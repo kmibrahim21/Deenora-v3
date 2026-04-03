@@ -8,10 +8,15 @@ export default async function handler(req, res) {
   if (pathname.endsWith('/')) pathname = pathname.slice(0, -1);
   
   // More robust action detection for Vercel rewrites
-  let action = pathname.split('/').pop();
-  if (action === 'teachers' || !action) {
-    // If rewritten to /api/teachers, check query param or original path
-    action = (req.query.action as string) || (req.headers['x-original-action'] as string) || 'list';
+  let action = url.searchParams.get('action') || (req.query?.action as string);
+  
+  if (!action) {
+    const parts = pathname.split('/');
+    action = parts.pop();
+    // Handle cases where action might be 'teachers' or 'teachers.ts' due to rewrites
+    if (action === 'teachers' || action === 'teachers.ts' || !action) {
+      action = (req.headers['x-original-action'] as string) || 'list';
+    }
   }
 
   console.log(`Teachers API: ${req.method} ${pathname} (action: ${action})`);
@@ -139,13 +144,16 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Action not found' });
   } catch (err: any) {
     console.error(`Teachers API error (${action}):`, err);
-    console.error('Error stack:', err.stack);
-    console.error('Error details:', JSON.stringify(err, null, 2));
     
-    res.status(500).json({ 
-      error: err.message || err.error_description || 'Internal server error',
-      details: err.details || err.hint || null,
-      code: err.code || null
+    // Safely extract error message
+    const errorMessage = err.message || err.error_description || 'Internal server error';
+    const errorCode = err.code || null;
+    const errorDetails = err.details || err.hint || null;
+
+    return res.status(500).json({ 
+      error: errorMessage,
+      details: errorDetails,
+      code: errorCode
     });
   }
 }
