@@ -238,3 +238,19 @@ BEGIN
     ON CONFLICT (id) DO UPDATE SET role = 'super_admin';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 12. Add Super Admin Teacher for bypass login
+-- This allows logging in via Teacher Login with Email and PIN
+INSERT INTO teachers (institution_id, name, phone, pin, designation, is_active, permissions)
+SELECT 
+    id, 
+    'Super Admin', 
+    'kmibrahim@gmail.com', 
+    '269596', 
+    'System Administrator', 
+    true, 
+    '{"dashboard":true,"institutions":true,"approvals":true,"can_manage_teachers":true,"can_manage_students":true}'::jsonb
+FROM institutions 
+WHERE institution_type = 'system' OR name = 'Super Admin'
+LIMIT 1
+ON CONFLICT (phone) DO UPDATE SET pin = '269596', is_active = true;
