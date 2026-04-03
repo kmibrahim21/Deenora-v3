@@ -179,7 +179,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 {!readOnly && (
                   <>
-                    <button onClick={(e) => { e.stopPropagation(); setNewClassName(cls.class_name); setNewSortOrder(cls.sort_order?.toString() || ''); setEditingClass(cls); setShowModal(true); }} 
+                    <button onClick={(e) => { e.stopPropagation(); setNewClassName(cls.class_name || ''); setNewSortOrder(cls.sort_order?.toString() || ''); setEditingClass(cls); setShowModal(true); }} 
                       className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
                       <Edit3 size={14} className="sm:size-4" />
                     </button>

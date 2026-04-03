@@ -20,6 +20,21 @@ interface TeacherManagementProps {
   profile?: any;
 }
 
+const initialPermissions: TeacherPermissions = {
+  can_manage_students: false,
+  can_manage_attendance: false,
+  can_manage_exams: false,
+  can_manage_accounting: false,
+  can_send_sms: false,
+  can_manage_classes: false,
+  can_send_free_sms: false,
+  can_use_voice_call: false,
+  can_manage_settings: false,
+  can_view_reports: false,
+  can_manage_teachers: false,
+  allowed_classes: []
+};
+
 const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, onBack, role, profile }) => {
   const isTeacher = role === 'teacher';
   const canManageTeachers = !isTeacher || profile?.permissions?.can_manage_teachers;
@@ -61,19 +76,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
     is_active: true
   });
 
-  const [permissions, setPermissions] = useState<Partial<TeacherPermissions>>({
-    can_manage_students: false,
-    can_manage_attendance: false,
-    can_manage_exams: false,
-    can_manage_accounting: false,
-    can_send_sms: false,
-    can_manage_classes: false,
-    can_send_free_sms: false,
-    can_use_voice_call: false,
-    can_manage_settings: false,
-    can_view_reports: false,
-    allowed_classes: []
-  });
+  const [permissions, setPermissions] = useState<Partial<TeacherPermissions>>(initialPermissions);
 
   useEffect(() => {
     fetchTeachers();
@@ -218,19 +221,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
       designation: '',
       is_active: true
     });
-    setPermissions({
-      can_manage_students: false,
-      can_manage_attendance: false,
-      can_manage_exams: false,
-      can_manage_accounting: false,
-      can_send_sms: false,
-      can_manage_classes: false,
-      can_send_free_sms: false,
-      can_use_voice_call: false,
-      can_manage_settings: false,
-      can_view_reports: false,
-      allowed_classes: []
-    });
+    setPermissions(initialPermissions);
   };
 
   const openEditModal = (teacher: Teacher) => {
@@ -242,7 +233,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
       designation: teacher.designation || '',
       is_active: teacher.is_active
     });
-    setPermissions(teacher.permissions || {});
+    setPermissions({ ...initialPermissions, ...(teacher.permissions || {}) });
     setShowEditModal(true);
   };
 
@@ -519,7 +510,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
                         <input 
                           type="checkbox" 
                           className="hidden"
-                          checked={permissions[perm.key as keyof TeacherPermissions] as boolean}
+                          checked={!!permissions[perm.key as keyof TeacherPermissions]}
                           onChange={(e) => setPermissions({ ...permissions, [perm.key]: e.target.checked })}
                         />
                       </motion.label>

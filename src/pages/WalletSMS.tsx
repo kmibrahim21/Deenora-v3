@@ -350,7 +350,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                              <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto line-clamp-1">{tmp.title}</h4>
                           </div>
                           <div className="flex gap-1.5 shrink-0">
-                             <button onClick={() => { setEditingId(tmp.id); setTempTitle(tmp.title); setTempBody(tmp.body); setShowAddModal(true); }} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Edit3 size={14}/></button>
+                             <button onClick={() => { setEditingId(tmp.id); setTempTitle(tmp.title || ''); setTempBody(tmp.body || ''); setShowAddModal(true); }} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Edit3 size={14}/></button>
                              <button onClick={() => setShowDeleteConfirm(tmp)} className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Trash2 size={14}/></button>
                           </div>
                        </div>
