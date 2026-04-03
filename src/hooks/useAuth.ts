@@ -19,7 +19,7 @@ export const useAuth = () => {
     }
     
     const userEmail = email?.trim().toLowerCase();
-    const isSuperAdminEmail = userEmail === 'kmibrahim@gmail.com' || userEmail === 'thedevomix@gmail.com';
+    const isSuperAdminEmail = userEmail === 'kmibrahim@gmail.com' || userEmail === 'thedevomix@gmail.com' || userEmail === 'ibrahimkhan269596@gmail.com';
 
     try {
       // First, get the profile

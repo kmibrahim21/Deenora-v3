@@ -204,22 +204,30 @@ CREATE POLICY "Enable insert for institution admins" ON voice_templates
         )
     );
 
--- 10. Ensure profiles table has correct RLS for super admins to bootstrap
+-- 10. Ensure profiles table has correct RLS and fix infinite recursion
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+-- Helper function to check if user is super admin without recursion
+-- SECURITY DEFINER bypasses RLS for the query inside the function
+CREATE OR REPLACE FUNCTION check_is_super_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = auth.uid() 
+    AND role = 'super_admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 DROP POLICY IF EXISTS "Users can view their own profile" ON profiles;
+DROP POLICY IF EXISTS "Super admins can view all profiles" ON profiles;
+
 CREATE POLICY "Users can view their own profile" ON profiles
     FOR SELECT USING (auth.uid() = id);
 
-DROP POLICY IF EXISTS "Super admins can view all profiles" ON profiles;
 CREATE POLICY "Super admins can view all profiles" ON profiles
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM profiles 
-            WHERE id = auth.uid() 
-            AND role = 'super_admin'
-        )
-    );
+    FOR SELECT USING (check_is_super_admin());
 
 -- 11. Bootstrap Super Admin Function (if not exists)
 CREATE OR REPLACE FUNCTION bootstrap_super_admin(p_uid UUID, p_email TEXT)
