@@ -31,11 +31,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const subAction = parts[3] || (req.query.id as string);
 
   try {
+    const headers = getAwajHeaders();
+
     // VOICES
     if (action === 'voices') {
       if (req.method === 'GET') {
-        const response = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: getAwajHeaders() as any });
-        if (!response.ok) throw new Error(`Awaj API Error: ${response.statusText}`);
+        const response = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+        }
         const data = await response.json();
         return res.status(200).json(data);
       }
@@ -51,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const body = req.body || {};
         const { name, file_url } = body;
         let bodyStr: any = JSON.stringify(body);
-        let headers: any = { ...getAwajHeaders() };
+        let requestHeaders: any = { ...headers };
         if (file_url) {
           const fileRes = await fetch(file_url);
           if (!fileRes.ok) throw new Error(`Failed to download file: ${fileRes.statusText}`);
@@ -64,16 +69,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           formData.append('audio', Buffer.from(new Uint8Array(fileBuffer)), { filename, contentType });
           formData.append('file', Buffer.from(new Uint8Array(fileBuffer)), { filename, contentType });
           bodyStr = formData;
-          headers = { 'Authorization': `Bearer ${process.env.AWAJ_API_TOKEN}`, 'Accept': 'application/json', ...formData.getHeaders() };
+          requestHeaders = { 
+            'Authorization': headers.Authorization, 
+            'Accept': 'application/json', 
+            ...formData.getHeaders() 
+          };
         }
-        const response = await fetch(`${AWAJ_BASE_URL}/voices/upload`, { method: 'POST', headers, body: bodyStr });
+        const response = await fetch(`${AWAJ_BASE_URL}/voices/upload`, { 
+          method: 'POST', 
+          headers: requestHeaders, 
+          body: bodyStr 
+        });
         const data = await response.json();
         if (!response.ok) return res.status(response.status).json(data);
         return res.status(200).json(data);
       }
       if (req.method === 'DELETE' && subAction) {
-        const response = await fetch(`${AWAJ_BASE_URL}/voices/${subAction}`, { method: 'DELETE', headers: getAwajHeaders() as any });
-        if (!response.ok) throw new Error(`Awaj API Error: ${response.statusText}`);
+        const response = await fetch(`${AWAJ_BASE_URL}/voices/${subAction}`, { 
+          method: 'DELETE', 
+          headers: headers as any 
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+        }
         let data = {};
         try { data = await response.json(); } catch (e) {}
         return res.status(200).json({ success: true, ...data });
@@ -83,21 +102,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // BROADCAST
     if (action === 'broadcast' || action === 'broadcasts') {
       if (req.method === 'POST') {
-        const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { method: 'POST', headers: getAwajHeaders(), body: JSON.stringify(req.body) });
+        const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { 
+          method: 'POST', 
+          headers: headers, 
+          body: JSON.stringify(req.body) 
+        });
         const data = await response.json();
         if (!response.ok) return res.status(response.status).json(data);
         return res.status(200).json(data);
       }
       if (req.method === 'GET') {
         if (subAction) {
-          let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${subAction}/result`, { headers: getAwajHeaders() });
-          if (response.status === 404) response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${subAction}`, { headers: getAwajHeaders() });
-          if (!response.ok) throw new Error(`Awaj API Error: ${response.statusText}`);
+          let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${subAction}/result`, { headers: headers });
+          if (response.status === 404) response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${subAction}`, { headers: headers });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+          }
           const data = await response.json();
           return res.status(200).json(data);
         } else {
-          const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { headers: getAwajHeaders() });
-          if (!response.ok) throw new Error(`Awaj API Error: ${response.statusText}`);
+          const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { headers: headers });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+          }
           const data = await response.json();
           return res.status(200).json(data);
         }
@@ -108,17 +137,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'broadcast-result') {
       const id = req.query.id || subAction;
       if (!id) return res.status(400).json({ error: 'ID is required' });
-      let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${id}/result`, { headers: getAwajHeaders() });
-      if (response.status === 404) response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${id}`, { headers: getAwajHeaders() });
-      if (!response.ok) throw new Error(`Awaj API Error: ${response.statusText}`);
+      let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${id}/result`, { headers: headers });
+      if (response.status === 404) response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${id}`, { headers: headers });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+      }
       const data = await response.json();
       return res.status(200).json(data);
     }
 
     // SENDERS
     if (action === 'senders') {
-      const response = await fetch(`${AWAJ_BASE_URL}/senders`, { headers: getAwajHeaders() });
-      if (!response.ok) throw new Error(`Awaj API Error: ${response.statusText}`);
+      const response = await fetch(`${AWAJ_BASE_URL}/senders`, { headers: headers });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+      }
       const data = await response.json();
       return res.status(200).json(data);
     }
@@ -126,8 +161,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // SURVEYS
     if (action === 'surveys') {
       if (req.method === 'POST') {
-        const response = await fetch(`${AWAJ_BASE_URL}/surveys`, { method: 'POST', headers: getAwajHeaders(), body: JSON.stringify(req.body) });
-        if (!response.ok) throw new Error(`Awaj API Error: ${response.statusText}`);
+        const response = await fetch(`${AWAJ_BASE_URL}/surveys`, { 
+          method: 'POST', 
+          headers: headers, 
+          body: JSON.stringify(req.body) 
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+        }
         const data = await response.json();
         return res.status(200).json(data);
       }
