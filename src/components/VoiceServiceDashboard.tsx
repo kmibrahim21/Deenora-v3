@@ -253,7 +253,11 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
           <div>
             <h4 className="font-bold">API Connection Error</h4>
             <p className="text-sm mt-1">{apiError}</p>
-            <p className="text-xs mt-2 opacity-80">Make sure AWAJ_API_TOKEN is set in your Vercel Environment Variables.</p>
+            {apiError.toLowerCase().includes('token') && (
+              <p className="text-xs mt-2 opacity-80 font-bold">
+                Action Required: Please ensure AWAJ_API_TOKEN is correctly set in your environment variables (Vercel or AI Studio Settings).
+              </p>
+            )}
           </div>
         </div>
       )}

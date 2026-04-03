@@ -241,7 +241,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 12. Add Super Admin Teacher for bypass login
 -- This allows logging in via Teacher Login with Email and PIN
-INSERT INTO teachers (institution_id, name, phone, pin, designation, is_active, permissions)
+-- Using teacher_name instead of name based on schema error
+INSERT INTO teachers (institution_id, teacher_name, phone, pin, designation, is_active, permissions)
 SELECT 
     id, 
     'Super Admin', 

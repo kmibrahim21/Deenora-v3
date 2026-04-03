@@ -9,7 +9,7 @@ const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
 const getAwajHeaders = () => {
   const token = process.env.AWAJ_API_TOKEN;
   if (!token) {
-    console.error('AWAJ_API_TOKEN is not set in environment variables');
+    throw new Error('AWAJ_API_TOKEN is not set. Please add it to your environment variables.');
   }
   return {
     'Authorization': `Bearer ${token}`,

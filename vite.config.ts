@@ -12,13 +12,15 @@ import { VitePWA } from 'vite-plugin-pwa';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function vercelApiPlugin() {
+function vercelApiPlugin(env: Record<string, string> = {}) {
   return {
     name: 'vercel-api-plugin',
     configureServer(server: any) {
       server.middlewares.use(async (req: any, res: any, next: any) => {
         if (req.url?.startsWith('/api/')) {
           try {
+            // Set environment variables for the handler
+            Object.assign(process.env, env);
             const urlPath = req.url.split('?')[0];
             let filePath = path.join(__dirname, urlPath);
             let queryParams: Record<string, string> = {};
@@ -109,7 +111,7 @@ export default defineConfig(({ mode }) => {
         react(), 
         tailwindcss(), 
         tsconfigPaths(), 
-        vercelApiPlugin(),
+        vercelApiPlugin(env),
         VitePWA({
           registerType: 'autoUpdate',
           injectRegister: 'inline',
