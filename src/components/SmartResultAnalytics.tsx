@@ -446,7 +446,7 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
                             {selectedClassId === 'all' && <Check size={14} className="text-white" />}
                         </button>
                         
-                        {classes.filter(c => c.class_name.toLowerCase().includes(filterSearch.toLowerCase())).map(c => (
+                        {classes.filter(c => (c.class_name || '').toLowerCase().includes((filterSearch || '').toLowerCase())).map(c => (
                             <button 
                                 key={c.id}
                                 onClick={() => { setSelectedClassId(c.id); setShowFilter(false); }}
@@ -460,7 +460,7 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
                                 {selectedClassId === c.id && <Check size={14} className="text-white" />}
                             </button>
                         ))}
-                        {classes.filter(c => c.class_name.toLowerCase().includes(filterSearch.toLowerCase())).length === 0 && (
+                        {classes.filter(c => (c.class_name || '').toLowerCase().includes((filterSearch || '').toLowerCase())).length === 0 && (
                             <div className="text-center py-4 text-[10px] font-bold text-slate-400">{localT.noClassesFound[lang]}</div>
                         )}
                     </div>

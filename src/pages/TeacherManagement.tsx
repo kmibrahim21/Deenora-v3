@@ -247,7 +247,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
   };
 
   const filteredTeachers = teachers.filter(t => 
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (t.name || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
     (t.phone && t.phone.includes(searchQuery))
   );
 

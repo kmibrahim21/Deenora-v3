@@ -720,8 +720,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   };
 
   const filtered = useMemo(() => madrasahs.filter(m => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = m.name.toLowerCase().includes(query) || (m.login_code && m.login_code.toLowerCase().includes(query));
+    const query = (searchQuery || '').toLowerCase();
+    const matchesSearch = (m.name || '').toLowerCase().includes(query) || (m.login_code && m.login_code.toLowerCase().includes(query));
     const matchesType = filterType === 'all' || (m.institution_type || 'madrasah') === filterType;
     return matchesSearch && matchesType;
   }), [madrasahs, searchQuery, filterType]);

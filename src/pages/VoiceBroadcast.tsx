@@ -180,7 +180,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           // Try to find matching voice in API by ID or Name
           const awajVoice = apiVoices.find(v => 
             (localVoice.provider_voice_id && v.id && v.id.toString() === localVoice.provider_voice_id.toString()) || 
-            (v.name && v.name.toLowerCase() === localVoice.title.toLowerCase())
+            (v.name && v.name.toLowerCase() === (localVoice.title || '').toLowerCase())
           );
 
           if (awajVoice) {

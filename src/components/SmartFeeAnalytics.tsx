@@ -212,11 +212,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         const matchedStructures: any[] = [];
         
         fees.forEach(f => {
-            const normalizedF = f.toLowerCase().trim();
+            const normalizedF = (f || '').toLowerCase().trim();
             // Find structure for this fee name and class
             // Match either the student's class or a global fee (class_id is null)
             const structure = structures.find(s => 
-                s.fee_name.toLowerCase().trim() === normalizedF && 
+                (s.fee_name || '').toLowerCase().trim() === normalizedF && 
                 (s.class_id === null || (classId && s.class_id === classId))
             );
             
@@ -225,7 +225,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 matchedStructures.push(structure);
             } else {
                 // Try matching by name only if class match fails
-                const nameOnlyMatch = structures.find(s => s.fee_name.toLowerCase().trim() === normalizedF);
+                const nameOnlyMatch = structures.find(s => (s.fee_name || '').toLowerCase().trim() === normalizedF);
                 if (nameOnlyMatch) {
                     totalStructureAmount += nameOnlyMatch.amount;
                     matchedStructures.push(nameOnlyMatch);
@@ -248,9 +248,9 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         } else {
             // Fallback if no structures matched
             fees.forEach(f => {
-                const normalizedF = f.toLowerCase().trim();
+                const normalizedF = (f || '').toLowerCase().trim();
                 // Find any breakdown item that matches the name
-                const breakdownKey = Object.keys(breakdownMap).find(k => k.toLowerCase().trim() === normalizedF);
+                const breakdownKey = Object.keys(breakdownMap).find(k => (k || '').toLowerCase().trim() === normalizedF);
                 if (breakdownKey) {
                     breakdownMap[breakdownKey].transactions += 1;
                     breakdownMap[breakdownKey].collected += l.amount / fees.length;
