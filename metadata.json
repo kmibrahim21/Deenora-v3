@@ -1,0 +1,8 @@
+{
+  "name": "Deenora V3 - Madrasah Management",
+  "description": "A comprehensive Madrasah management system (Deenora V3) with student tracking, attendance, exams, and accounting.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
