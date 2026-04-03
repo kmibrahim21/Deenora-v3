@@ -38,10 +38,10 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const fetchGlobalSettings = async () => {
     const settings = await smsApi.getGlobalSettings();
     setGlobalSettings({
-      reve_api_key: settings.reve_api_key,
-      reve_secret_key: settings.reve_secret_key,
-      reve_caller_id: settings.reve_caller_id,
-      bkash_number: settings.bkash_number,
+      reve_api_key: settings.reve_api_key || '',
+      reve_secret_key: settings.reve_secret_key || '',
+      reve_caller_id: settings.reve_caller_id || '',
+      bkash_number: settings.bkash_number || '',
       sms_rate: settings.sms_rate || 0.50,
       voice_rate: settings.voice_rate || 1.00
     });

@@ -312,9 +312,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   const handleEditClick = (exam: Exam) => {
     setEditingExam(exam);
-    setExamName(exam.exam_name);
-    setExamDate(exam.exam_date);
-    setClassId(exam.class_id);
+    setExamName(exam.exam_name || '');
+    setExamDate(exam.exam_date || '');
+    setClassId(exam.class_id || '');
     setShowAddExam(true);
   };
 

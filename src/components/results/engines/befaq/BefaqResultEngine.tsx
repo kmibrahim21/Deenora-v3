@@ -264,9 +264,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
   const handleEditClick = (exam: BefaqExam) => {
     setEditingExam(exam);
-    setExamName(exam.exam_name);
-    setExamYear(exam.exam_year);
-    setClassId(exam.marhala_id);
+    setExamName(exam.exam_name || '');
+    setExamYear(exam.exam_year || '');
+    setClassId(exam.marhala_id || '');
     setShowAddExam(true);
   };
 
