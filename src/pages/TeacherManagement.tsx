@@ -201,13 +201,15 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
     if (!window.confirm(t('confirm_delete', lang))) return;
     
     try {
-      const response = await fetch('/api/teachers/delete', {
+      const response = await fetch(`/api/teachers/delete?id=${id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
+        headers: { 'Content-Type': 'application/json' }
       });
 
-      if (!response.ok) throw new Error('Failed to delete teacher');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete teacher');
+      }
       await fetchTeachers();
     } catch (err: any) {
       alert(err.message);

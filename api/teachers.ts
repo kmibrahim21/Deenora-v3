@@ -174,10 +174,31 @@ export default async function handler(req, res) {
     }
 
     if (action === 'delete' && req.method === 'DELETE') {
-      const id = req.query.id || body?.id;
+      const id = req.query.id || url.searchParams.get('id') || body?.id;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
+      
+      console.log('Deleting teacher:', id);
+      
+      // Also delete from profiles and auth if possible
       const { error } = await supabase.from('teachers').delete().eq('id', id);
       if (error) throw error;
+      
+      // Cleanup profile too
+      await supabase.from('profiles').delete().eq('id', id);
+      
+      // Cleanup teacher_permissions too
+      await supabase.from('teacher_permissions').delete().eq('teacher_id', id);
+      
+      // Delete auth user
+      try {
+        const { error: authError } = await supabase.auth.admin.deleteUser(id);
+        if (authError) {
+          console.warn('Failed to delete auth user (might not exist):', authError.message);
+        }
+      } catch (e) {
+        console.warn('Error deleting auth user:', e);
+      }
+      
       return res.status(200).json({ success: true });
     }
 
