@@ -267,12 +267,12 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                     
                     <div className={`p-5 rounded-[2.5rem] border flex items-center gap-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-purple-400' : 'bg-white border-slate-100 text-purple-600'}`}>
-                        {/* removed */}
+                        <Key size={24} />
                        </div>
                        <div className="flex-1 text-left min-w-0">
-                           <p className="text-[9px] font-black text-slate-400 uppercase mb-1"></p>
+                           <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{lang === 'bn' ? 'অ্যাকাউন্ট পিন' : 'Account PIN'}</p>
                           <p className={`text-[14px] font-black tracking-widest ${madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>
-                            {/* removed */}
+                            {madrasah?.config_json?.user_pin || '****'}
                           </p>
                        </div>
                     </div>

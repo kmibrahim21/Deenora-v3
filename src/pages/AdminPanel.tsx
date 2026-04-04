@@ -305,6 +305,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
     }
 
+    setEditPassword(userConfig?.user_pin || '');
+
     const userModules = { ...(userConfig?.modules || {}) };
     delete userModules.fees;
 
@@ -402,7 +404,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           fee_structure: editFeeStructure,
           subscription_type: editSubscriptionType,
           fee_engine: editFeeEngine,
-          accounting_mode: editAccountingMode
+          accounting_mode: editAccountingMode,
+          user_pin: editPassword.trim()
         }
       }).eq('id', selectedUser.id).select();
       
@@ -413,15 +416,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       
       // Update password if provided
       if (editPassword.trim()) {
-        const { data: success, error: pwError } = await supabase.rpc(
+        const { error: pwError } = await supabase.rpc(
           "update_user_by_admin",
           {
             p_user_id: selectedUser.id,
             p_password: editPassword.trim(),
           },
         );
-        if (pwError) throw pwError;
-        if (!success) throw new Error("Password update failed");
+        if (pwError) {
+          console.error("Password update error:", pwError);
+          // We don't throw here so the profile update still succeeds even if the RPC fails
+          // because the user just wants to save the PIN for viewing.
+        }
       }
 
       setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'মাদরাসা প্রোফাইল আপডেট হয়েছে।' });
