@@ -409,7 +409,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
                 </button>
               </div>
 
-              <form onSubmit={showAddModal ? handleAddTeacher : handleUpdateTeacher} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+              <form onSubmit={showAddModal ? handleAddTeacher : handleUpdateTeacher} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar pb-20">
                 {error && (
                   <div className={`border p-4 rounded-2xl flex items-center gap-3 text-xs font-bold ${isDark ? 'bg-red-900/20 border-red-900/30 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}>
                     <AlertCircle size={18} />

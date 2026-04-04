@@ -89,6 +89,7 @@ export default async function handler(req, res) {
         }
         return {
           ...t,
+          name: t.teacher_name,
           permissions: parsedPermissions
         };
       });
@@ -103,7 +104,7 @@ export default async function handler(req, res) {
 
       const { data: teacher, error: teacherError } = await supabase.from('teachers').insert({
         institution_id: institute_id,
-        name,
+        teacher_name: name,
         phone,
         pin,
         designation,
@@ -118,7 +119,7 @@ export default async function handler(req, res) {
     if (action === 'update' && req.method === 'PUT') {
       const { id, name, phone, pin, designation, photo_url, is_active, permissions } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
-      const updateData: any = { name, phone, designation, photo_url, is_active, permissions };
+      const updateData: any = { teacher_name: name, phone, designation, photo_url, is_active, permissions };
       if (pin) updateData.pin = pin;
       const { error: teacherError } = await supabase.from('teachers').update(updateData).eq('id', id);
       if (teacherError) throw teacherError;
