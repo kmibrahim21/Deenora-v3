@@ -376,7 +376,27 @@ CREATE TABLE IF NOT EXISTS qawmi_result_configs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 31. System Settings
+CREATE TABLE IF NOT EXISTS system_settings (
+    id UUID DEFAULT '00000000-0000-0000-0000-000000000001'::UUID PRIMARY KEY,
+    reve_api_key TEXT,
+    reve_secret_key TEXT,
+    reve_caller_id TEXT,
+    reve_client_id TEXT,
+    bkash_number TEXT,
+    sms_rate DECIMAL(5, 2) DEFAULT 0.50,
+    voice_rate DECIMAL(5, 2) DEFAULT 1.00,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- RPC Functions
+
+-- Drop existing functions first to avoid return type mismatch errors
+DROP FUNCTION IF EXISTS check_teacher_login(TEXT, TEXT);
+DROP FUNCTION IF EXISTS promote_students(UUID, TEXT, DATE, DATE, JSONB);
+DROP FUNCTION IF EXISTS send_bulk_sms_rpc(UUID, UUID[], TEXT);
+DROP FUNCTION IF EXISTS check_is_super_admin();
+DROP FUNCTION IF EXISTS bootstrap_super_admin(UUID, TEXT);
 
 -- Check Teacher Login
 CREATE OR REPLACE FUNCTION check_teacher_login(p_mobile TEXT, p_password_hash TEXT)
@@ -456,6 +476,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Send Bulk SMS RPC
+CREATE OR REPLACE FUNCTION send_bulk_sms_rpc(
+  p_institution_id UUID,
+  p_student_ids UUID[],
+  p_message TEXT
+) RETURNS JSONB AS $$
+DECLARE
+  v_total_sms INTEGER;
+  v_current_balance INTEGER;
+BEGIN
+  v_total_sms := array_length(p_student_ids, 1);
+  
+  SELECT sms_balance INTO v_current_balance FROM institutions WHERE id = p_institution_id;
+  
+  IF v_current_balance < v_total_sms THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Insufficient SMS balance');
+  END IF;
+  
+  UPDATE institutions SET sms_balance = sms_balance - v_total_sms WHERE id = p_institution_id;
+  
+  RETURN jsonb_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Helper function to check if user is super admin
 CREATE OR REPLACE FUNCTION check_is_super_admin()
 RETURNS BOOLEAN AS $$
@@ -507,5 +551,11 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON students;
 CREATE POLICY "Enable all access for institution admins" ON students FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = students.institution_id AND role IN ('madrasah_admin', 'super_admin', 'teacher'))
 );
+
+ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read for everyone" ON system_settings;
+CREATE POLICY "Enable read for everyone" ON system_settings FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Enable all for super admins" ON system_settings;
+CREATE POLICY "Enable all for super admins" ON system_settings FOR ALL USING (check_is_super_admin());
 
 -- Add more RLS policies as needed...
