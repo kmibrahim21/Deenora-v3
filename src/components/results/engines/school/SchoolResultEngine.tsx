@@ -661,12 +661,21 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       )}
 
       {activeTab === 'exams' && view === 'list' && selectedClassId && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          <div className="col-span-full mb-4">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
             <button onClick={() => setSelectedClassId(null)} className="text-sm font-black text-[#2563EB] flex items-center gap-2">
               <ArrowLeft size={16} /> {lang === 'bn' ? 'শ্রেণিতে ফিরে যান' : 'Back to Classes'}
             </button>
+            {role === 'madrasah_admin' && (
+              <button 
+                onClick={() => { setClassId(selectedClassId); setShowAddExam(true); }}
+                className="px-4 py-2 bg-[#2563EB] text-white rounded-xl font-black text-xs flex items-center gap-2 shadow-premium active:scale-95 transition-all"
+              >
+                <Plus size={16} /> {lang === 'bn' ? 'নতুন পরীক্ষা' : 'Add Exam'}
+              </button>
+            )}
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {loading ? <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" /></div> : exams.map(exam => (
             <div key={exam.id} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-bubble space-y-4">
                 <div className="flex items-center justify-between">
@@ -705,6 +714,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             </div>
           ))}
         </div>
+      </div>
       )}
 
       {activeTab === 'exams' && view === 'subjects' && (

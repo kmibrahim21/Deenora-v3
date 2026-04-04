@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, BefaqExam, BefaqSubject, Language, UserRole, Profile } from 'types';
-import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Download, CreditCard, Trash2, RefreshCw, Edit2, TrendingUp, AlertCircle } from 'lucide-react';
+import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Download, CreditCard, Trash2, RefreshCw, Edit2, TrendingUp, AlertCircle, ChevronRight } from 'lucide-react';
 import { t } from 'translations';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
@@ -21,6 +21,7 @@ interface BefaqResultEngineProps {
 const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, onBack, role, profile }) => {
   const [activeTab, setActiveTab] = useState<'exams' | 'analytics' | 'final-results' | 'seat-plan'>('exams');
   const [view, setView] = useState<'list' | 'subjects' | 'marks' | 'report' | 'rank'>('list');
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [exams, setExams] = useState<BefaqExam[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedExam, setSelectedExam] = useState<BefaqExam | null>(null);
@@ -66,13 +67,24 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
   useEffect(() => {
     if (madrasah) {
-      fetchExams();
       fetchClasses();
     }
-  }, [madrasah?.id, view]);
+  }, [madrasah?.id]);
+
+  useEffect(() => {
+    if (madrasah && (selectedClassId || view !== 'list')) {
+      fetchExams();
+    }
+  }, [madrasah?.id, selectedClassId, view]);
 
   const fetchExams = async () => {
-    const { data } = await supabase.from('befaq_exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id).order('created_at', { ascending: false });
+    let query = supabase.from('befaq_exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
+    
+    if (selectedClassId) {
+      query = query.eq('marhala_id', selectedClassId);
+    }
+
+    const { data } = await query.order('created_at', { ascending: false });
     if (data) {
       let filteredExams = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
@@ -224,7 +236,6 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         const examData = {
           institution_id: madrasah.id,
           marhala_id: classId,
-          class_name: selectedClass?.class_name || 'Unknown',
           exam_name: examName,
           exam_year: examYear,
           is_active: true
@@ -370,11 +381,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       {activeTab !== 'final-results' && (
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
-          <button onClick={view === 'list' ? onBack : () => setView('list')} className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100">
+          <button onClick={view === 'list' ? (selectedClassId ? () => setSelectedClassId(null) : onBack) : () => setView('list')} className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100">
             <ArrowLeft size={20}/>
           </button>
           <h1 className="text-xl font-black text-[#1E293B] font-noto">
-            {activeTab === 'exams' && view === 'list' ? 'বেফাক পরীক্ষা' : 
+            {activeTab === 'exams' && view === 'list' ? (selectedClassId ? classes.find(c => c.id === selectedClassId)?.class_name : 'বেফাক পরীক্ষা') : 
              activeTab === 'exams' && selectedExam ? selectedExam.exam_name :
              activeTab === 'seat-plan' ? 'Seat Plan' :
              activeTab === 'analytics' ? 'Result Analytics' : 'বেফাক পরীক্ষা'}
@@ -385,7 +396,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                 <button onClick={() => setActiveTab('final-results')} className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center border border-purple-100 shadow-sm active:scale-95 transition-all" title="চূড়ান্ত ফলাফল">
                   <Trophy size={20} />
                 </button>
-                <button onClick={() => setShowAddExam(true)} className="w-10 h-10 bg-emerald-600 text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all"><Plus size={20}/></button>
+                {selectedClassId && (
+                  <button onClick={() => { setClassId(selectedClassId); setShowAddExam(true); }} className="w-10 h-10 bg-emerald-600 text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all"><Plus size={20}/></button>
+                )}
             </div>
         )}
       </div>
@@ -544,8 +557,39 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         </div>
       )}
 
-      {activeTab === 'exams' && view === 'list' && (
+      {activeTab === 'exams' && view === 'list' && !selectedClassId && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {classes.map(cls => (
+            <button
+              key={cls.id}
+              onClick={() => setSelectedClassId(cls.id)}
+              className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between hover:border-emerald-200 transition-all active:scale-95"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center"><BookOpen size={24}/></div>
+                <h3 className="text-lg font-black text-[#1E3A8A] font-noto">{cls.class_name}</h3>
+              </div>
+              <ChevronRight className="text-slate-300" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'exams' && view === 'list' && selectedClassId && (
         <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <button onClick={() => setSelectedClassId(null)} className="text-sm font-black text-emerald-600 flex items-center gap-2">
+              <ArrowLeft size={16} /> {lang === 'bn' ? 'শ্রেণিতে ফিরে যান' : 'Back to Classes'}
+            </button>
+            {role === 'madrasah_admin' && (
+              <button 
+                onClick={() => { setClassId(selectedClassId); setShowAddExam(true); }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-xs flex items-center gap-2 shadow-premium active:scale-95 transition-all"
+              >
+                <Plus size={16} /> {lang === 'bn' ? 'নতুন পরীক্ষা' : 'Add Exam'}
+              </button>
+            )}
+          </div>
           {loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-600" /></div> : exams.map(exam => (
             <div key={exam.id} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-bubble space-y-4">
                 <div className="flex items-center justify-between">
