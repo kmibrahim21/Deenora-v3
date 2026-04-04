@@ -267,12 +267,12 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                     
                     <div className={`p-5 rounded-[2.5rem] border flex items-center gap-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-purple-400' : 'bg-white border-slate-100 text-purple-600'}`}>
-                        <Shield size={24} />
+                        {/* removed */}
                        </div>
                        <div className="flex-1 text-left min-w-0">
-                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{t('madrasah_code_label', lang)}</p>
+                           <p className="text-[9px] font-black text-slate-400 uppercase mb-1"></p>
                           <p className={`text-[14px] font-black tracking-widest ${madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>
-                            {madrasah.login_code || (lang === 'bn' ? 'অ্যাসাইন করা হয়নি' : 'Not assigned')}
+                            {/* removed */}
                           </p>
                        </div>
                     </div>
@@ -550,10 +550,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                  </div>
                  <div className="space-y-1 opacity-70 cursor-not-allowed">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center justify-between">
-                      {t('madrasah_code_label', lang)}
-                      <span className="text-[8px] text-red-400 lowercase tracking-normal bg-red-500/10 px-1.5 py-0.5 rounded-md">read-only</span>
                     </label>
-                    <input type="text" readOnly disabled className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none cursor-not-allowed ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`} value={madrasah?.login_code || (lang === 'bn' ? 'অ্যাসাইন করা হয়নি' : 'Not assigned')} />
+                    {/* removed */}
                  </div>
               </div>
               <div className="flex gap-2 pt-2 shrink-0">

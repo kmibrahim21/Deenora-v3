@@ -44,7 +44,6 @@ export interface Institution {
   is_super_admin: boolean;
   created_at: string;
   email?: string;
-  login_code?: string;
   balance: number;
   sms_balance: number;
   reve_api_key?: string;

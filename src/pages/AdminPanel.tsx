@@ -113,7 +113,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editAddress, setEditAddress] = useState('');
-  const [editLoginCode, setEditLoginCode] = useState('');
   const [editActive, setEditActive] = useState(true);
   const [editReveApiKey, setEditReveApiKey] = useState('');
   const [editReveSecretKey, setEditReveSecretKey] = useState('');
@@ -163,7 +162,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [newInstEmail, setNewInstEmail] = useState('');
   const [newInstPassword, setNewInstPassword] = useState('');
   const [newInstType, setNewInstType] = useState<'madrasah' | 'school' | 'kindergarten' | 'nurani'>('madrasah');
-  const [newInstLoginCode, setNewInstLoginCode] = useState('');
   const [isCreatingInst, setIsCreatingInst] = useState(false);
 
   const fetchGlobalCounts = async () => {
@@ -297,7 +295,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditPhone(user.phone || '');
     setEditEmail(user.email || '');
     setEditAddress(user.address || '');
-    setEditLoginCode(user.login_code || '');
     setEditActive(user.is_active);
     setEditReveApiKey(user.reve_api_key || '');
     setEditReveSecretKey(user.reve_secret_key || '');
@@ -390,7 +387,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         phone: editPhone.trim(),
         email: editEmail.trim() || null,
         address: editAddress.trim() || null,
-        login_code: editLoginCode.trim(),
         is_active: editActive,
         reve_api_key: editReveApiKey.trim() || null,
         reve_secret_key: editReveSecretKey.trim() || null,
@@ -646,7 +642,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         phone: newInstPhone.trim(),
         email: newInstEmail.trim(),
         institution_type: newInstType,
-        login_code: newInstLoginCode.trim() || null,
         status: 'active',
         is_active: true,
         config_json: {
@@ -676,7 +671,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           email: newInstEmail.trim(),
           phone: newInstPhone.trim(),
           institution_type: newInstType,
-          login_code: newInstLoginCode.trim() || null,
           is_active: true,
           is_super_admin: false,
           balance: 0,
@@ -709,7 +703,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setNewInstPhone('');
       setNewInstEmail('');
       setNewInstPassword('');
-      setNewInstLoginCode('');
       initData(true);
     } catch (err: any) {
       console.error("Create Error:", err);
@@ -721,7 +714,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const filtered = useMemo(() => madrasahs.filter(m => {
     const query = (searchQuery || '').toLowerCase();
-    const matchesSearch = (m.name || '').toLowerCase().includes(query) || (m.login_code && m.login_code.toLowerCase().includes(query));
+    const matchesSearch = (m.name || '').toLowerCase().includes(query);
     const matchesType = filterType === 'all' || (m.institution_type || 'madrasah') === filterType;
     return matchesSearch && matchesType;
   }), [madrasahs, searchQuery, filterType]);
@@ -1176,8 +1169,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                <input type="tel" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Login Pin</label>
-                               <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-slate-50 border-slate-100 text-[#2563EB]'} border rounded-2xl px-6 font-black outline-none`} value={editLoginCode} onChange={(e) => setEditLoginCode(e.target.value)} />
+                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2"></label>
+                               {/* removed */}
                             </div>
                          </div>
                       </div>
@@ -1413,17 +1406,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   <option value="kindergarten">Kindergarten</option>
                   <option value="nurani">Nurani</option>
                 </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">লগইন পিন (Optional)</label>
-                <input 
-                  type="text" 
-                  className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl px-6 font-black text-[#1E3A8A] outline-none focus:border-[#2563EB]/20" 
-                  value={newInstLoginCode} 
-                  onChange={(e) => setNewInstLoginCode(e.target.value)} 
-                  placeholder="1234"
-                />
               </div>
 
               <button 

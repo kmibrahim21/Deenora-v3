@@ -21,6 +21,7 @@ interface SchoolResultEngineProps {
 const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah, onBack, role, onNavigateToFinalResults, profile }) => {
   const [activeTab, setActiveTab] = useState<'exams' | 'final-results' | 'seat-plan' | 'analytics'>('exams');
   const [view, setView] = useState<'list' | 'subjects' | 'marks' | 'report'>('list');
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [exams, setExams] = useState<Exam[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
@@ -58,13 +59,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   useEffect(() => {
     if (madrasah) {
-      fetchExams();
       fetchClasses();
     }
-  }, [madrasah?.id, view]);
+  }, [madrasah?.id]);
+
+  useEffect(() => {
+    if (madrasah && selectedClassId) {
+      fetchExams();
+    }
+  }, [madrasah?.id, selectedClassId, view]);
 
   const fetchExams = async () => {
-    const { data } = await supabase.from('exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id).order('created_at', { ascending: false });
+    let query = supabase.from('exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
+    if (selectedClassId) {
+        query = query.eq('class_id', selectedClassId);
+    }
+    const { data } = await query.order('created_at', { ascending: false });
     if (data) {
       let filteredExams = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
@@ -462,10 +472,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
             <div className="flex gap-2">
+                {selectedClassId && (
+                    <button onClick={() => { setClassId(selectedClassId); setShowAddExam(true); }} className="w-10 h-10 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all"><Plus size={20}/></button>
+                )}
                 <button onClick={() => setActiveTab('final-results')} className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center border border-purple-100 shadow-sm active:scale-95 transition-all" title="Final Results">
                   <Trophy size={20} />
                 </button>
-                <button onClick={() => setShowAddExam(true)} className="w-10 h-10 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all"><Plus size={20}/></button>
             </div>
         )}
       </div>
@@ -630,8 +642,31 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         </div>
       )}
 
-      {activeTab === 'exams' && view === 'list' && (
+      {activeTab === 'exams' && view === 'list' && !selectedClassId && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {classes.map(cls => (
+            <button
+              key={cls.id}
+              onClick={() => setSelectedClassId(cls.id)}
+              className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between hover:border-blue-200 transition-all active:scale-95"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center"><BookOpen size={24}/></div>
+                <h3 className="text-lg font-black text-[#1E3A8A] font-noto">{cls.class_name}</h3>
+              </div>
+              <ChevronRight className="text-slate-300" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'exams' && view === 'list' && selectedClassId && (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="col-span-full mb-4">
+            <button onClick={() => setSelectedClassId(null)} className="text-sm font-black text-[#2563EB] flex items-center gap-2">
+              <ArrowLeft size={16} /> {lang === 'bn' ? 'শ্রেণিতে ফিরে যান' : 'Back to Classes'}
+            </button>
+          </div>
           {loading ? <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" /></div> : exams.map(exam => (
             <div key={exam.id} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-bubble space-y-4">
                 <div className="flex items-center justify-between">
