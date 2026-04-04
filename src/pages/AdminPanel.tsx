@@ -135,6 +135,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editInstitutionType, setEditInstitutionType] = useState<'madrasah' | 'school' | 'kindergarten' | 'nurani' | 'system'>('madrasah');
   const [editFeeEngine, setEditFeeEngine] = useState<'school' | 'qawmi' | 'kindergarten' | 'simple'>('school');
   const [editAccountingMode, setEditAccountingMode] = useState<'qawmi_flexible' | 'school_system'>('school_system');
+  const [editReveApiKey, setEditReveApiKey] = useState('');
+  const [editReveSecretKey, setEditReveSecretKey] = useState('');
+  const [editReveClientId, setEditReveClientId] = useState('');
 
   const [editPassword, setEditPassword] = useState('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
@@ -332,6 +335,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditInstitutionType(user.institution_type || 'madrasah');
     setEditFeeEngine(userConfig?.fee_engine || 'school');
     setEditAccountingMode(userConfig?.accounting_mode || 'school_system');
+    setEditReveApiKey(user.reve_api_key || '');
+    setEditReveSecretKey(user.reve_secret_key || '');
+    setEditReveClientId(user.reve_client_id || '');
     
     setView('details');
     
@@ -384,6 +390,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         institution_type: editInstitutionType,
         subscription_end: editSubscriptionEnd || null,
         status: editStatus,
+        reve_api_key: editReveApiKey.trim() || null,
+        reve_secret_key: editReveSecretKey.trim() || null,
+        reve_client_id: editReveClientId.trim() || null,
         config_json: {
           ...(typeof userConfig === 'object' && userConfig !== null ? userConfig : {}),
           modules: editModules,
@@ -1157,11 +1166,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                <input type="tel" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2"></label>
-                               {/* removed */}
+                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">User PIN / Password</label>
+                               <div className="relative">
+                                  <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
+                                  <Shield className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                               </div>
                             </div>
-                         </div>
-                      </div>
+                          </div>
+                       </div>
+
+                       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                          <div className="flex items-center justify-between px-1">
+                             <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <Key size={14} className={madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-600'} /> API & Security
+                             </h4>
+                          </div>
+                          <div className="space-y-4">
+                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                <div className="space-y-1.5">
+                                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE API Key</label>
+                                   <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="API Key" />
+                                </div>
+                                <div className="space-y-1.5">
+                                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Secret Key</label>
+                                   <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
+                                </div>
+                                <div className="space-y-1.5">
+                                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE Client ID</label>
+                                   <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
+                                </div>
+                             </div>
+
+                          </div>
+                       </div>
 
                       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
                          <div className="flex items-center justify-between px-1">
