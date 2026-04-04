@@ -255,3 +255,61 @@ FROM institutions
 WHERE institution_type = 'system' OR name = 'Super Admin'
 LIMIT 1
 ON CONFLICT (phone) DO UPDATE SET pin = '269596', is_active = true;
+
+-- 13. Create student_fee_settings table
+CREATE TABLE IF NOT EXISTS student_fee_settings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    fee_structure_id UUID NOT NULL REFERENCES fee_structures(id) ON DELETE CASCADE,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(student_id, fee_structure_id)
+);
+
+ALTER TABLE student_fee_settings ENABLE ROW LEVEL SECURITY;
+
+-- RLS for student_fee_settings
+DROP POLICY IF EXISTS "Enable read access for institution admins" ON student_fee_settings;
+CREATE POLICY "Enable read access for institution admins" ON student_fee_settings
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() 
+            AND institution_id = student_fee_settings.institution_id 
+            AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
+        )
+    );
+
+DROP POLICY IF EXISTS "Enable insert for institution admins" ON student_fee_settings;
+CREATE POLICY "Enable insert for institution admins" ON student_fee_settings
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() 
+            AND institution_id = student_fee_settings.institution_id 
+            AND role IN ('madrasah_admin', 'super_admin', 'accountant')
+        )
+    );
+
+DROP POLICY IF EXISTS "Enable update for institution admins" ON student_fee_settings;
+CREATE POLICY "Enable update for institution admins" ON student_fee_settings
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() 
+            AND institution_id = student_fee_settings.institution_id 
+            AND role IN ('madrasah_admin', 'super_admin', 'accountant')
+        )
+    );
+
+DROP POLICY IF EXISTS "Enable delete for institution admins" ON student_fee_settings;
+CREATE POLICY "Enable delete for institution admins" ON student_fee_settings
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() 
+            AND institution_id = student_fee_settings.institution_id 
+            AND role IN ('madrasah_admin', 'super_admin', 'accountant')
+        )
+    );

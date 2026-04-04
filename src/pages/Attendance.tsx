@@ -371,7 +371,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                             <span className="text-[8px] font-black opacity-40 leading-none">ROLL</span>
                             <span className="text-base font-black leading-none mt-1">{s.roll || '-'}</span>
                           </div>
-                          <h5 className={`font-black font-noto truncate text-base ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
+                          <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
                         </div>
                         <div className="flex gap-2 shrink-0">
                            <button onClick={() => setStatus(s.id, 'present')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={18}/></button>

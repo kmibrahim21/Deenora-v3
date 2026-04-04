@@ -1,6 +1,5 @@
 
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, Hash, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
@@ -202,8 +201,8 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         </div>
       </div>
 
-      {showDeleteConfirm && createPortal(
-        <div className="modal-overlay bg-[#080A12]/60 backdrop-blur-3xl animate-in fade-in duration-500">
+      {showDeleteConfirm && (
+        <div className="modal-overlay bg-[#080A12]/60 backdrop-blur-3xl animate-in fade-in duration-500 fixed inset-0 z-[1000] flex items-center justify-center p-4">
           <div className={`w-full max-w-sm rounded-[4rem] p-12 shadow-[0_50px_120px_rgba(239,68,68,0.3)] border text-center space-y-8 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-red-50'}`}>
              <div className="relative">
                <div className="absolute inset-0 bg-red-500 blur-3xl opacity-20 animate-pulse" />
@@ -236,8 +235,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 </button>
              </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

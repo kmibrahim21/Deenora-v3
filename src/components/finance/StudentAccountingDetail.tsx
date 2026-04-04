@@ -17,6 +17,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const [fees, setFees] = useState<Fee[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [structures, setStructures] = useState<any[]>([]);
+  const [studentFeeSettings, setStudentFeeSettings] = useState<any[]>([]);
+  const [loadingFees, setLoadingFees] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
   useEffect(() => {
@@ -55,10 +57,50 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       
       if (structureData) setStructures(structureData);
 
+      // 4. Fetch student fee settings
+      const { data: settingsData } = await supabase
+        .from('student_fee_settings')
+        .select('*')
+        .eq('student_id', student.student_id);
+      
+      if (settingsData) setStudentFeeSettings(settingsData);
+
     } catch (error) {
       console.error('Error fetching student accounting:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleFee = async (feeStructureId: string) => {
+    setLoadingFees(true);
+    try {
+      const setting = studentFeeSettings.find(s => s.fee_structure_id === feeStructureId);
+      const isCurrentlyEnabled = setting ? setting.is_enabled : true;
+      const newEnabledState = !isCurrentlyEnabled;
+
+      if (setting) {
+        await supabase.from('student_fee_settings').update({ is_enabled: newEnabledState }).eq('id', setting.id);
+      } else {
+        await supabase.from('student_fee_settings').insert({
+          institution_id: madrasah.id,
+          student_id: student.student_id,
+          fee_structure_id: feeStructureId,
+          is_enabled: newEnabledState
+        });
+      }
+      
+      // Refresh settings
+      const { data: settingsData } = await supabase
+        .from('student_fee_settings')
+        .select('*')
+        .eq('student_id', student.student_id);
+      
+      if (settingsData) setStudentFeeSettings(settingsData);
+    } catch (error) {
+      console.error('Error toggling fee:', error);
+    } finally {
+      setLoadingFees(false);
     }
   };
 
@@ -190,8 +232,47 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
             </div>
           </div>
 
-          {/* Right Column: Recent Transactions */}
+          {/* Right Column: Recent Transactions & Fee Settings */}
           <div className="space-y-6">
+            {/* Fee Settings Section */}
+            <div className={`p-8 rounded-[3rem] border shadow-sm ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>ফি সেটিংস</h3>
+                <DollarSign size={18} className="text-slate-300" />
+              </div>
+              
+              {loadingFees ? (
+                <div className="flex justify-center py-4"><Loader2 className="animate-spin text-blue-500" size={20} /></div>
+              ) : (
+                <div className="space-y-3">
+                  {structures.length > 0 ? structures.map(fee => {
+                    const setting = studentFeeSettings.find(s => s.fee_structure_id === fee.id);
+                    const isEnabled = setting ? setting.is_enabled : true;
+                    return (
+                      <label key={fee.id} className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all active:scale-[0.98] ${isEnabled ? (isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-100') : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200')}`}>
+                        <div className="flex flex-col">
+                          <span className={`text-xs font-black ${isEnabled ? (isDark ? 'text-blue-400' : 'text-blue-700') : 'text-slate-400'}`}>{fee.fee_name}</span>
+                          <span className="text-[10px] font-bold text-slate-400">৳{fee.amount}</span>
+                        </div>
+                        <div className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none">
+                          <input 
+                            type="checkbox" 
+                            checked={isEnabled} 
+                            onChange={() => toggleFee(fee.id)}
+                            className="sr-only"
+                          />
+                          <span className={`${isEnabled ? 'bg-blue-500' : 'bg-slate-300'} inline-block h-6 w-11 rounded-full transition-colors`} />
+                          <span className={`${isEnabled ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                        </div>
+                      </label>
+                    );
+                  }) : (
+                    <p className="text-[10px] font-bold text-slate-400 text-center py-4 uppercase tracking-widest">কোনো ফি পাওয়া যায়নি</p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className={`p-8 rounded-[3rem] border shadow-sm h-full ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
               <div className="flex items-center justify-between mb-8">
                 <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>লেনদেন ইতিহাস</h3>

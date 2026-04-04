@@ -170,7 +170,17 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         setAvailableFeeItems([]);
         return;
     }
-    setAvailableFeeItems(structures);
+    
+    // Fetch student fee settings
+    const { data: settings } = await supabase.from('student_fee_settings')
+      .select('*')
+      .eq('student_id', student.student_id);
+    
+    const enabledStructures = structures.filter(s => {
+        const setting = settings?.find(set => set.fee_structure_id === s.id);
+        return setting ? setting.is_enabled : true;
+    });
+    setAvailableFeeItems(enabledStructures);
 
     // 2. Fetch ledger entries for this student/month to see what's paid
     const { data: ledgerData } = await supabase.from('ledger')
