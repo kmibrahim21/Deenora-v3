@@ -114,11 +114,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editEmail, setEditEmail] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editActive, setEditActive] = useState(true);
-  const [editReveApiKey, setEditReveApiKey] = useState('');
-  const [editReveSecretKey, setEditReveSecretKey] = useState('');
-  const [editReveCallerId, setEditReveCallerId] = useState('');
   const [editVoiceSenderId, setEditVoiceSenderId] = useState('');
-  const [editReveClientId, setEditReveClientId] = useState('');
   const [editModules, setEditModules] = useState({
     attendance: true,
     results: true,
@@ -296,11 +292,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditEmail(user.email || '');
     setEditAddress(user.address || '');
     setEditActive(user.is_active);
-    setEditReveApiKey(user.reve_api_key || '');
-    setEditReveSecretKey(user.reve_secret_key || '');
-    setEditReveCallerId(user.reve_caller_id || '');
     setEditVoiceSenderId(user.voice_sender_id || '');
-    setEditReveClientId(user.reve_client_id || '');
     let userConfig: any = user.config_json;
     if (typeof userConfig === 'string') {
       try {
@@ -388,10 +380,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         email: editEmail.trim() || null,
         address: editAddress.trim() || null,
         is_active: editActive,
-        reve_api_key: editReveApiKey.trim() || null,
-        reve_secret_key: editReveSecretKey.trim() || null,
-        reve_caller_id: editReveCallerId.trim() || null,
-        reve_client_id: editReveClientId.trim() || null,
         voice_sender_id: editVoiceSenderId.trim() || null,
         institution_type: editInstitutionType,
         subscription_end: editSubscriptionEnd || null,
@@ -1187,18 +1175,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                          </div>
                          <div className="space-y-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE API Key</label>
-                                  <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="System Default Used" />
-                               </div>
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE Secret</label>
-                                  <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="System Default Used" />
-                               </div>
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Override Sender ID</label>
-                                  <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm`} value={editReveCallerId} onChange={(e) => setEditReveCallerId(e.target.value)} placeholder="e.g. 12345" />
-                               </div>
                                <div className="space-y-1.5">
                                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Voice Sender ID</label>
                                   <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm`} value={editVoiceSenderId} onChange={(e) => setEditVoiceSenderId(e.target.value)} placeholder="e.g. 8801..." />

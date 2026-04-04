@@ -49,7 +49,7 @@ export const SMSService = {
 
   sendBulk: async (institutionId: string, students: Student[], message: string) => {
     const [mRes, global] = await Promise.all([
-      supabase.from('institutions').select('sms_balance, reve_api_key, reve_secret_key, reve_caller_id, reve_client_id').eq('id', institutionId).single(),
+      supabase.from('institutions').select('sms_balance').eq('id', institutionId).single(),
       SMSService.getGlobalSettings()
     ]);
 
@@ -108,10 +108,10 @@ export const SMSService = {
     if (rpcError) throw new Error("ট্রানজ্যাকশন সফল হয়নি। (RLS Refused)");
     if (rpcData && rpcData.success === false) throw new Error(rpcData.error || "ট্রানজ্যাকশন সফল হয়নি।");
 
-    const apiKey = (mData.reve_api_key && mData.reve_api_key.trim() !== '') ? mData.reve_api_key.trim() : global.reve_api_key;
-    const secretKey = (mData.reve_secret_key && mData.reve_secret_key.trim() !== '') ? mData.reve_secret_key.trim() : global.reve_secret_key;
-    const callerId = (mData.reve_caller_id && mData.reve_caller_id.trim() !== '') ? mData.reve_caller_id.trim() : global.reve_caller_id;
-    const clientId = (mData.reve_client_id && mData.reve_client_id.trim() !== '') ? mData.reve_client_id.trim() : global.reve_client_id;
+    const apiKey = global.reve_api_key;
+    const secretKey = global.reve_secret_key;
+    const callerId = global.reve_caller_id;
+    const clientId = global.reve_client_id;
 
     if (hasShortcodes) {
       // Send personalized messages in batches
@@ -165,18 +165,7 @@ export const SMSService = {
     let clientId = global.reve_client_id;
 
     if (institutionId) {
-      const { data } = await supabase
-        .from('institutions')
-        .select('reve_api_key, reve_secret_key, reve_caller_id, reve_client_id')
-        .eq('id', institutionId)
-        .maybeSingle();
-        
-      if (data) {
-        if (data.reve_api_key && data.reve_api_key.trim() !== '') apiKey = data.reve_api_key.trim();
-        if (data.reve_secret_key && data.reve_secret_key.trim() !== '') secretKey = data.reve_secret_key.trim();
-        if (data.reve_caller_id && data.reve_caller_id.trim() !== '') callerId = data.reve_caller_id.trim();
-        if (data.reve_client_id && data.reve_client_id.trim() !== '') clientId = data.reve_client_id.trim();
-      }
+      // Removed institution-specific REVE keys as columns are missing
     }
 
     const target = normalizePhone(phone);
@@ -188,13 +177,13 @@ export const SMSService = {
   getHistory: async (institutionId: string) => {
     try {
       const [mRes, global] = await Promise.all([
-        supabase.from('institutions').select('reve_api_key, reve_secret_key').eq('id', institutionId).single(),
+        supabase.from('institutions').select('sms_balance').eq('id', institutionId).single(),
         SMSService.getGlobalSettings()
       ]);
 
       const mData = mRes.data;
-      const apiKey = (mData?.reve_api_key && mData.reve_api_key.trim() !== '') ? mData.reve_api_key.trim() : global.reve_api_key;
-      const secretKey = (mData?.reve_secret_key && mData.reve_secret_key.trim() !== '') ? mData.reve_secret_key.trim() : global.reve_secret_key;
+      const apiKey = global.reve_api_key;
+      const secretKey = global.reve_secret_key;
 
       // REVE SMS Report API (Hypothetical CORS-enabled or proxied endpoint)
       // Since we don't have a confirmed CORS-enabled endpoint, we provide a structured mock 
