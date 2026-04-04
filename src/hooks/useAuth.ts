@@ -288,85 +288,11 @@ export const useAuth = () => {
           
           await fetchUserProfile(currentSession.user.id, currentSession.user.email);
         } else {
+          // If there's no Supabase session, we shouldn't trust teacher_session
+          // because all RLS queries will fail anyway.
           const teacherSessionStr = localStorage.getItem('teacher_session');
           if (teacherSessionStr) {
-            try {
-              const teacherData = JSON.parse(teacherSessionStr);
-              if (teacherData && teacherData.id) {
-                // Fetch latest teacher data to get updated permissions and check active status
-                const { data: latestTeacher } = await supabase
-                  .from('teachers')
-                  .select('*')
-                  .eq('id', teacherData.id)
-                  .maybeSingle();
-
-                if (latestTeacher) {
-                  if (!latestTeacher.is_active) {
-                    localStorage.removeItem('teacher_session');
-                    setProfile(null);
-                    setMadrasah(null);
-                    setLoading(false);
-                    return;
-                  }
-
-                  setSession({ user: { id: latestTeacher.id, role: 'teacher' } });
-                  setProfile({
-                    id: latestTeacher.id,
-                    institution_id: latestTeacher.institution_id,
-                    full_name: latestTeacher.name,
-                    role: 'teacher',
-                    is_active: latestTeacher.is_active,
-                    created_at: latestTeacher.created_at,
-                    permissions: latestTeacher.permissions
-                  });
-                  // Update local storage too
-                  localStorage.setItem('teacher_session', JSON.stringify(latestTeacher));
-                  
-                  // Fetch madrasah data
-                  if (isValidUUID(latestTeacher.institution_id)) {
-                    const { data: institutionData } = await supabase
-                      .from('institutions')
-                      .select('*')
-                      .eq('id', latestTeacher.institution_id)
-                      .maybeSingle();
-                      
-                    if (institutionData) {
-                      setMadrasah(institutionData);
-                    }
-                  }
-                } else {
-                  // Fallback to stored data if fetch fails (e.g. offline)
-                  setSession({ user: { id: teacherData.id, role: 'teacher' } });
-                  setProfile({
-                    id: teacherData.id,
-                    institution_id: teacherData.institution_id,
-                    full_name: teacherData.name,
-                    role: 'teacher',
-                    is_active: teacherData.is_active,
-                    created_at: teacherData.created_at,
-                    permissions: teacherData.permissions
-                  });
-                  
-                  // Fetch madrasah data
-                  if (isValidUUID(teacherData.institution_id)) {
-                    const { data: institutionData } = await supabase
-                      .from('institutions')
-                      .select('*')
-                      .eq('id', teacherData.institution_id)
-                      .maybeSingle();
-                      
-                    if (institutionData) {
-                      setMadrasah(institutionData);
-                    }
-                  }
-                }
-              } else {
-                localStorage.removeItem('teacher_session');
-              }
-            } catch (e) {
-              console.error("Error parsing teacher session:", e);
-              localStorage.removeItem('teacher_session');
-            }
+            localStorage.removeItem('teacher_session');
           }
         }
       } catch (err: any) {
@@ -374,6 +300,7 @@ export const useAuth = () => {
         const errorMessage = (err?.message || '').toLowerCase();
         if (errorMessage.includes('refresh token') || errorMessage.includes('refresh_token_not_found')) {
           localStorage.removeItem('madrasah_auth_token');
+          localStorage.removeItem('teacher_session');
           OfflineService.removeCache('profile');
           setSession(null);
           setProfile(null);
@@ -396,16 +323,6 @@ export const useAuth = () => {
       } else if (session) {
         setSession(session);
         if (session.user) {
-          const teacherSessionStr = localStorage.getItem('teacher_session');
-          if (teacherSessionStr) {
-            try {
-              const teacherData = JSON.parse(teacherSessionStr);
-              if (teacherData && teacherData.id) {
-                // Already handled by initializeAuth, or we can just return
-                return;
-              }
-            } catch (e) {}
-          }
           fetchUserProfile(session.user.id, session.user.email);
         }
       }

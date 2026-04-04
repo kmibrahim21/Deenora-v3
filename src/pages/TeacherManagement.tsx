@@ -5,7 +5,7 @@ import {
   ChevronLeft, Loader2, CheckCircle2, AlertCircle,
   Smartphone, User, Briefcase, Lock, X, Save,
   Check, BookOpen, GraduationCap, Settings, 
-  MessageSquare, Calendar, ClipboardCheck, Layout, TrendingUp, UserCheck
+  MessageSquare, Calendar, ClipboardCheck, Layout, TrendingUp, UserCheck, Eye, EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Teacher, TeacherPermissions, Language, Institution, Class } from 'types';
@@ -64,6 +64,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -222,6 +223,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
       is_active: true
     });
     setPermissions(initialPermissions);
+    setShowPassword(false);
   };
 
   const openEditModal = (teacher: Teacher) => {
@@ -464,13 +466,20 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({ lang, madrasah, o
                         <div className="relative">
                           <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                           <input 
-                            type="password" 
+                            type={showPassword ? "text" : "password"} 
                             required={showAddModal}
                             placeholder={showEditModal ? 'Leave blank to keep current' : ''}
-                            className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-100 text-slate-700'}`}
+                            className={`w-full pl-11 pr-12 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-100 text-slate-700'}`}
                             value={formData.pin || ''}
                             onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
                           />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                          >
+                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
                         </div>
                       </div>
                     </div>

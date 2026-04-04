@@ -58,7 +58,42 @@ export default async function handler(req, res) {
           parsedPermissions = {};
         }
       }
+      
+      // Generate deterministic auth credentials
+      const authEmail = `t_${teacherData.id}@deenora.local`;
+      const authPassword = crypto.createHash('sha256').update(teacherData.id + (process.env.VITE_SUPABASE_URL || '')).digest('hex').substring(0, 16) + 'Aa1!';
+      
+      // Ensure Supabase Auth user exists with the same ID
+      const { data: existingUser, error: getUserError } = await supabase.auth.admin.getUserById(teacherData.id);
+      
+      if (getUserError || !existingUser?.user) {
+        const { error: createError } = await supabase.auth.admin.createUser({
+          id: teacherData.id,
+          email: authEmail,
+          password: authPassword,
+          email_confirm: true,
+          user_metadata: { role: 'teacher' }
+        });
+        if (createError && !createError.message.includes('already exists')) {
+          console.error('Failed to create auth user for teacher:', createError);
+        }
+      } else {
+        // Update password just in case
+        await supabase.auth.admin.updateUserById(teacherData.id, { password: authPassword });
+      }
+      
+      // Upsert profile to ensure RLS works
+      await supabase.from('profiles').upsert({
+        id: teacherData.id,
+        institution_id: teacherData.institution_id,
+        full_name: teacherData.teacher_name,
+        role: 'teacher',
+        permissions: parsedPermissions,
+        is_active: teacherData.is_active
+      });
+
       await supabase.from('teachers').update({ last_login_at: new Date().toISOString() }).eq('id', teacherData.id);
+      
       return res.status(200).json({ 
         user: {
           id: teacherData.id,
@@ -68,6 +103,10 @@ export default async function handler(req, res) {
           designation: teacherData.designation,
           photo_url: teacherData.photo_url,
           permissions: parsedPermissions
+        },
+        auth: {
+          email: authEmail,
+          password: authPassword
         }
       });
     }
@@ -93,6 +132,7 @@ export default async function handler(req, res) {
         return {
           ...t,
           name: t.teacher_name,
+          phone: t.mobile,
           permissions: parsedPermissions
         };
       });

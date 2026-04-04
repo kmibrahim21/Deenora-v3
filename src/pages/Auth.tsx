@@ -74,53 +74,42 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     setError('');
     
     try {
-      // 1. Call RPC to verify credentials and ensure Supabase user exists
-      const { data: rpcData, error: rpcError } = await supabase.rpc('check_teacher_login', {
-        p_phone: phone.trim(),
-        p_pin: pin.trim()
+      const response = await fetch('/api/teachers/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mobile: phone.trim(),
+          password: pin.trim()
+        })
       });
 
-      if (rpcError) {
-        // Fallback to direct table query if RPC doesn't exist yet (before user runs SQL)
-        const { data, error: fetchError } = await supabase
-          .from('teachers')
-          .select('*')
-          .eq('phone', phone.trim())
-          .eq('pin', pin.trim())
-          .eq('is_active', true)
-          .maybeSingle();
+      const data = await response.json();
 
-        if (fetchError) throw fetchError;
-        
-        if (data) {
-          localStorage.setItem('teacher_session', JSON.stringify(data));
-          window.location.reload();
-        } else {
-          setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
-        }
-        return;
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to login');
       }
-      
-      if (rpcData && rpcData.length > 0) {
-        const teacherData = rpcData[0];
-        
-        // 2. Sign in with Supabase Auth
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: teacherData.supabase_email,
-          password: pin.trim()
+
+      if (data.user && data.auth) {
+        // Sign in to Supabase Auth to get a real session
+        const { error: signInError } = await (supabase.auth as any).signInWithPassword({
+          email: data.auth.email,
+          password: data.auth.password
         });
         
         if (signInError) throw signInError;
-        
-        // 3. Store teacher session data
-        localStorage.setItem('teacher_session', JSON.stringify(teacherData));
+
+        localStorage.setItem('teacher_session', JSON.stringify(data.user));
         window.location.reload();
       } else {
         setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
       }
     } catch (err: any) {
       console.error('Teacher login error:', err);
-      setError(lang === 'bn' ? 'লগইন করতে সমস্যা হচ্ছে' : 'Error logging in');
+      setError(err.message === 'Invalid mobile number or password' 
+        ? (lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN')
+        : (lang === 'bn' ? 'লগইন করতে সমস্যা হচ্ছে' : 'Error logging in'));
     } finally {
       setLoading(false);
     }
