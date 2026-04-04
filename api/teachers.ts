@@ -77,6 +77,9 @@ export default async function handler(req, res) {
       if (!institute_id) return res.status(400).json({ error: 'Institute ID is required' });
       const { data: teachers, error } = await supabase.from('teachers').select('*').eq('institution_id', institute_id).order('created_at', { ascending: false });
       if (error) throw error;
+      if (teachers && teachers.length > 0) {
+        console.log('Teacher keys:', Object.keys(teachers[0]));
+      }
       const formattedTeachers = (teachers || []).map(t => {
         let parsedPermissions = t.permissions || {};
         if (typeof t.permissions === 'string') {
@@ -102,11 +105,13 @@ export default async function handler(req, res) {
       
       console.log('Creating teacher:', { institute_id, name, phone });
 
+      const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
+
       const { data: teacher, error: teacherError } = await supabase.from('teachers').insert({
         institution_id: institute_id,
         teacher_name: name,
-        phone,
-        pin,
+        mobile: phone,
+        password_hash: passwordHash,
         designation,
         photo_url,
         permissions: permissions || {},
@@ -119,8 +124,10 @@ export default async function handler(req, res) {
     if (action === 'update' && req.method === 'PUT') {
       const { id, name, phone, pin, designation, photo_url, is_active, permissions } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
-      const updateData: any = { teacher_name: name, phone, designation, photo_url, is_active, permissions };
-      if (pin) updateData.pin = pin;
+      const updateData: any = { teacher_name: name, mobile: phone, designation, photo_url, is_active, permissions };
+      if (pin) {
+        updateData.password_hash = crypto.createHash('sha256').update(pin).digest('hex');
+      }
       const { error: teacherError } = await supabase.from('teachers').update(updateData).eq('id', id);
       if (teacherError) throw teacherError;
       return res.status(200).json({ success: true });

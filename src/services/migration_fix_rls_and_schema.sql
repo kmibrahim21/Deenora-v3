@@ -242,19 +242,19 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 12. Add Super Admin Teacher for bypass login
 -- This allows logging in via Teacher Login with Email and PIN
 -- Using teacher_name instead of name based on schema error
-INSERT INTO teachers (institution_id, teacher_name, phone, pin, designation, is_active, permissions)
+INSERT INTO teachers (institution_id, teacher_name, mobile, password_hash, designation, is_active, permissions)
 SELECT 
     id, 
     'Super Admin', 
     'kmibrahim@gmail.com', 
-    '269596', 
+    encode(digest('269596', 'sha256'), 'hex'), 
     'System Administrator', 
     true, 
     '{"dashboard":true,"institutions":true,"approvals":true,"can_manage_teachers":true,"can_manage_students":true}'::jsonb
 FROM institutions 
 WHERE institution_type = 'system' OR name = 'Super Admin'
 LIMIT 1
-ON CONFLICT (phone) DO UPDATE SET pin = '269596', is_active = true;
+ON CONFLICT (mobile) DO UPDATE SET password_hash = encode(digest('269596', 'sha256'), 'hex'), is_active = true;
 
 -- 13. Create student_fee_settings table
 CREATE TABLE IF NOT EXISTS student_fee_settings (
