@@ -24,6 +24,7 @@ import { Institution, Language, Class, Student, Profile, UserRole } from 'types'
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { normalizePhone } from 'utils/smsUtils';
+import { useOfflineStatus } from 'hooks/useOffline';
 
 interface VoiceBroadcastProps {
   lang: Language;
@@ -37,6 +38,7 @@ interface VoiceBroadcastProps {
 }
 
 const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, triggerRefresh, dataVersion, isEmbedded = false, role, profile, onBack }) => {
+  const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canUseVoice = !isTeacher || profile?.permissions?.can_use_voice_call;
 
@@ -614,6 +616,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
     setIsBroadcasting(true);
     try {
+      if (!isOnline) {
+        setStatusModal({
+          show: true,
+          type: 'error',
+          title: 'Offline',
+          message: 'Internet required to send voice broadcast.'
+        });
+        setIsBroadcasting(false);
+        return;
+      }
+
       // Get the actual students to get their phone numbers
       const { data: students, error: studentError } = await supabase.from('students').select('guardian_phone, guardian_phone_2').eq('class_id', selectedClassId);
       

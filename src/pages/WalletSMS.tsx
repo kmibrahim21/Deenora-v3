@@ -7,6 +7,7 @@ import { SMSTemplate, Language, Institution, Class, Student, Transaction, Profil
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { getSmsLengthInfo } from 'utils/smsUtils';
+import { useOfflineStatus } from 'hooks/useOffline';
 import VoiceBroadcast from './VoiceBroadcast';
 
 interface WalletSMSProps {
@@ -21,6 +22,7 @@ interface WalletSMSProps {
 }
 
 const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, dataVersion, initialTab, role, profile, onBack }) => {
+  const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canSendSms = !isTeacher || profile?.permissions?.can_send_sms;
 
@@ -229,6 +231,17 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
   const handleSendBulk = async () => {
     if (!bulkMessage.trim() || !selectedClassId || classStudents.length === 0 || !madrasah) return;
+    
+    if (!isOnline) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'Offline',
+        message: 'Internet required to send SMS.'
+      });
+      return;
+    }
+
     setSendingBulk(true);
     try {
       await smsApi.sendBulk(madrasah.id, classStudents, bulkMessage);

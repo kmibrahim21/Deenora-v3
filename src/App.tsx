@@ -121,7 +121,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleStatusChange = () => {
-      if (navigator.onLine) OfflineService.processQueue();
+      if (navigator.onLine) {
+        OfflineService.processQueue();
+        triggerRefresh();
+      }
     };
     window.addEventListener("online", handleStatusChange);
     window.addEventListener("offline", handleStatusChange);

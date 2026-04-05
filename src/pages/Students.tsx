@@ -105,12 +105,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
         // Update cache if this is the first page and no search query
         if (reset && !searchQuery.trim()) {
-           // We only cache the first page for now, or we can fetch all for caching in background
-           // For simplicity, we just cache what we fetched.
-           // A better approach is to cache all students for the institute in a background task.
-           // Let's just cache the fetched data for now.
-           // Wait, if we overwrite the cache with just one page, we lose other pages.
-           // We should probably fetch all students for caching somewhere else, or just cache this class's students.
+           await CacheService.cacheData('students', institutionId, formattedData);
         }
       }
     } catch (err) {
