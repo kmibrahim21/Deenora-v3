@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@supabase/supabase-js';
 // Fix: Import icons from lucide-react instead of ../supabase
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History as HistoryIcon, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2 } from 'lucide-react';
@@ -154,6 +155,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   });
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
   const [detailsTab, setDetailsTab] = useState<'institution' | 'api' | 'permissions' | 'subscription'>('institution');
+  const [showRefreshPopup, setShowRefreshPopup] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Create Institution State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -276,6 +279,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
     return () => { isMounted = false; };
   }, [view, madrasahs.length]);
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await initData(true); // silent refresh to avoid full-page loader
+      setShowRefreshPopup(true);
+      setTimeout(() => setShowRefreshPopup(false), 3000);
+    } catch (err) {
+      setStatusModal({ 
+        show: true, 
+        type: 'error', 
+        title: lang === 'bn' ? 'ব্যর্থ' : 'Failed', 
+        message: lang === 'bn' ? 'ডাটা রিফ্রেশ করতে সমস্যা হয়েছে।' : 'Failed to refresh system data.' 
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => { 
     const cleanup = initData(); 
@@ -736,8 +758,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             <div className="space-y-6 animate-in slide-in-from-bottom-5">
               <div className="flex items-center justify-between px-2">
                 <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>সিস্টেম ড্যাশবোর্ড</h1>
-                <button onClick={() => initData()} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm`}>
-                   <RefreshCw size={18} />
+                <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                   <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
                 </button>
               </div>
 
@@ -907,6 +929,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             <div className="space-y-6">
               <div className="flex items-center justify-between px-2">
                 <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>মাদরাসা লিস্ট</h1>
+                <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                   <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
               </div>
 
               <div className="flex gap-2 px-1">
@@ -969,8 +994,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             <div className="space-y-8 px-1">
               <div className="flex items-center justify-between px-2">
                 <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>পেমেন্ট ম্যানেজমেন্ট</h1>
-                <button onClick={() => initData()} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm`}>
-                   <RefreshCw size={18} />
+                <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                   <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
                 </button>
               </div>
 
@@ -1539,6 +1564,43 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         </div>,
         document.body
       )}
+
+      <AnimatePresence>
+        {showRefreshPopup && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: -20 }}
+              className={`pointer-events-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900/90 border-slate-700' : 'bg-white/90 border-blue-100'} backdrop-blur-xl border-2 p-8 rounded-[3rem] shadow-2xl flex flex-col items-center text-center max-w-xs w-full relative overflow-hidden`}
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500" />
+              
+              <motion.div 
+                initial={{ rotate: -90, scale: 0 }}
+                animate={{ rotate: 0, scale: 1 }}
+                transition={{ type: 'spring', damping: 12, stiffness: 200, delay: 0.1 }}
+                className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-[#2563EB]'} shadow-inner`}
+              >
+                <CheckCircle2 size={40} />
+              </motion.div>
+              
+              <h3 className={`text-2xl font-black mb-2 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>সফল হয়েছে!</h3>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest leading-relaxed">
+                সিস্টেম ডাটা সফলভাবে রিফ্রেশ করা হয়েছে।
+              </p>
+              
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 3 }}
+                className="absolute bottom-0 left-0 h-1 bg-blue-500/20"
+              />
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
     </div>
   );
 };
