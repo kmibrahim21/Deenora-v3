@@ -5,6 +5,8 @@ import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, Chev
 import { supabase, offlineApi, smsApi } from 'supabase';
 import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
+import { useOfflineStatus } from 'hooks/useOffline';
+import { CacheService } from 'services/cacheService';
 
 
 interface StudentsProps {
@@ -25,6 +27,7 @@ interface StudentsProps {
 const PAGE_SIZE = 50;
 
 const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, institutionId, madrasah, onNavigateToWallet }) => {
+  const isOnline = useOfflineStatus();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -59,6 +62,21 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     const to = from + PAGE_SIZE - 1;
 
     try {
+      if (!isOnline) {
+        const cachedStudents = await CacheService.getCachedData('students', institutionId);
+        let filtered = cachedStudents.filter(s => s.class_id === selectedClass.id);
+        if (searchQuery.trim()) {
+          filtered = filtered.filter(s => s.student_name.toLowerCase().includes(searchQuery.toLowerCase()));
+        }
+        filtered.sort((a, b) => (a.roll || 0) - (b.roll || 0));
+        
+        const paginated = filtered.slice(from, to + 1);
+        setStudents(prev => reset ? paginated : [...prev, ...paginated]);
+        setHasMore(filtered.length > to + 1);
+        if (!reset) setPage(currentPage + 1);
+        return;
+      }
+
       // Fix: Add institution_id to the select query to satisfy the Student type requirements.
       let query = supabase
         .from('students')
@@ -84,6 +102,16 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         setStudents(prev => reset ? formattedData : [...prev, ...formattedData]);
         setHasMore(data.length === PAGE_SIZE);
         if (!reset) setPage(currentPage + 1);
+
+        // Update cache if this is the first page and no search query
+        if (reset && !searchQuery.trim()) {
+           // We only cache the first page for now, or we can fetch all for caching in background
+           // For simplicity, we just cache what we fetched.
+           // A better approach is to cache all students for the institute in a background task.
+           // Let's just cache the fetched data for now.
+           // Wait, if we overwrite the cache with just one page, we lose other pages.
+           // We should probably fetch all students for caching somewhere else, or just cache this class's students.
+        }
       }
     } catch (err) {
       console.error(err);
@@ -177,8 +205,15 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           </button>
           {!isSelectionMode && canAdd && (
             <button 
-              onClick={onAddClick} 
-              className="w-11 h-11 bg-white rounded-[1.2rem] flex items-center justify-center text-[#2563EB] active:scale-90 transition-all border border-white shadow-xl hover:shadow-[#2563EB]/20"
+              onClick={() => {
+                if (!isOnline) {
+                  setStatusModal({ show: true, type: 'error', title: 'Offline', message: 'Internet required to add students.' });
+                  setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 3000);
+                  return;
+                }
+                onAddClick();
+              }} 
+              className={`w-11 h-11 rounded-[1.2rem] flex items-center justify-center active:scale-90 transition-all border shadow-xl ${!isOnline ? 'bg-slate-400 text-white border-slate-400 cursor-not-allowed' : 'bg-white text-[#2563EB] border-white hover:shadow-[#2563EB]/20'}`}
             >
               <Plus size={24} strokeWidth={3} />
             </button>

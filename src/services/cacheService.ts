@@ -1,0 +1,35 @@
+import { offlineDb, type CachedData } from './offlineDb';
+
+export class CacheService {
+  static async cacheData(storeName: 'students' | 'teachers' | 'attendance' | 'fees', institutionId: string, data: any[]) {
+    try {
+      const table = offlineDb[storeName];
+      
+      // Delete existing records for this institution
+      await table.where('institution_id').equals(institutionId).delete();
+
+      // Add new records
+      const cachedData: CachedData[] = data.map(item => ({
+        id: item.id || crypto.randomUUID(),
+        institution_id: institutionId,
+        data: item,
+        timestamp: Date.now()
+      }));
+
+      await table.bulkAdd(cachedData);
+    } catch (error) {
+      console.error(`[CacheService] Error caching data in ${storeName}:`, error);
+    }
+  }
+
+  static async getCachedData(storeName: 'students' | 'teachers' | 'attendance' | 'fees', institutionId: string): Promise<any[]> {
+    try {
+      const table = offlineDb[storeName];
+      const records = await table.where('institution_id').equals(institutionId).toArray();
+      return records.map(record => record.data);
+    } catch (error) {
+      console.error(`[CacheService] Error getting cached data from ${storeName}:`, error);
+      return [];
+    }
+  }
+}

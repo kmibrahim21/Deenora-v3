@@ -41,6 +41,8 @@ import {
 } from "types";
 import { t } from "translations";
 import { supabase } from "supabase";
+import { useOfflineStatus } from "hooks/useOffline";
+import { CacheService } from "services/cacheService";
 
 interface TeacherManagementProps {
   lang: Language;
@@ -97,6 +99,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       </div>
     );
   }
+  const isOnline = useOfflineStatus();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,12 +151,24 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     if (!madrasah?.id) return;
     setLoading(true);
     try {
+      if (!isOnline) {
+        const cachedTeachers = await CacheService.getCachedData('teachers', madrasah.id);
+        setTeachers(cachedTeachers);
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(
         `/api/teachers/list?institute_id=${madrasah.id}`,
       );
       if (!response.ok) throw new Error("Failed to fetch teachers");
       const data = await response.json();
       setTeachers(data.teachers || []);
+      
+      // Cache the fetched teachers
+      if (data.teachers) {
+        await CacheService.cacheData('teachers', madrasah.id, data.teachers);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -305,7 +320,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     >
       {/* Header */}
       <div
-        className={`sticky top-0 z-30 px-4 py-4 border-b ${isDark ? "bg-slate-900 border-slate-800" : "bg-white/80 backdrop-blur-md border-blue-100"}`}
+        className={`px-4 py-4 border-b ${isDark ? "bg-slate-900 border-slate-800" : "bg-transparent border-blue-100"}`}
       >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -328,10 +343,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           </div>
           <button
             onClick={() => {
+              if (!isOnline) {
+                setError("Internet required to add teachers.");
+                return;
+              }
               resetForm();
               setShowAddModal(true);
             }}
-            className="bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+            className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg active:scale-95 transition-all ${!isOnline ? "bg-slate-400 text-white cursor-not-allowed shadow-none" : "bg-blue-600 text-white shadow-blue-600/20"}`}
           >
             <UserPlus size={18} />
             <span className="hidden sm:inline">{t("add_teacher", lang)}</span>

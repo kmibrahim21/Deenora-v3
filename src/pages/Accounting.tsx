@@ -8,6 +8,8 @@ import { SchoolFeeEngine } from 'components/finance/SchoolFeeEngine';
 import { QawmiFeeEngine } from 'components/finance/QawmiFeeEngine';
 import StudentAccountingDetail from 'components/finance/StudentAccountingDetail';
 import { sortMadrasahClasses } from 'pages/Classes';
+import { useOfflineStatus } from 'hooks/useOffline';
+import { CacheService } from 'services/cacheService';
 
 interface AccountingProps {
   lang: Language;
@@ -40,6 +42,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     );
   }
 
+  const isOnline = useOfflineStatus();
   const [activeTab, setActiveTab] = useState<'summary' | 'ledger' | 'fees' | 'structures' | 'add-ledger'>('fees');
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<any>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
@@ -82,8 +85,18 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     if (activeTab === 'summary' || activeTab === 'ledger') {
       setLoading(true);
       try {
+        if (!isOnline) {
+          const cachedLedger = await CacheService.getCachedData('fees', madrasah.id);
+          setLedger(cachedLedger);
+          setLoading(false);
+          return;
+        }
+
         const { data } = await supabase.from('ledger').select('*').eq('institution_id', madrasah.id).order('transaction_date', { ascending: false });
-        if (data) setLedger(data);
+        if (data) {
+          setLedger(data);
+          await CacheService.cacheData('fees', madrasah.id, data);
+        }
         setRefreshKey(prev => prev + 1);
       } catch (e: any) { 
         console.error("Accounting Fetch Error:", e);
@@ -93,6 +106,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
   const handleAddLedger = async () => {
     if (!madrasah || !amount || !category) return;
+    if (!isOnline) {
+      alert("Internet required to add ledger entry.");
+      return;
+    }
     setIsSaving(true);
     try {
       const { error } = await supabase.from('ledger').insert({

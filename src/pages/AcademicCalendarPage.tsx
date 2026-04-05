@@ -21,7 +21,7 @@ const AcademicCalendarPage: React.FC<AcademicCalendarPageProps> = ({
   return (
     <div className={`min-h-screen pb-24 ${isDark ? "bg-slate-950" : ""}`}>
       <div
-        className={`sticky top-0 z-30 px-4 py-4 flex items-center gap-4 border-b ${isDark ? "bg-slate-900 border-slate-800" : "bg-white/80 backdrop-blur-md border-blue-100"}`}
+        className={`px-4 py-4 flex items-center gap-4 border-b ${isDark ? "bg-slate-900 border-slate-800" : "bg-transparent border-blue-100"}`}
       >
         <button
           onClick={onBack}

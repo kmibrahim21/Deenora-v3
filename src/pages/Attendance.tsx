@@ -6,6 +6,8 @@ import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, 
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
+import { useOfflineStatus } from 'hooks/useOffline';
+import { CacheService } from 'services/cacheService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface AttendanceProps {
@@ -39,6 +41,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     );
   }
 
+  const isOnline = useOfflineStatus();
   const [activeTab, setActiveTab] = useState<'daily' | 'report'>('daily');
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
@@ -139,6 +142,16 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setLoading(true);
     setFetchError(null);
     try {
+      if (!isOnline) {
+        const cachedReport = await CacheService.getCachedData('attendance', madrasah?.id || '');
+        // Filter cached report by class and date range
+        // For simplicity, we just set the cached data if it matches the class
+        const filtered = cachedReport.filter(r => r.class_id === cid);
+        setReportData(filtered);
+        setLoading(false);
+        return;
+      }
+
       let startDate, endDate;
 
       if (reportType === 'monthly') {
@@ -156,7 +169,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       });
 
       if (error) throw error;
-      if (data) setReportData(data);
+      if (data) {
+        setReportData(data);
+        await CacheService.cacheData('attendance', madrasah?.id || '', data);
+      }
     } catch (e: any) { 
       console.error(e);
       setFetchError(e.message);
@@ -383,12 +399,32 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                    ))}
                    </div>
                    <div className="flex flex-col gap-4 mt-8">
-                        <button onClick={handleSave} disabled={saving} className="w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg active:scale-95 transition-all">
+                        <button 
+                          onClick={() => {
+                            if (!isOnline) {
+                              alert("Internet required to save attendance.");
+                              return;
+                            }
+                            handleSave();
+                          }} 
+                          disabled={saving || !isOnline} 
+                          className={`w-full h-16 font-black rounded-full flex items-center justify-center gap-3 text-lg active:scale-95 transition-all ${!isOnline ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-[#2563EB] text-white shadow-premium'}`}
+                        >
                             {saving ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} strokeWidth={3} /> {t('save', lang)}</>}
                         </button>
                         
                         <div className="flex items-center gap-3">
-                           <button onClick={sendAbsentAlerts} disabled={sendingAlerts} className={`flex-1 h-14 font-black rounded-full flex items-center justify-center gap-3 text-[13px] active:scale-95 transition-all border uppercase tracking-widest shadow-sm ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                           <button 
+                             onClick={() => {
+                               if (!isOnline) {
+                                 alert("Internet required to send SMS.");
+                                 return;
+                               }
+                               sendAbsentAlerts();
+                             }} 
+                             disabled={sendingAlerts || !isOnline} 
+                             className={`flex-1 h-14 font-black rounded-full flex items-center justify-center gap-3 text-[13px] active:scale-95 transition-all border uppercase tracking-widest shadow-sm ${!isOnline ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' : isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}
+                           >
                                {sendingAlerts ? <Loader2 className="animate-spin" size={20} /> : <><Send size={20} className={isDark ? 'text-blue-400/60' : 'text-[#2563EB]/60'} /> {t('absent_alert', lang)}</>}
                            </button>
                            <button 

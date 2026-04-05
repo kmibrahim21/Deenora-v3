@@ -45,7 +45,7 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
       className={`min-h-screen pb-24 ${madrasah?.theme === "dark" ? "bg-slate-900" : ""}`}
     >
       <div
-        className={`${madrasah?.theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white/80 backdrop-blur-md border-blue-100"} sticky top-0 z-30 px-4 py-4 flex items-center gap-4 border-b`}
+        className={`${madrasah?.theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-transparent border-blue-100"} px-4 py-4 flex items-center gap-4 border-b`}
       >
         <button
           onClick={onBack}

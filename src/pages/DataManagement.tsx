@@ -252,11 +252,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500 pb-24">
-      <div className="flex items-center gap-5 px-2">
-        <button onClick={onBack} className={`w-14 h-14 ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-blue-50 border-blue-100 text-[#2563EB]'} rounded-2xl flex items-center justify-center active:scale-90 transition-all border shadow-sm`}>
-          <ArrowLeft size={28} strokeWidth={3} />
-        </button>
-        <h1 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E293B]'} font-noto`}>ডাটা ম্যানেজমেন্ট</h1>
+      <div className="sticky top-0 z-30 bg-slate-50/80 backdrop-blur-md pb-4 pt-2">
+        <div className="flex items-center gap-5 px-2">
+          <button onClick={onBack} className={`w-14 h-14 ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-blue-50 border-blue-100 text-[#2563EB]'} rounded-2xl flex items-center justify-center active:scale-90 transition-all border shadow-sm`}>
+            <ArrowLeft size={28} strokeWidth={3} />
+          </button>
+          <h1 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E293B]'} font-noto`}>ডাটা ম্যানেজমেন্ট</h1>
+        </div>
       </div>
 
       {status.message && (
