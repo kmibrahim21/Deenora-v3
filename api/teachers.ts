@@ -192,11 +192,13 @@ export default async function handler(req, res) {
       // Delete auth user
       try {
         const { error: authError } = await supabase.auth.admin.deleteUser(id);
-        if (authError) {
-          console.warn('Failed to delete auth user (might not exist):', authError.message);
+        if (authError && !authError.message.includes('User not found') && !authError.message.includes('user not found')) {
+          console.warn('Failed to delete auth user:', authError.message);
         }
-      } catch (e) {
-        console.warn('Error deleting auth user:', e);
+      } catch (e: any) {
+        if (e?.message && !e.message.includes('User not found') && !e.message.includes('user not found')) {
+          console.warn('Error deleting auth user:', e);
+        }
       }
       
       return res.status(200).json({ success: true });
