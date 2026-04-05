@@ -19,14 +19,16 @@ interface StudentsProps {
   triggerRefresh: () => void;
   canAdd?: boolean;
   canSendSMS?: boolean;
+  canUseVoice?: boolean;
   institutionId?: string;
   madrasah?: Institution | null;
   onNavigateToWallet?: () => void;
+  onNavigateToVoiceBroadcast?: (ids: string[]) => void;
 }
 
 const PAGE_SIZE = 50;
 
-const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, institutionId, madrasah, onNavigateToWallet }) => {
+const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
   const isOnline = useOfflineStatus();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -316,9 +318,18 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                 ))}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2">
-              {canSendSystemSMS && <button onClick={handlePremiumSMS} disabled={sending || !selectedTemplate} className="h-11 bg-[#2563EB] text-white rounded-full font-black text-[9px] uppercase shadow-lg flex items-center justify-center gap-2">{sending ? <Loader2 size={14} /> : <MessageSquare size={14} fill="currentColor" />} {t('system_sms', lang)}</button>}
-              {canSendFreeSMS && <button onClick={() => { if(!selectedTemplate) return; const phones = students.filter(s => selectedIds.has(s.id)).map(s => s.guardian_phone).join(','); window.location.href = `sms:${phones}?body=${encodeURIComponent(selectedTemplate.body)}`; }} disabled={!selectedTemplate} className="h-11 bg-[#1E3A8A] text-white rounded-full font-black text-[9px] uppercase shadow-lg flex items-center justify-center gap-2"><Smartphone size={14} fill="currentColor" /> {t('native_sms', lang)}</button>}
+            <div className={`grid ${canUseVoice ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
+              {canSendSMS && <button onClick={handlePremiumSMS} disabled={sending || !selectedTemplate} className="h-11 bg-[#2563EB] text-white rounded-full font-black text-[9px] uppercase shadow-lg flex items-center justify-center gap-2">{sending ? <Loader2 size={14} /> : <MessageSquare size={14} fill="currentColor" />} {t('system_sms', lang)}</button>}
+              {canSendSMS && <button onClick={() => { if(!selectedTemplate) return; const phones = students.filter(s => selectedIds.has(s.id)).map(s => s.guardian_phone).join(','); window.location.href = `sms:${phones}?body=${encodeURIComponent(selectedTemplate.body)}`; }} disabled={!selectedTemplate} className="h-11 bg-[#1E3A8A] text-white rounded-full font-black text-[9px] uppercase shadow-lg flex items-center justify-center gap-2"><Smartphone size={14} fill="currentColor" /> {t('native_sms', lang)}</button>}
+              {canUseVoice && (
+                <button 
+                  onClick={() => onNavigateToVoiceBroadcast?.(Array.from(selectedIds))} 
+                  className="h-11 bg-emerald-600 text-white rounded-full font-black text-[9px] uppercase shadow-lg flex items-center justify-center gap-2"
+                >
+                  <PhoneCall size={14} fill="currentColor" />
+                  {lang === 'bn' ? 'ভয়েস কল' : 'Voice Call'}
+                </button>
+              )}
             </div>
             <p className="text-[9px] font-black text-[#2563EB] uppercase tracking-widest text-center">{selectedIds.size} {t('selected', lang)}</p>
           </div>

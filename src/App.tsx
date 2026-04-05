@@ -67,6 +67,7 @@ const App: React.FC = () => {
   >("bulk-sms");
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [preSelectedStudentIds, setPreSelectedStudentIds] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const [lang, setLang] = useState<Language>(
@@ -256,7 +257,16 @@ const App: React.FC = () => {
               role === "super_admin" ||
               !!profile?.permissions?.can_send_sms
             }
+            canUseVoice={
+              role === "madrasah_admin" ||
+              role === "super_admin" ||
+              !!profile?.permissions?.can_use_voice_call
+            }
             institutionId={madrasah?.id}
+            onNavigateToVoiceBroadcast={(ids) => {
+              setPreSelectedStudentIds(ids);
+              setView("voice-broadcast");
+            }}
           />
         );
       case "teachers":
@@ -426,7 +436,11 @@ const App: React.FC = () => {
             dataVersion={dataVersion}
             role={role}
             profile={profile}
-            onBack={() => handleBack("home")}
+            onBack={() => {
+              setPreSelectedStudentIds([]);
+              handleBack("home");
+            }}
+            preSelectedStudentIds={preSelectedStudentIds}
           />
         );
       case "sms-voice-menu":
