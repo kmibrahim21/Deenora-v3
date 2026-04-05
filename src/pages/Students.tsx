@@ -110,8 +110,23 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
            await CacheService.cacheData('students', institutionId, formattedData);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      // Fallback to cache if network fails
+      if (err.message?.includes('fetch') || err.name === 'TypeError' || !navigator.onLine) {
+        console.log("Network error in fetchStudents, falling back to cache...");
+        const cachedStudents = await CacheService.getCachedData('students', institutionId);
+        let filtered = cachedStudents.filter(s => s.class_id === selectedClass.id);
+        if (searchQuery.trim()) {
+          filtered = filtered.filter(s => s.student_name.toLowerCase().includes(searchQuery.toLowerCase()));
+        }
+        filtered.sort((a, b) => (a.roll || 0) - (b.roll || 0));
+        
+        const paginated = filtered.slice(from, to + 1);
+        setStudents(prev => reset ? paginated : [...prev, ...paginated]);
+        setHasMore(filtered.length > to + 1);
+        if (!reset) setPage(currentPage + 1);
+      }
     } finally {
       setLoading(false);
       setLoadingMore(false);

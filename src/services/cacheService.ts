@@ -1,7 +1,7 @@
 import { offlineDb, type CachedData } from './offlineDb';
 
 export class CacheService {
-  static async cacheData(storeName: 'students' | 'teachers' | 'attendance' | 'fees', institutionId: string, data: any[]) {
+  static async cacheData(storeName: 'students' | 'teachers' | 'attendance' | 'fees' | 'stats', institutionId: string, data: any[] | any) {
     try {
       const table = offlineDb[storeName];
       
@@ -9,7 +9,8 @@ export class CacheService {
       await table.where('institution_id').equals(institutionId).delete();
 
       // Add new records
-      const cachedData: CachedData[] = data.map(item => ({
+      const dataArray = Array.isArray(data) ? data : [data];
+      const cachedData: CachedData[] = dataArray.map(item => ({
         id: item.id || crypto.randomUUID(),
         institution_id: institutionId,
         data: item,
@@ -22,7 +23,7 @@ export class CacheService {
     }
   }
 
-  static async getCachedData(storeName: 'students' | 'teachers' | 'attendance' | 'fees', institutionId: string): Promise<any[]> {
+  static async getCachedData(storeName: 'students' | 'teachers' | 'attendance' | 'fees' | 'stats', institutionId: string): Promise<any[]> {
     try {
       const table = offlineDb[storeName];
       const records = await table.where('institution_id').equals(institutionId).toArray();

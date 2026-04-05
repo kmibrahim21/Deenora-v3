@@ -24,15 +24,17 @@ export class OfflineDatabase extends Dexie {
   teachers!: Table<CachedData>;
   attendance!: Table<CachedData>;
   fees!: Table<CachedData>;
+  stats!: Table<CachedData>;
 
   constructor() {
     super('OfflineQueueDB');
-    this.version(2).stores({
+    this.version(3).stores({
       actions: '++id, table, action, clientId, timestamp, synced',
       students: 'id, institution_id, timestamp',
       teachers: 'id, institution_id, timestamp',
       attendance: 'id, institution_id, timestamp',
-      fees: 'id, institution_id, timestamp'
+      fees: 'id, institution_id, timestamp',
+      stats: 'id, institution_id, timestamp'
     });
   }
 }

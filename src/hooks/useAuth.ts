@@ -45,6 +45,7 @@ export const useAuth = () => {
           : profileData;
           
         setProfile(finalProfile);
+        OfflineService.setCache('user_profile', finalProfile);
         
         // Then get the institution if institution_id exists and is valid
         if (isValidUUID(finalProfile.institution_id)) {
@@ -155,9 +156,18 @@ export const useAuth = () => {
 
       // Try to load from cache if network fails
       const cachedMadrasah = OfflineService.getCache('profile');
-      if (cachedMadrasah) {
-        console.log("Network error, using cached madrasah data...");
-        setMadrasah(cachedMadrasah);
+      const cachedProfile = OfflineService.getCache('user_profile');
+      
+      if (cachedMadrasah || cachedProfile) {
+        console.log("Network error, using cached auth data...");
+        if (cachedMadrasah) setMadrasah(cachedMadrasah);
+        if (cachedProfile) setProfile(cachedProfile);
+        
+        // If we have cached data, don't show a fatal auth error for network issues
+        if (err.message?.includes('fetch') || err.name === 'TypeError' || !navigator.onLine) {
+          setLoading(false);
+          return;
+        }
       }
 
       setAuthError(err.message);
@@ -213,46 +223,51 @@ export const useAuth = () => {
               const teacherData = JSON.parse(teacherSessionStr);
               if (teacherData && teacherData.id) {
                 // Fetch latest teacher data to get updated permissions and check active status
-                const { data: latestTeacher, error: tError } = await supabase
-                  .from('teachers')
-                  .select('*')
-                  .eq('id', teacherData.id)
-                  .maybeSingle();
+                try {
+                  const { data: latestTeacher, error: tError } = await supabase
+                    .from('teachers')
+                    .select('*')
+                    .eq('id', teacherData.id)
+                    .maybeSingle();
 
-                if (latestTeacher) {
-                  if (!latestTeacher.is_active) {
-                    localStorage.removeItem('teacher_session');
-                    setProfile(null);
-                    setMadrasah(null);
-                    setLoading(false);
-                    return;
-                  }
-
-                  setProfile({
-                    id: latestTeacher.id,
-                    institution_id: latestTeacher.institution_id,
-                    full_name: latestTeacher.name,
-                    role: 'teacher',
-                    is_active: latestTeacher.is_active,
-                    created_at: latestTeacher.created_at,
-                    permissions: latestTeacher.permissions
-                  });
-                  // Update local storage too
-                  localStorage.setItem('teacher_session', JSON.stringify(latestTeacher));
-                  
-                  // Fetch madrasah data
-                  if (isValidUUID(latestTeacher.institution_id)) {
-                    const { data: institutionData } = await supabase
-                      .from('institutions')
-                      .select('*')
-                      .eq('id', latestTeacher.institution_id)
-                      .maybeSingle();
-                      
-                    if (institutionData) {
-                      setMadrasah(institutionData);
+                  if (latestTeacher) {
+                    if (!latestTeacher.is_active) {
+                      localStorage.removeItem('teacher_session');
+                      setProfile(null);
+                      setMadrasah(null);
+                      setLoading(false);
+                      return;
                     }
+
+                    setProfile({
+                      id: latestTeacher.id,
+                      institution_id: latestTeacher.institution_id,
+                      full_name: latestTeacher.name,
+                      role: 'teacher',
+                      is_active: latestTeacher.is_active,
+                      created_at: latestTeacher.created_at,
+                      permissions: latestTeacher.permissions
+                    });
+                    // Update local storage too
+                    localStorage.setItem('teacher_session', JSON.stringify(latestTeacher));
+                    
+                    // Fetch madrasah data
+                    if (isValidUUID(latestTeacher.institution_id)) {
+                      const { data: institutionData } = await supabase
+                        .from('institutions')
+                        .select('*')
+                        .eq('id', latestTeacher.institution_id)
+                        .maybeSingle();
+                        
+                      if (institutionData) {
+                        setMadrasah(institutionData);
+                      }
+                    }
+                  } else {
+                    throw new Error('Teacher not found');
                   }
-                } else {
+                } catch (fetchErr) {
+                  console.log("Teacher fetch failed (likely offline), using cached session...");
                   // Fallback to stored data if fetch fails (e.g. offline)
                   setProfile({
                     id: teacherData.id,
@@ -264,17 +279,10 @@ export const useAuth = () => {
                     permissions: teacherData.permissions
                   });
                   
-                  // Fetch madrasah data
-                  if (isValidUUID(teacherData.institution_id)) {
-                    const { data: institutionData } = await supabase
-                      .from('institutions')
-                      .select('*')
-                      .eq('id', teacherData.institution_id)
-                      .maybeSingle();
-                      
-                    if (institutionData) {
-                      setMadrasah(institutionData);
-                    }
+                  // Try to get cached madrasah
+                  const cachedMadrasah = OfflineService.getCache('profile');
+                  if (cachedMadrasah) {
+                    setMadrasah(cachedMadrasah);
                   }
                 }
                 

@@ -170,7 +170,15 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         await CacheService.cacheData('teachers', madrasah.id, data.teachers);
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error("Fetch teachers error:", err);
+      // Fallback to cache if network fails
+      if (err.message?.includes('fetch') || err.name === 'TypeError' || !navigator.onLine) {
+        console.log("Network error in fetchTeachers, falling back to cache...");
+        const cachedTeachers = await CacheService.getCachedData('teachers', madrasah.id);
+        setTeachers(cachedTeachers);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }

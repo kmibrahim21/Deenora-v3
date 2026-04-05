@@ -10,6 +10,7 @@ import AttendanceAnalyticsDashboard from 'components/AttendanceAnalyticsDashboar
 import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import SmartResultAnalytics from 'components/SmartResultAnalytics';
 import { isValidUUID } from 'utils/validation';
+import { CacheService } from 'services/cacheService';
 
 interface HomeProps {
   onStudentClick: (student: Student) => void;
@@ -91,6 +92,15 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     }
     setLoadingStats(true);
     try {
+      if (!navigator.onLine) {
+        const cachedStats = await CacheService.getCachedData('stats', institutionId);
+        if (cachedStats && cachedStats.length > 0) {
+          setStats(cachedStats[0]);
+          setLoadingStats(false);
+          return;
+        }
+      }
+
       const today = new Date().toISOString().split('T')[0];
       const allowedClasses = profile?.permissions?.allowed_classes;
       const isTeacher = role === 'teacher';
@@ -120,16 +130,28 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
 
       const [stdRes, clsRes, teacherRes, mRes, attRes] = await Promise.all(promises);
 
-      setStats({
+      const newStats = {
         totalStudents: stdRes.count || 0,
         totalClasses: clsRes.count || 0,
         totalTeachers: teacherRes.count || 0,
         smsBalance: mRes.data?.sms_balance || 0,
         voiceBalance: mRes.data?.balance || 0,
         attendanceToday: attRes.count || 0
-      });
-    } catch (e) {
+      };
+
+      setStats(newStats);
+      
+      // Cache stats
+      await CacheService.cacheData('stats', institutionId, newStats);
+    } catch (e: any) {
       console.error("Dashboard Stats Error:", e);
+      // Fallback to cache if network fails
+      if (e.message?.includes('fetch') || e.name === 'TypeError' || !navigator.onLine) {
+        const cachedStats = await CacheService.getCachedData('stats', institutionId);
+        if (cachedStats && cachedStats.length > 0) {
+          setStats(cachedStats[0]);
+        }
+      }
     } finally {
       setLoadingStats(false);
     }
