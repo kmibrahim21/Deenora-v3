@@ -155,10 +155,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                     <MessageSquare size={22} strokeWidth={isTabActive('sms-voice-menu') ? 2.5 : 2} />
                     <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'এসএমএস & ভয়েস' : 'SMS & Voice'}</span>
                   </button>
-                  <button onClick={() => setView('tutorials')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('tutorials') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
-                    <Play size={22} strokeWidth={isTabActive('tutorials') ? 2.5 : 2} />
-                    <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'টিউটোরিয়াল' : 'Tutorials'}</span>
-                  </button>
                 </>
               )}
               <button onClick={() => setView(isSuperAdmin ? 'super-account' : 'account')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
@@ -305,10 +301,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <button onClick={() => setView('sms-voice-menu')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
                     <MessageSquare size={20} />
                     <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'এসএমএস' : 'SMS'}</span>
-                  </button>
-                  <button onClick={() => setView('tutorials')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('tutorials') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                    <Play size={20} />
-                    <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'টিউটোরিয়াল' : 'Tutorials'}</span>
                   </button>
                 </>
               )}

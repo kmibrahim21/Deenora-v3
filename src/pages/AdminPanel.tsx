@@ -153,6 +153,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     onConfirm: () => {},
   });
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
+  const [detailsTab, setDetailsTab] = useState<'institution' | 'api' | 'permissions' | 'subscription'>('institution');
   
   // Create Institution State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -1156,196 +1157,246 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       </div>
                    </div>
 
+                   {/* Tab Navigation */}
+                   <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                      <button 
+                        onClick={() => setDetailsTab('institution')}
+                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'institution' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                      >
+                         <Building2 size={14} /> {lang === 'bn' ? 'প্রতিষ্ঠান তথ্য' : 'Institution Info'}
+                      </button>
+                      <button 
+                        onClick={() => setDetailsTab('api')}
+                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'api' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                      >
+                         <Key size={14} /> {lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}
+                      </button>
+                      <button 
+                        onClick={() => setDetailsTab('permissions')}
+                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'permissions' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                      >
+                         <ShieldCheck size={14} /> {lang === 'bn' ? 'পারমিশন' : 'Permissions'}
+                      </button>
+                      <button 
+                        onClick={() => setDetailsTab('subscription')}
+                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'subscription' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                      >
+                         <CreditCard size={14} /> {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
+                      </button>
+                   </div>
+
                    <div className={`space-y-6 pt-4 border-t ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Name</label>
-                            <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editName} onChange={(e) => setEditName(e.target.value)} />
-                         </div>
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Gmail / Email</label>
-                            <input type="email" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
-                         </div>
-                         <div className="grid grid-cols-2 gap-4 lg:col-span-2">
-                            <div className="space-y-2">
-                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Phone</label>
-                               <input type="tel" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
-                            </div>
-                            <div className="space-y-2">
-                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">User PIN / Password</label>
-                               <div className="relative">
-                                  <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
-                                  <Shield className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-                               </div>
-                            </div>
-                          </div>
-                       </div>
+                      {detailsTab === 'institution' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Name</label>
+                                 <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                              </div>
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Gmail / Email</label>
+                                 <input type="email" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                              </div>
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:col-span-2">
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Phone</label>
+                                    <input type="tel" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">User PIN / Password</label>
+                                    <div className="relative">
+                                       <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
+                                       <Shield className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                                    </div>
+                                 </div>
+                              </div>
+                              <div className="lg:col-span-2 space-y-2">
+                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Address</label>
+                                 <textarea className={`w-full h-24 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 py-4 font-black outline-none focus:border-[#2563EB]/20 resize-none`} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Enter full address..." />
+                              </div>
+                           </div>
 
-                       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
-                          <div className="flex items-center justify-between px-1">
-                             <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                <Key size={14} className={madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-600'} /> API & Security
-                             </h4>
-                          </div>
-                          <div className="space-y-4">
-                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                <div className="space-y-1.5">
-                                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE API Key</label>
-                                   <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="API Key" />
-                                </div>
-                                <div className="space-y-1.5">
-                                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Secret Key</label>
-                                   <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
-                                </div>
-                                <div className="space-y-1.5">
-                                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE Client ID</label>
-                                   <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
-                                </div>
-                             </div>
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                              <div className="flex items-center justify-between px-1">
+                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <Sliders size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> Basic Config
+                                 </h4>
+                                 <button onClick={() => setEditActive(!editActive)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all ${editActive ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                                    {editActive ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{editActive ? 'Active' : 'Inactive'}</span>
+                                 </button>
+                              </div>
+                              <div className="space-y-4">
+                                 <div className="grid grid-cols-1 gap-4">
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Institution Type</label>
+                                       <select 
+                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
+                                         value={editInstitutionType}
+                                         onChange={(e) => setEditInstitutionType(e.target.value as any)}
+                                       >
+                                         <option value="madrasah">Madrasah</option>
+                                         <option value="school">School</option>
+                                         <option value="kindergarten">Kindergarten</option>
+                                         <option value="nurani">Nurani</option>
+                                       </select>
+                                    </div>
+                                 </div>
+                              </div>
+                           </div>
 
-                          </div>
-                       </div>
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                              <div className="flex items-center justify-between px-1">
+                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <Settings size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> System Settings
+                                 </h4>
+                              </div>
+                              <div className="space-y-4">
+                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Result Engine</label>
+                                       <select 
+                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
+                                         value={editResultEngine}
+                                         onChange={(e) => setEditResultEngine(e.target.value as any)}
+                                       >
+                                         <option value="school">School (GPA)</option>
+                                         <option value="befaq">Befaq (Division)</option>
+                                         <option value="qawmi_custom">Qawmi Custom</option>
+                                       </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Result System</label>
+                                       <select 
+                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
+                                         value={editResultSystem}
+                                         onChange={(e) => setEditResultSystem(e.target.value as any)}
+                                       >
+                                         <option value="grading">Grading (GPA)</option>
+                                         <option value="marks">Marks Only</option>
+                                       </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Attendance Type</label>
+                                       <select 
+                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
+                                         value={editAttendanceType}
+                                         onChange={(e) => setEditAttendanceType(e.target.value as any)}
+                                       >
+                                         <option value="daily">Daily</option>
+                                         <option value="period">Period Wise</option>
+                                       </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Accounting Mode</label>
+                                       <select 
+                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
+                                         value={editAccountingMode}
+                                         onChange={(e) => setEditAccountingMode(e.target.value as any)}
+                                       >
+                                         <option value="qawmi_flexible">Qawmi Flexible</option>
+                                         <option value="school_system">School System</option>
+                                       </select>
+                                    </div>
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                      )}
 
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
-                         <div className="flex items-center justify-between px-1">
-                            <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                               <Sliders size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> Advanced Config
-                            </h4>
-                            <button onClick={() => setEditActive(!editActive)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all ${editActive ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-                               {editActive ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                               <span className="text-[10px] font-black uppercase tracking-widest">{editActive ? 'Active' : 'Inactive'}</span>
-                            </button>
-                         </div>
-                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Voice Sender ID</label>
-                                  <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm`} value={editVoiceSenderId} onChange={(e) => setEditVoiceSenderId(e.target.value)} placeholder="e.g. 8801..." />
-                               </div>
+                      {detailsTab === 'api' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                              <div className="flex items-center justify-between px-1">
+                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <Key size={14} className={madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-600'} /> API & Security
+                                 </h4>
+                              </div>
+                              <div className="space-y-4">
+                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Voice Sender ID</label>
+                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editVoiceSenderId} onChange={(e) => setEditVoiceSenderId(e.target.value)} placeholder="e.g. 8801..." />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE API Key</label>
+                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="API Key" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Secret Key</label>
+                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE Client ID</label>
+                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
+                                    </div>
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                      )}
 
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Institution Type</label>
-                                  <select 
-                                    className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                    value={editInstitutionType}
-                                    onChange={(e) => setEditInstitutionType(e.target.value as any)}
-                                  >
-                                    <option value="madrasah">Madrasah</option>
-                                    <option value="school">School</option>
-                                    <option value="kindergarten">Kindergarten</option>
-                                    <option value="nurani">Nurani</option>
-                                  </select>
-                               </div>
-                            </div>
-                            
-                            <div className={`space-y-3 pt-4 border-t ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
-                               <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Enabled Modules</h5>
-                               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                  {Object.entries(editModules).map(([key, value]) => (
-                                    <button 
-                                      type="button"
-                                      key={key}
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        setEditModules({...editModules, [key]: !value});
-                                      }}
-                                      className={`p-3 rounded-xl border flex items-center justify-between transition-all ${value ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-900/50 text-blue-400' : 'bg-blue-50 border-blue-100 text-[#1E3A8A]') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-600' : 'bg-slate-50 border-slate-100 text-slate-400')}`}
-                                    >
-                                      <span className="text-[10px] font-black uppercase tracking-wider">{key.replace('_', ' ')}</span>
-                                      {value ? <CheckCircle2 size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-500'} /> : <XCircle size={14} />}
-                                    </button>
-                                  ))}
-                               </div>
-                            </div>
-                         </div>
-                      </div>
+                      {detailsTab === 'permissions' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                              <div className="flex items-center justify-between px-1">
+                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <ShieldCheck size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> Enabled Modules
+                                 </h4>
+                              </div>
+                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                 {Object.entries(editModules).map(([key, value]) => (
+                                   <button 
+                                     type="button"
+                                     key={key}
+                                     onClick={(e) => {
+                                       e.preventDefault();
+                                       setEditModules({...editModules, [key]: !value});
+                                     }}
+                                     className={`p-3 rounded-xl border flex items-center justify-between transition-all ${value ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-900/50 text-blue-400' : 'bg-blue-50 border-blue-100 text-[#1E3A8A]') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-600' : 'bg-slate-50 border-slate-100 text-slate-400')}`}
+                                   >
+                                     <span className="text-[10px] font-black uppercase tracking-wider">{key.replace('_', ' ')}</span>
+                                     {value ? <CheckCircle2 size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-500'} /> : <XCircle size={14} />}
+                                   </button>
+                                 ))}
+                              </div>
+                           </div>
+                        </div>
+                      )}
 
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
-                         <div className="flex items-center justify-between px-1">
-                            <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                               <CreditCard size={14} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} /> Subscription Info
-                            </h4>
-                         </div>
-                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                            <div className="space-y-1.5">
-                               <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">System Type</label>
-                               <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none`} value={editSubscriptionType} onChange={(e) => setEditSubscriptionType(e.target.value as any)}>
-                                  <option value="monthly">Monthly Subscription</option>
-                                  <option value="yearly">Yearly Subscription</option>
-                                  <option value="lifetime">Lifetime Access</option>
-                               </select>
-                            </div>
-                            <div className="space-y-1.5">
-                               <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Portal Status</label>
-                               <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none`} value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
-                                  <option value="active">Active</option>
-                                  <option value="suspended">Suspended</option>
-                                  <option value="trial">Trial Period</option>
-                               </select>
-                            </div>
-                            <div className="space-y-1.5">
-                               <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Subscription End</label>
-                               <input type="date" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
-                            </div>
-                         </div>
-                      </div>
-
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
-                         <div className="flex items-center justify-between px-1">
-                            <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                               <Settings size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> System Settings
-                            </h4>
-                         </div>
-                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Result Engine</label>
-                                  <select 
-                                    className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                    value={editResultEngine}
-                                    onChange={(e) => setEditResultEngine(e.target.value as any)}
-                                  >
-                                    <option value="school">School (GPA)</option>
-                                    <option value="befaq">Befaq (Division)</option>
-                                    <option value="qawmi_custom">Qawmi Custom</option>
-                                  </select>
-                               </div>
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Result System</label>
-                                  <select 
-                                    className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                    value={editResultSystem}
-                                    onChange={(e) => setEditResultSystem(e.target.value as any)}
-                                  >
-                                    <option value="grading">Grading (GPA)</option>
-                                    <option value="marks">Marks Only</option>
-                                  </select>
-                               </div>
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Attendance Type</label>
-                                  <select 
-                                    className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                    value={editAttendanceType}
-                                    onChange={(e) => setEditAttendanceType(e.target.value as any)}
-                                  >
-                                    <option value="daily">Daily</option>
-                                    <option value="period">Period Wise</option>
-                                  </select>
-                               </div>
-                               <div className="space-y-1.5">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Accounting Mode</label>
-                                  <select 
-                                    className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                    value={editAccountingMode}
-                                    onChange={(e) => setEditAccountingMode(e.target.value as any)}
-                                  >
-                                    <option value="qawmi_flexible">Qawmi Flexible</option>
-                                    <option value="school_system">School System</option>
-                                  </select>
-                               </div>
-                            </div>
-                         </div>
-                      </div>
+                      {detailsTab === 'subscription' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                              <div className="flex items-center justify-between px-1">
+                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <CreditCard size={14} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} /> Subscription Info
+                                 </h4>
+                              </div>
+                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                 <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">System Type</label>
+                                    <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none`} value={editSubscriptionType} onChange={(e) => setEditSubscriptionType(e.target.value as any)}>
+                                       <option value="monthly">Monthly Subscription</option>
+                                       <option value="yearly">Yearly Subscription</option>
+                                       <option value="lifetime">Lifetime Access</option>
+                                    </select>
+                                 </div>
+                                 <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Portal Status</label>
+                                    <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none`} value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
+                                       <option value="active">Active</option>
+                                       <option value="suspended">Suspended</option>
+                                       <option value="trial">Trial Period</option>
+                                    </select>
+                                 </div>
+                                 <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Subscription End</label>
+                                    <input type="date" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                      )}
 
                       <button onClick={handleUserUpdate} disabled={isUpdatingUser} className="w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 text-lg">
                          {isUpdatingUser ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} /> Save Profile Changes</>}
