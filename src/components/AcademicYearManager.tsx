@@ -6,10 +6,11 @@ import { Loader2, Calendar, ArrowRight, Save, AlertTriangle, CheckCircle2, X, Ch
 interface AcademicYearManagerProps {
   institution: Institution;
   onClose: () => void;
+  onUpdate?: () => void;
   lang?: 'en' | 'bn';
 }
 
-export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ institution, onClose, lang = 'en' }) => {
+export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ institution, onClose, onUpdate, lang = 'en' }) => {
   const isDark = institution?.theme === 'dark';
   const [loading, setLoading] = useState(true);
   const [currentYear, setCurrentYear] = useState<any>(null);

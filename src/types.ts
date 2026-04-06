@@ -34,6 +34,7 @@ export interface Institution {
     fee_engine?: 'school' | 'qawmi' | 'kindergarten' | 'simple';
     accounting_mode?: 'qawmi_flexible' | 'school_system';
     user_pin?: string;
+    academic_year_start?: string;
     attendance_settings?: {
       half_day_time?: string;
       full_day_time?: string;

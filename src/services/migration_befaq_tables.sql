@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS befaq_exams (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     institution_id UUID REFERENCES profiles(institution_id) ON DELETE CASCADE,
     marhala_id UUID REFERENCES classes(id) ON DELETE CASCADE,
+    class_name VARCHAR(255),
     exam_name VARCHAR(255) NOT NULL,
     exam_year VARCHAR(50) NOT NULL,
     is_active BOOLEAN DEFAULT true,

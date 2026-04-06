@@ -159,8 +159,8 @@ CREATE TABLE IF NOT EXISTS attendance (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 11. Ledger Entries (Accounting)
-CREATE TABLE IF NOT EXISTS ledger_entries (
+-- 11. Ledger (Accounting)
+CREATE TABLE IF NOT EXISTS ledger (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
     type TEXT CHECK (type IN ('income', 'expense')) NOT NULL,
@@ -342,6 +342,7 @@ CREATE TABLE IF NOT EXISTS befaq_exams (
     exam_name TEXT NOT NULL,
     exam_year TEXT NOT NULL,
     marhala_id UUID REFERENCES classes(id) ON DELETE SET NULL,
+    class_name TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -473,6 +474,44 @@ BEGIN
       auth.uid()
     );
   END LOOP;
+
+  -- 5. Update institution config_json with new academic_year_start
+  UPDATE institutions 
+  SET config_json = jsonb_set(
+    COALESCE(config_json, '{}'::jsonb), 
+    '{academic_year_start}', 
+    to_jsonb(p_start_date::text)
+  )
+  WHERE id = p_institution_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Get Monthly Dues Report
+CREATE OR REPLACE FUNCTION get_monthly_dues_report(
+  p_institution_id UUID,
+  p_class_id UUID DEFAULT NULL,
+  p_month TEXT DEFAULT NULL
+) RETURNS TABLE (
+  student_id UUID,
+  student_name TEXT,
+  roll INTEGER,
+  class_id UUID,
+  class_name TEXT,
+  guardian_phone TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    s.id as student_id,
+    s.student_name,
+    s.roll,
+    s.class_id,
+    c.class_name,
+    s.guardian_phone
+  FROM students s
+  JOIN classes c ON s.class_id = c.id
+  WHERE s.institution_id = p_institution_id
+    AND (p_class_id IS NULL OR s.class_id = p_class_id);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -529,6 +568,10 @@ DROP POLICY IF EXISTS "Public read for institutions" ON institutions;
 CREATE POLICY "Public read for institutions" ON institutions FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Super admin all access for institutions" ON institutions;
 CREATE POLICY "Super admin all access for institutions" ON institutions FOR ALL USING (check_is_super_admin());
+DROP POLICY IF EXISTS "Institution admins can update their own institution" ON institutions;
+CREATE POLICY "Institution admins can update their own institution" ON institutions FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = institutions.id AND role IN ('madrasah_admin', 'super_admin'))
+);
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view their own profile" ON profiles;
@@ -558,4 +601,96 @@ CREATE POLICY "Enable read for everyone" ON system_settings FOR SELECT USING (tr
 DROP POLICY IF EXISTS "Enable all for super admins" ON system_settings;
 CREATE POLICY "Enable all for super admins" ON system_settings FOR ALL USING (check_is_super_admin());
 
--- Add more RLS policies as needed...
+-- Fees RLS
+ALTER TABLE fees ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON fees;
+CREATE POLICY "Enable read access for authenticated users" ON fees FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON fees;
+CREATE POLICY "Enable all access for institution admins" ON fees FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = fees.institution_id AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher'))
+);
+
+-- Ledger RLS
+ALTER TABLE ledger ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON ledger;
+CREATE POLICY "Enable read access for authenticated users" ON ledger FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON ledger;
+CREATE POLICY "Enable all access for institution admins" ON ledger FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = ledger.institution_id AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher'))
+);
+
+-- Exams RLS
+ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON exams;
+CREATE POLICY "Enable read access for authenticated users" ON exams FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON exams;
+CREATE POLICY "Enable all access for institution admins" ON exams FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = exams.institution_id AND role IN ('madrasah_admin', 'super_admin', 'teacher'))
+);
+
+-- Fee Structures RLS
+ALTER TABLE fee_structures ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON fee_structures;
+CREATE POLICY "Enable read access for authenticated users" ON fee_structures FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON fee_structures;
+CREATE POLICY "Enable all access for institution admins" ON fee_structures FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = fee_structures.institution_id AND role IN ('madrasah_admin', 'super_admin', 'accountant'))
+);
+
+-- Academic Years RLS
+ALTER TABLE academic_years ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON academic_years;
+CREATE POLICY "Enable read access for authenticated users" ON academic_years FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON academic_years;
+CREATE POLICY "Enable all access for institution admins" ON academic_years FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = academic_years.institution_id AND role IN ('madrasah_admin', 'super_admin'))
+);
+
+-- Promotion Logs RLS
+ALTER TABLE promotion_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for institution admins" ON promotion_logs;
+CREATE POLICY "Enable read access for institution admins" ON promotion_logs FOR SELECT USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = promotion_logs.institution_id AND role IN ('madrasah_admin', 'super_admin'))
+);
+DROP POLICY IF EXISTS "Enable insert for institution admins" ON promotion_logs;
+CREATE POLICY "Enable insert for institution admins" ON promotion_logs FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = promotion_logs.institution_id AND role IN ('madrasah_admin', 'super_admin'))
+);
+
+-- Befaq Exams RLS
+ALTER TABLE befaq_exams ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON befaq_exams;
+CREATE POLICY "Enable read access for authenticated users" ON befaq_exams FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON befaq_exams;
+CREATE POLICY "Enable all access for institution admins" ON befaq_exams FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = befaq_exams.institution_id AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher'))
+);
+
+-- Befaq Subjects RLS
+ALTER TABLE befaq_subjects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON befaq_subjects;
+CREATE POLICY "Enable read access for authenticated users" ON befaq_subjects FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON befaq_subjects;
+CREATE POLICY "Enable all access for institution admins" ON befaq_subjects FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles p JOIN befaq_exams e ON p.institution_id = e.institution_id WHERE p.id = auth.uid() AND e.id = befaq_subjects.exam_id AND p.role IN ('madrasah_admin', 'super_admin', 'teacher'))
+);
+
+-- Befaq Results RLS
+ALTER TABLE befaq_results ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON befaq_results;
+CREATE POLICY "Enable read access for authenticated users" ON befaq_results FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON befaq_results;
+CREATE POLICY "Enable all access for institution admins" ON befaq_results FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles p JOIN befaq_exams e ON p.institution_id = e.institution_id WHERE p.id = auth.uid() AND e.id = befaq_results.exam_id AND p.role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher'))
+);
+
+-- Student Fee Settings RLS
+ALTER TABLE student_fee_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for institution admins" ON student_fee_settings;
+CREATE POLICY "Enable read access for institution admins" ON student_fee_settings FOR SELECT USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = student_fee_settings.institution_id AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher'))
+);
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON student_fee_settings;
+CREATE POLICY "Enable all access for institution admins" ON student_fee_settings FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND institution_id = student_fee_settings.institution_id AND role IN ('madrasah_admin', 'super_admin', 'accountant'))
+);

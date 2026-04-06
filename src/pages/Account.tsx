@@ -219,6 +219,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         .eq('id', madrasah.id);
 
       if (error) throw error;
+      
+      if (onProfileUpdate) onProfileUpdate();
 
       setMadrasah({ ...madrasah, config_json: updatedConfig });
       setShowStartNewYear(false);
@@ -227,6 +229,10 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         title: lang === 'bn' ? 'সফল' : 'Success', 
         message: lang === 'bn' ? 'নতুন শিক্ষাবর্ষ সফলভাবে শুরু হয়েছে।' : 'New academic year started successfully.' 
       });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
       
       if (onProfileUpdate) onProfileUpdate();
     } catch (err: any) {
@@ -528,6 +534,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         <AcademicYearManager 
           institution={madrasah} 
           onClose={() => setShowAcademicYearManager(false)} 
+          onUpdate={onProfileUpdate}
           lang={lang}
         />,
         document.body
