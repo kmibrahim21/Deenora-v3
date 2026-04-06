@@ -698,21 +698,25 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         key: "can_manage_attendance",
                         label: t("permissions_attendance", lang),
                         icon: <ClipboardCheck size={14} />,
+                        module: "attendance",
                       },
                       {
                         key: "can_manage_exams",
                         label: t("permissions_exams", lang),
                         icon: <GraduationCap size={14} />,
+                        module: "results",
                       },
                       {
                         key: "can_manage_accounting",
                         label: t("permissions_accounting", lang),
                         icon: <Save size={14} />,
+                        module: "accounting",
                       },
                       {
                         key: "can_send_sms",
                         label: t("permissions_sms", lang),
                         icon: <MessageSquare size={14} />,
+                        module: "sms",
                       },
                       {
                         key: "can_manage_classes",
@@ -727,6 +731,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         label:
                           lang === "bn" ? "ভয়েস কল ব্যবহার" : "Use Voice Call",
                         icon: <Smartphone size={14} />,
+                        module: "voice_broadcast",
                       },
                       {
                         key: "can_manage_teachers",
@@ -749,7 +754,32 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         label: lang === "bn" ? "রিপোর্ট দেখা" : "View Reports",
                         icon: <TrendingUp size={14} />,
                       },
-                    ].map((perm) => (
+                    ].filter((perm: any) => {
+                      if (role === 'super_admin') return true;
+
+                      // 1. Check Institution Modules
+                      const modules = madrasah?.config_json?.modules || {};
+                      if (perm.module && modules[perm.module as keyof typeof modules] === false) {
+                        return false;
+                      }
+
+                      // 2. Check current user's permissions
+                      // If the current user is a teacher, they can only grant what they have.
+                      if (role === 'teacher') {
+                        return !!profile?.permissions?.[perm.key as keyof TeacherPermissions];
+                      }
+                      
+                      // If the current user is a madrasah_admin, they are restricted by modules (already checked)
+                      // and potentially by their own profile.permissions if the Super Admin set them.
+                      if (role === 'madrasah_admin') {
+                        if (profile?.permissions && typeof profile.permissions === 'object' && perm.key in profile.permissions) {
+                           return !!(profile.permissions as any)[perm.key];
+                        }
+                        return true;
+                      }
+
+                      return true;
+                    }).map((perm) => (
                       <motion.label
                         key={perm.key}
                         whileHover={{ scale: 1.02 }}
@@ -808,7 +838,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         : "Which classes can this teacher access?"}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      {classes.map((cls) => {
+                      {classes.filter(cls => {
+                        if (role === 'super_admin' || role === 'madrasah_admin') return true;
+                        if (!profile?.permissions?.allowed_classes || profile.permissions.allowed_classes.length === 0) return true;
+                        return profile.permissions.allowed_classes.includes(cls.id);
+                      }).map((cls) => {
                         const isSelected =
                           permissions.allowed_classes?.includes(cls.id);
                         return (
