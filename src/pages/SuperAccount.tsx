@@ -147,7 +147,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
           </div>
           <div>
             <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'রেট ম্যানেজমেন্ট' : 'Rates Management'}</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">SMS & Voice Rates</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Communication Rates</p>
           </div>
         </button>
 

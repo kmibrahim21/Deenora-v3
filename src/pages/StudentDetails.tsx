@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, Hash, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
 import { t } from 'translations';
@@ -107,15 +107,17 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
             <div className={`relative w-32 h-32 rounded-[2.5rem] flex items-center justify-center text-[#2563EB] border-4 shadow-xl overflow-hidden transform group-hover:scale-105 transition-transform duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'}`}>
               <UserIcon size={64} strokeWidth={2.5} />
             </div>
-            <div className={`absolute -bottom-2 -right-2 w-11 h-11 bg-[#2563EB] text-white rounded-[1rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`}>
-              <Hash size={22} strokeWidth={3} />
+            <div className={`absolute -bottom-2 -right-2 min-w-[2.75rem] h-11 px-3 bg-[#2563EB] text-white rounded-[1rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`}>
+              <span className="text-xs font-black tracking-tighter">{student.admission_number || '#'}</span>
             </div>
           </div>
           
           <h2 className={`text-xl font-black font-noto tracking-tight leading-tight mb-2 drop-shadow-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h2>
           
-          <div className={`inline-flex items-center gap-3 px-6 py-2 rounded-[1.2rem] border-2 shadow-inner ${isDark ? 'bg-blue-900/20 border-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB]/10'}`}>
-            <span className="text-[11px] font-black text-[#2563EB] uppercase tracking-[0.2em]">{t('roll', lang)}: {student.roll || '-'}</span>
+          <div className="flex flex-wrap justify-center gap-3">
+            <div className={`inline-flex items-center gap-3 px-6 py-2 rounded-[1.2rem] border-2 shadow-inner ${isDark ? 'bg-blue-900/20 border-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB]/10'}`}>
+              <span className="text-[11px] font-black text-[#2563EB] uppercase tracking-[0.2em]">{t('roll', lang)}: {student.roll || '-'}</span>
+            </div>
           </div>
         </div>
 
@@ -143,11 +145,34 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         </div>
 
         {/* Detailed Info Section */}
-        <div className="mt-10 space-y-5">
-          <div className="flex items-center gap-3 px-2 mb-3">
-            <div className="w-1.5 h-6 bg-gradient-to-b from-[#2563EB] to-[#1E3A8A] rounded-full shadow-lg shadow-[#2563EB]/20" />
-            <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'অভিভাবকের তথ্য' : 'Guardian Details'}</h3>
-          </div>
+        <div className="mt-10 space-y-8">
+          {/* Personal Details */}
+          {student.date_of_birth && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3 px-2 mb-3">
+                <div className="w-1.5 h-6 bg-gradient-to-b from-indigo-500 to-indigo-800 rounded-full shadow-lg shadow-indigo-500/20" />
+                <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ব্যক্তিগত তথ্য' : 'Personal Details'}</h3>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                  <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-indigo-500 shrink-0 shadow-md border group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                    <AlertTriangle size={22} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('dob', lang)}</p>
+                    <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.date_of_birth}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 px-2 mb-3">
+              <div className="w-1.5 h-6 bg-gradient-to-b from-[#2563EB] to-[#1E3A8A] rounded-full shadow-lg shadow-[#2563EB]/20" />
+              <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'অভিভাবকের তথ্য' : 'Guardian Details'}</h3>
+            </div>
 
           <div className="grid grid-cols-1 gap-3">
             <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
@@ -197,9 +222,22 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 </button>
               </div>
             )}
+
+            {student.address && (
+              <div className={`flex items-start gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  <BookOpen size={22} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('address', lang)}</p>
+                  <p className={`text-sm font-bold font-noto leading-relaxed ${isDark ? 'text-slate-300' : 'text-[#1E293B]'}`}>{student.address}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+    </div>
 
       {showDeleteConfirm && (
         <div className="modal-overlay bg-[#080A12]/60 backdrop-blur-3xl animate-in fade-in duration-500 fixed inset-0 z-[1000] flex items-center justify-center p-4">

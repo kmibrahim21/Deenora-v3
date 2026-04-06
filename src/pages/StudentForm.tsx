@@ -21,10 +21,21 @@ interface StudentFormProps {
 
 const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultClassId, isEditing, onSuccess, onCancel, lang, title }) => {
   const [name, setName] = useState(student?.student_name || '');
+  const [admissionNumber, setAdmissionNumber] = useState(student?.admission_number || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
+
+  useEffect(() => {
+    if (!isEditing && !admissionNumber) {
+      const randomNum = Math.floor(10000 + Math.random() * 90000).toString();
+      setAdmissionNumber(randomNum);
+    }
+  }, [isEditing, admissionNumber]);
+
   const [roll, setRoll] = useState(student?.roll?.toString() || '');
+  const [dob, setDob] = useState(student?.date_of_birth || '');
   const [phone, setPhone] = useState(student?.guardian_phone || '');
   const [phone2, setPhone2] = useState(student?.guardian_phone_2 || '');
+  const [address, setAddress] = useState(student?.address || '');
   const [classId, setClassId] = useState(student?.class_id || defaultClassId || '');
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,10 +88,13 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
     try {
       const payload = {
         student_name: name.trim(),
+        admission_number: admissionNumber.trim() || null,
         guardian_name: guardianName.trim(),
         roll: roll ? parseInt(roll) : null,
+        date_of_birth: dob || null,
         guardian_phone: phone.trim(),
         guardian_phone_2: phone2.trim() || null,
+        address: address.trim() || null,
         class_id: classId,
         institution_id: madrasah.id
       };
@@ -160,6 +174,20 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                  <Hash size={11} className="text-[#2563EB]" /> 
+                  {t('admission_number', lang, madrasah?.institution_type)}
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Admission ID"
+                  className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
+                  value={admissionNumber} 
+                  onChange={(e) => setAdmissionNumber(e.target.value)} 
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
                   <UserCheck size={11} className="text-[#2563EB]" /> 
                   {t('guardian_name', lang, madrasah?.institution_type)}
                 </label>
@@ -171,6 +199,32 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   onChange={(e) => setGuardianName(e.target.value)} 
                 />
               </div>
+
+              <div className="space-y-2">
+                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                  <AlertCircle size={11} className="text-[#2563EB]" /> 
+                  {t('dob', lang, madrasah?.institution_type)}
+                </label>
+                <input 
+                  type="date" 
+                  className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
+                  value={dob} 
+                  onChange={(e) => setDob(e.target.value)} 
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                <List size={11} className="text-[#2563EB]" /> 
+                {t('address', lang, madrasah?.institution_type)}
+              </label>
+              <textarea 
+                placeholder="Full Address"
+                className={`w-full min-h-[100px] p-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm resize-none`} 
+                value={address} 
+                onChange={(e) => setAddress(e.target.value)} 
+              />
             </div>
           </div>
 

@@ -153,7 +153,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 <>
                   <button onClick={() => setView('sms-voice-menu')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                     <MessageSquare size={22} strokeWidth={isTabActive('sms-voice-menu') ? 2.5 : 2} />
-                    <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'এসএমএস & ভয়েস' : 'SMS & Voice'}</span>
+                    <span className="text-sm font-bold font-noto">{t('sms_voice', lang)}</span>
                   </button>
                 </>
               )}
@@ -189,7 +189,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 >
                   <MessageSquare size={22} strokeWidth={isTabActive('wallet') || isTabActive('voice-broadcast') || isTabActive('sms-voice-menu') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">
-                    {modules.modules.sms !== false && modules.modules.voice_broadcast ? 'এসএমএস & ভয়েস' : modules.modules.sms !== false ? 'এসএমএস' : 'ভয়েস'}
+                    {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
                   </span>
                 </button>
               )}
@@ -333,7 +333,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   >
                     <MessageSquare size={20} />
                     <span className="text-[9px] font-black font-noto opacity-80 whitespace-nowrap">
-                      {modules.modules.sms !== false && modules.modules.voice_broadcast ? 'এসএমএস & ভয়েস' : modules.modules.sms !== false ? 'এসএমএস' : 'ভয়েস'}
+                      {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
                     </span>
                   </button>
                 </div>

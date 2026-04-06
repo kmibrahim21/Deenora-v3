@@ -188,7 +188,7 @@ const AppLayout: React.FC<LayoutProps> = ({ children, currentView, setView, lang
                   >
                     <MessageSquare size={20} />
                     <span className="text-[9px] font-black font-noto opacity-80 whitespace-nowrap">
-                      {modules.modules.sms !== false && modules.modules.voice_broadcast ? 'SMS & Voice' : modules.modules.sms !== false ? 'SMS' : 'Voice'}
+                      {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
                     </span>
                   </button>
                 </div>

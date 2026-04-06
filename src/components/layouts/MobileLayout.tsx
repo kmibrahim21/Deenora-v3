@@ -186,7 +186,7 @@ const MobileLayout: React.FC<LayoutProps> = ({ children, currentView, setView, l
                    (role !== 'teacher' || hasPermission('can_send_sms') || hasPermission('can_send_free_sms') || hasPermission('can_use_voice_call')) && (
                     <NavItem 
                       icon={MessageSquare} 
-                      label={modules.modules.sms !== false && modules.modules.voice_broadcast ? 'SMS & Voice' : modules.modules.sms !== false ? 'SMS' : 'Voice'} 
+                      label={modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)} 
                       tab="sms-voice-menu" 
                       onClick={() => {
                         if (modules.modules.sms !== false && modules.modules.voice_broadcast) {

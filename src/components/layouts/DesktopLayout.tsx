@@ -110,7 +110,7 @@ const DesktopLayout: React.FC<LayoutProps> = ({ children, currentView, setView, 
       'exams': t('exams', lang, madrasah?.institution_type) || 'Exams',
       'results': t('exam_results', lang, madrasah?.institution_type) || 'Results',
       'voice-broadcast': 'Voice Broadcast',
-      'sms-voice-menu': 'SMS & Voice',
+      'sms-voice-menu': t('sms_voice', lang),
       'academic-calendar': 'Academic Calendar',
       'tutorials': 'Tutorials',
       'student-details': t('student_info', lang, madrasah?.institution_type) || 'Student Details',
@@ -173,7 +173,7 @@ const DesktopLayout: React.FC<LayoutProps> = ({ children, currentView, setView, 
                (role !== 'teacher' || hasPermission('can_send_sms') || hasPermission('can_send_free_sms') || hasPermission('can_use_voice_call')) && (
                 <NavItem 
                   icon={MessageSquare} 
-                  label={modules.modules.sms !== false && modules.modules.voice_broadcast ? 'SMS & Voice' : modules.modules.sms !== false ? 'SMS' : 'Voice'} 
+                  label={modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)} 
                   tab="sms-voice-menu" 
                   onClick={() => {
                     if (modules.modules.sms !== false && modules.modules.voice_broadcast) {

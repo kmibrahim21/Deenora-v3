@@ -155,10 +155,13 @@ export interface Student {
   institution_id: string;
   class_id: string;
   student_name: string;
+  admission_number?: string;
   roll: number | null;
+  date_of_birth?: string;
   guardian_name?: string;
   guardian_phone: string;
   guardian_phone_2?: string;
+  address?: string;
   photo_url?: string;
   student_type?: 'boarding' | 'day_scholar';
   department?: 'hifz' | 'nazera' | 'kitab' | 'other';
