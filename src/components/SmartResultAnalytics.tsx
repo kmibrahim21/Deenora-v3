@@ -109,6 +109,12 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
 
         // Fetch Exams
         let examQuery = supabase.from(examTable).select('*').eq('institution_id', institutionId).order(isBefaq ? 'created_at' : 'exam_date', { ascending: true });
+        
+        const yearStart = madrasah?.config_json?.academic_year_start;
+        if (yearStart) {
+            examQuery = examQuery.gte('created_at', yearStart);
+        }
+
         if (selectedClassId !== 'all') {
             examQuery = examQuery.eq(classIdField, selectedClassId);
         }

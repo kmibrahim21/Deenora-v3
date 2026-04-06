@@ -75,7 +75,14 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
   };
 
   const fetchExamsForClass = async (classId: string) => {
-    const { data } = await supabase.from('exams').select('*').eq('class_id', classId);
+    let query = supabase.from('exams').select('*').eq('class_id', classId);
+    
+    const yearStart = madrasah?.config_json?.academic_year_start;
+    if (yearStart) {
+      query = query.gte('created_at', yearStart);
+    }
+
+    const { data } = await query;
     if (data) setAvailableExams(data);
   };
 
@@ -272,10 +279,10 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       )}
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
-          <button onClick={viewResult ? () => setViewResult(null) : onBack} className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-[#2563EB] border border-blue-100">
+          <button onClick={viewResult ? () => setViewResult(null) : onBack} className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-blue-50 border-blue-100 text-[#2563EB]'}`}>
             <ArrowLeft size={20}/>
           </button>
-          <h1 className="text-xl font-black text-[#1E293B] font-noto">
+          <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
             {viewResult ? viewResult.title : 'Final Results'}
           </h1>
         </div>
@@ -302,9 +309,9 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
             <div className="col-span-full text-center py-20 text-slate-400">No final results created yet.</div>
           ) : (
             results.map(result => (
-              <div key={result.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between">
+              <div key={result.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
                 <div>
-                  <h3 className="text-lg font-black text-[#1E3A8A] font-noto">{result.title}</h3>
+                  <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{result.title}</h3>
                   <p className="text-xs text-slate-400 font-bold mt-1">
                     {classes.find(c => c.id === result.class_id)?.class_name} • {result.exams?.length} Exams
                   </p>
@@ -328,10 +335,10 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           {resultLoading ? (
             <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#2563EB]" size={40} /></div>
           ) : (
-            <div className="bg-white p-5 rounded-[2.5rem] shadow-bubble border border-slate-100 overflow-x-auto no-scrollbar">
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border overflow-x-auto no-scrollbar`}>
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-slate-50">
+                  <tr className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
                     <th className="py-4 text-[10px] font-black text-slate-400 uppercase pr-4">Rank</th>
                     <th className="py-4 text-[10px] font-black text-slate-400 uppercase pr-4">Roll/Name</th>
                     {subjects.map(s => (
@@ -344,20 +351,20 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                 </thead>
                 <tbody>
                   {calculatedData.map((student) => (
-                    <tr key={student.id} className="border-b border-slate-50 last:border-0">
-                      <td className="py-4 pr-4 font-black text-[#2563EB]">#{student.rank}</td>
+                    <tr key={student.id} className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800/50' : 'border-slate-50'} last:border-0`}>
+                      <td className={`py-4 pr-4 font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>#{student.rank}</td>
                       <td className="py-4 pr-4">
                         <div className="flex flex-col">
                           <span className="text-[10px] font-black text-slate-400 leading-none mb-1">Roll: {student.roll}</span>
-                          <span className="font-black text-[#1E3A8A] text-xs font-noto truncate max-w-[120px]">{student.student_name}</span>
+                          <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto truncate max-w-[120px]`}>{student.student_name}</span>
                         </div>
                       </td>
                       {subjects.map(sub => (
-                        <td key={sub} className="py-4 px-2 text-center font-black text-slate-600 text-xs">
+                        <td key={sub} className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} text-xs`}>
                           {student.marks[sub] || '-'}
                         </td>
                       ))}
-                      <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">{student.total}</td>
+                      <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} text-xs`}>{student.total}</td>
                       <td className="py-4 px-2 text-center font-black text-purple-600 text-xs">{student.gpa}</td>
                       <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">{student.grade}</td>
                     </tr>
@@ -373,11 +380,11 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       {/* Modals */}
       {showDownloadLangModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
-                  <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200`}>
+                  <div className={`w-16 h-16 ${madrasah?.theme === 'dark' ? 'bg-blue-500/10' : 'bg-blue-50'} rounded-full flex items-center justify-center mx-auto mb-6`}>
                       <Download className="text-blue-600" size={32} />
                   </div>
-                  <h3 className="text-xl font-black text-[#1E293B] mb-2 text-center">Select Language</h3>
+                  <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} mb-2 text-center`}>Select Language</h3>
                   <p className="text-slate-400 text-center text-sm font-bold mb-8">ভাষা নির্বাচন করুন</p>
                   
                   <div className="space-y-4">
@@ -412,21 +419,21 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
       {showCreate && (
         <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-md rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-w-md rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between">
-              <h3 className="text-xl font-black text-[#1E3A8A]">Create Final Result</h3>
-              <button onClick={() => setShowCreate(false)} className="w-9 h-9 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center"><X size={18} /></button>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Create Final Result</h3>
+              <button onClick={() => setShowCreate(false)} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
             </div>
             
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1 block">Title</label>
-                <input type="text" className="w-full h-12 bg-slate-50 rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20" placeholder="e.g. Annual Result 2024" value={title} onChange={e => setTitle(e.target.value)} />
+                <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20`} placeholder="e.g. Annual Result 2024" value={title} onChange={e => setTitle(e.target.value)} />
               </div>
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1 block">Class</label>
-                <select className="w-full h-12 bg-slate-50 rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20" value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}>
+                <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20`} value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}>
                   <option value="">Select Class</option>
                   {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
                 </select>
@@ -440,9 +447,9 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                     const weight = selectedExams.find(e => e.examId === exam.id)?.weight || 0;
 
                     return (
-                      <div key={exam.id} className={`p-4 rounded-2xl border transition-all ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100'}`}>
+                      <div key={exam.id} className={`p-4 rounded-2xl border transition-all ${isSelected ? (madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-black text-[#1E3A8A] text-sm">{exam.exam_name}</span>
+                          <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} text-sm`}>{exam.exam_name}</span>
                           <button 
                             onClick={() => {
                               if (isSelected) {
@@ -451,7 +458,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                                 setSelectedExams([...selectedExams, { examId: exam.id, weight: 0 }]);
                               }
                             }}
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center border ${isSelected ? 'bg-[#2563EB] border-[#2563EB] text-white' : 'bg-white border-slate-200 text-transparent'}`}
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center border ${isSelected ? 'bg-[#2563EB] border-[#2563EB] text-white' : (madrasah?.theme === 'dark' ? 'bg-slate-700 border-slate-600 text-transparent' : 'bg-white border-slate-200 text-transparent')}`}
                           >
                             <Check size={14} />
                           </button>
@@ -460,7 +467,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                           <div className="flex items-center gap-2">
                             <input 
                               type="number" 
-                              className="w-20 h-8 bg-white rounded-lg px-2 font-black text-xs outline-none border border-blue-200 text-center" 
+                              className={`w-20 h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-blue-200 text-[#1E293B]'} rounded-lg px-2 font-black text-xs outline-none border text-center`} 
                               placeholder="0"
                               value={weight || ''}
                               onChange={e => {

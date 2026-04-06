@@ -26,15 +26,15 @@ const ExamsContent: React.FC<ExamsProps> = (props) => {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6">
         <AlertCircle size={60} className="text-red-500 mb-4" />
-        <h2 className="text-xl font-black text-slate-800 mb-2">
+        <h2 className={`text-xl font-black ${props.madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'} mb-2`}>
           {props.lang === 'bn' ? 'আপনার অনুমতি নেই' : 'Access Denied'}
         </h2>
-        <p className="text-slate-500 mb-6">
+        <p className={`text-slate-500 mb-6 ${props.madrasah?.theme === 'dark' ? 'text-slate-400' : ''}`}>
           {props.lang === 'bn' 
             ? 'আপনার এই মডিউলটি ব্যবহার করার অনুমতি নেই। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।' 
             : 'You do not have permission to access this module. Please contact your administrator.'}
         </p>
-        <button onClick={props.onBack} className="px-8 py-3 bg-slate-800 text-white rounded-full font-black">
+        <button onClick={props.onBack} className={`px-8 py-3 ${props.madrasah?.theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-white'} rounded-full font-black`}>
           {props.lang === 'bn' ? 'ফিরে যান' : 'Go Back'}
         </button>
       </div>

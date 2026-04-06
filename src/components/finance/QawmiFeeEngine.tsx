@@ -91,10 +91,17 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             .select('*')
             .eq('institution_id', madrasah.id);
 
-        const { data: feesData } = await supabase.from('fees')
+        const yearStart = madrasah.config_json?.academic_year_start;
+
+        let feesQuery = supabase.from('fees')
             .select('student_id, amount_paid, discount')
             .eq('institution_id', madrasah.id)
             .eq('month', selectedMonth);
+        
+        if (yearStart) {
+            feesQuery = feesQuery.gte('created_at', yearStart);
+        }
+        const { data: feesData } = await feesQuery;
 
         // For Qawmi, we might use a different report or the same one but interpret it differently
         // Using the same report for now as a base
@@ -183,12 +190,19 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     setAvailableFeeItems(enabledStructures);
 
     // 2. Fetch ledger entries for this student/month to see what's paid
-    const { data: ledgerData } = await supabase.from('ledger')
+    let ledgerQuery = supabase.from('ledger')
       .select('description')
       .eq('institution_id', madrasah.id)
       .eq('type', 'income')
       .eq('category', 'Student Fee')
       .ilike('description', `%${student.student_name} (%Month: ${selectedMonth})%`);
+
+    const yearStart = madrasah.config_json?.academic_year_start;
+    if (yearStart) {
+      ledgerQuery = ledgerQuery.gte('created_at', yearStart);
+    }
+
+    const { data: ledgerData } = await ledgerQuery;
 
     const paidItems: string[] = [];
     ledgerData?.forEach(l => {
@@ -269,7 +283,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       setSelectedStudent(null);
       fetchData();
     } catch (err: any) { 
-      setActionError(err.message); 
+      if (err.message?.includes('row-level security policy')) {
+         setActionError("Database RLS Error: Please run the SQL migration script in Supabase SQL Editor to fix permissions for 'fees' and 'ledger' tables. You can find the script in 'src/services/migration_fees_and_ledger_rls.sql'.");
+      } else {
+         setActionError(err.message); 
+      }
     } finally { 
       setIsSaving(false); 
     }
@@ -282,10 +300,17 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   };
 
   const fetchStudentHistory = async (studentId: string, year: string) => {
-    const { data } = await supabase.from('fees')
+    let query = supabase.from('fees')
       .select('*')
       .eq('student_id', studentId)
       .like('month', `${year}-%`);
+    
+    const yearStart = madrasah.config_json?.academic_year_start;
+    if (yearStart) {
+      query = query.gte('created_at', yearStart);
+    }
+
+    const { data } = await query;
     setStudentFeeHistory(data || []);
   };
 
@@ -338,29 +363,29 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
          {/* Download Indicator */}
          {isDownloading && (
             <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className="bg-white/90 backdrop-blur-md border border-blue-100 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
+                <div className={`${madrasah.theme === 'dark' ? 'bg-slate-800/90 border-slate-700' : 'bg-white/90 border-blue-100'} backdrop-blur-md border px-6 py-3 rounded-full shadow-2xl flex items-center gap-3`}>
                     <div className="relative">
-                        <Loader2 className="animate-spin text-blue-600" size={20} />
-                        <div className="absolute inset-0 bg-blue-400/20 blur-sm rounded-full animate-pulse"></div>
+                        <Loader2 className={`animate-spin ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`} size={20} />
+                        <div className={`absolute inset-0 blur-sm rounded-full animate-pulse ${madrasah.theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-400/20'}`}></div>
                     </div>
-                    <span className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest">ডাউনলোড হচ্ছে...</span>
+                    <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>ডাউনলোড হচ্ছে...</span>
                 </div>
             </div>
          )}
 
-         <div className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-bubble space-y-4">
+         <div className={`${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[2rem] border shadow-bubble space-y-4`}>
             <div className="flex flex-wrap gap-3 items-center justify-between">
                {/* Class Selector */}
                <div className="relative flex-1 min-w-[140px]">
-                  <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between group active:scale-[0.98] transition-all">
-                     <span className="text-[11px] font-black text-[#1E3A8A] truncate">{classes.find(c => c.id === selectedClass)?.class_name || 'সব জামাত (Classes)'}</span>
-                     <ChevronDown size={16} className="text-slate-400 group-hover:text-[#2563EB] transition-colors" />
+                  <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-11 px-4 rounded-xl border flex items-center justify-between group active:scale-[0.98] transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                     <span className={`text-[11px] font-black truncate ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{classes.find(c => c.id === selectedClass)?.class_name || 'সব জামাত (Classes)'}</span>
+                     <ChevronDown size={16} className={`transition-colors ${madrasah.theme === 'dark' ? 'text-slate-500 group-hover:text-blue-400' : 'text-slate-400 group-hover:text-[#2563EB]'}`} />
                   </button>
                   {showClassDropdown && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 z-50 p-1 max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
-                          <button onClick={() => { setSelectedClass(''); setShowClassDropdown(false); }} className="w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black text-slate-600 hover:bg-slate-50 hover:text-[#2563EB] transition-colors">সব জামাত</button>
+                      <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-xl border z-50 p-1 max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-200 ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                          <button onClick={() => { setSelectedClass(''); setShowClassDropdown(false); }} className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black transition-colors ${madrasah.theme === 'dark' ? 'text-slate-400 hover:bg-slate-700 hover:text-blue-400' : 'text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]'}`}>সব জামাত</button>
                           {classes.map(c => (
-                              <button key={c.id} onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} className="w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black text-slate-600 hover:bg-slate-50 hover:text-[#2563EB] transition-colors">{c.class_name}</button>
+                              <button key={c.id} onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black transition-colors ${madrasah.theme === 'dark' ? 'text-slate-400 hover:bg-slate-700 hover:text-blue-400' : 'text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]'}`}>{c.class_name}</button>
                           ))}
                       </div>
                   )}
@@ -368,7 +393,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
                {/* Month Selector */}
                <div className="relative flex-1 min-w-[140px]">
-                  <input type="month" className="w-full h-11 px-4 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-black text-[#1E3A8A] outline-none focus:border-[#2563EB]/30 transition-all" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
+                  <input type="month" className={`w-full h-11 px-4 border rounded-xl text-[11px] font-black outline-none transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
                </div>
 
                {/* Status Filter */}
@@ -376,7 +401,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                    <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as any)}
-                      className="w-full h-11 px-4 bg-slate-50 border border-slate-100 rounded-xl text-[11px] font-black text-[#1E3A8A] outline-none appearance-none focus:border-[#2563EB]/30 transition-all"
+                      className={`w-full h-11 px-4 border rounded-xl text-[11px] font-black outline-none appearance-none transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`}
                   >
                       <option value="all">সব স্ট্যাটাস</option>
                       <option value="paid">পরিশোধিত (Paid)</option>
@@ -393,7 +418,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                       setShowDownloadLangModal(true);
                   }}
                   disabled={feesReport.length === 0}
-                  className="h-11 px-6 bg-emerald-500 text-white rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:shadow-none"
+                  className={`h-11 px-6 rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none ${madrasah.theme === 'dark' ? 'bg-emerald-600 text-white shadow-emerald-900/20' : 'bg-emerald-500 text-white shadow-emerald-200'}`}
                >
                   <Download size={16} />
                   রিপোর্ট ডাউনলোড
@@ -402,7 +427,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
          </div>
 
          {actionError && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-xs font-bold shadow-sm mb-4">
+            <div className={`p-4 border rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm mb-4 ${madrasah.theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}>
                <div className="bg-red-500 text-white p-2 rounded-xl">
                   <AlertCircle size={20} />
                </div>
@@ -410,7 +435,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                   <p className="font-black">ত্রুটি!</p>
                   <p className="opacity-70">{actionError}</p>
                </div>
-               <button onClick={() => setActionError(null)} className="bg-white p-1.5 rounded-lg border border-red-200 text-red-600 active:scale-95"><X size={14}/></button>
+               <button onClick={() => setActionError(null)} className={`p-1.5 rounded-lg border active:scale-95 ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-red-200 text-red-600'}`}><X size={14}/></button>
             </div>
          )}
 
@@ -441,14 +466,14 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                   const hasBalance = balance > 0;
                   
                   return (
-                  <div key={item.student_id} className="bg-white p-4 rounded-[1.8rem] border border-slate-100 shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all">
+                  <div key={item.student_id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center font-black shrink-0 ${isFullyPaid ? 'bg-emerald-50 text-emerald-500' : hasBalance ? 'bg-orange-50 text-orange-500' : 'bg-blue-50 text-[#2563EB]'}`}>
+                        <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center font-black shrink-0 ${isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500') : hasBalance ? (madrasah.theme === 'dark' ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-500') : (madrasah.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
                            {item.roll || '-'}
                         </div>
                         <div className="min-w-0">
                            <h5 
-                             className="font-black text-[#1E3A8A] font-noto truncate leading-tight mb-1 cursor-pointer hover:underline decoration-2 underline-offset-2"
+                             className={`font-black font-noto truncate leading-tight mb-1 cursor-pointer hover:underline decoration-2 underline-offset-2 ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
                              onClick={() => onStudentClick ? onStudentClick(item) : handleShowHistory(item)}
                            >
                              {item.student_name}
@@ -465,7 +490,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                               setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l));
                               setShowDownloadLangModal(true);
                           }}
-                          className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-blue-50 hover:text-[#2563EB] transition-all active:scale-90 border border-slate-100"
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 border ${madrasah.theme === 'dark' ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-[#2563EB] border-slate-100'}`}
                           title="রশিদ ডাউনলোড করুন"
                        >
                           <Download size={18} />
@@ -473,7 +498,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                        <button 
                           onClick={() => { setSelectedStudent(item); setCollectAmount(''); setShowFeeCollection(true); }} 
                           disabled={isFullyPaid || isNoFeeSet}
-                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${isFullyPaid ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : isNoFeeSet ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : hasBalance ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 'bg-[#2563EB] text-white active:scale-95'}`}
+                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : isNoFeeSet ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : hasBalance ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 'bg-[#2563EB] text-white active:scale-95'}`}
                        >
                           {isFullyPaid ? 'PAID' : 'জমা নিন'}
                        </button>
@@ -481,11 +506,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                   </div>
                 )})
             ) : !fetchError && (
-              <div className="text-center py-16 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 mx-2 px-6 flex flex-col items-center col-span-full">
-                 <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-200 mb-5">
+              <div className={`text-center py-16 rounded-[3rem] border-2 border-dashed mx-2 px-6 flex flex-col items-center col-span-full ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                 <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-5 ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-600' : 'bg-blue-50 text-blue-200'}`}>
                     {anyStudentsInMadrasah ? <Info size={32} /> : <Users size={32} />}
                  </div>
-                 <h3 className="text-[#1E293B] text-lg font-black font-noto leading-tight">
+                 <h3 className={`text-lg font-black font-noto leading-tight ${madrasah.theme === 'dark' ? 'text-slate-300' : 'text-[#1E293B]'}`}>
                    {anyStudentsInMadrasah ? 'কোনো ডাটা পাওয়া যায়নি' : 'কোনো ছাত্র পাওয়া যায়নি'}
                  </h3>
               </div>
@@ -496,12 +521,12 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
          {/* Modals */}
       {showDownloadLangModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1001] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl border border-white/20 animate-in zoom-in-95 duration-300">
-                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mx-auto mb-6 shadow-sm">
+              <div className={`rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl border animate-in zoom-in-95 duration-300 ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-white/20'}`}>
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm ${madrasah.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
                       <Download size={32} strokeWidth={2.5} />
                   </div>
                   
-                  <h3 className="text-xl font-black text-[#1E3A8A] mb-2 text-center font-noto">ভাষা নির্বাচন করুন</h3>
+                  <h3 className={`text-xl font-black mb-2 text-center font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>ভাষা নির্বাচন করুন</h3>
                   <p className="text-[10px] text-slate-400 font-bold uppercase text-center mb-8 tracking-widest">Select PDF Language</p>
                   
                   <div className="space-y-3">
@@ -512,7 +537,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                   await downloadAction('bn');
                               }
                           }}
-                          className="w-full py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                          className={`w-full py-4 font-black rounded-2xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3 ${madrasah.theme === 'dark' ? 'bg-emerald-600 text-white shadow-emerald-900/20 hover:bg-emerald-500' : 'bg-emerald-500 text-white shadow-emerald-200 hover:bg-emerald-600'}`}
                       >
                           <span className="text-sm">বাংলা (Bengali)</span>
                       </button>
@@ -524,14 +549,14 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                   await downloadAction('en');
                               }
                           }}
-                          className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                          className={`w-full py-4 font-black rounded-2xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3 ${madrasah.theme === 'dark' ? 'bg-blue-600 text-white shadow-blue-900/20 hover:bg-blue-500' : 'bg-blue-600 text-white shadow-blue-200 hover:bg-blue-700'}`}
                       >
                           <span className="text-sm">English</span>
                       </button>
                       
                       <button 
                           onClick={() => setShowDownloadLangModal(false)}
-                          className="w-full py-4 bg-slate-50 text-slate-400 font-black rounded-2xl hover:bg-slate-100 active:scale-[0.98] transition-all mt-4"
+                          className={`w-full py-4 font-black rounded-2xl active:scale-[0.98] transition-all mt-4 ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-500 hover:bg-slate-700' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                       >
                           বাতিল (Cancel)
                       </button>
@@ -542,24 +567,24 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
       {showFeeCollection && selectedStudent && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-                <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 overflow-y-auto max-h-[80vh] shadow-2xl">
+                <div className={`w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 overflow-y-auto max-h-[80vh] shadow-2xl ${madrasah.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
                     <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-black text-[#1E3A8A] font-noto">কওমি ফি / অনুদান</h3>
-                        <button onClick={() => setShowFeeCollection(false)} className="w-9 h-9 bg-slate-50 text-slate-300 rounded-xl flex items-center justify-center"><X size={20} /></button>
+                        <h3 className={`text-xl font-black font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>কওমি ফি / অনুদান</h3>
+                        <button onClick={() => setShowFeeCollection(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
                     </div>
-                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-center">
+                    <div className={`p-6 rounded-3xl border text-center ${madrasah.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                         <p className="text-[10px] font-black text-slate-400 uppercase mb-1">ছাত্রের নাম</p>
-                        <h4 className="text-xl font-black text-[#1E3A8A] font-noto">{selectedStudent.student_name}</h4>
+                        <h4 className={`text-xl font-black font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{selectedStudent.student_name}</h4>
                         <div className="grid grid-cols-3 gap-2 mt-4">
-                            <div className="bg-white p-2.5 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className={`p-2.5 rounded-2xl border shadow-sm ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                               <p className="text-[7px] font-black text-slate-400 uppercase"> প্রদেয় </p>
                               <p className="font-black text-blue-600 text-sm">৳{selectedStudent.total_payable}</p>
                             </div>
-                            <div className="bg-white p-2.5 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className={`p-2.5 rounded-2xl border shadow-sm ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                               <p className="text-[7px] font-black text-slate-400 uppercase"> পরিশোধিত </p>
                               <p className="font-black text-green-600 text-sm">৳{selectedStudent.total_paid}</p>
                             </div>
-                            <div className="bg-white p-2.5 rounded-2xl border border-slate-100 shadow-sm">
+                            <div className={`p-2.5 rounded-2xl border shadow-sm ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                               <p className="text-[7px] font-black text-slate-400 uppercase"> বকেয়া </p>
                               <p className="font-black text-red-600 text-sm">৳{Math.max(0, Number(selectedStudent.balance_due))}</p>
                             </div>
@@ -568,7 +593,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">ফি-র ধরণ (Fee Type)</label>
-                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 max-h-40 overflow-y-auto">
+                            <div className={`rounded-2xl p-4 border max-h-40 overflow-y-auto ${madrasah.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                                 <div className="space-y-2">
                                     {availableFeeItems.length > 0 ? (
                                         availableFeeItems.map(item => {
@@ -576,7 +601,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                             const isSelected = selectedFeeCategories.includes(item.fee_name);
                                             
                                             return (
-                                                <div key={item.id} className={`flex flex-col gap-2 p-3 rounded-xl transition-colors ${isPaid ? 'bg-emerald-50' : 'bg-white border border-slate-100'}`}>
+                                                <div key={item.id} className={`flex flex-col gap-2 p-3 rounded-xl transition-colors ${isPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/10' : 'bg-emerald-50') : (madrasah.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white border border-slate-100')}`}>
                                                     <label className={`flex items-center gap-3 cursor-pointer`}>
                                                         <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected || isPaid ? 'bg-[#2563EB] border-[#2563EB]' : 'border-slate-300'} ${isPaid ? 'opacity-50' : ''}`}>
                                                             {(isSelected || isPaid) && <CheckCircle2 size={14} className="text-white" />}
@@ -599,10 +624,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                                             }}
                                                         />
                                                         <div className="flex-1 flex justify-between items-center">
-                                                            <span className={`text-xs font-black ${isPaid ? 'text-emerald-600' : 'text-[#1E3A8A]'}`}>
+                                                            <span className={`text-xs font-black ${isPaid ? (madrasah.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600') : (madrasah.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]')}`}>
                                                                 {item.fee_name} {isPaid && '(পরিশোধিত)'}
                                                             </span>
-                                                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">৳{item.amount}</span>
+                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${madrasah.theme === 'dark' ? 'text-slate-400 bg-slate-800' : 'text-slate-400 bg-slate-100'}`}>৳{item.amount}</span>
                                                         </div>
                                                     </label>
                                                 </div>
@@ -617,18 +642,18 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">জমা টাকার পরিমাণ</label>
                             <div className="relative">
-                              <input type="number" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent focus:border-[#2563EB]/20" placeholder="0.00" value={collectAmount} onChange={(e) => setCollectAmount(e.target.value)} />
-                              <DollarSign className="absolute left-4 top-4 text-[#2563EB]" size={20}/>
+                              <input type="number" className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} placeholder="0.00" value={collectAmount} onChange={(e) => setCollectAmount(e.target.value)} />
+                              <DollarSign className={`absolute left-4 top-4 ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
                             </div>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">ছাড় / ডিসকাউন্ট (যদি থাকে)</label>
                             <div className="relative">
-                              <input type="number" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent focus:border-orange-500/20" placeholder="0.00" value={discount} onChange={(e) => {
+                              <input type="number" className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-100 focus:border-orange-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-orange-500/20'}`} placeholder="0.00" value={discount} onChange={(e) => {
                                   setDiscount(e.target.value);
                                   setCollectAmount(calculateTotal(selectedFeeCategories, e.target.value, availableFeeItems));
                               }} />
-                              <Tag className="absolute left-4 top-4 text-orange-500" size={20}/>
+                              <Tag className={`absolute left-4 top-4 ${madrasah.theme === 'dark' ? 'text-orange-400' : 'text-orange-500'}`} size={20}/>
                             </div>
                         </div>
                         <button onClick={handleCollectFee} disabled={isSaving || !collectAmount} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all text-base">
@@ -642,22 +667,22 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
          {/* HISTORY MODAL */}
          {showHistoryModal && historyStudent && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-                <div className="bg-white w-full max-w-2xl rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 overflow-y-auto max-h-[90vh] shadow-2xl">
+                <div className={`w-full max-w-2xl rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 overflow-y-auto max-h-[90vh] shadow-2xl ${madrasah.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
                     <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-black text-[#1E3A8A] font-noto">ফি হিস্ট্রি</h3>
-                        <button onClick={() => setShowHistoryModal(false)} className="w-9 h-9 bg-slate-50 text-slate-300 rounded-xl flex items-center justify-center"><X size={20} /></button>
+                        <h3 className={`text-xl font-black font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>ফি হিস্ট্রি</h3>
+                        <button onClick={() => setShowHistoryModal(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
                     </div>
                     
-                    <div className="flex items-center justify-between bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                    <div className={`flex items-center justify-between p-4 rounded-3xl border ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                         <div>
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-1">ছাত্রের নাম</p>
-                            <h4 className="text-lg font-black text-[#1E3A8A] font-noto">{historyStudent.student_name}</h4>
+                            <h4 className={`text-lg font-black font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{historyStudent.student_name}</h4>
                         </div>
                         <div className="w-32">
                             <select 
                                 value={historyYear}
                                 onChange={(e) => setHistoryYear(e.target.value)}
-                                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-[#1E3A8A] outline-none"
+                                className={`w-full h-10 px-3 border rounded-xl text-sm font-bold outline-none ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-[#1E3A8A]'}`}
                             >
                                 {[0, 1, 2].map(offset => {
                                     const year = (new Date().getFullYear() - offset).toString();
@@ -687,15 +712,15 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                             }
 
                             return (
-                                <div key={monthStr} className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center gap-2 transition-all ${status === 'paid' ? 'bg-emerald-50 border-emerald-100' : status === 'partial' ? 'bg-orange-50 border-orange-100' : 'bg-slate-50 border-slate-100'}`}>
-                                    <span className={`text-sm font-black ${status === 'paid' ? 'text-emerald-700' : status === 'partial' ? 'text-orange-700' : 'text-slate-500'}`}>
+                                <div key={monthStr} className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center gap-2 transition-all ${status === 'paid' ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (madrasah.theme === 'dark' ? 'bg-orange-500/20 border-orange-500/30' : 'bg-orange-50 border-orange-100') : (madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
+                                    <span className={`text-sm font-black ${status === 'paid' ? (madrasah.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700') : status === 'partial' ? (madrasah.theme === 'dark' ? 'text-orange-400' : 'text-orange-700') : 'text-slate-500'}`}>
                                         {monthName}
                                     </span>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${status === 'paid' ? 'bg-emerald-200 text-emerald-800' : status === 'partial' ? 'bg-orange-200 text-orange-800' : 'bg-slate-200 text-slate-600'}`}>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${status === 'paid' ? (madrasah.theme === 'dark' ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : status === 'partial' ? (madrasah.theme === 'dark' ? 'bg-orange-500/30 text-orange-300' : 'bg-orange-200 text-orange-800') : (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600')}`}>
                                         {status === 'paid' ? 'পরিশোধিত' : status === 'partial' ? 'আংশিক' : 'বকেয়া'}
                                     </span>
                                     {totalPaid > 0 && (
-                                        <span className="text-xs font-bold text-slate-600 mt-1">৳{totalPaid}</span>
+                                        <span className={`text-xs font-bold mt-1 ${madrasah.theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>৳{totalPaid}</span>
                                     )}
                                 </div>
                             );
@@ -712,7 +737,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     return (
       <div className="space-y-4 animate-in slide-in-from-bottom-5">
          {actionError && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-xs font-bold shadow-sm mb-4">
+            <div className={`p-4 border rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm mb-4 ${madrasah.theme === 'dark' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}>
                <div className="bg-red-500 text-white p-2 rounded-xl">
                   <AlertCircle size={20} />
                </div>
@@ -720,23 +745,23 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                   <p className="font-black">ত্রুটি!</p>
                   <p className="opacity-70">{actionError}</p>
                </div>
-               <button onClick={() => setActionError(null)} className="bg-white p-1.5 rounded-lg border border-red-200 text-red-600 active:scale-95"><X size={14}/></button>
+               <button onClick={() => setActionError(null)} className={`p-1.5 rounded-lg border active:scale-95 ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-red-200 text-red-600'}`}><X size={14}/></button>
             </div>
          )}
-         <button onClick={() => setShowAddStructure(true)} className="w-full py-5 bg-white rounded-[2.2rem] text-[#2563EB] font-black flex items-center justify-center gap-3 shadow-bubble active:scale-95 transition-all border border-slate-100">
+         <button onClick={() => setShowAddStructure(true)} className={`w-full py-5 rounded-[2.2rem] font-black flex items-center justify-center gap-3 shadow-bubble active:scale-95 transition-all border ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-white border-slate-100 text-[#2563EB]'}`}>
             <Plus size={24} strokeWidth={3} /> নতুন ফি/অনুদান খাত যোগ করুন
          </button>
          <div className="space-y-3">
             {structures.length > 0 ? structures.map(s => (
-              <div key={s.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between">
+              <div key={s.id} className={`p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                  <div className="min-w-0">
-                    <h5 className="font-black text-[#1E3A8A] font-noto text-[17px] truncate">{s.fee_name}</h5>
+                    <h5 className={`font-black font-noto text-[17px] truncate ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.fee_name}</h5>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest">{s.classes?.class_name}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>{s.classes?.class_name}</span>
                     </div>
                  </div>
                  <div className="flex items-center gap-3">
-                     <div className="text-2xl font-black text-[#2563EB] shrink-0">৳{s.amount}</div>
+                     <div className={`text-2xl font-black shrink-0 ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>৳{s.amount}</div>
                      {deleteConfirmId === s.id ? (
                          <div className="flex items-center gap-2">
                              <button onClick={async () => {
@@ -749,10 +774,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                  }
                                  setDeleteConfirmId(null);
                              }} className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black">নিশ্চিত</button>
-                             <button onClick={() => setDeleteConfirmId(null)} className="bg-slate-100 text-slate-600 text-[10px] px-3 py-1.5 rounded-lg font-black">বাতিল</button>
+                             <button onClick={() => setDeleteConfirmId(null)} className={`text-[10px] px-3 py-1.5 rounded-lg font-black ${madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>বাতিল</button>
                          </div>
                      ) : (
-                         <button onClick={() => setDeleteConfirmId(s.id)} className="p-2 text-red-300 hover:text-red-500"><X size={18}/></button>
+                         <button onClick={() => setDeleteConfirmId(s.id)} className="p-2 text-red-400 hover:text-red-500"><X size={18}/></button>
                      )}
                  </div>
               </div>
@@ -764,38 +789,38 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
          {/* ADD STRUCTURE MODAL */}
          {showAddStructure && (
            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-              <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 shadow-2xl relative">
+              <div className={`w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 shadow-2xl relative ${madrasah.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
                  <div className="flex items-center justify-between">
-                   <h3 className="text-xl font-black text-[#1E3A8A]">ফি/অনুদান সেটআপ</h3>
-                   <button onClick={() => setShowAddStructure(false)} className="w-9 h-9 bg-slate-50 text-slate-300 rounded-xl flex items-center justify-center"><X size={20} /></button>
+                   <h3 className={`text-xl font-black ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>ফি/অনুদান সেটআপ</h3>
+                   <button onClick={() => setShowAddStructure(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
                  </div>
                  <div className="space-y-4">
                     <div className="relative">
                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">জামাত (Class) (ঐচ্ছিক)</label>
-                       <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-14 px-6 rounded-2xl border-2 border-slate-100 bg-slate-50 flex items-center justify-between font-black text-[#1E3A8A]">
+                       <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-14 px-6 rounded-2xl border-2 flex items-center justify-between font-black ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
                           <span className="truncate">{classes.find(c => c.id === selectedClass)?.class_name || 'সব জামাত (All Classes)'}</span>
-                          <ChevronDown size={20} className="text-slate-300" />
+                          <ChevronDown size={20} className="text-slate-400" />
                        </button>
                        {showClassDropdown && (
-                           <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[1001] p-2 max-h-48 overflow-y-auto">
-                               <button onClick={() => { setSelectedClass(''); setShowClassDropdown(false); }} className="w-full text-left px-5 py-3 rounded-xl hover:bg-slate-50 font-black text-[#1E3A8A]">সব জামাত (All Classes)</button>
+                           <div className={`absolute top-full left-0 right-0 mt-2 rounded-2xl shadow-2xl border z-[1001] p-2 max-h-48 overflow-y-auto ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                               <button onClick={() => { setSelectedClass(''); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black ${madrasah.theme === 'dark' ? 'hover:bg-slate-700 text-slate-100' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>সব জামাত (All Classes)</button>
                                {classes.map(c => (
-                                   <button key={c.id} onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} className="w-full text-left px-5 py-3 rounded-xl hover:bg-slate-50 font-black text-[#1E3A8A]">{c.class_name}</button>
+                                   <button key={c.id} onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black ${madrasah.theme === 'dark' ? 'hover:bg-slate-700 text-slate-100' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>{c.class_name}</button>
                                ))}
                            </div>
                        )}
                     </div>
                     <div className="relative">
                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">খাতের নাম</label>
-                       <input type="text" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20" placeholder="যেমন: খোরাকি" value={category} onChange={(e) => setCategory(e.target.value)} />
-                       <Tag className="absolute left-4 top-[44px] text-slate-300" size={20}/>
+                       <input type="text" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} placeholder="যেমন: খোরাকি" value={category} onChange={(e) => setCategory(e.target.value)} />
+                       <Tag className={`absolute left-4 top-[44px] ${madrasah.theme === 'dark' ? 'text-slate-500' : 'text-slate-300'}`} size={20}/>
                        <div className="flex flex-wrap gap-2 mt-2 px-1">
                           {['মাসিক ফি', 'বোর্ডিং / খাওয়ার খরচ', 'কিতাব / বই ফি', 'পরীক্ষা ফি', 'জামা / লিবাস ফি', 'বিদ্যুৎ / পানি ফি'].map(suggestion => (
                              <button 
                                 key={suggestion}
                                 type="button"
                                 onClick={() => setCategory(suggestion)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all ${category === suggestion ? 'bg-blue-50 text-[#2563EB] border-[#2563EB]/20' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all ${category === suggestion ? (madrasah.theme === 'dark' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-[#2563EB]/20') : (madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200')}`}
                              >
                                 {suggestion}
                              </button>
@@ -804,8 +829,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     </div>
                     <div className="relative">
                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">ধার্যকৃত টাকা (Optional)</label>
-                       <input type="number" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent focus:border-[#2563EB]/20" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                       <DollarSign className="absolute left-4 top-[44px] text-[#2563EB]" size={20}/>
+                       <input type="number" className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                       <DollarSign className={`absolute left-4 top-[44px] ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
                     </div>
                     
                     <button onClick={async () => {

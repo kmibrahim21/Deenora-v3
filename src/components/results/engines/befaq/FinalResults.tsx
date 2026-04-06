@@ -87,7 +87,14 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
   };
 
   const fetchExamsForClass = async (classId: string) => {
-    const { data } = await supabase.from('befaq_exams').select('*').eq('marhala_id', classId);
+    let query = supabase.from('befaq_exams').select('*').eq('marhala_id', classId);
+    
+    const yearStart = madrasah?.config_json?.academic_year_start;
+    if (yearStart) {
+      query = query.gte('created_at', yearStart);
+    }
+
+    const { data } = await query;
     if (data) setAvailableExams(data);
   };
 
@@ -303,10 +310,10 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
-          <button onClick={viewResult ? () => setViewResult(null) : onBack} className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100">
+          <button onClick={viewResult ? () => setViewResult(null) : onBack} className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
             <ArrowLeft size={20}/>
           </button>
-          <h1 className="text-xl font-black text-[#1E293B] font-noto">
+          <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
             {viewResult ? viewResult.title : 'চূড়ান্ত ফলাফল (বেফাক)'}
           </h1>
         </div>
@@ -336,9 +343,9 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
             </div>
           ) : (
             results.map(result => (
-              <div key={result.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between">
+              <div key={result.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
                 <div>
-                  <h3 className="text-lg font-black text-[#1E3A8A] font-noto">{result.title}</h3>
+                  <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{result.title}</h3>
                   <p className="text-xs text-slate-400 font-bold mt-1">
                     {classes.find(c => c.id === result.class_id)?.class_name} • {result.exams?.length} Exams
                   </p>
@@ -362,10 +369,10 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
           {resultLoading ? (
             <div className="flex justify-center py-20"><Loader2 className="animate-spin text-emerald-600" size={40} /></div>
           ) : (
-            <div className="bg-white p-5 rounded-[2.5rem] shadow-bubble border border-slate-100 overflow-x-auto no-scrollbar">
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border overflow-x-auto no-scrollbar`}>
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-slate-50">
+                  <tr className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
                     <th className="py-4 text-[10px] font-black text-slate-400 uppercase pr-4">মেধা</th>
                     <th className="py-4 text-[10px] font-black text-slate-400 uppercase pr-4">রোল/নাম</th>
                     {subjects.map(s => (
@@ -377,16 +384,16 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
                 </thead>
                 <tbody>
                   {calculatedData.map((student) => (
-                    <tr key={student.id} className="border-b border-slate-50 last:border-0">
+                    <tr key={student.id} className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800/50' : 'border-slate-50'} last:border-0`}>
                       <td className="py-4 pr-4 font-black text-emerald-600">#{student.rank}</td>
                       <td className="py-4 pr-4">
                         <div className="flex flex-col">
                           <span className="text-[10px] font-black text-slate-400 leading-none mb-1">রোল: {student.roll}</span>
-                          <span className="font-black text-[#1E3A8A] text-xs font-noto truncate max-w-[120px]">{student.student_name}</span>
+                          <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto truncate max-w-[120px]`}>{student.student_name}</span>
                         </div>
                       </td>
                       {subjects.map(sub => (
-                        <td key={sub} className="py-4 px-2 text-center font-black text-slate-600 text-xs">
+                        <td key={sub} className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} text-xs`}>
                           {student.marks[sub] || '-'}
                         </td>
                       ))}
@@ -405,8 +412,8 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
       {/* Modals */}
       {showDownloadLangModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl">
-                  <h3 className="text-lg font-black text-[#1E293B] mb-4 text-center">Select Language / ভাষা নির্বাচন করুন</h3>
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} rounded-[2rem] p-6 w-full max-w-sm shadow-2xl`}>
+                  <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} mb-4 text-center`}>Select Language / ভাষা নির্বাচন করুন</h3>
                   <div className="space-y-3">
                       <button 
                           onClick={() => {
@@ -439,21 +446,21 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
 
       {showCreate && (
         <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-md rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-w-md rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between">
-              <h3 className="text-xl font-black text-[#1E3A8A]">নতুন চূড়ান্ত ফলাফল</h3>
-              <button onClick={() => setShowCreate(false)} className="w-9 h-9 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center"><X size={18} /></button>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>নতুন চূড়ান্ত ফলাফল</h3>
+              <button onClick={() => setShowCreate(false)} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
             </div>
             
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1 block">ফলাফলের নাম</label>
-                <input type="text" className="w-full h-12 bg-slate-50 rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20" placeholder="উদাহরণ: বার্ষিক ফলাফল ২০২৪" value={title} onChange={e => setTitle(e.target.value)} />
+                <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20`} placeholder="উদাহরণ: বার্ষিক ফলাফল ২০২৪" value={title} onChange={e => setTitle(e.target.value)} />
               </div>
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1 block">মারহালা (ক্লাস)</label>
-                <select className="w-full h-12 bg-slate-50 rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20" value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}>
+                <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-xl px-4 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20`} value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}>
                   <option value="">মারহালা নির্বাচন করুন</option>
                   {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
                 </select>
@@ -467,9 +474,9 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
                     const weight = selectedExams.find(e => e.examId === exam.id)?.weight || 0;
 
                     return (
-                      <div key={exam.id} className={`p-4 rounded-2xl border transition-all ${isSelected ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100'}`}>
+                      <div key={exam.id} className={`p-4 rounded-2xl border transition-all ${isSelected ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-black text-[#1E3A8A] text-sm">{exam.exam_name}</span>
+                          <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} text-sm`}>{exam.exam_name}</span>
                           <button 
                             onClick={() => {
                               if (isSelected) {
@@ -478,7 +485,7 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
                                 setSelectedExams([...selectedExams, { examId: exam.id, weight: 0 }]);
                               }
                             }}
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center border ${isSelected ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-transparent'}`}
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center border ${isSelected ? 'bg-emerald-600 border-emerald-600 text-white' : (madrasah?.theme === 'dark' ? 'bg-slate-700 border-slate-600 text-transparent' : 'bg-white border-slate-200 text-transparent')}`}
                           >
                             <Check size={14} />
                           </button>
@@ -487,7 +494,7 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
                           <div className="flex items-center gap-2">
                             <input 
                               type="number" 
-                              className="w-20 h-8 bg-white rounded-lg px-2 font-black text-xs outline-none border border-emerald-200 text-center" 
+                              className={`w-20 h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-emerald-200 text-[#1E293B]'} rounded-lg px-2 font-black text-xs outline-none border text-center`} 
                               placeholder="0"
                               value={weight || ''}
                               onChange={e => {

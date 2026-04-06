@@ -27,15 +27,15 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6">
         <AlertCircle size={60} className="text-red-500 mb-4" />
-        <h2 className="text-xl font-black text-slate-800 mb-2">
+        <h2 className={`text-xl font-black mb-2 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
           {lang === 'bn' ? 'আপনার অনুমতি নেই' : 'Access Denied'}
         </h2>
-        <p className="text-slate-500 mb-6">
+        <p className={`${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'} mb-6`}>
           {lang === 'bn' 
             ? 'আপনার এই মডিউলটি ব্যবহার করার অনুমতি নেই। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।' 
             : 'You do not have permission to access this module. Please contact your administrator.'}
         </p>
-        <button onClick={onBack} className="px-8 py-3 bg-slate-800 text-white rounded-full font-black">
+        <button onClick={onBack} className={`px-8 py-3 rounded-full font-black ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-800 text-white'}`}>
           {lang === 'bn' ? 'ফিরে যান' : 'Go Back'}
         </button>
       </div>
@@ -92,7 +92,14 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           return;
         }
 
-        const { data } = await supabase.from('ledger').select('*').eq('institution_id', madrasah.id).order('transaction_date', { ascending: false });
+        let query = supabase.from('ledger').select('*').eq('institution_id', madrasah.id);
+        
+        const yearStart = madrasah.config_json?.academic_year_start;
+        if (yearStart) {
+          query = query.gte('transaction_date', yearStart);
+        }
+
+        const { data } = await query.order('transaction_date', { ascending: false });
         if (data) {
           setLedger(data);
           await CacheService.cacheData('fees', madrasah.id, data);
@@ -124,7 +131,13 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       setAmount(''); setCategory(''); setDesc('');
       setActiveTab('ledger');
       fetchData();
-    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+    } catch (err: any) { 
+      if (err.message?.includes('row-level security policy')) {
+         alert("Database RLS Error: Please run the SQL migration script in Supabase SQL Editor to fix permissions for 'fees' and 'ledger' tables. You can find the script in 'src/services/migration_fees_and_ledger_rls.sql'.");
+      } else {
+         alert(err.message); 
+      }
+    } finally { setIsSaving(false); }
   };
 
   const isDark = madrasah?.theme === 'dark';
@@ -166,25 +179,25 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       <div className="px-1">
         <div className={`flex p-1.5 rounded-[2rem] border overflow-x-auto no-scrollbar gap-1 ${isDark ? 'bg-slate-800/80 border-slate-700/50' : 'bg-slate-100/80 border-slate-200/50'}`}>
           <button 
-            onClick={() => setActiveTab('fees')} 
+            onClick={() => { setActiveTab('fees'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'fees' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
             শিক্ষার্থী ফি
           </button>
           <button 
-            onClick={() => setActiveTab('structures')} 
+            onClick={() => { setActiveTab('structures'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'structures' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
             ফি সেটিংস
           </button>
           <button 
-            onClick={() => setActiveTab('add-ledger')} 
+            onClick={() => { setActiveTab('add-ledger'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'add-ledger' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
             লেনদেন
           </button>
           <button 
-            onClick={() => setActiveTab('ledger')} 
+            onClick={() => { setActiveTab('ledger'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'ledger' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
             ইতিহাস

@@ -80,6 +80,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const fetchExams = async () => {
     let query = supabase.from('befaq_exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
     
+    const yearStart = madrasah?.config_json?.academic_year_start;
+    if (yearStart) {
+      query = query.gte('created_at', yearStart);
+    }
+
     if (selectedClassId) {
       query = query.eq('marhala_id', selectedClassId);
     }
@@ -381,10 +386,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       {activeTab !== 'final-results' && (
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
-          <button onClick={view === 'list' ? (selectedClassId ? () => setSelectedClassId(null) : onBack) : () => setView('list')} className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100">
+          <button onClick={view === 'list' ? (selectedClassId ? () => setSelectedClassId(null) : onBack) : () => setView('list')} className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
             <ArrowLeft size={20}/>
           </button>
-          <h1 className="text-xl font-black text-[#1E293B] font-noto">
+          <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
             {activeTab === 'exams' && view === 'list' ? (selectedClassId ? classes.find(c => c.id === selectedClassId)?.class_name : 'বেফাক পরীক্ষা') : 
              activeTab === 'exams' && selectedExam ? selectedExam.exam_name :
              activeTab === 'seat-plan' ? 'Seat Plan' :
@@ -393,7 +398,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
             <div className="flex gap-2">
-                <button onClick={() => setActiveTab('final-results')} className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center border border-purple-100 shadow-sm active:scale-95 transition-all" title="চূড়ান্ত ফলাফল">
+                <button onClick={() => setActiveTab('final-results')} className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all ${madrasah?.theme === 'dark' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-purple-50 text-purple-600 border-purple-100'}`} title="চূড়ান্ত ফলাফল">
                   <Trophy size={20} />
                 </button>
                 {selectedClassId && (
@@ -405,7 +410,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       )}
 
       {activeTab !== 'final-results' && (
-      <div className="flex p-1.5 bg-slate-50 rounded-[1.5rem] border border-slate-100 overflow-x-auto no-scrollbar">
+      <div className={`flex p-1.5 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'} rounded-[1.5rem] border overflow-x-auto no-scrollbar`}>
         <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'exams' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
             {t('exams', lang)}
         </button>
@@ -428,8 +433,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {activeTab === 'seat-plan' && (
         <div className="space-y-6">
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-bubble space-y-6">
-                <h3 className="text-lg font-black text-[#1E3A8A] font-noto">Seat Plan Configuration</h3>
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2.5rem] border shadow-bubble space-y-6`}>
+                <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>Seat Plan Configuration</h3>
                 
                 <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Classes</label>
@@ -444,7 +449,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                         setSelectedClassesForSeatPlan(prev => [...prev, c.id]);
                                     }
                                 }}
-                                className={`px-4 py-2 rounded-xl text-xs font-black border transition-all ${selectedClassesForSeatPlan.includes(c.id) ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                                className={`px-4 py-2 rounded-xl text-xs font-black border transition-all ${selectedClassesForSeatPlan.includes(c.id) ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border-emerald-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100')}`}
                             >
                                 {c.class_name}
                             </button>
@@ -464,7 +469,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                     newRooms[idx].room_name = e.target.value;
                                     setRooms(newRooms);
                                 }}
-                                className="flex-1 h-10 bg-slate-50 border border-slate-100 rounded-xl px-3 text-xs font-bold outline-none"
+                                className={`flex-1 h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E293B]'} rounded-xl px-3 text-xs font-bold outline-none`}
                                 placeholder="Room Name"
                             />
                             <input 
@@ -475,7 +480,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                     newRooms[idx].capacity = parseInt(e.target.value) || 0;
                                     setRooms(newRooms);
                                 }}
-                                className="w-24 h-10 bg-slate-50 border border-slate-100 rounded-xl px-3 text-xs font-bold outline-none"
+                                className={`w-24 h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E293B]'} rounded-xl px-3 text-xs font-bold outline-none`}
                                 placeholder="Capacity"
                             />
                             <button onClick={() => setRooms(rooms.filter((_, i) => i !== idx))} className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center"><Trash2 size={16}/></button>
@@ -493,9 +498,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                             <button 
                                 key={t.id}
                                 onClick={() => setSelectedSeatPlanTemplate(t.id)}
-                                className={`p-3 rounded-xl border text-left transition-all ${selectedSeatPlanTemplate === t.id ? 'bg-emerald-50 border-emerald-200 ring-2 ring-emerald-100' : 'bg-slate-50 border-slate-100 hover:bg-slate-100'}`}
+                                className={`p-3 rounded-xl border text-left transition-all ${selectedSeatPlanTemplate === t.id ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 border-emerald-500/30 ring-2 ring-emerald-500/20' : 'bg-emerald-50 border-emerald-200 ring-2 ring-emerald-100') : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 border-slate-100 hover:bg-slate-100')}`}
                             >
-                                <div className={`font-black text-xs ${selectedSeatPlanTemplate === t.id ? 'text-emerald-600' : 'text-slate-600'}`}>{t.name}</div>
+                                <div className={`font-black text-xs ${selectedSeatPlanTemplate === t.id ? (madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600') : (madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}`}>{t.name}</div>
                                 <div className="text-[10px] text-slate-400 mt-1">{t.description}</div>
                             </button>
                         ))}
@@ -509,7 +514,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                         onChange={(e) => setSeatPlanConfig(prev => ({ ...prev, randomize: e.target.checked }))}
                         className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
                     />
-                    <label className="text-xs font-bold text-slate-600">Randomize Seating</label>
+                    <label className={`text-xs font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Randomize Seating</label>
                 </div>
 
                 <button onClick={handleGenerateSeatPlan} disabled={loading} className="w-full h-14 bg-emerald-600 text-white font-black rounded-2xl shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all">
@@ -520,17 +525,17 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
             {seatAssignments.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-black text-[#1E3A8A] font-noto">Generated Plan</h3>
+                        <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>Generated Plan</h3>
                         <button onClick={() => {
                             setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadSeatPlan(l));
                             setShowDownloadLangModal(true);
-                        }} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl font-black text-xs flex items-center gap-2 border border-emerald-100">
+                        }} className={`px-4 py-2 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-100'} rounded-xl font-black text-xs flex items-center gap-2 border`}>
                             <Download size={14}/> Download PDF
                         </button>
                     </div>
-                    <div className="bg-white rounded-[2rem] border border-slate-100 shadow-bubble overflow-hidden">
+                    <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} rounded-[2rem] border shadow-bubble overflow-hidden`}>
                         <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50">
+                            <thead className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
                                 <tr>
                                     <th className="py-3 px-4 font-black text-slate-400 uppercase text-[10px]">Room</th>
                                     <th className="py-3 px-4 font-black text-slate-400 uppercase text-[10px]">Seat</th>
@@ -539,12 +544,12 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                     <th className="py-3 px-4 font-black text-slate-400 uppercase text-[10px]">Roll</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50">
+                            <tbody className={`divide-y ${madrasah?.theme === 'dark' ? 'divide-slate-800' : 'divide-slate-50'}`}>
                                 {seatAssignments.map((a, i) => (
-                                    <tr key={i} className="hover:bg-slate-50/50">
-                                        <td className="py-3 px-4 font-bold text-[#1E3A8A]">{a.room_name}</td>
+                                    <tr key={i} className={`${madrasah?.theme === 'dark' ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50/50'}`}>
+                                        <td className={`py-3 px-4 font-bold ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-[#1E3A8A]'}`}>{a.room_name}</td>
                                         <td className="py-3 px-4 font-black text-slate-500">{a.seat_number}</td>
-                                        <td className="py-3 px-4 font-bold text-slate-700">{a.student_name}</td>
+                                        <td className={`py-3 px-4 font-bold ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>{a.student_name}</td>
                                         <td className="py-3 px-4 text-slate-500 text-xs">{a.class_name}</td>
                                         <td className="py-3 px-4 font-black text-slate-400">{a.roll}</td>
                                     </tr>
@@ -563,11 +568,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
             <button
               key={cls.id}
               onClick={() => setSelectedClassId(cls.id)}
-              className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between hover:border-emerald-200 transition-all active:scale-95"
+              className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble flex items-center justify-between hover:border-emerald-200 transition-all active:scale-95`}
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center"><BookOpen size={24}/></div>
-                <h3 className="text-lg font-black text-[#1E3A8A] font-noto">{cls.class_name}</h3>
+                <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} rounded-2xl flex items-center justify-center`}><BookOpen size={24}/></div>
+                <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{cls.class_name}</h3>
               </div>
               <ChevronRight className="text-slate-300" />
             </button>
@@ -591,12 +596,12 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
             )}
           </div>
           {loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-600" /></div> : exams.map(exam => (
-            <div key={exam.id} className="bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-bubble space-y-4">
+            <div key={exam.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] border shadow-bubble space-y-4`}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner"><GraduationCap size={24}/></div>
+                        <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} rounded-2xl flex items-center justify-center shadow-inner`}><GraduationCap size={24}/></div>
                         <div>
-                            <h3 className="text-lg font-black text-[#1E3A8A] font-noto leading-tight">{exam.exam_name}</h3>
+                            <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>{exam.exam_name}</h3>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{exam.classes?.class_name}</span>
                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[8px] font-black uppercase">{exam.exam_year}</span>
@@ -629,15 +634,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {activeTab === 'exams' && view === 'subjects' && (
         <div className="space-y-4">
-           <button onClick={() => setShowAddSubject(true)} className="w-full py-5 bg-white rounded-[2.2rem] text-emerald-600 font-black flex items-center justify-center gap-3 shadow-bubble border border-slate-100 active:scale-95 transition-all">
+           <button onClick={() => setShowAddSubject(true)} className={`w-full py-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} rounded-[2.2rem] text-emerald-600 font-black flex items-center justify-center gap-3 shadow-bubble border active:scale-95 transition-all`}>
               <Plus size={24} strokeWidth={3} /> কিতাব যোগ করুন
            </button>
            <div className="space-y-3">
               {subjects.map(s => (
-                <div key={s.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between">
+                <div key={s.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
                    <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center"><BookOpen size={20}/></div>
-                      <h5 className="font-black text-[#1E3A8A] font-noto text-lg">{s.subject_name}</h5>
+                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto text-lg`}>{s.subject_name}</h5>
                    </div>
                    <div className="text-right">
                       <p className="text-[9px] font-black text-slate-400 uppercase">মোট নম্বর: {s.total_marks}</p>
@@ -669,7 +674,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                 <td className="py-4 pr-4">
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-black text-emerald-600 leading-none mb-1">#{std.roll}</span>
-                                        <span className="font-black text-[#1E3A8A] text-xs font-noto truncate max-w-[100px]">{std.student_name}</span>
+                                        <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto truncate max-w-[100px]`}>{std.student_name}</span>
                                     </div>
                                 </td>
                                 {subjects.map(sub => (
@@ -691,7 +696,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                         />
                                     </td>
                                 ))}
-                                <td className="py-4 px-2 text-center font-black text-[#1E3A8A] text-xs">
+                                <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
                                     {(Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0)}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
@@ -714,10 +719,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {activeTab === 'exams' && view === 'rank' && (
         <div className="space-y-4">
-            <div className="bg-white p-5 rounded-[2.5rem] shadow-bubble border border-slate-100 overflow-x-auto no-scrollbar">
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border overflow-x-auto no-scrollbar`}>
                 <table className="w-full text-left min-w-[600px]">
                     <thead>
-                        <tr className="border-b border-slate-50">
+                        <tr className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
                             <th className="py-4 text-[10px] font-black text-slate-400 uppercase text-center w-16">মেধা</th>
                             <th className="py-4 text-[10px] font-black text-slate-400 uppercase pl-4">নাম</th>
                             <th className="py-4 text-[10px] font-black text-slate-400 uppercase text-center">রোল</th>
@@ -744,13 +749,13 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                 failed
                             } as Student & { totalObtained: number; division: string; failed: boolean };
                         }).sort((a, b) => b.totalObtained - a.totalObtained).map((std, index) => (
-                            <tr key={std.id} className="border-b border-slate-50 last:border-0">
+                            <tr key={std.id} className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800/50' : 'border-slate-50'} last:border-0`}>
                                 <td className="py-4 px-2">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black mx-auto ${index < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-50 text-slate-500'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black mx-auto ${index < 3 ? 'bg-yellow-100 text-yellow-700' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500')}`}>
                                         {index + 1}
                                     </div>
                                 </td>
-                                <td className="py-4 pl-4 font-black text-[#1E3A8A] text-xs font-noto">{std.student_name}</td>
+                                <td className={`py-4 pl-4 font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto`}>{std.student_name}</td>
                                 <td className="py-4 text-center font-black text-slate-400 text-xs">{std.roll}</td>
                                 <td className="py-4 text-center font-black text-emerald-600 text-xs">{std.totalObtained}</td>
                                 <td className={`py-4 text-center font-black text-xs ${std.failed ? 'text-red-500' : 'text-purple-600'}`}>{std.division}</td>
@@ -765,15 +770,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       {/* Modals */}
       {showAdmitCardModal && examForAdmitCard && (
         <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-md rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-w-md rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95`}>
              <div className="flex items-center justify-between">
-               <h3 className="text-xl font-black text-[#1E3A8A]">Admit Card Options</h3>
-               <button onClick={() => setShowAdmitCardModal(false)} className="w-9 h-9 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center"><X size={18} /></button>
+               <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Admit Card Options</h3>
+               <button onClick={() => setShowAdmitCardModal(false)} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
              </div>
              <div className="space-y-4">
-                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                    <p className="text-sm font-bold text-emerald-800">Exam: {examForAdmitCard.exam_name}</p>
-                    <p className="text-xs text-emerald-600 mt-1">Class: {examForAdmitCard.classes?.class_name}</p>
+                <div className={`p-4 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} rounded-2xl border`}>
+                    <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-800'}`}>Exam: {examForAdmitCard.exam_name}</p>
+                    <p className={`text-xs ${madrasah?.theme === 'dark' ? 'text-emerald-500/60' : 'text-emerald-600'} mt-1`}>Class: {examForAdmitCard.classes?.class_name}</p>
                 </div>
                 
                 <div className="space-y-2">
@@ -810,23 +815,23 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-300">
-            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border animate-in zoom-in-95 duration-300`}>
+            <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mb-6 mx-auto">
               <AlertCircle size={32} />
             </div>
-            <h3 className="text-xl font-black text-[#1E293B] text-center mb-2 font-noto">আপনি কি নিশ্চিত?</h3>
-            <p className="text-slate-500 text-center text-sm mb-8 leading-relaxed">এই পরীক্ষাটি ডিলিট করলে এর সাথে সম্পর্কিত সকল বিষয় ও নম্বর মুছে যাবে। এটি আর ফিরে পাওয়া যাবে না।</p>
+            <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} text-center mb-2 font-noto`}>আপনি কি নিশ্চিত?</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-center text-sm mb-8 leading-relaxed">এই পরীক্ষাটি ডিলিট করলে এর সাথে সম্পর্কিত সকল বিষয় ও নম্বর মুছে যাবে। এটি আর ফিরে পাওয়া যাবে না।</p>
             <div className="flex gap-3">
               <button 
                 onClick={() => { setShowDeleteConfirm(false); setExamToDelete(null); }}
-                className="flex-1 h-12 bg-slate-50 text-slate-500 font-black rounded-xl active:scale-95 transition-all"
+                className={`flex-1 h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-500'} font-black rounded-xl active:scale-95 transition-all`}
               >
                 বাতিল
               </button>
               <button 
                 onClick={() => examToDelete && handleDeleteExam(examToDelete)}
                 disabled={isSaving}
-                className="flex-1 h-12 bg-red-600 text-white font-black rounded-xl shadow-lg shadow-red-200 active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="flex-1 h-12 bg-red-600 text-white font-black rounded-xl shadow-lg shadow-red-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 {isSaving ? <Loader2 className="animate-spin" size={18} /> : 'ডিলিট করুন'}
               </button>
@@ -838,15 +843,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       {/* Modals */}
       {showDownloadLangModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl">
-                  <h3 className="text-lg font-black text-[#1E293B] mb-4 text-center">Select Language / ভাষা নির্বাচন করুন</h3>
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} rounded-[2rem] p-6 w-full max-w-sm shadow-2xl`}>
+                  <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} mb-4 text-center`}>Select Language / ভাষা নির্বাচন করুন</h3>
                   <div className="space-y-3">
                       <button 
                           onClick={() => {
                               if (downloadAction) downloadAction('en');
                               setShowDownloadLangModal(false);
                           }}
-                          className="w-full py-3 bg-blue-50 text-[#2563EB] font-bold rounded-xl border border-blue-100 hover:bg-blue-100 transition-colors"
+                          className={`w-full py-3 ${madrasah?.theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-[#2563EB] border-blue-100'} font-bold rounded-xl border hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors`}
                       >
                           English
                       </button>
@@ -855,13 +860,13 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                               if (downloadAction) downloadAction('bn');
                               setShowDownloadLangModal(false);
                           }}
-                          className="w-full py-3 bg-emerald-50 text-emerald-600 font-bold rounded-xl border border-emerald-100 hover:bg-emerald-100 transition-colors"
+                          className={`w-full py-3 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-100'} font-bold rounded-xl border hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors`}
                       >
                           বাংলা (Bengali)
                       </button>
                       <button 
                           onClick={() => setShowDownloadLangModal(false)}
-                          className="w-full py-3 bg-slate-50 text-slate-500 font-bold rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors mt-4"
+                          className={`w-full py-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200'} font-bold rounded-xl border hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mt-4`}
                       >
                           Cancel
                       </button>
@@ -872,20 +877,20 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {showAddExam && (
         <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95`}>
              <div className="flex items-center justify-between">
-               <h3 className="text-xl font-black text-[#1E3A8A]">{editingExam ? 'পরীক্ষা এডিট করুন' : 'নতুন পরীক্ষা (বেফাক)'}</h3>
-               <button onClick={() => { setShowAddExam(false); setEditingExam(null); setExamName(''); setClassId(''); }} className="w-9 h-9 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center"><X size={18} /></button>
+               <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{editingExam ? 'পরীক্ষা এডিট করুন' : 'নতুন পরীক্ষা (বেফাক)'}</h3>
+               <button onClick={() => { setShowAddExam(false); setEditingExam(null); setExamName(''); setClassId(''); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
              </div>
              <div className="space-y-4">
-                <div className="relative"><input type="text" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all" placeholder="পরীক্ষার নাম" value={examName} onChange={(e) => setExamName(e.target.value)} /><BookOpen className="absolute left-4 top-4 text-slate-300" size={20}/></div>
-                <div className="relative"><input type="text" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all" placeholder="সাল (যেমন: ২০২৪)" value={examYear} onChange={(e) => setExamYear(e.target.value)} /><Calendar className="absolute left-4 top-4 text-slate-300" size={20}/></div>
+                <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="পরীক্ষার নাম" value={examName} onChange={(e) => setExamName(e.target.value)} /><BookOpen className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
+                <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="সাল (যেমন: ২০২৪)" value={examYear} onChange={(e) => setExamYear(e.target.value)} /><Calendar className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
                 <div className="relative">
-                    <select className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 appearance-none transition-all" value={classId} onChange={(e) => setClassId(e.target.value)}>
+                    <select className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 appearance-none transition-all`} value={classId} onChange={(e) => setClassId(e.target.value)}>
                         <option value="">মারহালা (ক্লাস) বেছে নিন</option>
                         {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
                     </select>
-                    <LayoutGrid className="absolute left-4 top-4 text-slate-300" size={20}/>
+                    <LayoutGrid className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/>
                 </div>
                 <button onClick={handleAddExam} disabled={isSaving} className="w-full py-5 bg-emerald-600 text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all">
                   {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={20}/> {editingExam ? 'আপডেট করুন' : 'পরীক্ষা তৈরি করুন'}</>}
@@ -897,16 +902,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {showAddSubject && (
         <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95`}>
              <div className="flex items-center justify-between">
-               <h3 className="text-xl font-black text-[#1E3A8A]">কিতাব যোগ করুন</h3>
-               <button onClick={() => setShowAddSubject(false)} className="w-9 h-9 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center"><X size={18} /></button>
+               <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>কিতাব যোগ করুন</h3>
+               <button onClick={() => setShowAddSubject(false)} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
              </div>
              <div className="space-y-4">
-                <div className="relative"><input type="text" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all" placeholder="কিতাবের নাম" value={subName} onChange={(e) => setSubName(e.target.value)} /><BookOpen size={20} className="absolute left-4 top-4 text-slate-300" /></div>
+                <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="কিতাবের নাম" value={subName} onChange={(e) => setSubName(e.target.value)} /><BookOpen size={20} className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" /></div>
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="relative"><input type="number" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all" placeholder="মোট নম্বর" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} /><CreditCard className="absolute left-4 top-4 text-slate-300" size={20}/></div>
-                    <div className="relative"><input type="number" className="w-full h-14 bg-slate-50 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all" placeholder="পাস নম্বর" value={passingMarks} onChange={(e) => setPassingMarks(e.target.value)} /><CreditCard className="absolute left-4 top-4 text-slate-300" size={20}/></div>
+                    <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="মোট নম্বর" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} /><CreditCard className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
+                    <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="পাস নম্বর" value={passingMarks} onChange={(e) => setPassingMarks(e.target.value)} /><CreditCard className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
                 </div>
                 <button onClick={handleAddSubject} disabled={isSaving} className="w-full py-5 bg-emerald-600 text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all">
                   {isSaving ? <Loader2 className="animate-spin" /> : 'কিতাব সেভ করুন'}

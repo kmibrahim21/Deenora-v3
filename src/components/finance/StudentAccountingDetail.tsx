@@ -28,23 +28,36 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const fetchStudentAccountingData = async () => {
     setLoading(true);
     try {
+      const yearStart = madrasah.config_json?.academic_year_start;
+
       // 1. Fetch all fees for the student in the selected year
-      const { data: feesData } = await supabase
+      let feesQuery = supabase
         .from('fees')
         .select('*')
         .eq('student_id', student.student_id)
         .like('month', `${selectedYear}-%`);
       
+      if (yearStart) {
+        feesQuery = feesQuery.gte('created_at', yearStart);
+      }
+
+      const { data: feesData } = await feesQuery;
+      
       if (feesData) setFees(feesData);
 
       // 2. Fetch ledger entries mentioning this student
-      // Note: This is a bit loose but works with the current schema
-      const { data: ledgerData } = await supabase
+      let ledgerQuery = supabase
         .from('ledger')
         .select('*')
         .eq('institution_id', madrasah.id)
         .eq('category', 'Student Fee')
         .ilike('description', `%${student.student_name}%`);
+      
+      if (yearStart) {
+        ledgerQuery = ledgerQuery.gte('created_at', yearStart);
+      }
+
+      const { data: ledgerData } = await ledgerQuery;
       
       if (ledgerData) setLedgerEntries(ledgerData.sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()));
 
@@ -223,7 +236,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                         <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full ${status === 'paid' ? 'bg-emerald-500 text-white' : status === 'partial' ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
                           {status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid'}
                         </span>
-                        {paidAmt > 0 && <span className="text-[10px] font-black text-slate-600">৳{paidAmt}</span>}
+                        {paidAmt > 0 && <span className={`text-[10px] font-black ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>৳{paidAmt}</span>}
                       </div>
                     </div>
                   );
@@ -282,8 +295,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
               <div className="space-y-4">
                 {ledgerEntries.length > 0 ? (
                   ledgerEntries.map((entry, idx) => (
-                    <div key={entry.id} className={`relative pl-8 pb-6 ${idx === ledgerEntries.length - 1 ? '' : 'border-l-2 border-dashed border-slate-100'}`}>
-                      <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${isDark ? 'bg-emerald-500 border-slate-800' : 'bg-emerald-500 border-white'}`}></div>
+                    <div key={entry.id} className={`relative pl-8 pb-6 ${idx === ledgerEntries.length - 1 ? '' : `border-l-2 border-dashed ${isDark ? 'border-slate-700' : 'border-slate-100'}`}`}>
+                      <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 shadow-sm flex items-center justify-center ${isDark ? 'bg-emerald-500 border-slate-800' : 'bg-emerald-500 border-white'}`}></div>
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <p className={`text-xs font-black ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>৳{entry.amount}</p>
@@ -295,7 +308,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   ))
                 ) : (
                   <div className="text-center py-20 flex flex-col items-center justify-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-200">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isDark ? 'bg-slate-800 text-slate-600' : 'bg-slate-50 text-slate-200'}`}>
                       <FileText size={24} />
                     </div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">কোনো লেনদেন নেই</p>

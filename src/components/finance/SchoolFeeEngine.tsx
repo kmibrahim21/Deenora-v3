@@ -92,10 +92,17 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             .select('*')
             .eq('institution_id', madrasah.id);
 
-        const { data: feesData } = await supabase.from('fees')
+        const yearStart = madrasah.config_json?.academic_year_start;
+
+        let feesQuery = supabase.from('fees')
             .select('student_id, amount_paid, discount')
             .eq('institution_id', madrasah.id)
             .eq('month', selectedMonth);
+        
+        if (yearStart) {
+            feesQuery = feesQuery.gte('created_at', yearStart);
+        }
+        const { data: feesData } = await feesQuery;
 
         const { data, error } = await supabase.rpc('get_monthly_dues_report', {
           p_institution_id: madrasah.id,
@@ -182,12 +189,19 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     setAvailableFeeItems(enabledStructures);
 
     // 2. Fetch ledger entries for this student/month to see what's paid
-    const { data: ledgerData } = await supabase.from('ledger')
+    let ledgerQuery = supabase.from('ledger')
       .select('description')
       .eq('institution_id', madrasah.id)
       .eq('type', 'income')
       .eq('category', 'Student Fee')
       .ilike('description', `%${student.student_name} (%Month: ${selectedMonth})%`);
+
+    const yearStart = madrasah.config_json?.academic_year_start;
+    if (yearStart) {
+      ledgerQuery = ledgerQuery.gte('created_at', yearStart);
+    }
+
+    const { data: ledgerData } = await ledgerQuery;
 
     const paidItems: string[] = [];
     ledgerData?.forEach(l => {
@@ -268,7 +282,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       setSelectedStudent(null);
       fetchData();
     } catch (err: any) { 
-      setActionError(err.message); 
+      if (err.message?.includes('row-level security policy')) {
+         setActionError("Database RLS Error: Please run the SQL migration script in Supabase SQL Editor to fix permissions for 'fees' and 'ledger' tables. You can find the script in 'src/services/migration_fees_and_ledger_rls.sql'.");
+      } else {
+         setActionError(err.message); 
+      }
     } finally { 
       setIsSaving(false); 
     }
@@ -398,7 +416,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                       setShowDownloadLangModal(true);
                   }}
                   disabled={feesReport.length === 0}
-                  className="h-11 px-6 bg-emerald-500 text-white rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:shadow-none"
+                  className={`h-11 px-6 rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none ${isDark ? 'bg-emerald-500/20 text-emerald-400 shadow-emerald-900/20' : 'bg-emerald-500 text-white shadow-emerald-200'}`}
                >
                   <Download size={16} />
                   রিপোর্ট ডাউনলোড
@@ -407,7 +425,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
          </div>
 
          {fetchError && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-xs font-bold shadow-sm">
+            <div className={`p-4 border rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm ${isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}>
                <div className="bg-red-500 text-white p-2 rounded-xl">
                   <AlertCircle size={20} />
                </div>
@@ -416,12 +434,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                   <p className="opacity-70">{fetchError}</p>
                   <p className="mt-1 font-normal opacity-60">সমাধান: SQL এডিটর থেকে নতুন প্রোভাইড করা কোডটি রান করুন।</p>
                </div>
-               <button onClick={() => fetchData()} className="bg-white px-3 py-1.5 rounded-lg border border-red-200 text-red-600 active:scale-95"><RefreshCw size={14}/></button>
+               <button onClick={() => fetchData()} className={`px-3 py-1.5 rounded-lg border active:scale-95 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-red-200 text-red-600'}`}><RefreshCw size={14}/></button>
             </div>
          )}
 
          {actionError && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-xs font-bold shadow-sm mb-4">
+            <div className={`p-4 border rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm mb-4 ${isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}>
                <div className="bg-red-500 text-white p-2 rounded-xl">
                   <AlertCircle size={20} />
                </div>
@@ -429,7 +447,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                   <p className="font-black">ত্রুটি!</p>
                   <p className="opacity-70">{actionError}</p>
                </div>
-               <button onClick={() => setActionError(null)} className="bg-white p-1.5 rounded-lg border border-red-200 text-red-600 active:scale-95"><X size={14}/></button>
+               <button onClick={() => setActionError(null)} className={`p-1.5 rounded-lg border active:scale-95 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-red-200 text-red-600'}`}><X size={14}/></button>
             </div>
          )}
 
@@ -535,7 +553,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                   await downloadAction('bn');
                               }
                           }}
-                          className="w-full py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                          className={`w-full py-4 font-black rounded-2xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3 ${isDark ? 'bg-emerald-600 text-white shadow-emerald-900/20 hover:bg-emerald-500' : 'bg-emerald-500 text-white shadow-emerald-200 hover:bg-emerald-600'}`}
                       >
                           <span className="text-sm">বাংলা (Bengali)</span>
                       </button>
@@ -547,7 +565,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                   await downloadAction('en');
                               }
                           }}
-                          className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                          className={`w-full py-4 font-black rounded-2xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3 ${isDark ? 'bg-blue-600 text-white shadow-blue-900/20 hover:bg-blue-500' : 'bg-blue-600 text-white shadow-blue-200 hover:bg-blue-700'}`}
                       >
                           <span className="text-sm">English</span>
                       </button>
@@ -651,7 +669,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                   setDiscount(e.target.value);
                                   setCollectAmount(calculateTotal(selectedFeeCategories, e.target.value, availableFeeItems));
                               }} />
-                              <Tag className="absolute left-4 top-4 text-orange-500" size={20}/>
+                              <Tag className={`absolute left-4 top-4 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} size={20}/>
                             </div>
                         </div>
                         <button onClick={handleCollectFee} disabled={isSaving || !collectAmount} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all text-base">
@@ -801,7 +819,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                                         }
                                                         setDeleteConfirmId(null);
                                                     }} className="bg-red-500 text-white text-[9px] px-2.5 py-1.5 rounded-lg font-black">হ্যাঁ</button>
-                                                    <button onClick={() => setDeleteConfirmId(null)} className={`text-[9px] px-2.5 py-1.5 rounded-lg font-black ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>না</button>
+                                                    <button onClick={() => setDeleteConfirmId(null)} className={`text-[9px] px-2.5 py-1.5 rounded-lg font-black ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>না</button>
                                                 </div>
                                             ) : (
                                                 <button onClick={() => setDeleteConfirmId(s.id)} className={`w-8 h-8 flex items-center justify-center transition-colors ${isDark ? 'text-slate-600 hover:text-red-400' : 'text-slate-300 hover:text-red-500'}`}>
@@ -852,7 +870,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     <div className="relative">
                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">ফি-র নাম</label>
                        <input type="text" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-slate-700 focus:border-[#2563EB]/20'}`} placeholder="যেমন: মাসিক বেতন" value={category} onChange={(e) => setCategory(e.target.value)} />
-                       <Tag className="absolute left-4 top-[44px] text-slate-300" size={20}/>
+                       <Tag className={`absolute left-4 top-[44px] ${isDark ? 'text-slate-500' : 'text-slate-300'}`} size={20}/>
                        <div className="flex flex-wrap gap-2 mt-2 px-1">
                           {['পরীক্ষার ফি', 'কোচিং ফি', 'অন্যান্য ফি'].map(suggestion => (
                              <button 
