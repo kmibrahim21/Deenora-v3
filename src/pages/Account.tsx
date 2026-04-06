@@ -26,10 +26,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [showAcademicYearManager, setShowAcademicYearManager] = useState(false);
   const [showStartNewYear, setShowStartNewYear] = useState(false);
   const [newYearStartDate, setNewYearStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [showChangePin, setShowChangePin] = useState(false);
-  const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [pinError, setPinError] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   
   const [stats, setStats] = useState({ students: 0, classes: 0 });
@@ -160,41 +156,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       console.error('Upload error:', e);
       alert('Logo upload failed: ' + e.message); 
     } finally { setSaving(false); }
-  };
-
-  const handleChangePin = async () => {
-    if (!newPin || !confirmPin) {
-      setPinError(lang === 'bn' ? 'পিন প্রদান করুন' : 'Please enter PIN');
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setPinError(lang === 'bn' ? 'পিন মিলছে না' : 'PINs do not match');
-      return;
-    }
-    if (newPin.length < 4) {
-      setPinError(lang === 'bn' ? 'পিন কমপক্ষে ৪ অক্ষরের হতে হবে' : 'PIN must be at least 4 characters');
-      return;
-    }
-
-    setSaving(true);
-    setPinError('');
-    try {
-      const { error } = await supabase
-        .from('teachers')
-        .update({ pin: newPin })
-        .eq('user_id', profile?.id);
-
-      if (error) throw error;
-      
-      setShowChangePin(false);
-      setNewPin('');
-      setConfirmPin('');
-      setShowSuccessModal({ show: true, title: lang === 'bn' ? 'সফল' : 'Success', message: lang === 'bn' ? 'পিন সফলভাবে আপডেট হয়েছে' : 'PIN updated successfully' });
-    } catch (err: any) {
-      setPinError(err.message);
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleStartNewYear = async () => {
@@ -445,20 +406,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </div>
         </button>
 
-        {profile?.role === 'teacher' && (
-          <button 
-            onClick={() => setShowChangePin(true)} 
-            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-          >
-            <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Key size={24} />
-            </div>
-            <div>
-              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'পিন পরিবর্তন' : 'Change PIN'}</h5>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{lang === 'bn' ? 'নিরাপত্তা' : 'Security'}</p>
-            </div>
-          </button>
-        )}
 
         {/* Language Card */}
         <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
@@ -591,59 +538,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         document.body
       )}
 
-      {/* Change PIN Modal - PORTALED */}
-      {showChangePin && createPortal(
-        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className={`w-full max-w-sm rounded-[3.5rem] p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-500 relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
-              <div className="flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-rose-900/30 text-rose-400' : 'bg-rose-50 text-rose-600'}`}>
-                    <Key size={20} />
-                  </div>
-                  <h3 className={`text-xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                    {lang === 'bn' ? 'পিন পরিবর্তন' : 'Change PIN'}
-                  </h3>
-                </div>
-                <button onClick={() => { setShowChangePin(false); setPinError(''); setNewPin(''); setConfirmPin(''); }} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
-              </div>
-
-              <div className="space-y-4">
-                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'নতুন পিন' : 'New PIN'}</label>
-                   <input 
-                     type="password" 
-                     className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                     value={newPin} 
-                     onChange={(e) => setNewPin(e.target.value)} 
-                     placeholder="****"
-                   />
-                 </div>
-                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'পিন নিশ্চিত করুন' : 'Confirm PIN'}</label>
-                   <input 
-                     type="password" 
-                     className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                     value={confirmPin} 
-                     onChange={(e) => setConfirmPin(e.target.value)} 
-                     placeholder="****"
-                   />
-                 </div>
-                 
-                 {pinError && <p className="text-xs text-red-500 font-bold px-1">{pinError}</p>}
-                 
-                 <button 
-                   onClick={handleChangePin} 
-                   disabled={saving}
-                   className="w-full h-12 bg-[#2563EB] text-white font-bold rounded-2xl shadow-premium active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
-                 >
-                   {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                   {lang === 'bn' ? 'আপডেট করুন' : 'Update PIN'}
-                 </button>
-              </div>
-           </div>
-        </div>,
-        document.body
-      )}
 
       {/* Edit Profile Modal - PORTALED */}
       {isEditingProfile && createPortal(
