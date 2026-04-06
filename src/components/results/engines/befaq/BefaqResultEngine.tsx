@@ -262,7 +262,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         
         if (error) {
             console.error('Error saving exam:', error);
-            alert('Failed to save exam: ' + error.message);
+            if (error.message.includes('row-level security')) {
+              alert('Permission denied: You do not have permission to add exams. Please run the SQL migration script.');
+            } else {
+              alert('Failed to save exam: ' + error.message);
+            }
         } else {
           setShowAddExam(false);
           setEditingExam(null);

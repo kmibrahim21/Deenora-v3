@@ -95,7 +95,7 @@ CREATE POLICY "Enable insert for institution admins" ON befaq_exams
             SELECT 1 FROM profiles 
             WHERE id = auth.uid() 
             AND institution_id = befaq_exams.institution_id 
-            AND role IN ('madrasah_admin', 'super_admin', 'teacher')
+            AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
         )
     );
 
@@ -106,7 +106,7 @@ CREATE POLICY "Enable update for institution admins" ON befaq_exams
             SELECT 1 FROM profiles 
             WHERE id = auth.uid() 
             AND institution_id = befaq_exams.institution_id 
-            AND role IN ('madrasah_admin', 'super_admin', 'teacher')
+            AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
         )
     );
 
@@ -117,7 +117,7 @@ CREATE POLICY "Enable delete for institution admins" ON befaq_exams
             SELECT 1 FROM profiles 
             WHERE id = auth.uid() 
             AND institution_id = befaq_exams.institution_id 
-            AND role IN ('madrasah_admin', 'super_admin', 'teacher')
+            AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
         )
     );
 
@@ -136,7 +136,7 @@ CREATE POLICY "Enable insert for institution admins" ON befaq_results
             JOIN profiles p ON p.institution_id = be.institution_id
             WHERE be.id = befaq_results.exam_id
             AND p.id = auth.uid()
-            AND p.role IN ('madrasah_admin', 'super_admin', 'teacher')
+            AND p.role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
         )
     );
 
@@ -148,7 +148,7 @@ CREATE POLICY "Enable update for institution admins" ON befaq_results
             JOIN profiles p ON p.institution_id = be.institution_id
             WHERE be.id = befaq_results.exam_id
             AND p.id = auth.uid()
-            AND p.role IN ('madrasah_admin', 'super_admin', 'teacher')
+            AND p.role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
         )
     );
 
@@ -160,7 +160,7 @@ CREATE POLICY "Enable delete for institution admins" ON befaq_results
             JOIN profiles p ON p.institution_id = be.institution_id
             WHERE be.id = befaq_results.exam_id
             AND p.id = auth.uid()
-            AND p.role IN ('madrasah_admin', 'super_admin', 'teacher')
+            AND p.role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
         )
     );
 ALTER TABLE exam_marks ENABLE ROW LEVEL SECURITY;
