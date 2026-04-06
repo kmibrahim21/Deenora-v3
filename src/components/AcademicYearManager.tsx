@@ -183,6 +183,28 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
     }
   };
 
+  const handleDeleteYear = async (yearId: string) => {
+    if (!confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটি ডিলিট করতে চান? এটি স্থায়ীভাবে মুছে যাবে।' : 'Are you sure you want to delete this academic year? This will be permanently removed.')) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('academic_years')
+        .delete()
+        .eq('id', yearId);
+      
+      if (error) throw error;
+
+      setAcademicYears(academicYears.filter(y => y.id !== yearId));
+      if (currentYear?.id === yearId) setCurrentYear(null);
+      
+      if (onUpdate) onUpdate();
+      alert(lang === 'bn' ? 'শিক্ষাবর্ষ সফলভাবে ডিলিট করা হয়েছে।' : 'Academic year deleted successfully.');
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGeneratePreview = async () => {
     setLoading(true);
     try {
@@ -403,6 +425,11 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
                           <Archive size={14} /> {lang === 'bn' ? 'আর্কাইভ করুন' : 'Archive'}
                         </button>
                       )}
+                      <button onClick={() => handleDeleteYear(year.id)} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors border ${
+                        isDark ? 'bg-red-900/20 text-red-400 border-red-900/30 hover:bg-red-900/40' : 'bg-red-50 text-red-500 border-red-100 hover:bg-red-100'
+                      }`} title={lang === 'bn' ? 'ডিলিট করুন' : 'Delete'}>
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
                 ))}

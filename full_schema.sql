@@ -776,19 +776,19 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON academic_yea
 CREATE POLICY "Enable all access for institution admins" ON academic_years FOR ALL USING (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role = 'madrasah_admin' AND institution_id = academic_years.institution_id) OR
-            (role = 'super_admin')
+            profiles.role = 'super_admin' OR 
+            (profiles.role = 'madrasah_admin' AND profiles.institution_id = academic_years.institution_id)
         )
     )
 ) WITH CHECK (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role = 'madrasah_admin' AND institution_id = academic_years.institution_id) OR
-            (role = 'super_admin')
+            profiles.role = 'super_admin' OR 
+            (profiles.role = 'madrasah_admin' AND profiles.institution_id = academic_years.institution_id)
         )
     )
 );

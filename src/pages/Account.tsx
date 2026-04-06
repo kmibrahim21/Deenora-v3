@@ -24,8 +24,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showAcademicYearManager, setShowAcademicYearManager] = useState(false);
-  const [showStartNewYear, setShowStartNewYear] = useState(false);
-  const [newYearStartDate, setNewYearStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   
   const [stats, setStats] = useState({ students: 0, classes: 0 });
@@ -156,51 +154,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       console.error('Upload error:', e);
       alert('Logo upload failed: ' + e.message); 
     } finally { setSaving(false); }
-  };
-
-  const handleStartNewYear = async () => {
-    if (!madrasah || !newYearStartDate) return;
-    
-    if (!confirm(lang === 'bn' 
-      ? `আপনি কি নিশ্চিত যে আপনি ${newYearStartDate} তারিখ থেকে নতুন শিক্ষাবর্ষ শুরু করতে চান? এর ফলে আগের সকল হিসাব ও পরীক্ষার তথ্য বর্তমান ভিউ থেকে হাইড হয়ে যাবে।` 
-      : `Are you sure you want to start a new academic year from ${newYearStartDate}? This will hide previous accounting and exam data from the current view.`)) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const updatedConfig = {
-        ...madrasah.config_json,
-        academic_year_start: newYearStartDate
-      };
-
-      const { error } = await supabase
-        .from('institutions')
-        .update({ config_json: updatedConfig })
-        .eq('id', madrasah.id);
-
-      if (error) throw error;
-      
-      if (onProfileUpdate) onProfileUpdate();
-
-      setMadrasah({ ...madrasah, config_json: updatedConfig });
-      setShowStartNewYear(false);
-      setShowSuccessModal({ 
-        show: true, 
-        title: lang === 'bn' ? 'সফল' : 'Success', 
-        message: lang === 'bn' ? 'নতুন শিক্ষাবর্ষ সফলভাবে শুরু হয়েছে।' : 'New academic year started successfully.' 
-      });
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-      
-      if (onProfileUpdate) onProfileUpdate();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setSaving(false);
-    }
   };
 
   if (!madrasah) return null;
@@ -388,24 +341,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </div>
         </button>
 
-        {/* Start New Academic Year Card */}
-        <button 
-          onClick={() => setShowStartNewYear(true)}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <RefreshCw size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              {lang === 'bn' ? 'নতুন শিক্ষাবর্ষ' : 'Start New Year'}
-            </h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {lang === 'bn' ? 'হিসাব ও পরীক্ষা রিসেট' : 'Reset Accounting'}
-            </p>
-          </div>
-        </button>
-
 
         {/* Language Card */}
         <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
@@ -487,56 +422,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         document.body
       )}
 
-      {/* Start New Year Modal - PORTALED */}
-      {showStartNewYear && createPortal(
-        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className={`w-full max-w-sm rounded-[3.5rem] p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-500 relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
-              <div className="flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-rose-900/30 text-rose-400' : 'bg-rose-50 text-rose-600'}`}>
-                    <RefreshCw size={20} />
-                  </div>
-                  <h3 className={`text-xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                    {lang === 'bn' ? 'নতুন শিক্ষাবর্ষ শুরু' : 'Start New Year'}
-                  </h3>
-                </div>
-                <button onClick={() => setShowStartNewYear(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
-              </div>
-
-              <div className="space-y-4">
-                 <div className={`p-4 rounded-2xl border text-xs font-bold leading-relaxed ${madrasah?.theme === 'dark' ? 'bg-amber-900/20 border-amber-900/30 text-amber-500' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle size={16} />
-                      <span className="font-black uppercase tracking-widest">{lang === 'bn' ? 'সতর্কবার্তা' : 'Warning'}</span>
-                    </div>
-                    {lang === 'bn' 
-                      ? 'নতুন শিক্ষাবর্ষ শুরু করলে আগের সকল হিসাব ও পরীক্ষার তথ্য বর্তমান ভিউ থেকে হাইড হয়ে যাবে। তবে ডাটাবেজে তথ্যগুলো সংরক্ষিত থাকবে।' 
-                      : 'Starting a new year will hide previous accounting and exam data from the current view. Data will remain in the database.'}
-                 </div>
-
-                 <div className="space-y-1">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'শুরুর তারিখ' : 'Start Date'}</label>
-                   <input 
-                     type="date" 
-                     className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                     value={newYearStartDate} 
-                     onChange={(e) => setNewYearStartDate(e.target.value)} 
-                   />
-                 </div>
-                 
-                 <button 
-                   onClick={handleStartNewYear} 
-                   disabled={saving}
-                   className="w-full h-12 bg-[#2563EB] text-white font-bold rounded-2xl shadow-premium active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
-                 >
-                   {saving ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-                   {lang === 'bn' ? 'নতুন শিক্ষাবর্ষ শুরু করুন' : 'Start New Year'}
-                 </button>
-              </div>
-           </div>
-        </div>,
-        document.body
-      )}
+      {/* Edit Profile Modal - PORTALED */}
 
 
       {/* Edit Profile Modal - PORTALED */}
