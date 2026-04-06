@@ -123,5 +123,15 @@ BEGIN
       auth.uid()
     );
   END LOOP;
+
+  -- 5. Update institution config_json with new academic_year_start
+  UPDATE institutions 
+  SET config_json = jsonb_set(
+    COALESCE(config_json, '{}'::jsonb), 
+    '{academic_year_start}', 
+    to_jsonb(p_start_date::text)
+  )
+  WHERE id = p_institution_id;
+
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

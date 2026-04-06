@@ -196,6 +196,19 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
 
       if (error) throw error;
 
+      // Update institution config_json with new academic_year_start
+      const updatedConfig = {
+        ...(institution.config_json || {}),
+        academic_year_start: startDate
+      };
+
+      const { error: configError } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', institution.id);
+
+      if (configError) throw configError;
+
       setExecutingLog(prev => [...prev, lang === 'bn' ? 'প্রমোশন সফলভাবে সম্পন্ন হয়েছে!' : 'Promotion completed successfully!']);
       setExecutingLog(prev => [...prev, lang === 'bn' ? 'নতুন শিক্ষাবর্ষ তৈরি করা হয়েছে।' : 'New academic year created.']);
       setExecutingLog(prev => [...prev, lang === 'bn' ? 'পুরানো শিক্ষাবর্ষ আর্কাইভ করা হয়েছে।' : 'Old academic year archived.']);
