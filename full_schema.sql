@@ -408,6 +408,10 @@ DROP FUNCTION IF EXISTS promote_students(UUID, TEXT, DATE, DATE, JSONB);
 DROP FUNCTION IF EXISTS send_bulk_sms_rpc(UUID, UUID[], TEXT);
 DROP FUNCTION IF EXISTS check_is_super_admin();
 DROP FUNCTION IF EXISTS bootstrap_super_admin(UUID, TEXT);
+DROP FUNCTION IF EXISTS get_monthly_dues_report(UUID, UUID, TEXT);
+DROP FUNCTION IF EXISTS get_monthly_dues_report(UUID, UUID, TEXT, UUID);
+DROP FUNCTION IF EXISTS get_fee_reminder_list(UUID, TEXT);
+DROP FUNCTION IF EXISTS get_fee_reminder_list(UUID, TEXT, UUID);
 
 -- Check Teacher Login
 CREATE OR REPLACE FUNCTION check_teacher_login(p_mobile TEXT, p_password_hash TEXT)
@@ -674,10 +678,10 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON classes;
 CREATE POLICY "Enable all access for institution admins" ON classes FOR ALL USING (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role = 'madrasah_admin' AND institution_id = classes.institution_id) OR
-            (role = 'super_admin')
+            (profiles.role = 'madrasah_admin' AND profiles.institution_id = classes.institution_id) OR
+            (profiles.role = 'super_admin')
         )
     )
 );
@@ -690,10 +694,10 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON students;
 CREATE POLICY "Enable all access for institution admins" ON students FOR ALL USING (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role IN ('madrasah_admin', 'teacher') AND institution_id = students.institution_id) OR
-            (role = 'super_admin')
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = students.institution_id) OR
+            (profiles.role = 'super_admin')
         )
     )
 );
@@ -712,10 +716,10 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON fees;
 CREATE POLICY "Enable all access for institution admins" ON fees FOR ALL USING (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role IN ('madrasah_admin', 'accountant', 'teacher') AND institution_id = fees.institution_id) OR
-            (role = 'super_admin')
+            (profiles.role IN ('madrasah_admin', 'accountant', 'teacher') AND profiles.institution_id = fees.institution_id) OR
+            (profiles.role = 'super_admin')
         )
     )
 );
@@ -728,10 +732,10 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON ledger;
 CREATE POLICY "Enable all access for institution admins" ON ledger FOR ALL USING (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role IN ('madrasah_admin', 'accountant', 'teacher') AND institution_id = ledger.institution_id) OR
-            (role = 'super_admin')
+            (profiles.role IN ('madrasah_admin', 'accountant', 'teacher') AND profiles.institution_id = ledger.institution_id) OR
+            (profiles.role = 'super_admin')
         )
     )
 );
@@ -744,10 +748,10 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON exams;
 CREATE POLICY "Enable all access for institution admins" ON exams FOR ALL USING (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role IN ('madrasah_admin', 'teacher') AND institution_id = exams.institution_id) OR
-            (role = 'super_admin')
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = exams.institution_id) OR
+            (profiles.role = 'super_admin')
         )
     )
 );
@@ -760,10 +764,10 @@ DROP POLICY IF EXISTS "Enable all access for institution admins" ON fee_structur
 CREATE POLICY "Enable all access for institution admins" ON fee_structures FOR ALL USING (
     EXISTS (
         SELECT 1 FROM profiles 
-        WHERE id = auth.uid() 
+        WHERE profiles.id = auth.uid() 
         AND (
-            (role IN ('madrasah_admin', 'accountant') AND institution_id = fee_structures.institution_id) OR
-            (role = 'super_admin')
+            (profiles.role IN ('madrasah_admin', 'accountant') AND profiles.institution_id = fee_structures.institution_id) OR
+            (profiles.role = 'super_admin')
         )
     )
 );
