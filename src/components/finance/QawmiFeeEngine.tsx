@@ -51,6 +51,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [activeYearEndDate, setActiveYearEndDate] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
@@ -87,6 +88,13 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     setFetchError(null);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
+      
+      if (activeYearId) {
+          const { data: yearData } = await supabase.from('academic_years').select('end_date').eq('id', activeYearId).single();
+          if (yearData) {
+              setActiveYearEndDate(yearData.end_date);
+          }
+      }
 
       if (activeTab === 'fees') {
         const classId = selectedClass === '' ? null : selectedClass;
@@ -772,7 +780,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             setCategory('');
             setAmount('');
             setSelectedClass('');
-            setDueDate(madrasah?.config_json?.academic_year_end || '');
+            setDueDate(activeYearEndDate);
             setShowAddStructure(true);
          }} className={`w-full py-5 rounded-[2.2rem] font-black flex items-center justify-center gap-3 shadow-bubble active:scale-95 transition-all border ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-white border-slate-100 text-[#2563EB]'}`}>
             <Plus size={24} strokeWidth={3} /> নতুন ফি/অনুদান খাত যোগ করুন

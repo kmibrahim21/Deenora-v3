@@ -52,6 +52,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [activeYearEndDate, setActiveYearEndDate] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
@@ -88,6 +89,13 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     setFetchError(null);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
+      
+      if (activeYearId) {
+          const { data: yearData } = await supabase.from('academic_years').select('end_date').eq('id', activeYearId).single();
+          if (yearData) {
+              setActiveYearEndDate(yearData.end_date);
+          }
+      }
 
       if (activeTab === 'fees') {
         const classId = selectedClass === '' ? null : selectedClass;
@@ -788,7 +796,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         setCategory('');
                         setAmount('');
                         setSelectedClass('');
-                        setDueDate(madrasah?.config_json?.academic_year_end || '');
+                        setDueDate(activeYearEndDate);
                         setShowAddStructure(true);
                     }} 
                     className="w-12 h-12 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 active:scale-95 transition-all"
