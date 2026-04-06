@@ -241,6 +241,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         const examData = {
           institution_id: madrasah.id,
           marhala_id: classId,
+          class_name: selectedClass?.class_name || '',
           exam_name: examName,
           exam_year: examYear,
           is_active: true
