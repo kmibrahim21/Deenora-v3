@@ -55,7 +55,6 @@ const App: React.FC = () => {
     session,
     profile,
     madrasah,
-    activeYear,
     loading,
     authError,
     handleLogout,
@@ -113,7 +112,7 @@ const App: React.FC = () => {
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta) {
       if (loading) {
-        themeColorMeta.setAttribute("content", "#8D30F4"); // Splash screen color
+        themeColorMeta.setAttribute("content", "#0F172A"); // Splash screen color
       } else {
         // Use a dark color for the status bar in both modes to ensure white icons are always visible
         themeColorMeta.setAttribute("content", "#0F172A");
@@ -138,17 +137,37 @@ const App: React.FC = () => {
 
   if (loading)
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#8D30F4] mesh-bg-vibrant">
-        <div className="flex flex-col items-center justify-center animate-in fade-in duration-1000">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] relative overflow-hidden">
+        {/* Decorative Background */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-20 -right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        </div>
+
+        <div className="flex flex-col items-center justify-center animate-in fade-in zoom-in duration-1000 z-10">
           <div className="relative flex items-center justify-center mb-8">
-            <div className="absolute w-16 h-16 bg-white/10 rounded-full blur-xl animate-pulse"></div>
-            <div className="relative w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 flex items-center justify-center shadow-2xl">
-              <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+            {/* Outer glowing rings */}
+            <div className="absolute w-24 h-24 border border-blue-500/30 rounded-full animate-[spin_3s_linear_infinite]"></div>
+            <div className="absolute w-32 h-32 border border-indigo-500/20 rounded-full animate-[spin_4s_linear_infinite_reverse]"></div>
+            <div className="absolute w-16 h-16 bg-blue-500/20 rounded-full blur-xl animate-pulse"></div>
+            
+            {/* Center Icon */}
+            <div className="relative w-16 h-16 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 flex items-center justify-center shadow-2xl overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <BookOpen size={28} className="text-blue-400 animate-pulse" strokeWidth={1.5} />
             </div>
           </div>
-          <h1 className="text-white font-black tracking-[0.7em] text-[11px] uppercase opacity-90">
-            DEENORA
-          </h1>
+          
+          <div className="space-y-3 text-center">
+            <h1 className="text-white font-black tracking-[0.5em] text-sm uppercase opacity-90">
+              DEENORA
+            </h1>
+            <div className="flex items-center justify-center gap-1.5 opacity-60">
+              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -186,7 +205,6 @@ const App: React.FC = () => {
             triggerRefresh={triggerRefresh}
             institutionId={madrasah?.id}
             madrasah={madrasah}
-            activeYear={activeYear}
             profile={profile}
             onNavigateToWallet={() => {
               const modules = {
@@ -265,7 +283,6 @@ const App: React.FC = () => {
               !!profile?.permissions?.can_use_voice_call
             }
             institutionId={madrasah?.id}
-            activeYear={activeYear}
             onNavigateToVoiceBroadcast={(ids) => {
               setPreSelectedStudentIds(ids);
               setView("voice-broadcast");
@@ -489,7 +506,6 @@ const App: React.FC = () => {
           <Accounting
             lang={lang}
             madrasah={madrasah}
-            activeYear={activeYear}
             onBack={() => handleBack("home")}
             role={role}
             profile={profile}
@@ -500,7 +516,6 @@ const App: React.FC = () => {
           <Attendance
             lang={lang}
             madrasah={madrasah}
-            activeYear={activeYear}
             onBack={() => handleBack("home")}
             userId={session?.user?.id}
             profile={profile}
@@ -511,7 +526,6 @@ const App: React.FC = () => {
           <Exams
             lang={lang}
             madrasah={madrasah}
-            activeYear={activeYear}
             onBack={() => handleBack("home")}
             role={role}
             onNavigateToFinalResults={() => setView("final-results")}
@@ -523,7 +537,6 @@ const App: React.FC = () => {
           <FinalResults
             lang={lang}
             madrasah={madrasah}
-            activeYear={activeYear}
             onBack={() => handleBack("home")}
             role={role}
             profile={profile}
