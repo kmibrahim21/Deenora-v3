@@ -111,6 +111,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     setLoading(true);
     console.log("Fetching analytics for:", { institutionId, viewMode, selectedMonth, selectedYear, selectedClassId });
     try {
+      const activeYearId = madrasah?.config_json?.active_academic_year_id;
       // Determine date filter for ledger
       const dateFilter = viewMode === 'monthly' ? selectedMonth : selectedYear;
 
@@ -128,6 +129,9 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       if (selectedClassId !== 'all') {
         studentQuery = studentQuery.eq('class_id', selectedClassId);
       }
+      if (activeYearId) {
+        studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+      }
       const { data: students, error: studError } = await studentQuery;
       console.log("Students:", students, "Error:", studError);
       
@@ -140,9 +144,15 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       });
 
       // 3. Fetch Ledger for transaction counts (Income) AND Expenses
-      const { data: ledger, error: ledgerError } = await supabase.from('ledger')
+      let ledgerQuery = supabase.from('ledger')
         .select('description, amount, type, category, transaction_date')
         .eq('institution_id', institutionId);
+      
+      if (activeYearId) {
+        ledgerQuery = ledgerQuery.eq('academic_year_id', activeYearId);
+      }
+
+      const { data: ledger, error: ledgerError } = await ledgerQuery;
       console.log("Ledger:", ledger, "Error:", ledgerError);
 
       // 4. Process Data
@@ -275,7 +285,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
       // Fetch reminders only for monthly view (current dues)
       if (viewMode === 'monthly') {
-        const { data: remindersData, error: remError } = await supabase.rpc('get_fee_reminder_list', { p_institution_id: institutionId, p_month: selectedMonth });
+        const { data: remindersData, error: remError } = await supabase.rpc('get_fee_reminder_list', { 
+          p_institution_id: institutionId, 
+          p_month: selectedMonth,
+          p_academic_year_id: activeYearId
+        });
         console.log("Reminders:", remindersData, "Error:", remError);
         
         if (remindersData) {

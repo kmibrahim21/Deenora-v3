@@ -78,11 +78,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   }, [madrasah?.id, selectedClassId, view]);
 
   const fetchExams = async () => {
+    const activeYearId = madrasah?.config_json?.active_academic_year_id;
     let query = supabase.from('befaq_exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
     
-    const yearStart = madrasah?.config_json?.academic_year_start;
-    if (yearStart) {
-      query = query.gte('created_at', yearStart);
+    if (activeYearId) {
+      query = query.eq('academic_year_id', activeYearId);
+    } else {
+      const yearStart = madrasah?.config_json?.academic_year_start;
+      if (yearStart) {
+        query = query.gte('created_at', yearStart);
+      }
     }
 
     if (selectedClassId) {
@@ -120,7 +125,12 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
   const fetchMarkEntryData = async (examId: string, classId: string) => {
     setLoading(true);
-    const { data: stds } = await supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
+    const activeYearId = madrasah?.config_json?.active_academic_year_id;
+    let studentQuery = supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
+    if (activeYearId) {
+      studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+    }
+    const { data: stds } = await studentQuery;
     const { data: marks } = await supabase.from('befaq_results').select('*').eq('exam_id', examId);
     
     if (stds) setStudents(stds);
@@ -237,9 +247,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     }
     setIsSaving(true);
     try {
+        const activeYearId = madrasah.config_json?.active_academic_year_id;
         const selectedClass = classes.find(c => c.id === classId);
         const examData = {
           institution_id: madrasah.id,
+          academic_year_id: activeYearId,
           marhala_id: classId,
           class_name: selectedClass?.class_name || '',
           exam_name: examName,

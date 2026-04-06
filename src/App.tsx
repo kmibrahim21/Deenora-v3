@@ -55,6 +55,7 @@ const App: React.FC = () => {
     session,
     profile,
     madrasah,
+    activeYear,
     loading,
     authError,
     handleLogout,
@@ -185,6 +186,7 @@ const App: React.FC = () => {
             triggerRefresh={triggerRefresh}
             institutionId={madrasah?.id}
             madrasah={madrasah}
+            activeYear={activeYear}
             profile={profile}
             onNavigateToWallet={() => {
               const modules = {
@@ -263,6 +265,7 @@ const App: React.FC = () => {
               !!profile?.permissions?.can_use_voice_call
             }
             institutionId={madrasah?.id}
+            activeYear={activeYear}
             onNavigateToVoiceBroadcast={(ids) => {
               setPreSelectedStudentIds(ids);
               setView("voice-broadcast");
@@ -486,6 +489,7 @@ const App: React.FC = () => {
           <Accounting
             lang={lang}
             madrasah={madrasah}
+            activeYear={activeYear}
             onBack={() => handleBack("home")}
             role={role}
             profile={profile}
@@ -496,6 +500,7 @@ const App: React.FC = () => {
           <Attendance
             lang={lang}
             madrasah={madrasah}
+            activeYear={activeYear}
             onBack={() => handleBack("home")}
             userId={session?.user?.id}
             profile={profile}
@@ -506,6 +511,7 @@ const App: React.FC = () => {
           <Exams
             lang={lang}
             madrasah={madrasah}
+            activeYear={activeYear}
             onBack={() => handleBack("home")}
             role={role}
             onNavigateToFinalResults={() => setView("final-results")}
@@ -517,6 +523,7 @@ const App: React.FC = () => {
           <FinalResults
             lang={lang}
             madrasah={madrasah}
+            activeYear={activeYear}
             onBack={() => handleBack("home")}
             role={role}
             profile={profile}

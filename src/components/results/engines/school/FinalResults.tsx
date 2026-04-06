@@ -10,10 +10,11 @@ interface FinalResultsProps {
   madrasah: Institution | null;
   onBack: () => void;
   role: UserRole;
+  activeYear?: any;
   profile?: Profile | null;
 }
 
-const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, role, profile }) => {
+const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, role, activeYear, profile }) => {
   const [results, setResults] = useState<FinalResult[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,9 +78,13 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
   const fetchExamsForClass = async (classId: string) => {
     let query = supabase.from('exams').select('*').eq('class_id', classId);
     
-    const yearStart = madrasah?.config_json?.academic_year_start;
-    if (yearStart) {
-      query = query.gte('created_at', yearStart);
+    if (activeYear) {
+      query = query.eq('academic_year_id', activeYear.id);
+    } else {
+      const yearStart = madrasah?.config_json?.academic_year_start;
+      if (yearStart) {
+        query = query.gte('created_at', yearStart);
+      }
     }
 
     const { data } = await query;
@@ -136,11 +141,17 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     setResultLoading(true);
     try {
       // 1. Fetch Students
-      const { data: students } = await supabase
+      let stdQuery = supabase
         .from('students')
         .select('*')
         .eq('class_id', result.class_id)
         .order('roll', { ascending: true });
+      
+      if (activeYear) {
+        stdQuery = stdQuery.eq('academic_year_id', activeYear.id);
+      }
+
+      const { data: students } = await stdQuery;
 
       if (!students) throw new Error('No students found');
 

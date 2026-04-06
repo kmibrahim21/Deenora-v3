@@ -120,8 +120,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setLoading(true);
     setFetchError(null);
     try {
-      const { data: stdData } = await supabase.from('students').select('*').eq('class_id', cid).order('roll', { ascending: true });
-      const { data: attData } = await supabase.from('attendance').select('*').eq('class_id', cid).eq('date', date);
+      const activeYearId = madrasah?.config_json?.active_academic_year_id;
+      let studentQuery = supabase.from('students').select('*').eq('class_id', cid).order('roll', { ascending: true });
+      if (activeYearId) {
+        studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+      }
+      const { data: stdData } = await studentQuery;
+      
+      let attQuery = supabase.from('attendance').select('*').eq('class_id', cid).eq('date', date);
+      if (activeYearId) {
+        attQuery = attQuery.eq('academic_year_id', activeYearId);
+      }
+      const { data: attData } = await attQuery;
 
       if (stdData) {
         setStudents(stdData);
@@ -187,12 +197,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     if (!madrasah || !selectedClass) return;
     setSaving(true);
     try {
+      const activeYearId = madrasah.config_json?.active_academic_year_id;
       // Clean delete for sync
-      const { error: delError } = await supabase.from('attendance').delete().eq('class_id', selectedClass.id).eq('date', date);
+      let delQuery = supabase.from('attendance').delete().eq('class_id', selectedClass.id).eq('date', date);
+      if (activeYearId) {
+        delQuery = delQuery.eq('academic_year_id', activeYearId);
+      }
+      const { error: delError } = await delQuery;
       if (delError) throw delError;
 
       const payload = Object.entries(attendance).map(([sid, status]) => ({
         institution_id: madrasah.id,
+        academic_year_id: activeYearId,
         class_id: selectedClass.id,
         student_id: sid,
         status: status,

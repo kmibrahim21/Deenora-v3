@@ -101,6 +101,7 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
     if (!isValidUUID(institutionId)) return;
     setLoading(true);
     try {
+        const activeYearId = madrasah?.config_json?.active_academic_year_id;
         const isBefaq = madrasah?.config_json?.result_engine === 'befaq';
         const examTable = isBefaq ? 'befaq_exams' : 'exams';
         const subjectTable = isBefaq ? 'befaq_subjects' : 'exam_subjects';
@@ -110,9 +111,13 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
         // Fetch Exams
         let examQuery = supabase.from(examTable).select('*').eq('institution_id', institutionId).order(isBefaq ? 'created_at' : 'exam_date', { ascending: true });
         
-        const yearStart = madrasah?.config_json?.academic_year_start;
-        if (yearStart) {
-            examQuery = examQuery.gte('created_at', yearStart);
+        if (activeYearId) {
+            examQuery = examQuery.eq('academic_year_id', activeYearId);
+        } else {
+            const yearStart = madrasah?.config_json?.academic_year_start;
+            if (yearStart) {
+                examQuery = examQuery.gte('created_at', yearStart);
+            }
         }
 
         if (selectedClassId !== 'all') {
@@ -152,6 +157,9 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
         let studentQuery = supabase.from('students').select('id, student_name, roll, class_id').eq('institution_id', institutionId);
         if (selectedClassId !== 'all') {
             studentQuery = studentQuery.eq('class_id', selectedClassId);
+        }
+        if (activeYearId) {
+            studentQuery = studentQuery.eq('academic_year_id', activeYearId);
         }
         const { data: students } = await studentQuery;
 

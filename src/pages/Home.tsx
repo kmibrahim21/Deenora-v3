@@ -104,10 +104,16 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const today = new Date().toISOString().split('T')[0];
       const allowedClasses = profile?.permissions?.allowed_classes;
       const isTeacher = role === 'teacher';
+      const activeYearId = madrasah?.config_json?.active_academic_year_id;
 
       let studentQuery = supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
       let classQuery = supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
       let attendanceQuery = supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId).eq('date', today).eq('status', 'present');
+
+      if (activeYearId) {
+        studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+        attendanceQuery = attendanceQuery.eq('academic_year_id', activeYearId);
+      }
 
       if (isTeacher && allowedClasses && allowedClasses.length > 0) {
         studentQuery = studentQuery.in('class_id', allowedClasses);

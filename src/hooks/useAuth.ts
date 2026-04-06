@@ -2,15 +2,34 @@
 import { useState, useEffect } from 'react';
 import { supabase } from 'lib/supabase';
 import { OfflineService } from 'services/OfflineService';
-import { Profile, Institution } from 'types';
+import { Profile, Institution, AcademicYear } from 'types';
 import { isValidUUID } from '../utils/validation';
 
 export const useAuth = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [madrasah, setMadrasah] = useState<Institution | null>(null);
+  const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const fetchActiveYear = async (institutionId: string) => {
+    if (!isValidUUID(institutionId)) return;
+    try {
+      const { data: year } = await supabase
+        .from('academic_years')
+        .select('*')
+        .eq('institution_id', institutionId)
+        .eq('status', 'active')
+        .maybeSingle();
+      
+      if (year) {
+        setActiveYear(year);
+      }
+    } catch (err) {
+      console.error("Error fetching active year:", err);
+    }
+  };
 
   const fetchUserProfile = async (userId: string, email?: string) => {
     if (!isValidUUID(userId)) {
@@ -68,6 +87,7 @@ export const useAuth = () => {
             }
             setMadrasah(institutionData);
             OfflineService.setCache('profile', institutionData);
+            await fetchActiveYear(institutionData.id);
           } else {
             setMadrasah(null);
           }
@@ -362,5 +382,5 @@ export const useAuth = () => {
     };
   }, [profile?.institution_id]);
 
-  return { session, profile, madrasah, loading, authError, handleLogout, refreshMadrasah };
+  return { session, profile, madrasah, activeYear, loading, authError, handleLogout, refreshMadrasah };
 };

@@ -92,11 +92,16 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           return;
         }
 
+        const activeYearId = madrasah.config_json?.active_academic_year_id;
         let query = supabase.from('ledger').select('*').eq('institution_id', madrasah.id);
         
-        const yearStart = madrasah.config_json?.academic_year_start;
-        if (yearStart) {
-          query = query.gte('transaction_date', yearStart);
+        if (activeYearId) {
+          query = query.eq('academic_year_id', activeYearId);
+        } else {
+          const yearStart = madrasah.config_json?.academic_year_start;
+          if (yearStart) {
+            query = query.gte('transaction_date', yearStart);
+          }
         }
 
         const { data } = await query.order('transaction_date', { ascending: false });
@@ -119,8 +124,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     }
     setIsSaving(true);
     try {
+      const activeYearId = madrasah.config_json?.active_academic_year_id;
       const { error } = await supabase.from('ledger').insert({
         institution_id: madrasah.id,
+        academic_year_id: activeYearId,
         type: type,
         amount: parseFloat(amount),
         category: category.trim(),

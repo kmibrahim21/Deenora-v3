@@ -70,11 +70,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   }, [madrasah?.id, selectedClassId, view]);
 
   const fetchExams = async () => {
+    const activeYearId = madrasah?.config_json?.active_academic_year_id;
     let query = supabase.from('exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
     
-    const yearStart = madrasah?.config_json?.academic_year_start;
-    if (yearStart) {
-      query = query.gte('created_at', yearStart);
+    if (activeYearId) {
+      query = query.eq('academic_year_id', activeYearId);
+    } else {
+      const yearStart = madrasah?.config_json?.academic_year_start;
+      if (yearStart) {
+        query = query.gte('created_at', yearStart);
+      }
     }
 
     if (selectedClassId) {
@@ -111,8 +116,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   const fetchMarkEntryData = async (examId: string, classId: string) => {
     setLoading(true);
+    const activeYearId = madrasah?.config_json?.active_academic_year_id;
     // 1. Fetch Students of the exam's class
-    const { data: stds } = await supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
+    let studentQuery = supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
+    if (activeYearId) {
+      studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+    }
+    const { data: stds } = await studentQuery;
     // 2. Fetch existing marks
     const { data: marks } = await supabase.from('exam_marks').select('*').eq('exam_id', examId);
     
@@ -286,9 +296,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (!madrasah || !examName || !classId) return;
     setIsSaving(true);
     try {
+      const activeYearId = madrasah.config_json?.active_academic_year_id;
       const selectedClass = classes.find(c => c.id === classId);
-      const examData = {
+      const examData: any = {
         institution_id: madrasah.id,
+        academic_year_id: activeYearId,
         class_id: classId,
         exam_name: examName,
         exam_date: examDate

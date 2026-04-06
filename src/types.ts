@@ -35,6 +35,7 @@ export interface Institution {
     accounting_mode?: 'qawmi_flexible' | 'school_system';
     user_pin?: string;
     academic_year_start?: string;
+    active_academic_year_id?: string;
     attendance_settings?: {
       half_day_time?: string;
       full_day_time?: string;
@@ -74,6 +75,7 @@ export interface BefaqExam {
   exam_year: string;
   marhala_id: string; // class_id
   is_active: boolean;
+  academic_year_id?: string;
   created_at: string;
   classes?: Class;
 }
@@ -166,6 +168,7 @@ export interface Student {
   student_type?: 'boarding' | 'day_scholar';
   department?: 'hifz' | 'nazera' | 'kitab' | 'other';
   sponsor_id?: string | null;
+  academic_year_id?: string;
   created_at?: string;
   classes?: Class;
 }
@@ -197,6 +200,7 @@ export interface Exam {
   exam_name: string;
   exam_date: string;
   is_published: boolean;
+  academic_year_id?: string;
   created_at: string;
   classes?: Class;
 }
@@ -224,6 +228,7 @@ export interface Attendance {
   status: 'present' | 'absent' | 'late' | 'half_day';
   date: string;
   recorded_by: string;
+  academic_year_id?: string;
   students?: Student;
 }
 
@@ -235,6 +240,7 @@ export interface LedgerEntry {
   amount: number;
   description: string;
   transaction_date: string;
+  academic_year_id?: string;
   created_at: string;
 }
 
@@ -258,6 +264,7 @@ export interface Fee {
   month: string; // YYYY-MM
   status: 'paid' | 'unpaid' | 'partial';
   paid_at?: string;
+  academic_year_id?: string;
   students?: Student;
 }
 
@@ -281,6 +288,7 @@ export interface FinalResult {
   institution_id: string;
   class_id: string;
   title: string;
+  academic_year_id?: string;
   created_at: string;
   classes?: Class;
   exams?: FinalResultExam[];

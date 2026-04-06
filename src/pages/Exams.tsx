@@ -13,6 +13,7 @@ interface ExamsProps {
   madrasah: Institution | null;
   onBack: () => void;
   role: UserRole;
+  activeYear?: any;
   onNavigateToFinalResults?: () => void;
   profile?: Profile | null;
 }

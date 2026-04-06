@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'lib/supabase';
-import { Institution, Class, Exam, Student } from 'types';
-import { Loader2, Calendar, ArrowRight, Save, AlertTriangle, CheckCircle2, X, ChevronRight, School } from 'lucide-react';
+import { Institution, Class, Exam, Student, AcademicYear } from 'types';
+import { Loader2, Calendar, ArrowRight, Save, AlertTriangle, CheckCircle2, X, ChevronRight, School, List, BarChart3, Plus, Trash2, Archive, Check, GraduationCap } from 'lucide-react';
 
 interface AcademicYearManagerProps {
   institution: Institution;
@@ -13,7 +13,9 @@ interface AcademicYearManagerProps {
 export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ institution, onClose, onUpdate, lang = 'en' }) => {
   const isDark = institution?.theme === 'dark';
   const [loading, setLoading] = useState(true);
-  const [currentYear, setCurrentYear] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'years' | 'promotion' | 'reports'>('years');
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
+  const [currentYear, setCurrentYear] = useState<AcademicYear | null>(null);
   const [step, setStep] = useState<'status' | 'config' | 'preview' | 'executing'>('status');
   
   // Config State
@@ -30,6 +32,10 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [executingLog, setExecutingLog] = useState<string[]>([]);
 
+  // New Year Modal State
+  const [showNewYearModal, setShowNewYearModal] = useState(false);
+  const [isCreatingYear, setIsCreatingYear] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, [institution.id]);
@@ -37,14 +43,17 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch current year
-      const { data: year } = await supabase.from('academic_years')
+      // Fetch all academic years
+      const { data: years } = await supabase.from('academic_years')
         .select('*')
         .eq('institution_id', institution.id)
-        .eq('status', 'active')
-        .single();
+        .order('start_date', { ascending: false });
       
-      if (year) setCurrentYear(year);
+      if (years) {
+        setAcademicYears(years);
+        const active = years.find(y => y.status === 'active');
+        if (active) setCurrentYear(active);
+      }
 
       // Fetch classes
       const { data: cls } = await supabase.from('classes')
@@ -77,6 +86,98 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
 
     } catch (error) {
       console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateYear = async () => {
+    if (!newYearName || !startDate || !endDate) return;
+    setIsCreatingYear(true);
+    try {
+      const { data, error } = await supabase.from('academic_years').insert({
+        institution_id: institution.id,
+        year_name: newYearName,
+        start_date: startDate,
+        end_date: endDate,
+        status: academicYears.length === 0 ? 'active' : 'archived'
+      }).select().single();
+
+      if (error) throw error;
+      
+      setAcademicYears([data, ...academicYears]);
+      setShowNewYearModal(false);
+      setNewYearName('');
+      setStartDate('');
+      setEndDate('');
+      
+      if (onUpdate) onUpdate();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsCreatingYear(false);
+    }
+  };
+
+  const handleSetActive = async (yearId: string) => {
+    if (!confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটিকে সক্রিয় করতে চান?' : 'Are you sure you want to set this year as active?')) return;
+    setLoading(true);
+    try {
+      // 1. Archive all years for this institution
+      await supabase.from('academic_years')
+        .update({ status: 'archived' })
+        .eq('institution_id', institution.id);
+      
+      // 2. Set selected year as active
+      const { data: updatedYear, error } = await supabase.from('academic_years')
+        .update({ status: 'active' })
+        .eq('id', yearId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      // 3. Update institution config
+      const updatedConfig = {
+        ...(institution.config_json || {}),
+        academic_year_start: updatedYear.start_date,
+        active_academic_year_id: updatedYear.id
+      };
+
+      await supabase.from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', institution.id);
+
+      setCurrentYear(updatedYear);
+      setAcademicYears(academicYears.map(y => y.id === yearId ? updatedYear : { ...y, status: 'archived' }));
+      
+      if (onUpdate) onUpdate();
+      alert(lang === 'bn' ? 'শিক্ষাবর্ষ সফলভাবে সক্রিয় করা হয়েছে।' : 'Academic year activated successfully.');
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleArchive = async (yearId: string) => {
+    if (!confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটিকে আর্কাইভ করতে চান?' : 'Are you sure you want to archive this year?')) return;
+    setLoading(true);
+    try {
+      const { data: updatedYear, error } = await supabase.from('academic_years')
+        .update({ status: 'archived' })
+        .eq('id', yearId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      setAcademicYears(academicYears.map(y => y.id === yearId ? updatedYear : y));
+      if (currentYear?.id === yearId) setCurrentYear(null);
+      
+      if (onUpdate) onUpdate();
+    } catch (error: any) {
+      alert(error.message);
     } finally {
       setLoading(false);
     }
@@ -227,26 +328,89 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
 
   return (
     <div className={`fixed inset-0 backdrop-blur-md z-[9999] flex items-center justify-center p-4 ${isDark ? 'bg-slate-950/80' : 'bg-slate-900/80'}`}>
-      <div className={`w-full max-w-4xl rounded-[2.5rem] shadow-2xl border flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300 ${
+      <div className={`w-full max-w-5xl rounded-[2.5rem] shadow-2xl border flex flex-col h-[90vh] overflow-hidden animate-in zoom-in-95 duration-300 ${
           isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
       }`}>
         
         {/* Header */}
-        <div className={`p-8 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
-          <div>
-            <h2 className={`text-2xl font-black font-noto ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ প্রমোশন' : 'Academic Year Manager'}</h2>
-            <p className={`text-sm font-bold mt-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{institution.name}</p>
+        <div className={`p-6 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+              <Calendar size={24} />
+            </div>
+            <div>
+              <h2 className={`text-xl font-black font-noto ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ ব্যবস্থাপনা' : 'Academic Year Management'}</h2>
+              <p className={`text-xs font-bold mt-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{institution.name}</p>
+            </div>
           </div>
-          <button onClick={onClose} className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-sm border ${
-              isDark ? 'bg-slate-800 text-slate-500 hover:text-red-400 hover:bg-red-900/20 border-slate-700' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border-slate-100'
-          }`}>
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <div className={`flex p-1 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+              <button onClick={() => setActiveTab('years')} className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all flex items-center gap-2 ${activeTab === 'years' ? (isDark ? 'bg-slate-800 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>
+                <List size={14} /> {lang === 'bn' ? 'শিক্ষাবর্ষ তালিকা' : 'Years List'}
+              </button>
+              <button onClick={() => setActiveTab('promotion')} className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all flex items-center gap-2 ${activeTab === 'promotion' ? (isDark ? 'bg-slate-800 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>
+                <GraduationCap size={14} /> {lang === 'bn' ? 'প্রমোশন উইজার্ড' : 'Promotion'}
+              </button>
+              <button onClick={() => setActiveTab('reports')} className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all flex items-center gap-2 ${activeTab === 'reports' ? (isDark ? 'bg-slate-800 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>
+                <BarChart3 size={14} /> {lang === 'bn' ? 'রিপোর্ট' : 'Reports'}
+              </button>
+            </div>
+            <button onClick={onClose} className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-sm border ${
+                isDark ? 'bg-slate-800 text-slate-500 hover:text-red-400 hover:bg-red-900/20 border-slate-700' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border-slate-100'
+            }`}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
-          {step === 'status' && (
+        <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+          {activeTab === 'years' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-black ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{lang === 'bn' ? 'সকল শিক্ষাবর্ষ' : 'All Academic Years'}</h3>
+                <button onClick={() => setShowNewYearModal(true)} className="px-4 py-2 bg-[#2563EB] text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-premium">
+                  <Plus size={14} /> {lang === 'bn' ? 'নতুন শিক্ষাবর্ষ' : 'New Year'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {academicYears.map(year => (
+                  <div key={year.id} className={`p-6 rounded-[2rem] border relative group transition-all ${isDark ? 'bg-slate-800/50 border-slate-800 hover:border-blue-500/30' : 'bg-white border-slate-100 hover:border-blue-200'}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${year.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'}`}>
+                        <Calendar size={24} />
+                      </div>
+                      <div className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${year.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                        {year.status === 'active' ? (lang === 'bn' ? 'সক্রিয়' : 'Active') : (lang === 'bn' ? 'আর্কাইভ' : 'Archived')}
+                      </div>
+                    </div>
+                    <h4 className={`text-xl font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>{year.year_name}</h4>
+                    <div className="flex items-center gap-2 mt-2 text-[10px] font-bold text-slate-400">
+                      <span>{year.start_date}</span>
+                      <ArrowRight size={10} />
+                      <span>{year.end_date}</span>
+                    </div>
+
+                    <div className="mt-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {year.status !== 'active' && (
+                        <button onClick={() => handleSetActive(year.id)} className="flex-1 py-2.5 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">
+                          <Check size={14} /> {lang === 'bn' ? 'সক্রিয় করুন' : 'Set Active'}
+                        </button>
+                      )}
+                      {year.status === 'active' && (
+                        <button onClick={() => handleArchive(year.id)} className="flex-1 py-2.5 bg-amber-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">
+                          <Archive size={14} /> {lang === 'bn' ? 'আর্কাইভ করুন' : 'Archive'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'promotion' && (
             <div className="space-y-8">
               <div className={`p-6 rounded-[2rem] border flex items-center justify-between ${
                   isDark ? 'bg-blue-900/20 border-blue-900/30' : 'bg-blue-50 border-blue-100'
@@ -282,6 +446,32 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
                 <button onClick={() => setStep('config')} className="px-8 py-4 bg-[#2563EB] text-white font-black rounded-2xl shadow-premium hover:scale-105 transition-transform">
                   {lang === 'bn' ? 'প্রমোশন উইজার্ড শুরু করুন' : 'Start Promotion Wizard'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'reports' && (
+            <div className="space-y-6">
+              <div className={`p-8 rounded-[2.5rem] border text-center space-y-4 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-bubble ${isDark ? 'bg-slate-800 text-purple-400' : 'bg-white text-purple-600'}`}>
+                  <BarChart3 size={32} />
+                </div>
+                <h3 className={`text-xl font-black ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ ভিত্তিক রিপোর্ট' : 'Year-wise Reports'}</h3>
+                <p className={`text-sm max-w-md mx-auto ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                  {lang === 'bn' ? 'নির্দিষ্ট শিক্ষাবর্ষের আয়-ব্যয়, বকেয়া ফি এবং পরীক্ষার ফলাফল দেখতে শিক্ষাবর্ষ নির্বাচন করুন।' : 'Select an academic year to view its income, expenses, due fees, and exam results.'}
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto mt-8">
+                  {academicYears.map(year => (
+                    <button key={year.id} className={`p-6 rounded-3xl border text-left group transition-all active:scale-95 ${isDark ? 'bg-slate-900 border-slate-800 hover:border-purple-500/30' : 'bg-white border-slate-200 hover:border-purple-200'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-lg font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>{year.year_name}</span>
+                        <ChevronRight size={18} className="text-slate-300 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{year.start_date} - {year.end_date}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -461,6 +651,38 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({ instit
           )}
         </div>
       </div>
+
+      {/* New Year Modal */}
+      {showNewYearModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-[3rem] p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300 ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
+            <div className="flex items-center justify-between">
+              <h3 className={`text-xl font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'নতুন শিক্ষাবর্ষ যোগ করুন' : 'Add New Year'}</h3>
+              <button onClick={() => setShowNewYearModal(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={24} /></button>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'শিক্ষাবর্ষের নাম' : 'Year Name'}</label>
+                <input type="text" className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} placeholder="e.g. 2025-2026" value={newYearName} onChange={e => setNewYearName(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'শুরুর তারিখ' : 'Start Date'}</label>
+                  <input type="date" className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={startDate} onChange={e => setStartDate(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'শেষের তারিখ' : 'End Date'}</label>
+                  <input type="date" className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={endDate} onChange={e => setEndDate(e.target.value)} />
+                </div>
+              </div>
+              <button onClick={handleCreateYear} disabled={isCreatingYear} className="w-full h-14 bg-[#2563EB] text-white font-black rounded-2xl shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all">
+                {isCreatingYear ? <Loader2 className="animate-spin" /> : <Plus size={20} />}
+                {lang === 'bn' ? 'শিক্ষাবর্ষ তৈরি করুন' : 'Create Year'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

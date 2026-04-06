@@ -84,6 +84,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     setLoading(true);
     setFetchError(null);
     try {
+      const activeYearId = madrasah.config_json?.active_academic_year_id;
+
       if (activeTab === 'fees') {
         const classId = selectedClass === '' ? null : selectedClass;
         
@@ -98,7 +100,9 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             .eq('institution_id', madrasah.id)
             .eq('month', selectedMonth);
         
-        if (yearStart) {
+        if (activeYearId) {
+            feesQuery = feesQuery.eq('academic_year_id', activeYearId);
+        } else if (yearStart) {
             feesQuery = feesQuery.gte('created_at', yearStart);
         }
         const { data: feesData } = await feesQuery;
@@ -108,7 +112,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         const { data, error } = await supabase.rpc('get_monthly_dues_report', {
           p_institution_id: madrasah.id,
           p_class_id: classId,
-          p_month: selectedMonth
+          p_month: selectedMonth,
+          p_academic_year_id: activeYearId
         });
         
         if (error) throw error;
@@ -146,6 +151,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         if (!data || data.length === 0) {
           let checkQuery = supabase.from('students').select('id', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
           if (classId) checkQuery = checkQuery.eq('class_id', classId);
+          if (activeYearId) checkQuery = checkQuery.eq('academic_year_id', activeYearId);
           const { count } = await checkQuery;
           setAnyStudentsInMadrasah(count && count > 0 ? true : false);
         } else {
@@ -198,7 +204,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       .ilike('description', `%${student.student_name} (%Month: ${selectedMonth})%`);
 
     const yearStart = madrasah.config_json?.academic_year_start;
-    if (yearStart) {
+    const activeYearId = madrasah.config_json?.active_academic_year_id;
+
+    if (activeYearId) {
+      ledgerQuery = ledgerQuery.eq('academic_year_id', activeYearId);
+    } else if (yearStart) {
       ledgerQuery = ledgerQuery.gte('created_at', yearStart);
     }
 
@@ -237,6 +247,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     if (!selectedStudent || !collectAmount) return;
     setIsSaving(true);
     try {
+      const activeYearId = madrasah.config_json?.active_academic_year_id;
       const totalAmt = parseFloat(collectAmount);
       const totalDiscount = parseFloat(discount) || 0;
       
@@ -246,6 +257,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         class_id: selectedStudent.class_id,
         amount_paid: totalAmt,
         month: selectedMonth,
+        academic_year_id: activeYearId,
         status: (Number(selectedStudent.total_paid) + totalAmt + totalDiscount) >= Number(selectedStudent.total_payable) ? 'paid' : 'partial'
       };
 
@@ -274,7 +286,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         amount: totalAmt,
         category: 'Student Fee',
         description: `${feeDescription} - ${selectedStudent.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})${totalDiscount > 0 ? ` (ছাড়: ৳${totalDiscount})` : ''}`,
-        transaction_date: new Date().toISOString().split('T')[0]
+        transaction_date: new Date().toISOString().split('T')[0],
+        academic_year_id: activeYearId
       });
 
       setShowFeeCollection(false);
@@ -306,7 +319,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       .like('month', `${year}-%`);
     
     const yearStart = madrasah.config_json?.academic_year_start;
-    if (yearStart) {
+    const activeYearId = madrasah.config_json?.active_academic_year_id;
+
+    if (activeYearId) {
+      query = query.eq('academic_year_id', activeYearId);
+    } else if (yearStart) {
       query = query.gte('created_at', yearStart);
     }
 
