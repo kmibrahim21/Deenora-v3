@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS fee_structures (
     class_id UUID REFERENCES classes(id) ON DELETE CASCADE,
     fee_name TEXT NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
+    due_date DATE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

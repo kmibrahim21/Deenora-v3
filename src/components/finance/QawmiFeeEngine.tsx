@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, HandHeart, Bell } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, HandHeart, Bell, Edit3, Trash2, Calendar } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 
@@ -47,8 +47,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
   // Structure State
   const [showAddStructure, setShowAddStructure] = useState(false);
+  const [editingStructureId, setEditingStructureId] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
@@ -765,7 +767,14 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                <button onClick={() => setActionError(null)} className={`p-1.5 rounded-lg border active:scale-95 ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-red-200 text-red-600'}`}><X size={14}/></button>
             </div>
          )}
-         <button onClick={() => setShowAddStructure(true)} className={`w-full py-5 rounded-[2.2rem] font-black flex items-center justify-center gap-3 shadow-bubble active:scale-95 transition-all border ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-white border-slate-100 text-[#2563EB]'}`}>
+         <button onClick={() => {
+            setEditingStructureId(null);
+            setCategory('');
+            setAmount('');
+            setSelectedClass('');
+            setDueDate(madrasah?.config_json?.academic_year_end || '');
+            setShowAddStructure(true);
+         }} className={`w-full py-5 rounded-[2.2rem] font-black flex items-center justify-center gap-3 shadow-bubble active:scale-95 transition-all border ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-white border-slate-100 text-[#2563EB]'}`}>
             <Plus size={24} strokeWidth={3} /> নতুন ফি/অনুদান খাত যোগ করুন
          </button>
          <div className="space-y-3">
@@ -774,27 +783,41 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                  <div className="min-w-0">
                     <h5 className={`font-black font-noto text-[17px] truncate ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.fee_name}</h5>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>{s.classes?.class_name}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>{s.classes?.class_name || 'সব জামাত'}</span>
+                      {s.due_date && <span className={`text-[10px] font-black uppercase tracking-widest ${madrasah.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>• শেষ তারিখ: {new Date(s.due_date).toLocaleDateString('bn-BD')}</span>}
                     </div>
                  </div>
                  <div className="flex items-center gap-3">
                      <div className={`text-2xl font-black shrink-0 ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>৳{s.amount}</div>
                      {deleteConfirmId === s.id ? (
-                         <div className="flex items-center gap-2">
-                             <button onClick={async () => {
-                                 const { error } = await supabase.from('fee_structures').delete().eq('id', s.id);
-                                 if (error) {
-                                     console.error("Delete Error:", error);
-                                     setActionError("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
-                                 } else {
-                                     fetchData();
-                                 }
-                                 setDeleteConfirmId(null);
-                             }} className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black">নিশ্চিত</button>
-                             <button onClick={() => setDeleteConfirmId(null)} className={`text-[10px] px-3 py-1.5 rounded-lg font-black ${madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>বাতিল</button>
+                         <div className="flex flex-col items-end gap-2">
+                             <span className="text-[10px] font-bold text-red-500">সব ডাটা ডিলিট হয়ে যাবে!</span>
+                             <div className="flex items-center gap-2">
+                                 <button onClick={async () => {
+                                     const { error } = await supabase.from('fee_structures').delete().eq('id', s.id);
+                                     if (error) {
+                                         console.error("Delete Error:", error);
+                                         setActionError("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
+                                     } else {
+                                         fetchData();
+                                     }
+                                     setDeleteConfirmId(null);
+                                 }} className="bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg font-black">নিশ্চিত</button>
+                                 <button onClick={() => setDeleteConfirmId(null)} className={`text-[10px] px-3 py-1.5 rounded-lg font-black ${madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>বাতিল</button>
+                             </div>
                          </div>
                      ) : (
-                         <button onClick={() => setDeleteConfirmId(s.id)} className="p-2 text-red-400 hover:text-red-500"><X size={18}/></button>
+                         <div className="flex items-center gap-1">
+                             <button onClick={() => {
+                                 setEditingStructureId(s.id);
+                                 setCategory(s.fee_name);
+                                 setAmount(s.amount?.toString() || '');
+                                 setSelectedClass(s.class_id || '');
+                                 setDueDate(s.due_date || '');
+                                 setShowAddStructure(true);
+                             }} className={`p-2 rounded-lg ${madrasah.theme === 'dark' ? 'text-blue-400 hover:bg-slate-700' : 'text-[#2563EB] hover:bg-blue-50'}`}><Edit3 size={18}/></button>
+                             <button onClick={() => setDeleteConfirmId(s.id)} className={`p-2 rounded-lg ${madrasah.theme === 'dark' ? 'text-red-400 hover:bg-slate-700' : 'text-red-500 hover:bg-red-50'}`}><Trash2 size={18}/></button>
+                         </div>
                      )}
                  </div>
               </div>
@@ -808,7 +831,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
               <div className={`w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 shadow-2xl relative ${madrasah.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
                  <div className="flex items-center justify-between">
-                   <h3 className={`text-xl font-black ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>ফি/অনুদান সেটআপ</h3>
+                   <h3 className={`text-xl font-black ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{editingStructureId ? 'ফি/অনুদান এডিট করুন' : 'ফি/অনুদান সেটআপ'}</h3>
                    <button onClick={() => setShowAddStructure(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
                  </div>
                  <div className="space-y-4">
@@ -849,20 +872,38 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                        <input type="number" className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
                        <DollarSign className={`absolute left-4 top-[44px] ${madrasah.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
                     </div>
+                    <div className="relative">
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শেষ তারিখ (Optional)</label>
+                       <div className="relative">
+                           <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                           <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${madrasah.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} size={20}/>
+                       </div>
+                    </div>
                     
                     <button onClick={async () => {
                        if (!category) return;
                        setIsSaving(true);
                        try {
-                           const { error } = await supabase.from('fee_structures').insert({
+                           const payload = {
                                institution_id: madrasah.id,
                                class_id: selectedClass || null,
                                fee_name: category,
-                               amount: parseFloat(amount) || 0
-                           });
+                               amount: parseFloat(amount) || 0,
+                               due_date: dueDate || null
+                           };
+                           
+                           let error;
+                           if (editingStructureId) {
+                               const { error: updateError } = await supabase.from('fee_structures').update(payload).eq('id', editingStructureId);
+                               error = updateError;
+                           } else {
+                               const { error: insertError } = await supabase.from('fee_structures').insert(payload);
+                               error = insertError;
+                           }
+                           
                            if (error) throw error;
                            setShowAddStructure(false);
-                           setCategory(''); setAmount(''); setSelectedClass('');
+                           setCategory(''); setAmount(''); setSelectedClass(''); setDueDate(''); setEditingStructureId(null);
                            fetchData();
                        } catch (e: any) { setActionError(e.message); } finally { setIsSaving(false); }
                     }} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all text-base">

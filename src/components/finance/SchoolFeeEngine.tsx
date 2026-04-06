@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, UserRole, Profile } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 
@@ -48,8 +48,10 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
   // Structure State
   const [showAddStructure, setShowAddStructure] = useState(false);
+  const [editingStructureId, setEditingStructureId] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
@@ -781,7 +783,14 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     <p className="text-[10px] font-bold text-slate-400 uppercase">মাদরাসার ফি কাঠামো নির্ধারণ করুন</p>
                 </div>
                 <button 
-                    onClick={() => setShowAddStructure(true)} 
+                    onClick={() => {
+                        setEditingStructureId(null);
+                        setCategory('');
+                        setAmount('');
+                        setSelectedClass('');
+                        setDueDate(madrasah?.config_json?.academic_year_end || '');
+                        setShowAddStructure(true);
+                    }} 
                     className="w-12 h-12 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 active:scale-95 transition-all"
                 >
                     <Plus size={24} strokeWidth={3} />
@@ -811,29 +820,44 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                             </div>
                                             <div>
                                                 <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{s.fee_name}</h5>
-                                                <p className="text-[10px] font-bold text-slate-400">নির্ধারিত ফি</p>
+                                                <p className="text-[10px] font-bold text-slate-400">নির্ধারিত ফি {s.due_date && `• শেষ তারিখ: ${new Date(s.due_date).toLocaleDateString('bn-BD')}`}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <div className={`text-lg font-black ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`}>৳{s.amount}</div>
                                             {deleteConfirmId === s.id ? (
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={async () => {
-                                                        const { error } = await supabase.from('fee_structures').delete().eq('id', s.id);
-                                                        if (error) {
-                                                            console.error("Delete Error:", error);
-                                                            setActionError("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
-                                                        } else {
-                                                            fetchData();
-                                                        }
-                                                        setDeleteConfirmId(null);
-                                                    }} className="bg-red-500 text-white text-[9px] px-2.5 py-1.5 rounded-lg font-black">হ্যাঁ</button>
-                                                    <button onClick={() => setDeleteConfirmId(null)} className={`text-[9px] px-2.5 py-1.5 rounded-lg font-black ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>না</button>
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <span className="text-[9px] font-bold text-red-500">সব ডাটা ডিলিট হয়ে যাবে!</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={async () => {
+                                                            const { error } = await supabase.from('fee_structures').delete().eq('id', s.id);
+                                                            if (error) {
+                                                                console.error("Delete Error:", error);
+                                                                setActionError("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
+                                                            } else {
+                                                                fetchData();
+                                                            }
+                                                            setDeleteConfirmId(null);
+                                                        }} className="bg-red-500 text-white text-[9px] px-2.5 py-1.5 rounded-lg font-black">হ্যাঁ</button>
+                                                        <button onClick={() => setDeleteConfirmId(null)} className={`text-[9px] px-2.5 py-1.5 rounded-lg font-black ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>না</button>
+                                                    </div>
                                                 </div>
                                             ) : (
-                                                <button onClick={() => setDeleteConfirmId(s.id)} className={`w-8 h-8 flex items-center justify-center transition-colors ${isDark ? 'text-slate-600 hover:text-red-400' : 'text-slate-300 hover:text-red-500'}`}>
-                                                    <X size={16}/>
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => {
+                                                        setEditingStructureId(s.id);
+                                                        setCategory(s.fee_name);
+                                                        setAmount(s.amount?.toString() || '');
+                                                        setSelectedClass(s.class_id || '');
+                                                        setDueDate(s.due_date || '');
+                                                        setShowAddStructure(true);
+                                                    }} className={`w-8 h-8 flex items-center justify-center transition-colors ${isDark ? 'text-blue-400 hover:bg-slate-700' : 'text-[#2563EB] hover:bg-blue-50 rounded-lg'}`}>
+                                                        <Edit3 size={16}/>
+                                                    </button>
+                                                    <button onClick={() => setDeleteConfirmId(s.id)} className={`w-8 h-8 flex items-center justify-center transition-colors ${isDark ? 'text-red-400 hover:bg-slate-700' : 'text-red-500 hover:bg-red-50 rounded-lg'}`}>
+                                                        <Trash2 size={16}/>
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -857,7 +881,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
               <div className={`w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 shadow-2xl relative ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
                  <div className="flex items-center justify-between">
-                   <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>ফি সেটআপ করুন</h3>
+                   <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{editingStructureId ? 'ফি এডিট করুন' : 'ফি সেটআপ করুন'}</h3>
                    <button onClick={() => setShowAddStructure(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
                  </div>
                  <div className="space-y-4">
@@ -898,20 +922,38 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        <input type="number" className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
                        <DollarSign className={`absolute left-4 top-[44px] ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
                     </div>
+                    <div className="relative">
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শেষ তারিখ (Optional)</label>
+                       <div className="relative">
+                           <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                           <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`} size={20}/>
+                       </div>
+                    </div>
                     
                     <button onClick={async () => {
                        if (!category || !amount) return;
                        setIsSaving(true);
                        try {
-                           const { error } = await supabase.from('fee_structures').insert({
+                           const payload = {
                                institution_id: madrasah.id,
                                class_id: selectedClass || null,
                                fee_name: category,
-                               amount: parseFloat(amount)
-                           });
+                               amount: parseFloat(amount),
+                               due_date: dueDate || null
+                           };
+                           
+                           let error;
+                           if (editingStructureId) {
+                               const { error: updateError } = await supabase.from('fee_structures').update(payload).eq('id', editingStructureId);
+                               error = updateError;
+                           } else {
+                               const { error: insertError } = await supabase.from('fee_structures').insert(payload);
+                               error = insertError;
+                           }
+                           
                            if (error) throw error;
                            setShowAddStructure(false);
-                           setCategory(''); setAmount(''); setSelectedClass('');
+                           setCategory(''); setAmount(''); setSelectedClass(''); setDueDate(''); setEditingStructureId(null);
                            fetchData();
                        } catch (e: any) { setActionError(e.message); } finally { setIsSaving(false); }
                     }} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all text-base">
