@@ -28,6 +28,7 @@ const AdminPanel = React.lazy(() => import("pages/AdminPanel"));
 const WalletSMS = React.lazy(() => import("pages/WalletSMS"));
 const TeacherManagement = React.lazy(() => import("pages/TeacherManagement"));
 const DataManagement = React.lazy(() => import("pages/DataManagement"));
+const AcademicYearManager = React.lazy(() => import("components/AcademicYearManager").then(module => ({ default: module.AcademicYearManager })));
 const Accounting = React.lazy(() => import("pages/Accounting"));
 const Attendance = React.lazy(() => import("pages/Attendance"));
 const Exams = React.lazy(() => import("pages/Exams"));
@@ -351,6 +352,15 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             onProfileUpdate={refreshMadrasah}
             profile={profile}
+          />
+        );
+      case "academic-year":
+        return (
+          <AcademicYearManager
+            institution={madrasah}
+            onClose={() => setView('account')}
+            onUpdate={refreshMadrasah}
+            lang={lang}
           />
         );
       case "super-account":

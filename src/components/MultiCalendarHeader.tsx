@@ -24,7 +24,7 @@ const MultiCalendarHeader: React.FC<MultiCalendarHeaderProps> = ({ madrasah }) =
           </div>
           <div className="flex flex-col min-w-0">
             <span className={`text-[9px] lg:text-[11px] font-black uppercase tracking-widest leading-none mb-1 lg:mb-1.5 ${madrasah?.theme === 'dark' ? 'text-blue-400/60' : 'text-blue-500/60'}`}>ইংরেজি</span>
-            <span className={`text-[13px] lg:text-[17px] font-black truncate leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{format(today, 'd MMM, yy')}</span>
+            <span className={`text-[11px] lg:text-[14px] font-black truncate leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{format(today, 'd MMM, yy')}</span>
           </div>
         </div>
 
@@ -36,7 +36,7 @@ const MultiCalendarHeader: React.FC<MultiCalendarHeaderProps> = ({ madrasah }) =
           </div>
           <div className="flex flex-col min-w-0">
             <span className={`text-[9px] lg:text-[11px] font-black uppercase tracking-widest leading-none mb-1 lg:mb-1.5 font-noto ${madrasah?.theme === 'dark' ? 'text-emerald-400/60' : 'text-emerald-500/60'}`}>বাংলা</span>
-            <span className={`text-[13px] lg:text-[17px] font-black truncate leading-none font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{bnDate.fullBn.split(',')[0]}</span>
+            <span className={`text-[11px] lg:text-[14px] font-black truncate leading-none font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{bnDate.fullBn.split(',')[0]}</span>
           </div>
         </div>
 
@@ -48,7 +48,7 @@ const MultiCalendarHeader: React.FC<MultiCalendarHeaderProps> = ({ madrasah }) =
           </div>
           <div className="flex flex-col min-w-0">
             <span className={`text-[9px] lg:text-[11px] font-black uppercase tracking-widest leading-none mb-1 lg:mb-1.5 font-noto ${madrasah?.theme === 'dark' ? 'text-amber-400/60' : 'text-amber-500/60'}`}>হিজরি</span>
-            <span className={`text-[13px] lg:text-[17px] font-black truncate leading-none font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{hjDate.fullBn.split(',')[0]}</span>
+            <span className={`text-[11px] lg:text-[14px] font-black truncate leading-none font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{hjDate.fullBn.split(',')[0]}</span>
           </div>
         </div>
       </div>

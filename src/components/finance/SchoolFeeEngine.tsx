@@ -503,34 +503,34 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         </div>
                         <div className="min-w-0">
                            <h5 
-                             className={`font-black font-noto truncate leading-tight mb-1 cursor-pointer hover:underline decoration-2 underline-offset-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
+                             className={`font-black font-noto truncate leading-tight mb-0.5 cursor-pointer hover:underline decoration-2 underline-offset-2 text-[13px] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
                              onClick={() => onStudentClick ? onStudentClick(item) : handleShowHistory(item)}
                            >
                              {item.student_name}
                            </h5>
                            <div className="flex items-center gap-2">
-                              <p className="text-[10px] text-slate-400 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
-                              {isNoFeeSet && <span className={`text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>No Fee Set</span>}
+                              <p className="text-[9px] text-slate-400 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
+                              {isNoFeeSet && <span className={`text-[7px] px-1.5 py-0.5 rounded-md font-black uppercase ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>No Fee Set</span>}
                            </div>
                         </div>
                      </div>
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-1.5">
                        <button 
                           onClick={() => {
                               setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l));
                               setShowDownloadLangModal(true);
                           }}
-                          className={`w-11 h-11 rounded-xl flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-white text-slate-400 border-slate-100 hover:bg-blue-50 hover:text-[#2563EB] hover:border-blue-100'} active:scale-95`}
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-white text-slate-400 border-slate-100 hover:bg-blue-50 hover:text-[#2563EB] hover:border-blue-100'} active:scale-95`}
                           title="Download Receipt"
                        >
-                          <Download size={18} />
+                          <Download size={16} />
                        </button>
                        <button 
                           onClick={() => { setSelectedStudent(item); setCollectAmount(''); setShowFeeCollection(true); }} 
                           disabled={isFullyPaid || isNoFeeSet} 
-                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : isNoFeeSet ? (isDark ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : hasBalance ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 'bg-[#2563EB] text-white active:scale-95'}`}
+                          className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all shadow-sm ${isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : isNoFeeSet ? (isDark ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : hasBalance ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 'bg-[#2563EB] text-white active:scale-95'}`}
                        >
-                          {isFullyPaid ? 'PAID' : 'ফি জমা নিন'}
+                          {isFullyPaid ? 'PAID' : 'ফি জমা'}
                        </button>
                      </div>
                   </div>

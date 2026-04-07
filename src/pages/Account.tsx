@@ -23,7 +23,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [saving, setSaving] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [showAcademicYearManager, setShowAcademicYearManager] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   
   const [stats, setStats] = useState({ students: 0, classes: 0 });
@@ -279,7 +278,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
         {madrasah?.config_json?.modules?.academic_year_promotion && (
           <button 
-            onClick={() => setShowAcademicYearManager(true)} 
+            onClick={() => setView('academic-year')} 
             className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
           >
             <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -410,17 +409,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </div>
         </button>
       </div>
-
-      {/* Academic Year Manager - PORTALED */}
-      {showAcademicYearManager && madrasah && createPortal(
-        <AcademicYearManager 
-          institution={madrasah} 
-          onClose={() => setShowAcademicYearManager(false)} 
-          onUpdate={onProfileUpdate}
-          lang={lang}
-        />,
-        document.body
-      )}
 
       {/* Edit Profile Modal - PORTALED */}
 
