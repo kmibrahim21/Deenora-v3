@@ -472,7 +472,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
   return (
     <div
-      className={`min-h-screen flex flex-col animate-in fade-in duration-300 ${isDark ? "bg-slate-950" : "bg-slate-50"}`}
+      className={`min-h-screen flex flex-col animate-in fade-in duration-300 ${isDark ? "bg-slate-950" : "bg-blue-50"}`}
     >
       {/* Header */}
       <div

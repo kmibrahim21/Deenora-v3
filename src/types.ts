@@ -433,3 +433,12 @@ export interface CalendarEvent {
   event_type: 'islamic' | 'madrasah' | 'holiday' | 'closed';
   created_at: string;
 }
+
+export interface SubscriptionPackage {
+  id: string;
+  name: string;
+  rate: number;
+  features: string[];
+  sort_order: number;
+  created_at?: string;
+}

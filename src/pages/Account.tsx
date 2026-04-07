@@ -22,11 +22,15 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isEditingSubscription, setIsEditingSubscription] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   
   const [stats, setStats] = useState({ students: 0, classes: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
+  const [packages, setPackages] = useState<any[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
 
   const [newName, setNewName] = useState(initialMadrasah?.name || '');
   const [newAddress, setNewAddress] = useState(initialMadrasah?.address || '');
@@ -58,9 +62,31 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       setNewPhone(initialMadrasah.phone || '');
       setLogoUrl(initialMadrasah.logo_url || '');
       
-      if (initialMadrasah) fetchStats();
+      if (initialMadrasah) {
+        fetchStats();
+        fetchPackages();
+      }
     }
   }, [initialMadrasah]);
+
+  const fetchPackages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subscription_packages')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setPackages(data);
+        // Set default selected package if current madrasah has one
+        const currentPkg = data.find(p => p.name === madrasah?.config_json?.subscription?.package_name);
+        if (currentPkg) setSelectedPackage(currentPkg);
+      }
+    } catch (err) {
+      console.error('Error fetching packages:', err);
+    }
+  };
 
   const fetchStats = async () => {
     if (!initialMadrasah) return;
@@ -291,6 +317,24 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </button>
         )}
 
+        {/* Subscription Card */}
+        <button 
+          onClick={() => setIsEditingSubscription(true)}
+          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+        >
+          <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <CreditCard size={24} />
+          </div>
+          <div>
+            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+              {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
+            </h5>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+              {lang === 'bn' ? 'প্যাকেজ ও পেমেন্ট' : 'Plans & Billing'}
+            </p>
+          </div>
+        </button>
+
         <button 
           onClick={() => setView('data-management')} 
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
@@ -413,8 +457,123 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       {/* Edit Profile Modal - PORTALED */}
 
 
-      {/* Edit Profile Modal - PORTALED */}
-      {isEditingProfile && createPortal(
+      {/* Subscription Modal */}
+      {isEditingSubscription && createPortal(
+        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className={`w-full max-w-lg rounded-[3.5rem] p-6 shadow-2xl space-y-6 animate-in zoom-in-95 duration-500 relative max-h-[90vh] overflow-y-auto custom-scrollbar ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
+              <div className="flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                    <CreditCard size={20} />
+                  </div>
+                  <h3 className={`text-xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {lang === 'bn' ? 'সাবস্ক্রিপশন ম্যানেজমেন্ট' : 'Subscription Management'}
+                  </h3>
+                </div>
+                <button onClick={() => setIsEditingSubscription(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Current Status */}
+                <div className={`p-5 rounded-[2rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className="flex justify-between items-center mb-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Status</p>
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${madrasah?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                      {madrasah?.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400">Total Students</p>
+                      <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{stats.students}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400">Current Package</p>
+                      <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {madrasah?.config_json?.subscription?.package_name || 'None'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subscription Type */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Subscription Type</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['monthly', 'quarterly', 'yearly'] as const).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setSubscriptionType(type)}
+                        className={`py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${subscriptionType === type ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-100 text-slate-500')}`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Package Selection */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Select Package</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {packages.map((pkg) => (
+                      <button
+                        key={pkg.id}
+                        onClick={() => setSelectedPackage(pkg)}
+                        className={`p-4 rounded-[2rem] border text-left transition-all relative overflow-hidden group ${selectedPackage?.id === pkg.id ? 'border-blue-500 ring-2 ring-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100')}`}
+                      >
+                        {selectedPackage?.id === pkg.id && (
+                          <div className="absolute top-2 right-2 text-blue-500">
+                            <CheckCircle2 size={16} />
+                          </div>
+                        )}
+                        <h4 className={`text-sm font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{pkg.name}</h4>
+                        <p className="text-[10px] font-bold text-blue-600 mt-1">{pkg.rate.toFixed(2)} TK / Student</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Price Calculation */}
+                {selectedPackage && (
+                  <div className={`p-6 rounded-[2.5rem] border animate-in slide-in-from-top-2 duration-300 ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
+                        <span>Package Rate</span>
+                        <span className="text-blue-600">{selectedPackage.rate.toFixed(2)} TK</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
+                        <span>Total Students</span>
+                        <span className="text-blue-600">{stats.students}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
+                        <span>Duration</span>
+                        <span className="text-blue-600 capitalize">{subscriptionType}</span>
+                      </div>
+                      <div className="h-px bg-blue-200/30 my-2" />
+                      <div className="flex justify-between items-center">
+                        <span className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Total Price</span>
+                        <span className="text-xl font-black text-blue-600">
+                          {((selectedPackage.rate * stats.students) * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button 
+                  disabled={!selectedPackage}
+                  className="w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/20 text-[13px] uppercase tracking-[0.25em] disabled:opacity-50 disabled:grayscale"
+                >
+                  {lang === 'bn' ? 'আপগ্রেড রিকোয়েস্ট' : 'Request Upgrade'}
+                </button>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
            <div className={`w-full max-w-sm rounded-[3.5rem] p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-500 relative max-h-[85vh] overflow-y-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
               <div className="flex items-center justify-between shrink-0">

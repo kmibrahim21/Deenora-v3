@@ -127,7 +127,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     sms: true
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
-  const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'yearly' | 'lifetime'>('monthly');
+  const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
   const [editStatus, setEditStatus] = useState<'active' | 'suspended' | 'trial'>('active');
   const [editResultEngine, setEditResultEngine] = useState<'school' | 'befaq' | 'qawmi_custom'>('school');
   const [editResultSystem, setEditResultSystem] = useState<'grading' | 'marks'>('grading');
@@ -139,6 +139,56 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editReveApiKey, setEditReveApiKey] = useState('');
   const [editReveSecretKey, setEditReveSecretKey] = useState('');
   const [editReveClientId, setEditReveClientId] = useState('');
+  const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
+  const [editPackageRate, setEditPackageRate] = useState<number>(0);
+  const [editPackageName, setEditPackageName] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonthsForPayment, setSelectedMonthsForPayment] = useState<string[]>([]);
+  const [packages, setPackages] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchPackages();
+  }, []);
+
+  const fetchPackages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subscription_packages')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setPackages([...data, { name: 'Custom', rate: 0 }]);
+      } else {
+        const defaults = [
+          { name: 'স্টার্টার', rate: 0.50, sort_order: 1 },
+          { name: 'বেসিক', rate: 0.75, sort_order: 2 },
+          { name: 'স্মার্ট', rate: 1.00, sort_order: 3 },
+          { name: 'একাডেমিক', rate: 1.00, sort_order: 4 },
+          { name: 'স্ট্যান্ডার্ড', rate: 1.50, sort_order: 5 },
+          { name: 'ফিনান্স', rate: 1.50, sort_order: 6 },
+          { name: 'প্রফেশনাল', rate: 1.75, sort_order: 7 },
+          { name: 'এন্টারপ্রাইজ', rate: 2.50, sort_order: 8 },
+          { name: 'Custom', rate: 0, sort_order: 99 }
+        ];
+        setPackages(defaults);
+      }
+    } catch (err) {
+      const defaults = [
+        { name: 'স্টার্টার', rate: 0.50, sort_order: 1 },
+        { name: 'বেসিক', rate: 0.75, sort_order: 2 },
+        { name: 'স্মার্ট', rate: 1.00, sort_order: 3 },
+        { name: 'একাডেমিক', rate: 1.00, sort_order: 4 },
+        { name: 'স্ট্যান্ডার্ড', rate: 1.50, sort_order: 5 },
+        { name: 'ফিনান্স', rate: 1.50, sort_order: 6 },
+        { name: 'প্রফেশনাল', rate: 1.75, sort_order: 7 },
+        { name: 'এন্টারপ্রাইজ', rate: 2.50, sort_order: 8 },
+        { name: 'Custom', rate: 0, sort_order: 99 }
+      ];
+      setPackages(defaults);
+    }
+  };
 
   const [editPassword, setEditPassword] = useState('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
@@ -363,6 +413,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditReveApiKey(user.reve_api_key || '');
     setEditReveSecretKey(user.reve_secret_key || '');
     setEditReveClientId(user.reve_client_id || '');
+    setEditPaidMonths(userConfig?.paid_months || []);
+    setEditPackageRate(userConfig?.package_rate || 0);
+    setEditPackageName(userConfig?.package_name || '');
+    
+    // Refresh packages to ensure they match Super Admin settings
+    fetchPackages();
     
     setView('details');
     
@@ -428,6 +484,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           subscription_type: editSubscriptionType,
           fee_engine: editFeeEngine,
           accounting_mode: editAccountingMode,
+          paid_months: editPaidMonths,
+          package_rate: editPackageRate,
+          package_name: editPackageName,
           user_pin: editPassword.trim()
         }
       }).eq('id', selectedUser.id).select();
@@ -1402,6 +1461,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">System Type</label>
                                     <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none`} value={editSubscriptionType} onChange={(e) => setEditSubscriptionType(e.target.value as any)}>
                                        <option value="monthly">Monthly Subscription</option>
+                                       <option value="quarterly">Quarterly Subscription</option>
                                        <option value="yearly">Yearly Subscription</option>
                                        <option value="lifetime">Lifetime Access</option>
                                     </select>
@@ -1419,6 +1479,225 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     <input type="date" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
                                  </div>
                               </div>
+
+                              {/* Package Selection */}
+                              <div className="space-y-3">
+                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Select Package</label>
+                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                                    {packages.map(pkg => (
+                                       <button 
+                                         key={pkg.name}
+                                         onClick={() => {
+                                           setEditPackageName(pkg.name);
+                                           setEditPackageRate(pkg.rate);
+                                         }}
+                                         className={`p-4 rounded-2xl border flex flex-col items-center gap-1 transition-all ${editPackageName === pkg.name ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-100 text-slate-400')}`}
+                                       >
+                                          <span className="text-[10px] font-black uppercase tracking-widest">{pkg.name}</span>
+                                          {pkg.name === 'Custom' ? (
+                                            <input 
+                                              type="number" 
+                                              className={`w-full text-center bg-transparent font-black outline-none ${editPackageName === pkg.name ? 'text-blue-600' : 'text-slate-400'}`}
+                                              value={editPackageRate}
+                                              onChange={(e) => setEditPackageRate(Number(e.target.value))}
+                                              placeholder="Rate"
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                          ) : (
+                                            <span className="text-[14px] font-black">{pkg.rate} ৳</span>
+                                          )}
+                                       </button>
+                                    ))}
+                                 </div>
+                              </div>
+
+                              {/* Month Selection */}
+                              <div className="space-y-3">
+                                 <div className="flex items-center justify-between px-1">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Select Months to Pay ({selectedYear})</label>
+                                    <div className="flex items-center gap-2">
+                                       <button onClick={() => setSelectedYear(selectedYear - 1)} className="p-1 text-slate-400 hover:text-blue-500 transition-colors"><ArrowLeft size={14} /></button>
+                                       <span className="text-[10px] font-black text-blue-600">{selectedYear}</span>
+                                       <button onClick={() => setSelectedYear(selectedYear + 1)} className="p-1 text-slate-400 hover:text-blue-500 transition-colors"><ArrowRight size={14} /></button>
+                                    </div>
+                                 </div>
+
+                                 {/* Quick Selection */}
+                                 <div className="flex items-center gap-2 px-1 mb-2">
+                                    <button 
+                                      onClick={() => {
+                                        const currentYear = new Date().getFullYear();
+                                        const currentMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
+                                        setSelectedMonthsForPayment([`${currentYear}-${currentMonth}`]);
+                                      }}
+                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${selectedMonthsForPayment.length === 1 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'}`}
+                                    >
+                                      Monthly
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        const currentYear = new Date().getFullYear();
+                                        const currentMonth = new Date().getMonth(); // 0-indexed
+                                        const months = [];
+                                        for (let i = 0; i < 3; i++) {
+                                          const d = new Date(currentYear, currentMonth + i, 1);
+                                          months.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
+                                        }
+                                        setSelectedMonthsForPayment(months);
+                                      }}
+                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${selectedMonthsForPayment.length === 3 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'}`}
+                                    >
+                                      Quarterly
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        const currentYear = new Date().getFullYear();
+                                        const months = [];
+                                        for (let i = 1; i <= 12; i++) {
+                                          months.push(`${currentYear}-${i.toString().padStart(2, '0')}`);
+                                        }
+                                        setSelectedMonthsForPayment(months);
+                                      }}
+                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${selectedMonthsForPayment.length === 12 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'}`}
+                                    >
+                                      Yearly
+                                    </button>
+                                    <button 
+                                      onClick={() => setSelectedMonthsForPayment([])}
+                                      className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-100 hover:bg-slate-200 transition-all"
+                                    >
+                                      Clear
+                                    </button>
+                                 </div>
+
+                                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                    {[
+                                      { label: 'জানুয়ারি', value: '01' },
+                                      { label: 'ফেব্রুয়ারি', value: '02' },
+                                      { label: 'মার্চ', value: '03' },
+                                      { label: 'এপ্রিল', value: '04' },
+                                      { label: 'মে', value: '05' },
+                                      { label: 'জুন', value: '06' },
+                                      { label: 'জুলাই', value: '07' },
+                                      { label: 'আগস্ট', value: '08' },
+                                      { label: 'সেপ্টেম্বর', value: '09' },
+                                      { label: 'অক্টোবর', value: '10' },
+                                      { label: 'নভেম্বর', value: '11' },
+                                      { label: 'ডিসেম্বর', value: '12' }
+                                    ].map(month => {
+                                      const yearMonth = `${selectedYear}-${month.value}`;
+                                      const isPaidHistory = editPaidMonths.includes(yearMonth);
+                                      const isSelectedNow = selectedMonthsForPayment.includes(yearMonth);
+                                      
+                                      return (
+                                        <button 
+                                          key={month.value}
+                                          onClick={() => {
+                                            if (isSelectedNow) {
+                                              setSelectedMonthsForPayment(selectedMonthsForPayment.filter(m => m !== yearMonth));
+                                            } else {
+                                              setSelectedMonthsForPayment([...selectedMonthsForPayment, yearMonth]);
+                                            }
+                                          }}
+                                          className={`p-3 rounded-xl border text-[11px] font-black font-noto transition-all relative ${isSelectedNow ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-100 text-slate-400')}`}
+                                        >
+                                          {month.label}
+                                          {isPaidHistory && (
+                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
+                                              <Check size={8} className="text-white" />
+                                            </div>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                 </div>
+                              </div>
+
+                              {/* Price Calculation */}
+                              <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/50' : 'bg-blue-50 border-blue-100'} p-6 rounded-[2rem] border space-y-4`}>
+                                 <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Total Students</p>
+                                       <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{userStats.students}</p>
+                                    </div>
+                                    <div className="text-right space-y-1">
+                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Months Selected</p>
+                                       <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{selectedMonthsForPayment.length}</p>
+                                    </div>
+                                 </div>
+                                 
+                                 <div className="pt-4 border-t border-blue-200/30 flex items-center justify-between">
+                                    <div className="space-y-1">
+                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Package Rate</p>
+                                       <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{editPackageRate} ৳</p>
+                                    </div>
+                                    <div className="text-right space-y-1">
+                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Total Price</p>
+                                       <p className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                                          {(userStats.students * editPackageRate * selectedMonthsForPayment.length).toLocaleString('bn-BD')} ৳
+                                       </p>
+                                    </div>
+                                 </div>
+                              </div>
+
+                              {/* Payment Button */}
+                              <button 
+                                onClick={async () => {
+                                  const amount = userStats.students * editPackageRate * selectedMonthsForPayment.length;
+                                  if (amount <= 0) {
+                                    setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'পেমেন্ট অ্যামাউন্ট ০ হতে পারে না। অনুগ্রহ করে প্যাকেজ এবং মাস সিলেক্ট করুন।' });
+                                    return;
+                                  }
+                                  
+                                  setIsUpdatingUser(true);
+                                  try {
+                                    // 1. Record Transaction
+                                    const { error: trError } = await supabase.from('transactions').insert({
+                                      institution_id: selectedUser.id,
+                                      amount,
+                                      description: `Subscription Payment - ${editPackageName} Package (${selectedMonthsForPayment.length} Months)`,
+                                      status: 'approved',
+                                      transaction_id: `SUB-${Date.now()}`,
+                                      sender_phone: 'ADMIN'
+                                    });
+                                    if (trError) throw trError;
+
+                                    // 2. Update Institution Profile (Save paid months and package info)
+                                    let userConfig: any = selectedUser.config_json;
+                                    if (typeof userConfig === 'string') {
+                                      try { userConfig = JSON.parse(userConfig); } catch (e) { userConfig = {}; }
+                                    }
+
+                                    // Merge new paid months with history
+                                    const updatedPaidMonths = Array.from(new Set([...editPaidMonths, ...selectedMonthsForPayment]));
+
+                                    const { error: updateError } = await supabase.from('institutions').update({
+                                      config_json: {
+                                        ...(typeof userConfig === 'object' && userConfig !== null ? userConfig : {}),
+                                        paid_months: updatedPaidMonths,
+                                        package_rate: editPackageRate,
+                                        package_name: editPackageName,
+                                        subscription_type: editSubscriptionType
+                                      }
+                                    }).eq('id', selectedUser.id);
+
+                                    if (updateError) throw updateError;
+
+                                    setEditPaidMonths(updatedPaidMonths);
+                                    setSelectedMonthsForPayment([]);
+                                    setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'পেমেন্ট রিসিভ করা হয়েছে এবং প্রোফাইল আপডেট হয়েছে।' });
+                                    initData(true);
+                                  } catch (err: any) {
+                                    setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
+                                  } finally {
+                                    setIsUpdatingUser(false);
+                                  }
+                                }}
+                                disabled={isUpdatingUser || (userStats.students * editPackageRate * selectedMonthsForPayment.length) <= 0}
+                                className={`w-full h-14 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isUpdatingUser || (userStats.students * editPackageRate * selectedMonthsForPayment.length) <= 0 ? 'bg-slate-200 text-slate-400' : 'bg-emerald-500 text-white shadow-lg shadow-emerald-100 active:scale-95'}`}
+                              >
+                                <Banknote size={20} /> Receive Payment
+                              </button>
                            </div>
                         </div>
                       )}
