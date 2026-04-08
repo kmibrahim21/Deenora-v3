@@ -186,6 +186,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
     if (!newYearName || !startDate || !endDate) return;
     setIsCreatingYear(true);
     try {
+      const isFirstYear = academicYears.length === 0;
       const { data, error } = await supabase
         .from("academic_years")
         .insert({
@@ -193,12 +194,28 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
           year_name: newYearName,
           start_date: startDate,
           end_date: endDate,
-          status: academicYears.length === 0 ? "active" : "archived",
+          status: isFirstYear ? "active" : "archived",
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      if (isFirstYear) {
+        // Update institution config if it's the first year
+        const updatedConfig = {
+          ...(institution.config_json || {}),
+          academic_year_start: data.start_date,
+          active_academic_year_id: data.id,
+        };
+
+        await supabase
+          .from("institutions")
+          .update({ config_json: updatedConfig })
+          .eq("id", institution.id);
+          
+        setCurrentYear(data);
+      }
 
       setAcademicYears([data, ...academicYears]);
       setShowNewYearModal(false);
