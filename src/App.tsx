@@ -194,7 +194,17 @@ const App: React.FC = () => {
 
   const renderView = () => {
     const role = profile?.role || "accountant";
-    const activeYearId = madrasah?.config_json?.active_academic_year_id;
+    
+    let parsedConfig = madrasah?.config_json as any;
+    if (typeof parsedConfig === 'string') {
+      try {
+        parsedConfig = JSON.parse(parsedConfig);
+      } catch (e) {
+        parsedConfig = {};
+      }
+    }
+    const activeYearId = parsedConfig?.active_academic_year_id;
+    
     const isAdmin = role === "madrasah_admin" || role === "super_admin";
 
     // Views that are allowed even without an academic year
@@ -206,6 +216,7 @@ const App: React.FC = () => {
       "tutorials",
       "admin-tutorials",
       "admin-voice-service",
+      "academic-year"
     ];
 
     if (
