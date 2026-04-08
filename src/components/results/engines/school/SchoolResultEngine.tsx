@@ -300,10 +300,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setIsSaving(true);
     try {
       const activeYearId = activeYear?.id || madrasah.config_json?.active_academic_year_id;
-      const selectedClass = classes.find(c => c.id === classId);
+      
+      // Validate UUID format for academic_year_id
+      const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      
       const examData: any = {
         institution_id: madrasah.id,
-        academic_year_id: (activeYearId && activeYearId !== "") ? activeYearId : null,
+        academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null,
         class_id: classId,
         exam_name: examName,
         exam_date: examDate
@@ -321,6 +324,19 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           .from('exams')
           .insert(examData);
         error = insertError;
+      }
+      
+      // If still getting foreign key error, retry with null academic_year_id
+      if (error && error.message.includes('foreign key constraint')) {
+        console.warn('Foreign key violation for academic_year_id, retrying with null...');
+        const retryData = { ...examData, academic_year_id: null };
+        if (editingExam) {
+          const { error: retryError } = await supabase.from('exams').update(retryData).eq('id', editingExam.id);
+          error = retryError;
+        } else {
+          const { error: retryError } = await supabase.from('exams').insert(retryData);
+          error = retryError;
+        }
       }
       
       if (error) {

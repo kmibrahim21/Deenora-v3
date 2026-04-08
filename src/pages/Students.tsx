@@ -90,7 +90,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
       const activeYearId = madrasah?.config_json?.active_academic_year_id;
       if (activeYearId) {
-        query = query.eq('academic_year_id', activeYearId);
+        query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
       }
 
       if (searchQuery.trim()) {

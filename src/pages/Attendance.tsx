@@ -240,7 +240,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         student_id: sid,
         status: status,
         date: date,
-        recorded_by: userId
+        recorded_by: userId,
+        academic_year_id: activeYearId || null
       }));
 
       const { error } = await supabase.from('attendance').insert(payload);

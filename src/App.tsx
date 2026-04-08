@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 
+import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
+
 const Auth = React.lazy(() => import("pages/Auth"));
 const Home = React.lazy(() => import("pages/Home"));
 const Classes = React.lazy(() => import("pages/Classes"));
@@ -192,6 +194,35 @@ const App: React.FC = () => {
 
   const renderView = () => {
     const role = profile?.role || "accountant";
+    const activeYearId = madrasah?.config_json?.active_academic_year_id;
+    const isAdmin = role === "madrasah_admin" || role === "super_admin";
+
+    // Views that are allowed even without an academic year
+    const allowedViews = [
+      "account",
+      "super-account",
+      "admin-dashboard",
+      "admin-panel",
+      "tutorials",
+      "admin-tutorials",
+      "admin-voice-service",
+    ];
+
+    if (
+      !activeYearId &&
+      !allowedViews.includes(view) &&
+      role !== "super_admin" &&
+      madrasah
+    ) {
+      return (
+        <AcademicYearSetupRequired
+          madrasah={madrasah}
+          lang={lang}
+          onUpdate={triggerRefresh}
+          isAdmin={isAdmin}
+        />
+      );
+    }
 
     switch (view) {
       case "home":

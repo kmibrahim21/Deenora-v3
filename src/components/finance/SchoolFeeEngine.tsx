@@ -160,7 +160,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         if (!data || data.length === 0) {
           let checkQuery = supabase.from('students').select('id', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
           if (classId) checkQuery = checkQuery.eq('class_id', classId);
-          if (activeYearId) checkQuery = checkQuery.eq('academic_year_id', activeYearId);
+          if (activeYearId) checkQuery = checkQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
           const { count } = await checkQuery;
           setAnyStudentsInMadrasah(count && count > 0 ? true : false);
         } else {

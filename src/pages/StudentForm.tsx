@@ -86,7 +86,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
     setLoading(true);
     try {
-      const payload = {
+      const activeYearId = madrasah.config_json?.active_academic_year_id;
+      
+      // Validate UUID format for academic_year_id
+      const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      
+      const payload: any = {
         student_name: name.trim(),
         admission_number: admissionNumber.trim() || null,
         guardian_name: guardianName.trim(),
@@ -96,13 +101,29 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         guardian_phone_2: phone2.trim() || null,
         address: address.trim() || null,
         class_id: classId,
-        institution_id: madrasah.id
+        institution_id: madrasah.id,
+        academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null
       };
 
-      if (isEditing && student) {
-        await OfflineService.safeUpdate('students', student.id, payload);
-      } else {
-        await OfflineService.safeInsert('students', payload);
+      try {
+        if (isEditing && student) {
+          await OfflineService.safeUpdate('students', student.id, payload);
+        } else {
+          await OfflineService.safeInsert('students', payload);
+        }
+      } catch (innerErr: any) {
+        // If foreign key error, retry with null academic_year_id
+        if (innerErr.message?.includes('foreign key constraint') || innerErr.code === '23503') {
+          console.warn('Foreign key violation for academic_year_id in students, retrying with null...');
+          const retryPayload = { ...payload, academic_year_id: null };
+          if (isEditing && student) {
+            await OfflineService.safeUpdate('students', student.id, retryPayload);
+          } else {
+            await OfflineService.safeInsert('students', retryPayload);
+          }
+        } else {
+          throw innerErr;
+        }
       }
       
       onSuccess();

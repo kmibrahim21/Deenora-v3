@@ -533,10 +533,10 @@ BEGIN
     c.class_name,
     s.guardian_phone
   FROM students s
-  JOIN classes c ON s.class_id = c.id
+  LEFT JOIN classes c ON s.class_id = c.id
   WHERE s.institution_id = p_institution_id
     AND (p_class_id IS NULL OR s.class_id = p_class_id)
-    AND (p_academic_year_id IS NULL OR s.academic_year_id = p_academic_year_id);
+    AND (p_academic_year_id IS NULL OR s.academic_year_id = p_academic_year_id OR s.academic_year_id IS NULL);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
