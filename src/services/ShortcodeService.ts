@@ -8,6 +8,9 @@ export const ShortcodeService = {
   replaceShortcodes: (message: string, data: any): string => {
     if (!message) return '';
     
+    console.log('Replacing shortcodes in message:', message);
+    console.log('Data for replacement:', data);
+    
     const shortcodes: Record<string, any> = {
       '{student_name}': data.student_name || '-',
       '{father_name}': data.guardian_name || '-',
@@ -20,6 +23,7 @@ export const ShortcodeService = {
       '{attendance_percentage}': data.attendance_percentage !== undefined ? `${data.attendance_percentage}%` : '-',
       '{institution_name}': data.institution_name || '-',
       '{month}': data.month || '-',
+      '{date}': new Date().toLocaleDateString('bn-BD'),
     };
 
     let finalMessage = message;
@@ -28,6 +32,7 @@ export const ShortcodeService = {
       finalMessage = finalMessage.replace(regex, String(value));
     });
 
+    console.log('Final message after replacement:', finalMessage);
     return finalMessage;
   },
 
@@ -93,7 +98,7 @@ export const ShortcodeService = {
       .in('student_id', studentIds);
 
     // Combine all data
-    return students.map(s => {
+    const combinedData = students.map(s => {
       const studentFees = fees?.find(f => f.student_id === s.id);
       
       // Calculate Grade (Simple logic: marks / total * 100)
@@ -137,5 +142,8 @@ export const ShortcodeService = {
         month: currentMonth
       };
     });
+
+    console.log('Fetched shortcode data:', combinedData);
+    return combinedData;
   }
 };

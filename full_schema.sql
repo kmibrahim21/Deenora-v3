@@ -798,7 +798,7 @@ CREATE POLICY "Enable all access for institution admins" ON academic_years FOR A
     )
 );
 
--- Promotion Logs RLS
+-- 16. Promotion Logs RLS
 ALTER TABLE promotion_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enable read access for institution admins" ON promotion_logs;
 CREATE POLICY "Enable read access for institution admins" ON promotion_logs FOR SELECT USING (
@@ -819,6 +819,204 @@ CREATE POLICY "Enable insert for institution admins" ON promotion_logs FOR INSER
         AND (
             (role = 'madrasah_admin' AND institution_id = promotion_logs.institution_id) OR
             (role = 'super_admin')
+        )
+    )
+);
+
+-- 10. Attendance RLS
+ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON attendance;
+CREATE POLICY "Enable read access for authenticated users" ON attendance FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON attendance;
+CREATE POLICY "Enable all access for institution admins" ON attendance FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = attendance.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+
+-- 9. Exam Marks RLS
+ALTER TABLE exam_marks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON exam_marks;
+CREATE POLICY "Enable read access for authenticated users" ON exam_marks FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON exam_marks;
+CREATE POLICY "Enable all access for institution admins" ON exam_marks FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles p
+        JOIN exams e ON e.id = exam_marks.exam_id
+        WHERE p.id = auth.uid() 
+        AND (
+            (p.role IN ('madrasah_admin', 'teacher') AND p.institution_id = e.institution_id) OR
+            (p.role = 'super_admin')
+        )
+    )
+);
+
+-- 8. Exam Subjects RLS
+ALTER TABLE exam_subjects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON exam_subjects;
+CREATE POLICY "Enable read access for authenticated users" ON exam_subjects FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON exam_subjects;
+CREATE POLICY "Enable all access for institution admins" ON exam_subjects FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles p
+        JOIN exams e ON e.id = exam_subjects.exam_id
+        WHERE p.id = auth.uid() 
+        AND (
+            (p.role IN ('madrasah_admin', 'teacher') AND p.institution_id = e.institution_id) OR
+            (p.role = 'super_admin')
+        )
+    )
+);
+
+-- 20. Sponsors RLS
+ALTER TABLE sponsors ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON sponsors;
+CREATE POLICY "Enable read access for authenticated users" ON sponsors FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON sponsors;
+CREATE POLICY "Enable all access for institution admins" ON sponsors FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'accountant') AND profiles.institution_id = sponsors.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+
+-- 21. Student Sponsorships RLS
+ALTER TABLE student_sponsorships ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON student_sponsorships;
+CREATE POLICY "Enable read access for authenticated users" ON student_sponsorships FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON student_sponsorships;
+CREATE POLICY "Enable all access for institution admins" ON student_sponsorships FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles p
+        JOIN sponsors s ON s.id = student_sponsorships.sponsor_id
+        WHERE p.id = auth.uid() 
+        AND (
+            (p.role IN ('madrasah_admin', 'accountant') AND p.institution_id = s.institution_id) OR
+            (p.role = 'super_admin')
+        )
+    )
+);
+
+-- 25. Final Results RLS
+ALTER TABLE final_results ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON final_results;
+CREATE POLICY "Enable read access for authenticated users" ON final_results FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON final_results;
+CREATE POLICY "Enable all access for institution admins" ON final_results FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = final_results.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+
+-- 26. Final Result Exams RLS
+ALTER TABLE final_result_exams ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON final_result_exams;
+CREATE POLICY "Enable read access for authenticated users" ON final_result_exams FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON final_result_exams;
+CREATE POLICY "Enable all access for institution admins" ON final_result_exams FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles p
+        JOIN final_results fr ON fr.id = final_result_exams.final_result_id
+        WHERE p.id = auth.uid() 
+        AND (
+            (p.role IN ('madrasah_admin', 'teacher') AND p.institution_id = fr.institution_id) OR
+            (p.role = 'super_admin')
+        )
+    )
+);
+
+-- 30. Qawmi Result Configs RLS
+ALTER TABLE qawmi_result_configs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON qawmi_result_configs;
+CREATE POLICY "Enable read access for authenticated users" ON qawmi_result_configs FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON qawmi_result_configs;
+CREATE POLICY "Enable all access for institution admins" ON qawmi_result_configs FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = qawmi_result_configs.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+
+
+-- 22. Transactions RLS
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for institution admins" ON transactions;
+CREATE POLICY "Enable read access for institution admins" ON transactions FOR SELECT USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'super_admin') AND profiles.institution_id = transactions.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON transactions;
+CREATE POLICY "Enable insert for authenticated users" ON transactions FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+-- 18. Voice Templates RLS
+ALTER TABLE voice_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON voice_templates;
+CREATE POLICY "Enable read access for authenticated users" ON voice_templates FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON voice_templates;
+CREATE POLICY "Enable all access for institution admins" ON voice_templates FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = voice_templates.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+
+-- 19. Calendar Events RLS
+ALTER TABLE calendar_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON calendar_events;
+CREATE POLICY "Enable read access for authenticated users" ON calendar_events FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON calendar_events;
+CREATE POLICY "Enable all access for institution admins" ON calendar_events FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = calendar_events.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+
+
+-- 24. SMS Templates RLS
+ALTER TABLE sms_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON sms_templates;
+CREATE POLICY "Enable read access for authenticated users" ON sms_templates FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON sms_templates;
+CREATE POLICY "Enable all access for institution admins" ON sms_templates FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = sms_templates.institution_id) OR
+            (profiles.role = 'super_admin')
         )
     )
 );

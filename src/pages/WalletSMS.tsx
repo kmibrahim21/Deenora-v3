@@ -82,6 +82,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     { code: '{exam_name}', label: lang === 'bn' ? 'পরীক্ষার নাম' : 'Exam Name' },
     { code: '{attendance_percentage}', label: lang === 'bn' ? 'উপস্থিতি হার' : 'Attendance %' },
     { code: '{institution_name}', label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name' },
+    { code: '{date}', label: lang === 'bn' ? 'তারিখ' : 'Date' },
   ];
 
   // Error/Status Modal

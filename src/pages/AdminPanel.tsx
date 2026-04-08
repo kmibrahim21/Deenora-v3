@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@supabase/supabase-js';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History as HistoryIcon, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2 } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History as HistoryIcon, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
 
@@ -1419,7 +1419,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">REVE Client ID</label>
                                     <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
-                                                      {detailsTab === 'subscription' && (
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+                      )}
+                      {detailsTab === 'subscription' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-8`}>
                               <div className="flex items-center justify-between px-1">
