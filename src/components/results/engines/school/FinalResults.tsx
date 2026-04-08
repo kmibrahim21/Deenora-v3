@@ -95,8 +95,8 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     if (!title || !selectedClassId || selectedExams.length === 0) return;
     
     const totalWeight = selectedExams.reduce((sum, e) => sum + e.weight, 0);
-    if (totalWeight !== 100) {
-      alert('Total weight must be 100%');
+    if (totalWeight <= 0) {
+      alert('Total weight must be greater than 0%');
       return;
     }
 
@@ -495,7 +495,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                   
                   <div className="flex items-center justify-between px-2 pt-2">
                     <span className="text-xs font-black text-slate-400">Total Weight:</span>
-                    <span className={`text-sm font-black ${selectedExams.reduce((sum, e) => sum + e.weight, 0) === 100 ? 'text-emerald-500' : 'text-red-500'}`}>
+                    <span className={`text-sm font-black ${selectedExams.reduce((sum, e) => sum + e.weight, 0) > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                       {selectedExams.reduce((sum, e) => sum + e.weight, 0)}%
                     </span>
                   </div>

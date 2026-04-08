@@ -155,8 +155,18 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     }
     setIsSaving(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Please login first');
+
+      const { data: profile } = await supabase.from('profiles').select('role, institution_id').eq('id', user.id).single();
+      if (!profile) throw new Error('Profile not found');
+      if (profile.institution_id !== madrasah.id && profile.role !== 'super_admin') {
+        throw new Error('Permission denied for this institution');
+      }
+
       if (editingId) {
-        await supabase.from('sms_templates').update({ title: tempTitle, body: tempBody }).eq('id', editingId);
+        const { error } = await supabase.from('sms_templates').update({ title: tempTitle, body: tempBody }).eq('id', editingId);
+        if (error) throw error;
       } else {
         const { error } = await supabase.from('sms_templates').insert({ institution_id: madrasah.id, title: tempTitle, body: tempBody });
         if (error) throw error;
@@ -215,7 +225,8 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         sender_phone: rechargePhone.trim(),
         description: rechargeType === 'sms' ? 'SMS Recharge Request' : 'Voice Recharge Request',
         type: 'credit',
-        status: 'pending'
+        status: 'pending',
+        module: rechargeType === 'sms' ? 'sms' : 'voice'
       });
       if (error) throw error;
       setRequestSuccess(true);

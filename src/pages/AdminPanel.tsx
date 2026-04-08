@@ -1634,7 +1634,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       description: `Subscription Payment - ${editPackageName} Package (${selectedMonthsForPayment.length} Months)`,
                                       status: 'approved',
                                       transaction_id: `SUB-${Date.now()}`,
-                                      sender_phone: 'ADMIN'
+                                      sender_phone: 'ADMIN',
+                                      type: 'credit',
+                                      module: 'subscription'
                                     });
                                     if (trError) throw trError;
 

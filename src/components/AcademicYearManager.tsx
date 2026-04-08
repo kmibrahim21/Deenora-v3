@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { supabase } from "lib/supabase";
 import { Institution, Class, Exam, Student, AcademicYear } from "types";
 import {
@@ -18,6 +19,7 @@ import {
   Archive,
   Check,
   GraduationCap,
+  TrendingUp,
 } from "lucide-react";
 
 interface AcademicYearManagerProps {
@@ -64,9 +66,68 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   const [showNewYearModal, setShowNewYearModal] = useState(false);
   const [isCreatingYear, setIsCreatingYear] = useState(false);
 
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    type: "delete" | "archive" | "active" | "promotion" | "none";
+    yearId: string;
+    title: string;
+    message: string;
+  }>({ show: false, type: "none", yearId: "", title: "", message: "" });
+
+  const [successModal, setSuccessModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+  }>({ show: false, title: "", message: "" });
+
+  const [selectedReportYear, setSelectedReportYear] = useState<AcademicYear | null>(null);
+  const [reportData, setReportData] = useState<any>(null);
+  const [fetchingReport, setFetchingReport] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, [institution.id]);
+
+  const fetchReportData = async (year: AcademicYear) => {
+    setFetchingReport(true);
+    try {
+      // Fetch income/expense summary
+      const { data: ledgerData } = await supabase
+        .from("ledger")
+        .select("type, amount")
+        .eq("academic_year_id", year.id);
+
+      const income = ledgerData?.filter(l => l.type === 'income').reduce((sum, l) => sum + Number(l.amount), 0) || 0;
+      const expense = ledgerData?.filter(l => l.type === 'expense').reduce((sum, l) => sum + Number(l.amount), 0) || 0;
+
+      // Fetch fees summary
+      const { data: feesData } = await supabase
+        .from("fees")
+        .select("amount_paid, amount_due")
+        .eq("academic_year_id", year.id);
+      
+      const totalPaid = feesData?.reduce((sum, f) => sum + Number(f.amount_paid), 0) || 0;
+      const totalDue = feesData?.reduce((sum, f) => sum + Number(f.amount_due), 0) || 0;
+
+      // Fetch student count
+      const { count: studentCount } = await supabase
+        .from("students")
+        .select("*", { count: 'exact', head: true })
+        .eq("academic_year_id", year.id);
+
+      setReportData({
+        income,
+        expense,
+        totalPaid,
+        totalDue,
+        studentCount: studentCount || 0
+      });
+    } catch (err) {
+      console.error("Error fetching report data:", err);
+    } finally {
+      setFetchingReport(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -154,14 +215,19 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleSetActive = async (yearId: string) => {
-    if (
-      !confirm(
-        lang === "bn"
-          ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটিকে সক্রিয় করতে চান?"
-          : "Are you sure you want to set this year as active?",
-      )
-    )
-      return;
+    setConfirmModal({
+      show: true,
+      type: "active",
+      yearId,
+      title: lang === "bn" ? "শিক্ষাবর্ষ সক্রিয় করুন" : "Activate Year",
+      message: lang === "bn"
+        ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটিকে সক্রিয় করতে চান?"
+        : "Are you sure you want to set this year as active?",
+    });
+  };
+
+  const executeSetActive = async (yearId: string) => {
+    setConfirmModal({ ...confirmModal, show: false });
     setLoading(true);
     try {
       // 1. Archive all years for this institution
@@ -200,11 +266,13 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       );
 
       if (onUpdate) onUpdate();
-      alert(
-        lang === "bn"
+      setSuccessModal({
+        show: true,
+        title: lang === "bn" ? "সফল!" : "Success!",
+        message: lang === "bn"
           ? "শিক্ষাবর্ষ সফলভাবে সক্রিয় করা হয়েছে।"
           : "Academic year activated successfully.",
-      );
+      });
     } catch (error: any) {
       alert(error.message);
     } finally {
@@ -213,14 +281,19 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleArchive = async (yearId: string) => {
-    if (
-      !confirm(
-        lang === "bn"
-          ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটিকে আর্কাইভ করতে চান?"
-          : "Are you sure you want to archive this year?",
-      )
-    )
-      return;
+    setConfirmModal({
+      show: true,
+      type: "archive",
+      yearId,
+      title: lang === "bn" ? "শিক্ষাবর্ষ আর্কাইভ" : "Archive Year",
+      message: lang === "bn"
+        ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটিকে আর্কাইভ করতে চান?"
+        : "Are you sure you want to archive this year?",
+    });
+  };
+
+  const executeArchive = async (yearId: string) => {
+    setConfirmModal({ ...confirmModal, show: false });
     setLoading(true);
     try {
       const { data: updatedYear, error } = await supabase
@@ -238,6 +311,13 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       if (currentYear?.id === yearId) setCurrentYear(null);
 
       if (onUpdate) onUpdate();
+      setSuccessModal({
+        show: true,
+        title: lang === "bn" ? "সফল!" : "Success!",
+        message: lang === "bn"
+          ? "শিক্ষাবর্ষ সফলভাবে আর্কাইভ করা হয়েছে।"
+          : "Academic year archived successfully.",
+      });
     } catch (error: any) {
       alert(error.message);
     } finally {
@@ -246,14 +326,19 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleDeleteYear = async (yearId: string) => {
-    if (
-      !confirm(
-        lang === "bn"
-          ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটি ডিলিট করতে চান? এটি স্থায়ীভাবে মুছে যাবে।"
-          : "Are you sure you want to delete this academic year? This will be permanently removed.",
-      )
-    )
-      return;
+    setConfirmModal({
+      show: true,
+      type: "delete",
+      yearId,
+      title: lang === "bn" ? "শিক্ষাবর্ষ ডিলিট" : "Delete Year",
+      message: lang === "bn"
+        ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষাবর্ষটি ডিলিট করতে চান? এটি স্থায়ীভাবে মুছে যাবে।"
+        : "Are you sure you want to delete this academic year? This will be permanently removed.",
+    });
+  };
+
+  const executeDelete = async (yearId: string) => {
+    setConfirmModal({ ...confirmModal, show: false });
     setLoading(true);
     try {
       const { error } = await supabase
@@ -267,11 +352,13 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       if (currentYear?.id === yearId) setCurrentYear(null);
 
       if (onUpdate) onUpdate();
-      alert(
-        lang === "bn"
+      setSuccessModal({
+        show: true,
+        title: lang === "bn" ? "সফল!" : "Success!",
+        message: lang === "bn"
           ? "শিক্ষাবর্ষ সফলভাবে ডিলিট করা হয়েছে।"
           : "Academic year deleted successfully.",
-      );
+      });
     } catch (error: any) {
       alert(error.message);
     } finally {
@@ -371,15 +458,19 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleExecutePromotion = async () => {
-    if (
-      !confirm(
-        lang === "bn"
-          ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষার্থীদের প্রমোশন দিতে চান? এই কাজটি বাতিল করা যাবে না।"
-          : "Are you sure you want to promote these students? This action cannot be undone.",
-      )
-    )
-      return;
+    setConfirmModal({
+      show: true,
+      type: "promotion",
+      yearId: "",
+      title: lang === "bn" ? "প্রমোশন নিশ্চিত করুন" : "Confirm Promotion",
+      message: lang === "bn"
+        ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষার্থীদের প্রমোশন দিতে চান? এই কাজটি বাতিল করা যাবে না।"
+        : "Are you sure you want to promote these students? This action cannot be undone.",
+    });
+  };
 
+  const executePromotion = async () => {
+    setConfirmModal({ ...confirmModal, show: false });
     setStep("executing");
     setExecutingLog((prev) => [
       ...prev,
@@ -705,7 +796,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
           </div>
         )}
 
-        {activeTab === "reports" && (
+        {activeTab === "reports" && !selectedReportYear && (
           <div className="space-y-6">
             <div
               className={`p-8 rounded-[2.5rem] border text-center space-y-4 ${isDark ? "bg-slate-800/50 border-slate-700" : "bg-slate-50 border-slate-100"}`}
@@ -734,6 +825,10 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                 {academicYears.map((year) => (
                   <button
                     key={year.id}
+                    onClick={() => {
+                      setSelectedReportYear(year);
+                      fetchReportData(year);
+                    }}
                     className={`p-6 rounded-3xl border text-left group transition-all active:scale-95 ${isDark ? "bg-slate-900 border-slate-800 hover:border-purple-500/30" : "bg-white border-slate-200 hover:border-purple-200"}`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -754,6 +849,112 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === "reports" && selectedReportYear && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between">
+              <button 
+                onClick={() => setSelectedReportYear(null)}
+                className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"}`}
+              >
+                <ArrowRight size={16} className="rotate-180" />
+                {lang === "bn" ? "ফিরে যান" : "Back to List"}
+              </button>
+              <h3 className={`text-lg font-black ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
+                {selectedReportYear.year_name} {lang === "bn" ? "রিপোর্ট" : "Report"}
+              </h3>
+            </div>
+
+            {fetchingReport ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <Loader2 size={40} className="text-purple-500 animate-spin" />
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Fetching Data...</p>
+              </div>
+            ) : reportData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Student Count */}
+                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <GraduationCap size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Students</p>
+                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>{reportData.studentCount}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Income */}
+                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <TrendingUp size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Income</p>
+                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.income}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expense */}
+                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+                      <TrendingUp size={24} className="rotate-180" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Expense</p>
+                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.expense}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fees Paid */}
+                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                      <CheckCircle2 size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fees Collected</p>
+                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.totalPaid}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fees Due */}
+                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                      <AlertTriangle size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Due</p>
+                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.totalDue}</h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Net Balance */}
+                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <List size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Net Balance</p>
+                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.income - reportData.expense}</h4>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-20 text-slate-400 font-bold">No data found for this year.</div>
+            )}
           </div>
         )}
 
@@ -1190,6 +1391,139 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
           </div>
         </div>
       )}
+      {/* Modals */}
+      <AnimatePresence>
+        {confirmModal.show && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmModal({ ...confirmModal, show: false })}
+              className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`relative w-full max-w-sm rounded-[2.5rem] shadow-2xl border overflow-hidden ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"}`}
+            >
+              <div className="p-8 text-center">
+                <div
+                  className={`w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg ${
+                    confirmModal.type === "delete"
+                      ? "bg-red-50 text-red-500 shadow-red-100"
+                      : confirmModal.type === "archive"
+                        ? "bg-amber-50 text-amber-500 shadow-amber-100"
+                        : confirmModal.type === "promotion"
+                          ? "bg-purple-50 text-purple-500 shadow-purple-100"
+                          : "bg-blue-50 text-blue-500 shadow-blue-100"
+                  }`}
+                >
+                  {confirmModal.type === "delete" ? (
+                    <Trash2 size={36} />
+                  ) : confirmModal.type === "archive" ? (
+                    <Archive size={36} />
+                  ) : confirmModal.type === "promotion" ? (
+                    <GraduationCap size={36} />
+                  ) : (
+                    <CheckCircle2 size={36} />
+                  )}
+                </div>
+
+                <h3
+                  className={`text-xl font-black mb-2 font-noto ${isDark ? "text-white" : "text-slate-800"}`}
+                >
+                  {confirmModal.title}
+                </h3>
+                <p
+                  className={`text-sm font-bold mb-8 ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                >
+                  {confirmModal.message}
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() =>
+                      setConfirmModal({ ...confirmModal, show: false })
+                    }
+                    className={`py-4 rounded-2xl font-black text-sm transition-all active:scale-95 ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-50 text-slate-400"}`}
+                  >
+                    {lang === "bn" ? "না" : "Cancel"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirmModal.type === "delete")
+                        executeDelete(confirmModal.yearId);
+                      else if (confirmModal.type === "archive")
+                        executeArchive(confirmModal.yearId);
+                      else if (confirmModal.type === "active")
+                        executeSetActive(confirmModal.yearId);
+                      else if (confirmModal.type === "promotion")
+                        executePromotion();
+                    }}
+                    className={`py-4 rounded-2xl font-black text-sm text-white transition-all active:scale-95 shadow-lg ${
+                      confirmModal.type === "delete"
+                        ? "bg-red-500 shadow-red-200"
+                        : confirmModal.type === "archive"
+                          ? "bg-amber-500 shadow-amber-200"
+                          : confirmModal.type === "promotion"
+                            ? "bg-purple-500 shadow-purple-200"
+                            : "bg-blue-500 shadow-blue-200"
+                    }`}
+                  >
+                    {lang === "bn" ? "হ্যাঁ, নিশ্চিত" : "Yes, Confirm"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {successModal.show && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSuccessModal({ ...successModal, show: false })}
+              className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`relative w-full max-w-sm rounded-[2.5rem] shadow-2xl border overflow-hidden ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"}`}
+            >
+              <div className="p-8 text-center">
+                <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-100">
+                  <CheckCircle2 size={36} />
+                </div>
+
+                <h3
+                  className={`text-xl font-black mb-2 font-noto ${isDark ? "text-white" : "text-slate-800"}`}
+                >
+                  {successModal.title}
+                </h3>
+                <p
+                  className={`text-sm font-bold mb-8 ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                >
+                  {successModal.message}
+                </p>
+
+                <button
+                  onClick={() =>
+                    setSuccessModal({ ...successModal, show: false })
+                  }
+                  className="w-full py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 active:scale-95 transition-all"
+                >
+                  {lang === "bn" ? "ঠিক আছে" : "Done"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -149,12 +149,22 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const fetchTeachers = async () => {
     if (!madrasah?.id) return;
-    setLoading(true);
+    
+    // Load from cache first for instant UI
+    const cachedTeachers = await CacheService.getCachedData('teachers', madrasah.id);
+    if (cachedTeachers && cachedTeachers.length > 0) {
+      setTeachers(cachedTeachers);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     try {
       if (!isOnline) {
-        const cachedTeachers = await CacheService.getCachedData('teachers', madrasah.id);
-        setTeachers(cachedTeachers);
-        setLoading(false);
+        if (!cachedTeachers || cachedTeachers.length === 0) {
+          setTeachers([]);
+          setLoading(false);
+        }
         return;
       }
 
@@ -171,12 +181,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       }
     } catch (err: any) {
       console.error("Fetch teachers error:", err);
-      // Fallback to cache if network fails
-      if (err.message?.includes('fetch') || err.name === 'TypeError' || !navigator.onLine) {
-        console.log("Network error in fetchTeachers, falling back to cache...");
-        const cachedTeachers = await CacheService.getCachedData('teachers', madrasah.id);
-        setTeachers(cachedTeachers);
-      } else {
+      // Fallback to cache if network fails and we haven't already loaded it
+      if (!teachers || teachers.length === 0) {
+        const fallbackCache = await CacheService.getCachedData('teachers', madrasah.id);
+        setTeachers(fallbackCache || []);
+      }
+      if (!err.message?.includes('fetch') && err.name !== 'TypeError' && navigator.onLine) {
         setError(err.message);
       }
     } finally {
@@ -312,13 +322,15 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     setShowEditModal(true);
   };
 
-  const filteredTeachers = teachers.filter(
-    (t) =>
-      (t.name || "")
-        .toLowerCase()
-        .includes((searchQuery || "").toLowerCase()) ||
-      (t.phone && t.phone.includes(searchQuery)),
-  );
+  const filteredTeachers = React.useMemo(() => {
+    return teachers.filter(
+      (t) =>
+        (t.name || "")
+          .toLowerCase()
+          .includes((searchQuery || "").toLowerCase()) ||
+        (t.phone && t.phone.includes(searchQuery)),
+    );
+  }, [teachers, searchQuery]);
 
   const isDark = madrasah?.theme === "dark";
 

@@ -21,7 +21,7 @@ import {
   Users
 } from 'lucide-react';
 import { supabase } from 'supabase';
-import { Institution, Language, Class, Student, Profile, UserRole } from 'types';
+import { Institution, Language, Class, Student, Profile, UserRole, Transaction } from 'types';
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { normalizePhone } from 'utils/smsUtils';
@@ -93,6 +93,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [voices, setVoices] = useState<any[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Transaction state
+  const [userTransactions, setUserTransactions] = useState<Transaction[]>([]);
+  const [isFetchingTransactions, setIsFetchingTransactions] = useState(false);
+
   // Broadcast state
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('');
@@ -139,7 +143,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     if (activeTab === 'templates') fetchVoices();
     if (activeTab === 'broadcast') { fetchClasses(); fetchVoices(); fetchSenders(); }
     if (activeTab === 'history') fetchHistory();
-    if (activeTab === 'recharge') fetchSystemSettings();
+    if (activeTab === 'recharge') {
+      fetchSystemSettings();
+      fetchUserTransactions();
+    }
   }, [activeTab, madrasah?.id, dataVersion]);
 
   const fetchSystemSettings = async () => {
@@ -152,6 +159,24 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     if (!madrasah) return;
     const { data } = await supabase.from('institutions').select('balance').eq('id', madrasah.id).single();
     if (data) setWalletBalance(data.balance);
+  };
+
+  const fetchUserTransactions = async () => {
+    if (!madrasah) return;
+    setIsFetchingTransactions(true);
+    try {
+      const { data } = await supabase.from('transactions')
+        .select('*')
+        .eq('institution_id', madrasah.id)
+        .eq('module', 'voice')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (data) setUserTransactions(data);
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+    } finally {
+      setIsFetchingTransactions(false);
+    }
   };
 
   const fetchVoices = async () => {
@@ -882,6 +907,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       setRechargeAmount('');
       setRechargeTrx('');
       setRechargePhone('');
+      fetchUserTransactions();
       
       setStatusModal({
         show: true,
@@ -1354,6 +1380,39 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   <button onClick={handleRecharge} disabled={isRecharging || !rechargeAmount || !rechargeTrx || !rechargePhone} className="w-full h-16 bg-emerald-600 text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg mt-4 disabled:opacity-40 active:scale-95 transition-all">
                     {isRecharging ? <Loader2 className="animate-spin" size={24} /> : t('send_request', lang)}
                   </button>
+                </div>
+             </div>
+
+             <div className="space-y-4">
+                <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-3 flex items-center gap-2">
+                   <History size={12} /> {t('recharge_history', lang)}
+                </h2>
+                <div className="space-y-2.5">
+                  {isFetchingTransactions ? (
+                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-600" size={24} /></div>
+                  ) : userTransactions.length > 0 ? userTransactions.map(tr => (
+                    <div key={tr.id} className="bg-white p-4 rounded-[1.8rem] border border-slate-100 flex items-center justify-between shadow-bubble">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[15px] font-black leading-none text-slate-800">{tr.amount} ৳</p>
+                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : tr.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
+                            {tr.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                           <Clock size={10} className="text-slate-400" />
+                           <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter opacity-60">TrxID: {tr.transaction_id}</p>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="text-center py-10 rounded-[2.5rem] border border-dashed bg-slate-50 border-slate-200">
+                       <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest">No history records</p>
+                    </div>
+                  )}
                 </div>
              </div>
           </div>

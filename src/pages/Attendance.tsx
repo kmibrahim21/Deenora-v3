@@ -77,14 +77,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   }, [madrasah?.id]);
 
   useEffect(() => {
-    if (selectedClass) {
+    if (selectedClass && madrasah) {
       if (activeTab === 'daily') {
         fetchStudents(selectedClass.id);
         fetchDayEvents();
       }
       else fetchReport(selectedClass.id);
     }
-  }, [selectedClass?.id, activeTab, date, selectedMonth, reportType, selectedYear]);
+  }, [selectedClass?.id, activeTab, date, selectedMonth, reportType, selectedYear, madrasah?.id]);
 
   const fetchDayEvents = async () => {
     if (!madrasah) return;
@@ -117,33 +117,64 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   };
 
   const fetchStudents = async (cid: string) => {
+    if (!madrasah) return;
     setLoading(true);
     setFetchError(null);
     try {
-      const activeYearId = madrasah?.config_json?.active_academic_year_id;
-      let studentQuery = supabase.from('students').select('*').eq('class_id', cid).order('roll', { ascending: true });
+      const activeYearId = madrasah.config_json?.active_academic_year_id;
+      
+      // Use exact same query structure as Students.tsx
+      let studentQuery = supabase.from('students')
+        .select('*')
+        .eq('institution_id', madrasah.id)
+        .eq('class_id', cid)
+        .order('roll', { ascending: true });
+      
       if (activeYearId) {
         studentQuery = studentQuery.eq('academic_year_id', activeYearId);
       }
-      const { data: stdData } = await studentQuery;
       
-      let attQuery = supabase.from('attendance').select('*').eq('class_id', cid).eq('date', date);
-      if (activeYearId) {
-        attQuery = attQuery.eq('academic_year_id', activeYearId);
+      const { data: stdData, error: stdError } = await studentQuery;
+      if (stdError) throw stdError;
+      
+      let finalStdData = stdData || [];
+      
+      // Fallback: if no students found with activeYearId, try fetching without it
+      if (finalStdData.length === 0 && activeYearId) {
+        const { data: fallbackData } = await supabase.from('students')
+          .select('*')
+          .eq('institution_id', madrasah.id)
+          .eq('class_id', cid)
+          .order('roll', { ascending: true });
+        if (fallbackData && fallbackData.length > 0) {
+          finalStdData = fallbackData;
+        }
       }
-      const { data: attData } = await attQuery;
+      
+      // Also fetch attendance with institution_id
+      let attQuery = supabase.from('attendance')
+        .select('*')
+        .eq('institution_id', madrasah.id)
+        .eq('class_id', cid)
+        .eq('date', date);
+        
+      const { data: attData, error: attError } = await attQuery;
+      if (attError) {
+        console.error('Attendance fetch error (skipping academic_year_id):', attError);
+        // If it's a column missing error, we still want to proceed with empty attendance
+      }
 
-      if (stdData) {
-        setStudents(stdData);
+      if (finalStdData) {
+        setStudents(finalStdData);
         const initial: Record<string, 'present' | 'absent' | 'late' | 'half_day'> = {};
-        stdData.forEach(s => {
+        finalStdData.forEach(s => {
           const existing = attData?.find(a => a.student_id === s.id);
           initial[s.id] = existing ? (existing.status as any) : 'present';
         });
         setAttendance(initial);
       }
     } catch (e: any) { 
-      console.error(e);
+      console.error('Attendance fetch error:', e);
       setFetchError(e.message);
     } finally { setLoading(false); }
   };
@@ -200,15 +231,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       // Clean delete for sync
       let delQuery = supabase.from('attendance').delete().eq('class_id', selectedClass.id).eq('date', date);
-      if (activeYearId) {
-        delQuery = delQuery.eq('academic_year_id', activeYearId);
-      }
       const { error: delError } = await delQuery;
       if (delError) throw delError;
 
       const payload = Object.entries(attendance).map(([sid, status]) => ({
         institution_id: madrasah.id,
-        academic_year_id: activeYearId,
         class_id: selectedClass.id,
         student_id: sid,
         status: status,

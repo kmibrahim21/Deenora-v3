@@ -231,6 +231,7 @@ export interface Attendance {
   id: string;
   institution_id: string;
   student_id: string;
+  class_id?: string;
   status: 'present' | 'absent' | 'late' | 'half_day';
   date: string;
   recorded_by: string;
@@ -256,6 +257,7 @@ export interface FeeStructure {
   class_id: string;
   fee_name: string;
   amount: number;
+  due_date?: string;
   created_at: string;
 }
 

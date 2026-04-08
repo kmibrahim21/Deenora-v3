@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
 import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw } from 'lucide-react';
@@ -14,11 +15,12 @@ interface SchoolResultEngineProps {
   madrasah: Institution | null;
   onBack: () => void;
   role: UserRole;
+  activeYear?: any;
   onNavigateToFinalResults?: () => void;
   profile?: Profile | null;
 }
 
-const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah, onBack, role, onNavigateToFinalResults, profile }) => {
+const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah, onBack, role, activeYear, onNavigateToFinalResults, profile }) => {
   const [activeTab, setActiveTab] = useState<'exams' | 'final-results' | 'seat-plan' | 'analytics'>('exams');
   const [view, setView] = useState<'list' | 'subjects' | 'marks' | 'report'>('list');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -48,6 +50,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Form states
   const [examName, setExamName] = useState('');
@@ -296,11 +299,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (!madrasah || !examName || !classId) return;
     setIsSaving(true);
     try {
-      const activeYearId = madrasah.config_json?.active_academic_year_id;
+      const activeYearId = activeYear?.id || madrasah.config_json?.active_academic_year_id;
       const selectedClass = classes.find(c => c.id === classId);
       const examData: any = {
         institution_id: madrasah.id,
-        academic_year_id: activeYearId,
+        academic_year_id: (activeYearId && activeYearId !== "") ? activeYearId : null,
         class_id: classId,
         exam_name: examName,
         exam_date: examDate
@@ -408,7 +411,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     for (const row of payload) {
         await supabase.from('exam_marks').upsert(row);
     }
-    alert(t('success', lang));
+    setShowSuccessModal(true);
     setIsSaving(false);
   };
 
@@ -1039,6 +1042,58 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {showSuccessModal && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSuccessModal(false)}
+              className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`relative w-full max-w-sm rounded-[3rem] shadow-2xl border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}
+            >
+              <div className="p-8 text-center">
+                <div className="relative inline-block mb-6">
+                  <motion.div 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
+                    className="w-24 h-24 bg-emerald-500 rounded-[2rem] flex items-center justify-center shadow-lg shadow-emerald-500/30 relative z-10"
+                  >
+                    <CheckCircle2 size={48} className="text-white" />
+                  </motion.div>
+                  <motion.div 
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0, 0.3] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="absolute inset-0 bg-emerald-500 rounded-[2rem] blur-2xl -z-10"
+                  />
+                </div>
+                
+                <h3 className={`text-2xl font-black mb-2 font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                  {lang === 'bn' ? 'সফলভাবে সংরক্ষিত!' : 'Successfully Saved!'}
+                </h3>
+                <p className={`text-sm font-bold mb-8 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {lang === 'bn' ? 'পরীক্ষার নম্বরগুলো ডাটাবেসে সফলভাবে আপডেট করা হয়েছে।' : 'The exam marks have been successfully updated in the database.'}
+                </p>
+                
+                <button 
+                  onClick={() => setShowSuccessModal(false)}
+                  className="w-full py-5 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-lg"
+                >
+                  {lang === 'bn' ? 'ঠিক আছে' : 'Awesome'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

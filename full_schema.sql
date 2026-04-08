@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
     student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    class_id UUID REFERENCES classes(id) ON DELETE CASCADE,
     status TEXT CHECK (status IN ('present', 'absent', 'late', 'half_day')) NOT NULL,
     date DATE NOT NULL,
     recorded_by UUID REFERENCES auth.users(id),
@@ -308,6 +309,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     description TEXT,
     status TEXT CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
     sms_count INTEGER DEFAULT 0,
+    type TEXT CHECK (type IN ('credit', 'debit')) DEFAULT 'credit',
+    module TEXT CHECK (module IN ('sms', 'voice', 'subscription')) DEFAULT 'sms',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -964,13 +967,30 @@ CREATE POLICY "Enable read access for institution admins" ON transactions FOR SE
         SELECT 1 FROM profiles 
         WHERE profiles.id = auth.uid() 
         AND (
-            (profiles.role IN ('madrasah_admin', 'super_admin') AND profiles.institution_id = transactions.institution_id) OR
+            (profiles.role IN ('madrasah_admin', 'accountant', 'teacher') AND profiles.institution_id = transactions.institution_id) OR
             (profiles.role = 'super_admin')
         )
     )
 );
 DROP POLICY IF EXISTS "Enable insert for authenticated users" ON transactions;
-CREATE POLICY "Enable insert for authenticated users" ON transactions FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable insert for authenticated users" ON transactions FOR INSERT WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'accountant', 'teacher') AND profiles.institution_id = transactions.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+DROP POLICY IF EXISTS "Enable all access for super admins" ON transactions;
+CREATE POLICY "Enable all access for super admins" ON transactions FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND profiles.role = 'super_admin'
+    )
+);
 
 -- 18. Voice Templates RLS
 ALTER TABLE voice_templates ENABLE ROW LEVEL SECURITY;
@@ -1009,13 +1029,24 @@ CREATE POLICY "Enable all access for institution admins" ON calendar_events FOR 
 ALTER TABLE sms_templates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enable read access for authenticated users" ON sms_templates;
 CREATE POLICY "Enable read access for authenticated users" ON sms_templates FOR SELECT USING (auth.role() = 'authenticated');
-DROP POLICY IF EXISTS "Enable all access for institution admins" ON sms_templates;
-CREATE POLICY "Enable all access for institution admins" ON sms_templates FOR ALL USING (
+DROP POLICY IF EXISTS "Enable insert for institution admins" ON sms_templates;
+CREATE POLICY "Enable insert for institution admins" ON sms_templates FOR INSERT WITH CHECK (
     EXISTS (
         SELECT 1 FROM profiles 
         WHERE profiles.id = auth.uid() 
         AND (
-            (profiles.role IN ('madrasah_admin', 'teacher') AND profiles.institution_id = sms_templates.institution_id) OR
+            (profiles.role IN ('madrasah_admin', 'teacher', 'accountant') AND profiles.institution_id = sms_templates.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);
+DROP POLICY IF EXISTS "Enable update/delete for institution admins" ON sms_templates;
+CREATE POLICY "Enable update/delete for institution admins" ON sms_templates FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role IN ('madrasah_admin', 'teacher', 'accountant') AND profiles.institution_id = sms_templates.institution_id) OR
             (profiles.role = 'super_admin')
         )
     )
