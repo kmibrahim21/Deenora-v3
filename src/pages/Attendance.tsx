@@ -66,6 +66,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [dayEvents, setDayEvents] = useState<any[]>([]);
   const [isHoliday, setIsHoliday] = useState(false);
   const [showShortcodes, setShowShortcodes] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'ছাত্রের নাম' : 'Student Name' },
@@ -131,7 +132,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         .order('roll', { ascending: true });
       
       if (activeYearId) {
-        studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+        studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
       }
       
       const { data: stdData, error: stdError } = await studentQuery;
@@ -251,7 +252,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
         throw error;
       }
-      alert(t('success', lang));
+      setShowSuccessModal(true);
+      setTimeout(() => setShowSuccessModal(false), 3000);
     } catch (err: any) { 
       alert(err.message); 
     } finally { 
@@ -661,6 +663,28 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 {savingSettings ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} /> Save</>}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <div className={`rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden border animate-in zoom-in-95 duration-300 flex flex-col items-center justify-center p-8 text-center ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
+              <CheckCircle2 size={40} strokeWidth={3} />
+            </div>
+            <h2 className={`text-2xl font-black mb-2 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+              {t('success', lang)}
+            </h2>
+            <p className={`text-sm font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              {lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.'}
+            </p>
+            <button 
+              onClick={() => setShowSuccessModal(false)}
+              className="mt-8 w-full h-14 bg-emerald-500 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 active:scale-95 transition-all"
+            >
+              {lang === 'bn' ? 'ঠিক আছে' : 'OK'}
+            </button>
           </div>
         </div>
       )}

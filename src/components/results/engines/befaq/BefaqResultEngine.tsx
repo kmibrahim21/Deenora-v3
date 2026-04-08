@@ -131,7 +131,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     const activeYearId = madrasah?.config_json?.active_academic_year_id;
     let studentQuery = supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
     if (activeYearId) {
-      studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+      studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
     }
     const { data: stds } = await studentQuery;
     const { data: marks } = await supabase.from('befaq_results').select('*').eq('exam_id', examId);
@@ -399,8 +399,13 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     for (const row of payload) {
         // We need a unique constraint on befaq_results(exam_id, student_id, subject_id) for upsert to work perfectly
         // Or we check if exists. For now, let's try upsert.
-        const { error } = await supabase.from('befaq_results').upsert(row, { onConflict: 'exam_id, student_id, subject_id' });
-        if (error) console.error(error);
+        const { error } = await supabase.from('befaq_results').upsert(row, { onConflict: 'exam_id,student_id,subject_id' });
+        if (error) {
+            console.error("Error saving marks:", error);
+            alert("Error saving marks: " + error.message);
+            setIsSaving(false);
+            return;
+        }
     }
     setShowSuccessModal(true);
     setIsSaving(false);

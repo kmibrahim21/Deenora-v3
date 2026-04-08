@@ -111,8 +111,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       let attendanceQuery = supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId).eq('date', today).eq('status', 'present');
 
       if (activeYearId) {
-        studentQuery = studentQuery.eq('academic_year_id', activeYearId);
-        attendanceQuery = attendanceQuery.eq('academic_year_id', activeYearId);
+        studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        attendanceQuery = attendanceQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
       }
 
       if (isTeacher && allowedClasses && allowedClasses.length > 0) {

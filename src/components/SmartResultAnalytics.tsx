@@ -159,7 +159,7 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
             studentQuery = studentQuery.eq('class_id', selectedClassId);
         }
         if (activeYearId) {
-            studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+            studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
         }
         const { data: students } = await studentQuery;
 

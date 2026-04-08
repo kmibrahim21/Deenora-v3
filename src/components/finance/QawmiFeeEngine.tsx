@@ -118,15 +118,30 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         const { data: feesData } = await feesQuery;
 
         // For Qawmi, we might use a different report or the same one but interpret it differently
-        // Using the same report for now as a base
-        const { data, error } = await supabase.rpc('get_monthly_dues_report', {
-          p_institution_id: madrasah.id,
-          p_class_id: classId,
-          p_month: selectedMonth,
-          p_academic_year_id: activeYearId
-        });
+        let studentQuery = supabase.from('students')
+          .select('id, student_name, roll, class_id, classes(class_name), guardian_phone')
+          .eq('institution_id', madrasah.id);
+          
+        if (classId) {
+          studentQuery = studentQuery.eq('class_id', classId);
+        }
+        
+        if (activeYearId) {
+          studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        }
+
+        const { data: studentsData, error } = await studentQuery;
         
         if (error) throw error;
+        
+        const data = studentsData.map((s: any) => ({
+          student_id: s.id,
+          student_name: s.student_name,
+          roll: s.roll,
+          class_id: s.class_id,
+          class_name: s.classes?.class_name,
+          guardian_phone: s.guardian_phone
+        }));
 
         let filteredData = data || [];
         if (role === 'teacher' && profile?.permissions?.allowed_classes && !classId) {

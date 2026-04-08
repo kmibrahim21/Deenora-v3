@@ -148,7 +148,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         .order('roll', { ascending: true });
       
       if (activeYear) {
-        stdQuery = stdQuery.eq('academic_year_id', activeYear.id);
+        stdQuery = stdQuery.or(`academic_year_id.eq.${activeYear.id},academic_year_id.is.null`);
       }
 
       const { data: students } = await stdQuery;

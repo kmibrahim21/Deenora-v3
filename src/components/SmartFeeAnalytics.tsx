@@ -130,7 +130,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         studentQuery = studentQuery.eq('class_id', selectedClassId);
       }
       if (activeYearId) {
-        studentQuery = studentQuery.eq('academic_year_id', activeYearId);
+        studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
       }
       const { data: students, error: studError } = await studentQuery;
       console.log("Students:", students, "Error:", studError);
