@@ -80,7 +80,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       if (data && data.length > 0) {
         setPackages(data);
         // Set default selected package if current madrasah has one
-        const currentPkg = data.find(p => p.name === madrasah?.config_json?.subscription?.package_name);
+        const currentPkg = data.find(p => p.name === (madrasah?.config_json as any)?.subscription?.package_name);
         if (currentPkg) setSelectedPackage(currentPkg);
       }
     } catch (err) {
@@ -492,7 +492,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                     <div>
                       <p className="text-[10px] font-bold text-slate-400">Current Package</p>
                       <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {madrasah?.config_json?.subscription?.package_name || 'None'}
+                        {(madrasah?.config_json as any)?.subscription?.package_name || 'None'}
                       </p>
                     </div>
                   </div>
@@ -574,6 +574,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         </div>,
         document.body
       )}
+      {isEditingProfile && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
            <div className={`w-full max-w-sm rounded-[3.5rem] p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-500 relative max-h-[85vh] overflow-y-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
               <div className="flex items-center justify-between shrink-0">

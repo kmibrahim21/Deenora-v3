@@ -57,7 +57,7 @@ export const SMSService = {
     if (!mData) throw new Error("Security Violation: Unauthorized Institution context.");
     
     // Check for shortcodes
-    const hasShortcodes = /\{[a-z_]+\}/g.test(message);
+    const hasShortcodes = /\{[a-z_]+\}/gi.test(message);
     let personalizedMessages: { studentId: string, phone: string, text: string, parts: number }[] = [];
     let totalSmsNeeded = 0;
 

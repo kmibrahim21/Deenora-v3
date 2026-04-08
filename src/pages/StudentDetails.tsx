@@ -241,33 +241,33 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
 
       {showDeleteConfirm && (
         <div className="modal-overlay bg-[#080A12]/60 backdrop-blur-3xl animate-in fade-in duration-500 fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className={`w-full max-w-sm rounded-[4rem] p-12 shadow-[0_50px_120px_rgba(239,68,68,0.3)] border text-center space-y-8 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-red-50'}`}>
+          <div className={`w-full max-w-xs rounded-[3rem] p-8 shadow-[0_50px_120px_rgba(239,68,68,0.3)] border text-center space-y-6 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-red-50'}`}>
              <div className="relative">
                <div className="absolute inset-0 bg-red-500 blur-3xl opacity-20 animate-pulse" />
-               <div className={`relative w-24 h-24 rounded-full flex items-center justify-center mx-auto shadow-inner border mb-6 ${isDark ? 'bg-red-900/20 text-red-400 border-red-800/50' : 'bg-red-50 text-red-500 border-red-100'}`}>
-                  <AlertTriangle size={48} />
+               <div className={`relative w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-inner border mb-4 ${isDark ? 'bg-red-900/20 text-red-400 border-red-800/50' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                  <AlertTriangle size={40} />
                </div>
              </div>
              <div>
-                <h3 className={`text-2xl font-black font-noto tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{t('confirm_delete', lang)}</h3>
-                <p className="text-[13px] font-bold text-slate-400 mt-3 uppercase tracking-wider px-2 leading-relaxed">
+                <h3 className={`text-xl font-black font-noto tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{t('confirm_delete', lang)}</h3>
+                <p className="text-[12px] font-bold text-slate-400 mt-2 uppercase tracking-wider px-2 leading-relaxed">
                   {lang === 'bn' ? `আপনি কি নিশ্চিতভাবে "${student.student_name}" এর সকল তথ্য মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।` : `Are you sure you want to delete all info for "${student.student_name}"? This cannot be undone.`}
                 </p>
              </div>
-             <div className="flex flex-col gap-4 pt-2">
+             <div className="flex flex-col gap-3 pt-1">
                 <button 
                   onClick={handleDelete} 
                   disabled={isDeleting} 
-                  className="w-full py-6 bg-gradient-to-r from-red-500 to-red-600 text-white font-black rounded-full shadow-2xl shadow-red-200 active:scale-95 transition-all flex items-center justify-center text-lg gap-3 border border-white/10"
+                  className="w-full py-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-black rounded-full shadow-2xl shadow-red-200 active:scale-95 transition-all flex items-center justify-center text-base gap-2 border border-white/10"
                 >
-                  {isDeleting ? <Loader2 className="animate-spin" size={24} /> : (
-                    <><Trash2 size={24} /> {t('confirm_btn', lang)}</>
+                  {isDeleting ? <Loader2 className="animate-spin" size={20} /> : (
+                    <><Trash2 size={20} /> {t('confirm_btn', lang)}</>
                   )}
                 </button>
                 <button 
                   onClick={() => setShowDeleteConfirm(false)} 
                   disabled={isDeleting}
-                  className={`w-full py-5 font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest border ${isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                  className={`w-full py-4 font-black rounded-full active:scale-95 transition-all text-xs uppercase tracking-widest border ${isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
                 >
                   {t('cancel_btn', lang)}
                 </button>

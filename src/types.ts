@@ -40,6 +40,12 @@ export interface Institution {
       half_day_time?: string;
       full_day_time?: string;
     };
+    subscription?: {
+      package_name?: string;
+      package_rate?: number;
+      subscription_type?: string;
+      paid_months?: string[];
+    };
   };
   theme: string;
   status: 'active' | 'suspended' | 'trial';

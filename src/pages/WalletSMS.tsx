@@ -147,13 +147,18 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   };
 
   const handleSaveTemplate = async () => {
-    if (!madrasah || !tempTitle.trim() || !tempBody.trim()) return;
+    console.log('Saving template:', { madrasah, tempTitle, tempBody });
+    if (!madrasah || !tempTitle.trim() || !tempBody.trim()) {
+      console.log('Missing madrasah or title/body');
+      return;
+    }
     setIsSaving(true);
     try {
       if (editingId) {
         await supabase.from('sms_templates').update({ title: tempTitle, body: tempBody }).eq('id', editingId);
       } else {
-        await supabase.from('sms_templates').insert({ institution_id: madrasah.id, title: tempTitle, body: tempBody });
+        const { error } = await supabase.from('sms_templates').insert({ institution_id: madrasah.id, title: tempTitle, body: tempBody });
+        if (error) throw error;
       }
       setShowAddModal(false);
       setTempTitle('');
@@ -161,6 +166,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
       setEditingId(null);
       fetchTemplates();
     } catch (e: any) { 
+      console.error('Error saving template:', e);
       setStatusModal({
         show: true,
         type: 'error',

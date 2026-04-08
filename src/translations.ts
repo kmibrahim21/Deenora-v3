@@ -1,4 +1,3 @@
-
 import { Language } from 'types';
 
 export const translations = {
@@ -68,7 +67,17 @@ export const translations = {
     selected: 'জন নির্বাচিত',
     dashboard: 'ড্যাশবোর্ড',
     approvals: 'পেমেন্ট',
-    native_sms: 'সিম এসএমএস (ফ্রি)',
+    native_sms: 'সিম এসএমএস',
+    update_profile: 'প্রোফাইল আপডেট করুন',
+    warning: 'সতর্কবাণী',
+    ok: 'ঠিক আছে',
+    available_balance: 'উপলব্ধ ব্যালেন্স',
+    broadcast: 'ব্রডকাস্ট',
+    approved: 'অনুমোদিত',
+    pending: 'অপেক্ষমান',
+    attendance: 'হাজিরা',
+    sent_successfully: 'সফলভাবে প্রেরন করা হয়েছে',
+    add_template: 'টেমপ্লেট যোগ করুন',
     backup_restore: 'ব্যাকআপ ও রিস্টোর',
     madrasah_uuid: 'মাদরাসা আইডি (UUID)',
     madrasah_code_label: 'মাদরাসা কোড / পিন',
@@ -208,16 +217,6 @@ export const translations = {
     numbers: 'নম্বর',
     cost: 'খরচ',
     accounting: 'হিসাব',
-    update_profile: 'প্রোফাইল আপডেট করুন',
-    warning: 'সতর্কবাণী',
-    ok: 'ঠিক আছে',
-    available_balance: 'উপলব্ধ ব্যালেন্স',
-    broadcast: 'ব্রডকাস্ট',
-    approved: 'অনুমোদিত',
-    pending: 'অপেক্ষমান',
-    attendance: 'হাজিরা',
-    sent_successfully: 'সফলভাবে প্রেরন করা হয়েছে',
-    add_template: 'টেমপ্লেট যোগ করুন',
     sms_history: 'ইতিহাস',
     recipient: 'প্রাপক',
     message: 'মেসেজ',
@@ -303,7 +302,7 @@ export const translations = {
     selected: 'Selected',
     dashboard: 'Dashboard',
     approvals: 'Payments',
-    native_sms: 'SIM SMS (Free)',
+    native_sms: 'SIM SMS',
     update_profile: 'Update Profile',
     warning: 'Warning',
     ok: 'OK',
@@ -473,7 +472,6 @@ export const translations = {
   }
 };
 
-
 export const overrides: Record<string, any> = {
   madrasah: {
     bn: {
@@ -592,4 +590,3 @@ export const t = (key: keyof typeof translations.bn, lang: Language, type?: stri
   
   return defaultText;
 };
-

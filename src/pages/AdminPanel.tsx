@@ -1200,188 +1200,195 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           )}
 
           {view === 'details' && selectedUser && (
-             <div className="animate-in slide-in-from-right-10 duration-500 pb-20 space-y-8 pt-2">
-                <div className="flex items-center gap-5 px-1">
-                   <button onClick={() => setView('list')} className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-2xl flex items-center justify-center active:scale-90 transition-all border shadow-sm`}>
-                      <ArrowLeft size={24} strokeWidth={3} />
+             <div className="animate-in slide-in-from-right-10 duration-500 pb-24 space-y-6 pt-2 max-w-5xl mx-auto">
+                {/* Header */}
+                <div className="flex items-center gap-4 px-2">
+                   <button onClick={() => setView('list')} className={`w-12 h-12 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-white text-[#2563EB] border-slate-200 hover:bg-slate-50'} rounded-2xl flex items-center justify-center active:scale-95 transition-all border shadow-sm`}>
+                      <ArrowLeft size={24} strokeWidth={2.5} />
                    </button>
-                   <div className="min-w-0">
-                      <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto truncate leading-tight`}>Institution Details</h1>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">UUID: {selectedUser.id}</p>
+                   <div className="min-w-0 flex-1">
+                      <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto truncate tracking-tight`}>Institution Details</h1>
+                      <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5 truncate">ID: {selectedUser.id}</p>
                    </div>
                 </div>
 
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} rounded-[3.5rem] p-8 border space-y-8`}>
-                   <div className="flex flex-col items-center text-center">
-                      <div className={`w-24 h-24 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-white'} rounded-[2rem] flex items-center justify-center border-4 shadow-bubble overflow-hidden mb-4`}>
-                         {selectedUser.logo_url ? <img src={selectedUser.logo_url} className="w-full h-full object-contain" /> : <UserIcon size={40} className="text-slate-300" />}
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-200 shadow-xl shadow-slate-200/40'} rounded-[2.5rem] md:rounded-[3rem] p-5 md:p-8 border space-y-8`}>
+                   {/* Profile Header */}
+                   <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
+                      <div className={`w-28 h-28 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-white'} rounded-[2rem] flex items-center justify-center border-4 shadow-lg overflow-hidden relative group`}>
+                         {selectedUser.logo_url ? <img src={selectedUser.logo_url} className="w-full h-full object-contain" /> : <UserIcon size={48} className="text-slate-300" />}
+                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                            <Camera size={24} className="text-white" />
+                         </div>
                       </div>
-                      <h2 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{selectedUser.name}</h2>
-                      <div className={`mt-3 px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border ${editActive ? (madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100') : (madrasah?.theme === 'dark' ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-600 border-red-100')}`}>
-                         <Activity size={12} /> {editActive ? 'Active Portal' : 'Access Restricted'}
+                      <div className="flex-1 space-y-3">
+                        <h2 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight`}>{selectedUser.name}</h2>
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                          <div className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border ${editActive ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border-emerald-200') : (madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 text-red-600 border-red-200')}`}>
+                             <Activity size={14} /> {editActive ? 'Active Portal' : 'Access Restricted'}
+                          </div>
+                          <div className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                             {editInstitutionType || 'Institution'}
+                          </div>
+                        </div>
                       </div>
                    </div>
 
-                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} p-4 rounded-3xl text-center border`}>
-                         <h5 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{userStats.students}</h5>
-                         <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Students</p>
+                   {/* Stats Grid */}
+                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Students</p>
+                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{userStats.students}</h5>
                       </div>
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} p-4 rounded-3xl text-center border`}>
-                         <h5 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{userStats.classes}</h5>
-                         <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Classes</p>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Classes</p>
+                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{userStats.classes}</h5>
                       </div>
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-900/50' : 'bg-blue-50 border-blue-100'} p-4 rounded-3xl text-center border`}>
-                         <h5 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{selectedUser.sms_balance || 0}</h5>
-                         <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">SMS Bal</p>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">SMS Balance</p>
+                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{selectedUser.sms_balance || 0}</h5>
                       </div>
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 border-emerald-900/50' : 'bg-emerald-50 border-emerald-100'} p-4 rounded-3xl text-center border`}>
-                         <h5 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{Number(selectedUser.balance || 0).toFixed(2)}</h5>
-                         <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Voice Bal</p>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                         <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Voice Balance</p>
+                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>৳ {Number(selectedUser.balance || 0).toFixed(2)}</h5>
                       </div>
                    </div>
 
                    {/* Tab Navigation */}
-                   <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                   <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-5 px-5 md:mx-0 md:px-0">
                       <button 
                         onClick={() => setDetailsTab('institution')}
-                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'institution' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'institution' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <Building2 size={14} /> {lang === 'bn' ? 'প্রতিষ্ঠান তথ্য' : 'Institution Info'}
+                         <Building2 size={16} /> {lang === 'bn' ? 'প্রতিষ্ঠান তথ্য' : 'Institution Info'}
                       </button>
                       <button 
                         onClick={() => setDetailsTab('api')}
-                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'api' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'api' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <Key size={14} /> {lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}
+                         <Key size={16} /> {lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}
                       </button>
                       <button 
                         onClick={() => setDetailsTab('permissions')}
-                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'permissions' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'permissions' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <ShieldCheck size={14} /> {lang === 'bn' ? 'পারমিশন' : 'Permissions'}
+                         <ShieldCheck size={16} /> {lang === 'bn' ? 'পারমিশন' : 'Permissions'}
                       </button>
                       <button 
                         onClick={() => setDetailsTab('subscription')}
-                        className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 ${detailsTab === 'subscription' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100')}`}
+                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'subscription' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <CreditCard size={14} /> {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
+                         <CreditCard size={16} /> {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
                       </button>
                    </div>
 
-                   <div className={`space-y-6 pt-4 border-t ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
+                   <div className={`space-y-6 pt-4 border-t ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
                       {detailsTab === 'institution' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Name</label>
-                                 <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                                 <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editName} onChange={(e) => setEditName(e.target.value)} />
                               </div>
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Gmail / Email</label>
-                                 <input type="email" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                                 <input type="email" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
                               </div>
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:col-span-2">
-                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Phone</label>
-                                    <input type="tel" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
-                                 </div>
-                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">User PIN / Password</label>
-                                    <div className="relative">
-                                       <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 font-black outline-none focus:border-[#2563EB]/20`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
-                                       <Shield className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-                                    </div>
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Phone</label>
+                                 <input type="tel" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                              </div>
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">User PIN / Password</label>
+                                 <div className="relative">
+                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
+                                    <Shield className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                                  </div>
                               </div>
-                              <div className="lg:col-span-2 space-y-2">
+                              <div className="md:col-span-2 space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Address</label>
-                                 <textarea className={`w-full h-24 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border rounded-2xl px-6 py-4 font-black outline-none focus:border-[#2563EB]/20 resize-none`} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Enter full address..." />
+                                 <textarea className={`w-full h-28 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 py-4 font-black outline-none focus:border-blue-500 transition-all resize-none`} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Enter full address..." />
                               </div>
                            </div>
 
-                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
-                              <div className="flex items-center justify-between px-1">
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-6`}>
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1">
                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                    <Sliders size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> Basic Config
+                                    <Sliders size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} /> Basic Config
                                  </h4>
-                                 <button onClick={() => setEditActive(!editActive)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all ${editActive ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                                 <button onClick={() => setEditActive(!editActive)} className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all w-full md:w-auto ${editActive ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-red-500 text-white shadow-lg shadow-red-500/20'}`}>
                                     {editActive ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
                                     <span className="text-[10px] font-black uppercase tracking-widest">{editActive ? 'Active' : 'Inactive'}</span>
                                  </button>
                               </div>
-                              <div className="space-y-4">
-                                 <div className="grid grid-cols-1 gap-4">
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Institution Type</label>
-                                       <select 
-                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                         value={editInstitutionType}
-                                         onChange={(e) => setEditInstitutionType(e.target.value as any)}
-                                       >
-                                         <option value="madrasah">Madrasah</option>
-                                         <option value="school">School</option>
-                                         <option value="kindergarten">Kindergarten</option>
-                                         <option value="nurani">Nurani</option>
-                                       </select>
-                                    </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Type</label>
+                                    <select 
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      value={editInstitutionType}
+                                      onChange={(e) => setEditInstitutionType(e.target.value as any)}
+                                    >
+                                      <option value="madrasah">Madrasah</option>
+                                      <option value="school">School</option>
+                                      <option value="kindergarten">Kindergarten</option>
+                                      <option value="nurani">Nurani</option>
+                                    </select>
                                  </div>
                               </div>
                            </div>
 
-                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-6`}>
                               <div className="flex items-center justify-between px-1">
                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                    <Settings size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> System Settings
+                                    <Settings size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} /> System Settings
                                  </h4>
                               </div>
-                              <div className="space-y-4">
-                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Result Engine</label>
-                                       <select 
-                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                         value={editResultEngine}
-                                         onChange={(e) => setEditResultEngine(e.target.value as any)}
-                                       >
-                                         <option value="school">School (GPA)</option>
-                                         <option value="befaq">Befaq (Division)</option>
-                                         <option value="qawmi_custom">Qawmi Custom</option>
-                                       </select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Result System</label>
-                                       <select 
-                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                         value={editResultSystem}
-                                         onChange={(e) => setEditResultSystem(e.target.value as any)}
-                                       >
-                                         <option value="grading">Grading (GPA)</option>
-                                         <option value="marks">Marks Only</option>
-                                       </select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Attendance Type</label>
-                                       <select 
-                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                         value={editAttendanceType}
-                                         onChange={(e) => setEditAttendanceType(e.target.value as any)}
-                                       >
-                                         <option value="daily">Daily</option>
-                                         <option value="period">Period Wise</option>
-                                       </select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Accounting Mode</label>
-                                       <select 
-                                         className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`}
-                                         value={editAccountingMode}
-                                         onChange={(e) => setEditAccountingMode(e.target.value as any)}
-                                       >
-                                         <option value="qawmi_flexible">Qawmi Flexible</option>
-                                         <option value="school_system">School System</option>
-                                       </select>
-                                    </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Result Engine</label>
+                                    <select 
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      value={editResultEngine}
+                                      onChange={(e) => setEditResultEngine(e.target.value as any)}
+                                    >
+                                      <option value="school">School (GPA)</option>
+                                      <option value="befaq">Befaq (Division)</option>
+                                      <option value="qawmi_custom">Qawmi Custom</option>
+                                    </select>
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Result System</label>
+                                    <select 
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      value={editResultSystem}
+                                      onChange={(e) => setEditResultSystem(e.target.value as any)}
+                                    >
+                                      <option value="grading">Grading (GPA)</option>
+                                      <option value="marks">Marks Only</option>
+                                    </select>
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Attendance Type</label>
+                                    <select 
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      value={editAttendanceType}
+                                      onChange={(e) => setEditAttendanceType(e.target.value as any)}
+                                    >
+                                      <option value="daily">Daily</option>
+                                      <option value="period">Period Wise</option>
+                                    </select>
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Accounting Mode</label>
+                                    <select 
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      value={editAccountingMode}
+                                      onChange={(e) => setEditAccountingMode(e.target.value as any)}
+                                    >
+                                      <option value="qawmi_flexible">Qawmi Flexible</option>
+                                      <option value="school_system">School System</option>
+                                    </select>
                                  </div>
                               </div>
                            </div>
@@ -1390,100 +1397,64 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
                       {detailsTab === 'api' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-6`}>
                               <div className="flex items-center justify-between px-1">
                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                    <Key size={14} className={madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-600'} /> API & Security
+                                    <Key size={16} className={madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-500'} /> API & Security
                                  </h4>
                               </div>
-                              <div className="space-y-4">
-                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Voice Sender ID</label>
-                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editVoiceSenderId} onChange={(e) => setEditVoiceSenderId(e.target.value)} placeholder="e.g. 8801..." />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE API Key</label>
-                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="API Key" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Secret Key</label>
-                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">REVE Client ID</label>
-                                       <input type="text" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-black text-sm outline-none`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
-                                    </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Voice Sender ID</label>
+                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editVoiceSenderId} onChange={(e) => setEditVoiceSenderId(e.target.value)} placeholder="e.g. 8801..." />
                                  </div>
-                              </div>
-                           </div>
-                        </div>
-                      )}
-
-                      {detailsTab === 'permissions' && (
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">REVE API Key</label>
+                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="API Key" />
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Secret Key</label>
+                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">REVE Client ID</label>
+                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
+                                                      {detailsTab === 'subscription' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-8`}>
                               <div className="flex items-center justify-between px-1">
                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                    <ShieldCheck size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} /> Enabled Modules
+                                    <CreditCard size={16} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-500'} /> Subscription Info
                                  </h4>
                               </div>
-                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                 {Object.entries(editModules).map(([key, value]) => (
-                                   <button 
-                                     type="button"
-                                     key={key}
-                                     onClick={(e) => {
-                                       e.preventDefault();
-                                       setEditModules({...editModules, [key]: !value});
-                                     }}
-                                     className={`p-3 rounded-xl border flex items-center justify-between transition-all ${value ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-900/50 text-blue-400' : 'bg-blue-50 border-blue-100 text-[#1E3A8A]') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-600' : 'bg-slate-50 border-slate-100 text-slate-400')}`}
-                                   >
-                                     <span className="text-[10px] font-black uppercase tracking-wider">{key.replace('_', ' ')}</span>
-                                     {value ? <CheckCircle2 size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-500'} /> : <XCircle size={14} />}
-                                   </button>
-                                 ))}
-                              </div>
-                           </div>
-                        </div>
-                      )}
-
-                      {detailsTab === 'subscription' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-50'} p-6 rounded-[2.5rem] space-y-6`}>
-                              <div className="flex items-center justify-between px-1">
-                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                    <CreditCard size={14} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} /> Subscription Info
-                                 </h4>
-                              </div>
-                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                 <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">System Type</label>
-                                    <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none`} value={editSubscriptionType} onChange={(e) => setEditSubscriptionType(e.target.value as any)}>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">System Type</label>
+                                    <select className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editSubscriptionType} onChange={(e) => setEditSubscriptionType(e.target.value as any)}>
                                        <option value="monthly">Monthly Subscription</option>
                                        <option value="quarterly">Quarterly Subscription</option>
                                        <option value="yearly">Yearly Subscription</option>
                                        <option value="lifetime">Lifetime Access</option>
                                     </select>
                                  </div>
-                                 <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Portal Status</label>
-                                    <select className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none`} value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Portal Status</label>
+                                    <select className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
                                        <option value="active">Active</option>
                                        <option value="suspended">Suspended</option>
                                        <option value="trial">Trial Period</option>
                                     </select>
                                  </div>
-                                 <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Subscription End</label>
-                                    <input type="date" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100'} border rounded-xl px-4 font-bold text-xs`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Subscription End</label>
+                                    <input type="date" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
                                  </div>
                               </div>
 
                               {/* Package Selection */}
                               <div className="space-y-3">
-                                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Select Package</label>
-                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Select Package</label>
+                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     {packages.map(pkg => (
                                        <button 
                                          key={pkg.name}
@@ -1491,20 +1462,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                            setEditPackageName(pkg.name);
                                            setEditPackageRate(pkg.rate);
                                          }}
-                                         className={`p-4 rounded-2xl border flex flex-col items-center gap-1 transition-all ${editPackageName === pkg.name ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-100 text-slate-400')}`}
+                                         className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${editPackageName === pkg.name ? (madrasah?.theme === 'dark' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-blue-50 border-blue-200 text-blue-700 shadow-lg shadow-blue-500/10') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
                                        >
-                                          <span className="text-[10px] font-black uppercase tracking-widest">{pkg.name}</span>
+                                          <span className="text-[11px] font-black uppercase tracking-widest">{pkg.name}</span>
                                           {pkg.name === 'Custom' ? (
                                             <input 
                                               type="number" 
-                                              className={`w-full text-center bg-transparent font-black outline-none ${editPackageName === pkg.name ? 'text-blue-600' : 'text-slate-400'}`}
+                                              className={`w-full text-center bg-transparent font-black outline-none text-lg ${editPackageName === pkg.name ? 'text-blue-600' : 'text-slate-400'}`}
                                               value={editPackageRate}
                                               onChange={(e) => setEditPackageRate(Number(e.target.value))}
                                               placeholder="Rate"
                                               onClick={(e) => e.stopPropagation()}
                                             />
                                           ) : (
-                                            <span className="text-[14px] font-black">{pkg.rate} ৳</span>
+                                            <span className="text-lg font-black">{pkg.rate} ৳</span>
                                           )}
                                        </button>
                                     ))}
@@ -1512,25 +1483,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               </div>
 
                               {/* Month Selection */}
-                              <div className="space-y-3">
-                                 <div className="flex items-center justify-between px-1">
-                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Select Months to Pay ({selectedYear})</label>
-                                    <div className="flex items-center gap-2">
-                                       <button onClick={() => setSelectedYear(selectedYear - 1)} className="p-1 text-slate-400 hover:text-blue-500 transition-colors"><ArrowLeft size={14} /></button>
-                                       <span className="text-[10px] font-black text-blue-600">{selectedYear}</span>
-                                       <button onClick={() => setSelectedYear(selectedYear + 1)} className="p-1 text-slate-400 hover:text-blue-500 transition-colors"><ArrowRight size={14} /></button>
+                              <div className="space-y-4">
+                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Months to Pay ({selectedYear})</label>
+                                    <div className="flex items-center gap-3">
+                                       <button onClick={() => setSelectedYear(selectedYear - 1)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}><ArrowLeft size={16} /></button>
+                                       <span className="text-sm font-black text-blue-500">{selectedYear}</span>
+                                       <button onClick={() => setSelectedYear(selectedYear + 1)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}><ArrowRight size={16} /></button>
                                     </div>
                                  </div>
 
                                  {/* Quick Selection */}
-                                 <div className="flex items-center gap-2 px-1 mb-2">
+                                 <div className="flex flex-wrap items-center gap-2 px-1">
                                     <button 
                                       onClick={() => {
                                         const currentYear = new Date().getFullYear();
                                         const currentMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
                                         setSelectedMonthsForPayment([`${currentYear}-${currentMonth}`]);
                                       }}
-                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${selectedMonthsForPayment.length === 1 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'}`}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 1 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
                                     >
                                       Monthly
                                     </button>
@@ -1545,7 +1516,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                         }
                                         setSelectedMonthsForPayment(months);
                                       }}
-                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${selectedMonthsForPayment.length === 3 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'}`}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 3 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
                                     >
                                       Quarterly
                                     </button>
@@ -1558,19 +1529,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                         }
                                         setSelectedMonthsForPayment(months);
                                       }}
-                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${selectedMonthsForPayment.length === 12 ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'}`}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 12 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
                                     >
                                       Yearly
                                     </button>
                                     <button 
                                       onClick={() => setSelectedMonthsForPayment([])}
-                                      className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-100 hover:bg-slate-200 transition-all"
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'}`}
                                     >
                                       Clear
                                     </button>
                                  </div>
 
-                                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                                     {[
                                       { label: 'জানুয়ারি', value: '01' },
                                       { label: 'ফেব্রুয়ারি', value: '02' },
@@ -1599,12 +1570,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                               setSelectedMonthsForPayment([...selectedMonthsForPayment, yearMonth]);
                                             }
                                           }}
-                                          className={`p-3 rounded-xl border text-[11px] font-black font-noto transition-all relative ${isSelectedNow ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-slate-100 text-slate-400')}`}
+                                          className={`p-4 rounded-2xl border text-[12px] font-black font-noto transition-all relative active:scale-95 ${isSelectedNow ? (madrasah?.theme === 'dark' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-blue-50 border-blue-200 text-blue-700 shadow-lg shadow-blue-500/10') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
                                         >
                                           {month.label}
                                           {isPaidHistory && (
-                                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
-                                              <Check size={8} className="text-white" />
+                                            <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-emerald-500 rounded-full border-[3px] border-white dark:border-slate-900 flex items-center justify-center shadow-sm">
+                                              <Check size={10} className="text-white" strokeWidth={3} />
                                             </div>
                                           )}
                                         </button>
@@ -1614,26 +1585,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               </div>
 
                               {/* Price Calculation */}
-                              <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/50' : 'bg-blue-50 border-blue-100'} p-6 rounded-[2rem] border space-y-4`}>
+                              <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'} p-6 md:p-8 rounded-[2rem] border space-y-6`}>
                                  <div className="flex items-center justify-between">
                                     <div className="space-y-1">
-                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Total Students</p>
-                                       <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{userStats.students}</p>
+                                       <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Total Students</p>
+                                       <p className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{userStats.students}</p>
                                     </div>
                                     <div className="text-right space-y-1">
-                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Months Selected</p>
-                                       <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{selectedMonthsForPayment.length}</p>
+                                       <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Months Selected</p>
+                                       <p className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{selectedMonthsForPayment.length}</p>
                                     </div>
                                  </div>
                                  
-                                 <div className="pt-4 border-t border-blue-200/30 flex items-center justify-between">
+                                 <div className={`pt-6 border-t ${madrasah?.theme === 'dark' ? 'border-blue-500/20' : 'border-blue-200'} flex items-center justify-between`}>
                                     <div className="space-y-1">
-                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Package Rate</p>
-                                       <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{editPackageRate} ৳</p>
+                                       <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Package Rate</p>
+                                       <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{editPackageRate} ৳</p>
                                     </div>
                                     <div className="text-right space-y-1">
-                                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Total Price</p>
-                                       <p className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                                       <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Total Price</p>
+                                       <p className={`text-4xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
                                           {(userStats.students * editPackageRate * selectedMonthsForPayment.length).toLocaleString('bn-BD')} ৳
                                        </p>
                                     </div>
@@ -1694,15 +1665,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   }
                                 }}
                                 disabled={isUpdatingUser || (userStats.students * editPackageRate * selectedMonthsForPayment.length) <= 0}
-                                className={`w-full h-14 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isUpdatingUser || (userStats.students * editPackageRate * selectedMonthsForPayment.length) <= 0 ? 'bg-slate-200 text-slate-400' : 'bg-emerald-500 text-white shadow-lg shadow-emerald-100 active:scale-95'}`}
+                                className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${isUpdatingUser || (userStats.students * editPackageRate * selectedMonthsForPayment.length) <= 0 ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400') : 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20 active:scale-95'}`}
                               >
-                                <Banknote size={20} /> Receive Payment
+                                <Banknote size={24} /> Receive Payment
                               </button>
                            </div>
                         </div>
                       )}
 
-                      <button onClick={handleUserUpdate} disabled={isUpdatingUser} className="w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 text-lg">
+                      <button onClick={handleUserUpdate} disabled={isUpdatingUser} className={`w-full h-16 ${madrasah?.theme === 'dark' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black rounded-[2rem] shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 text-lg mt-8`}>
                          {isUpdatingUser ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} /> Save Profile Changes</>}
                       </button>
                    </div>

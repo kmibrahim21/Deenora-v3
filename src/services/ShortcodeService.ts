@@ -24,7 +24,7 @@ export const ShortcodeService = {
 
     let finalMessage = message;
     Object.entries(shortcodes).forEach(([code, value]) => {
-      const regex = new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      const regex = new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
       finalMessage = finalMessage.replace(regex, String(value));
     });
 
