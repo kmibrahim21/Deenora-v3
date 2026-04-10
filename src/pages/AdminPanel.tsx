@@ -1424,6 +1424,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                             </div>
                          </div>
                       )}
+                      {detailsTab === 'permissions' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-6`}>
+                              <div className="flex items-center justify-between px-1">
+                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <ShieldCheck size={16} className={madrasah?.theme === 'dark' ? 'text-indigo-400' : 'text-indigo-500'} /> Module Permissions
+                                 </h4>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                {Object.entries(editModules).map(([key, value]) => (
+                                  <div key={key} className={`flex items-center justify-between p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100'}`}>
+                                    <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{key.replace(/_/g, ' ')}</span>
+                                    <button 
+                                      onClick={() => setEditModules({...editModules, [key]: !value})}
+                                      className={`w-12 h-6 rounded-full transition-all relative ${value ? 'bg-emerald-500' : (madrasah?.theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200')}`}
+                                    >
+                                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${value ? 'left-7' : 'left-1'}`} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                           </div>
+                        </div>
+                      )}
                       {detailsTab === 'subscription' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-8`}>

@@ -4,7 +4,7 @@ import { supabase, smsApi } from 'supabase';
 import { Language, Class, SMSTemplate, Institution, UserRole, Profile } from 'types';
 import { t } from 'translations';
 import { ShortcodeService } from 'services/ShortcodeService';
-import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall } from 'lucide-react';
 import { isValidUUID } from 'utils/validation';
 
 interface SmartFeeAnalyticsProps {
@@ -56,6 +56,13 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [selectedTemplate, setSelectedTemplate] = useState<SMSTemplate | null>(null);
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   const [showShortcodes, setShowShortcodes] = useState(false);
+  
+  // Voice Call States
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [voices, setVoices] = useState<any[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
+  const [voiceRate, setVoiceRate] = useState<number>(1.00);
+  const [isFetchingVoices, setIsFetchingVoices] = useState(false);
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'ছাত্রের নাম' : 'Student Name' },
@@ -125,7 +132,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       if (!structures) return;
 
       // 2. Fetch Students for counts and class mapping
-      let studentQuery = supabase.from('students').select('student_name, class_id').eq('institution_id', institutionId);
+      let studentQuery = supabase.from('students').select('id, student_name, class_id').eq('institution_id', institutionId);
       if (selectedClassId !== 'all') {
         studentQuery = studentQuery.eq('class_id', selectedClassId);
       }
@@ -288,18 +295,14 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         const { data: remindersData, error: remError } = await supabase.rpc('get_fee_reminder_list', { 
           p_institution_id: institutionId, 
           p_month: selectedMonth,
-          p_academic_year_id: activeYearId
+          p_academic_year_id: null // Bypass RPC filter to handle null academic_year_id correctly
         });
         console.log("Reminders:", remindersData, "Error:", remError);
         
         if (remindersData) {
-            // Filter reminders by class if selected
-            const filteredReminders = selectedClassId !== 'all' 
-                ? remindersData.filter((r: any) => {
-                    const selectedClass = localClasses.find(c => c.id === selectedClassId);
-                    return r.class_name === selectedClass?.class_name;
-                })
-                : remindersData;
+            // Filter reminders by active students (which handles class and academic_year_id filters)
+            const activeStudentIds = new Set(students?.map(s => s.id) || []);
+            const filteredReminders = remindersData.filter((r: any) => activeStudentIds.has(r.student_id));
             setReminders(filteredReminders || []);
         } else {
             setReminders([]);
@@ -312,6 +315,110 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       console.error('Smart Fee Analytics Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchVoices = async () => {
+    setIsFetchingVoices(true);
+    try {
+      const { data: sysSettings } = await supabase.from('system_settings').select('voice_rate').single();
+      if (sysSettings?.voice_rate) setVoiceRate(sysSettings.voice_rate);
+
+      const { data: localVoices } = await supabase
+        .from('voice_templates')
+        .select('*')
+        .eq('institution_id', institutionId)
+        .eq('provider_status', 'approved');
+      
+      setVoices(localVoices || []);
+      if (localVoices && localVoices.length > 0) {
+        setSelectedVoiceId(localVoices[0].id);
+      }
+      setShowVoiceModal(true);
+    } catch (err) {
+      console.error('Error fetching voices:', err);
+      alert(lang === 'bn' ? 'ভয়েস লোড করতে সমস্যা হয়েছে।' : 'Failed to load voices.');
+    } finally {
+      setIsFetchingVoices(false);
+    }
+  };
+
+  const sendVoiceBroadcast = async () => {
+    if (!selectedVoiceId || reminders.length === 0) return;
+    setSending(true);
+    try {
+      const voice = voices.find(v => v.id === selectedVoiceId);
+      if (!voice) throw new Error('Selected voice not found.');
+
+      const phoneNumbers = reminders.map(r => r.guardian_phone).filter(Boolean);
+      if (phoneNumbers.length === 0) throw new Error('No valid phone numbers found.');
+
+      const estimatedCost = phoneNumbers.length * voiceRate;
+      const { data: instData } = await supabase.from('institutions').select('balance, voice_sender_id').eq('id', institutionId).single();
+      
+      if (!instData || instData.balance < estimatedCost) {
+        throw new Error(lang === 'bn' ? `পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজন: ${estimatedCost} ৳, আছে: ${instData?.balance || 0} ৳` : `Insufficient balance. Required: ${estimatedCost} ৳, Available: ${instData?.balance || 0} ৳`);
+      }
+
+      const sNumber = instData.voice_sender_id;
+      if (!sNumber) throw new Error(lang === 'bn' ? 'কোনো সেন্ডার আইডি সেট করা নেই।' : 'No Sender ID configured.');
+
+      const voiceName = voice.provider_voice_name || voice.title;
+      const requestId = 'fee_' + Math.random().toString(36).substr(2, 9);
+
+      const payload = {
+        request_id: requestId,
+        voice: voiceName, 
+        sender: sNumber,
+        phone_numbers: phoneNumbers,
+        retry: 1,
+        retry_count: 1,
+        retries: 1
+      };
+
+      const response = await fetch('/api/awaj/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to send broadcast via Awaj API';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {}
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      const campaignId = result.broadcast?.id || result.campaign_id || result.id || result.data?.id || result.data?.campaign_id || result.request_id || requestId;
+
+      // Deduct balance
+      const { error: deductError } = await supabase.rpc('deduct_balance', {
+        p_institution_id: institutionId,
+        p_amount: estimatedCost
+      });
+      if (deductError) throw deductError;
+
+      // Save to Supabase
+      await supabase.from('voice_broadcasts').insert({
+        institution_id: institutionId,
+        voice_template_id: selectedVoiceId,
+        voice_id: voice.id,
+        sender_id: sNumber,
+        total_recipients: phoneNumbers.length,
+        total_cost: estimatedCost,
+        status: 'pending',
+        provider_campaign_id: campaignId.toString()
+      });
+
+      alert(lang === 'bn' ? 'ভয়েস কল সফলভাবে পাঠানো হয়েছে' : 'Voice broadcast sent successfully');
+      setShowVoiceModal(false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to send voice broadcast');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -646,7 +753,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button 
                 onClick={() => sendBulkReminder('system')}
                 disabled={sending}
@@ -661,6 +768,15 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             >
                 <Smartphone size={16} fill="currentColor" /> {t('native_sms', lang)}
             </button>
+            {(!role || role === 'madrasah_admin' || profile?.permissions?.can_use_voice_call) && (
+              <button 
+                  onClick={fetchVoices}
+                  disabled={sending || isFetchingVoices}
+                  className={`h-14 rounded-2xl font-black text-[10px] uppercase border flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 border-emerald-900/50 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
+              >
+                  {isFetchingVoices ? <Loader2 className="animate-spin" size={16} /> : <PhoneCall size={16} fill="currentColor" />} {t('voice_call', lang)}
+              </button>
+            )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
@@ -684,6 +800,69 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 </div>
             )}
             </div>
+        </div>
+      )}
+      {/* Voice Selection Modal */}
+      {showVoiceModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-md rounded-[2rem] border shadow-2xl overflow-hidden flex flex-col`}>
+            <div className={`p-6 border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('voice_call', lang)}</h3>
+              <p className={`text-xs font-bold mt-1 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                {lang === 'bn' ? 'ভয়েস ব্রডকাস্ট পাঠাতে একটি ভয়েস নির্বাচন করুন' : 'Select a voice to send broadcast'}
+              </p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {voices.length === 0 ? (
+                <div className={`p-4 rounded-xl text-center text-sm font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
+                  {lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস পাওয়া যায়নি। দয়া করে ভয়েস ব্রডকাস্ট মেনু থেকে ভয়েস আপলোড করুন।' : 'No approved voices found. Please upload a voice from Voice Broadcast menu.'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('select_voice', lang)}</label>
+                  <select
+                    value={selectedVoiceId}
+                    onChange={(e) => setSelectedVoiceId(e.target.value)}
+                    className={`w-full h-12 rounded-xl px-4 font-bold text-sm outline-none appearance-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-50 text-[#1E3A8A] border-slate-200'} border focus:border-[#2563EB]/50`}
+                  >
+                    {voices.map(v => (
+                      <option key={v.id} value={v.id}>{v.title || v.provider_voice_name || 'Unknown Voice'}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {voices.length > 0 && reminders.length > 0 && (
+                <div className={`p-4 rounded-xl flex items-center justify-between ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/50' : 'bg-blue-50 border-blue-100'} border`}>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">{lang === 'bn' ? 'মোট প্রাপক' : 'Total Recipients'}</p>
+                    <h4 className="text-lg font-black text-blue-600">{reminders.filter(r => r.guardian_phone).length}</h4>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">{lang === 'bn' ? 'আনুমানিক খরচ' : 'Estimated Cost'}</p>
+                    <h4 className="text-lg font-black text-blue-600">{(reminders.filter(r => r.guardian_phone).length * voiceRate).toFixed(2)} ৳</h4>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className={`p-4 border-t flex gap-3 ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+              <button
+                onClick={() => setShowVoiceModal(false)}
+                className={`flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+              <button
+                onClick={sendVoiceBroadcast}
+                disabled={sending || voices.length === 0}
+                className="flex-1 h-12 bg-[#2563EB] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {sending ? <Loader2 className="animate-spin" size={16} /> : <PhoneCall size={16} />} {lang === 'bn' ? 'কল করুন' : 'Call Now'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
