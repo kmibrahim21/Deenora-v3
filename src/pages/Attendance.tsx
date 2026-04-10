@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2 } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -701,69 +701,108 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       )}
       
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className={`rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border animate-in zoom-in-95 duration-300 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <div className={`p-6 border-b flex justify-between items-center ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}>
-              <h2 className={`text-xl font-black flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
-                <Settings className="text-[#2563EB]" size={24} />
-                Attendance Settings
-              </h2>
-              <button onClick={() => setShowSettingsModal(false)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm ${isDark ? 'bg-slate-800 text-slate-400 hover:text-red-400 hover:bg-red-900/20' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50'}`}>
-                <XCircle size={20} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
+            <div className={`p-8 border-b flex justify-between items-center relative overflow-hidden ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+              <div className="absolute top-0 left-0 w-1 h-full bg-[#2563EB]"></div>
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-slate-900 text-blue-400' : 'bg-white text-blue-600'}`}>
+                  <Settings size={24} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h2 className={`text-xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {lang === 'bn' ? 'হাজিরা সেটিংস' : 'Attendance Settings'}
+                  </h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Configure your sessions</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSettingsModal(false)} 
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${isDark ? 'bg-slate-900 text-slate-400 hover:text-red-400 hover:bg-red-900/20' : 'bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-100'}`}
+              >
+                <XCircle size={22} />
               </button>
             </div>
-            <div className="p-6 space-y-6">
-              <div className="space-y-3">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Attendance Sessions</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Session Name (e.g. Morning)"
-                    value={newSessionName}
-                    onChange={(e) => setNewSessionName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addSession();
-                      }
-                    }}
-                    className={`flex-1 h-12 px-4 border-2 rounded-xl font-bold outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-[#2563EB]/30' : 'bg-slate-50 border-slate-100 text-slate-700 focus:border-[#2563EB]/30 focus:bg-white'}`}
-                  />
+
+            <div className="p-8 space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Attendance Sessions</label>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                    {sessions.length} Active
+                  </span>
+                </div>
+                
+                <div className="flex gap-3 group">
+                  <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      placeholder={lang === 'bn' ? 'সেশনের নাম (উদা: সকাল)' : 'Session Name (e.g. Morning)'}
+                      value={newSessionName}
+                      onChange={(e) => setNewSessionName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addSession();
+                        }
+                      }}
+                      className={`w-full h-14 px-6 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50 focus:bg-slate-800' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30 focus:bg-white focus:shadow-lg focus:shadow-blue-500/5'}`}
+                    />
+                  </div>
                   <button 
                     onClick={addSession}
-                    className="w-12 h-12 bg-[#2563EB] text-white rounded-xl flex items-center justify-center shadow-md active:scale-95 transition-all"
+                    className="w-14 h-14 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30 active:scale-90 hover:scale-105 transition-all shrink-0"
                   >
-                    <Plus size={24} />
+                    <Plus size={28} strokeWidth={3} />
                   </button>
                 </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  {sessions.map(s => (
-                    <div key={s.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                      <span className={`font-bold text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{s.name}</span>
-                      <button onClick={() => removeSession(s.id)} className="text-red-400 hover:text-red-500 transition-colors">
-                        <XCircle size={18} />
+
+                <div className={`space-y-3 max-h-[280px] overflow-y-auto pr-2 scrollbar-hide rounded-3xl p-2 -mx-2 ${isDark ? 'bg-slate-800/30' : 'bg-slate-50/50'}`}>
+                  {sessions.length > 0 ? sessions.map((s, idx) => (
+                    <div 
+                      key={s.id} 
+                      className={`group flex items-center justify-between p-4 rounded-2xl border transition-all animate-in slide-in-from-right-4 duration-300`}
+                      style={{ animationDelay: `${idx * 50}ms` }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black ${isDark ? 'bg-slate-900 text-slate-500' : 'bg-white text-slate-400 shadow-sm'}`}>
+                          {idx + 1}
+                        </div>
+                        <span className={`font-black text-sm tracking-tight ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{s.name}</span>
+                      </div>
+                      <button 
+                        onClick={() => removeSession(s.id)} 
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 ${isDark ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
+                      >
+                        <Trash2 size={18} />
                       </button>
                     </div>
-                  ))}
-                  {sessions.length === 0 && (
-                    <p className="text-[10px] text-slate-400 font-bold italic text-center py-2">No sessions added. Defaulting to "Daily".</p>
+                  )) : (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${isDark ? 'bg-slate-800' : 'bg-white shadow-sm'}`}>
+                        <Clock size={24} className="text-slate-300" />
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-black uppercase tracking-widest">No sessions added</p>
+                      <p className="text-[10px] text-slate-400/60 font-bold mt-1 italic">Defaulting to "Daily" attendance</p>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
-            <div className={`p-6 border-t flex gap-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}>
+
+            <div className={`p-8 border-t flex gap-4 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
               <button 
                 onClick={() => setShowSettingsModal(false)}
-                className={`flex-1 h-14 font-black rounded-xl border-2 active:scale-95 transition-all ${isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-white text-slate-600 border-slate-200'}`}
+                className={`flex-1 h-14 font-black rounded-2xl border-2 active:scale-95 transition-all text-xs uppercase tracking-widest ${isDark ? 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
               >
-                Cancel
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
               </button>
               <button 
                 onClick={saveSettings}
                 disabled={savingSettings}
-                className="flex-1 h-14 bg-[#2563EB] text-white font-black rounded-xl shadow-premium active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="flex-1 h-14 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-500/30 active:scale-95 hover:shadow-xl hover:shadow-blue-500/40 transition-all flex items-center justify-center gap-3 text-xs uppercase tracking-widest disabled:opacity-50"
               >
-                {savingSettings ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} /> Save</>}
+                {savingSettings ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} strokeWidth={2.5} /> {lang === 'bn' ? 'সেভ করুন' : 'Save Changes'}</>}
               </button>
             </div>
           </div>
@@ -771,23 +810,31 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       )}
 
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
-          <div className={`rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden border animate-in zoom-in-95 duration-300 flex flex-col items-center justify-center p-8 text-center ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
-              <CheckCircle2 size={40} strokeWidth={3} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className={`rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden border-4 animate-in zoom-in-95 duration-500 p-10 text-center relative ${isDark ? 'bg-slate-900 border-slate-800 shadow-emerald-500/10' : 'bg-white border-white shadow-emerald-200/50'}`}>
+            <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+            
+            <div className="relative">
+              <div className="w-24 h-24 bg-emerald-500/10 text-emerald-500 rounded-[2rem] flex items-center justify-center mx-auto mb-8 relative">
+                <div className="absolute inset-0 bg-emerald-500/20 rounded-[2rem] animate-ping duration-1000"></div>
+                <CheckCircle2 size={48} strokeWidth={3} className="relative z-10" />
+              </div>
+              
+              <h2 className={`text-3xl font-black mb-3 tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {lang === 'bn' ? 'সফল হয়েছে!' : 'Success!'}
+              </h2>
+              
+              <p className={`text-sm font-bold leading-relaxed px-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.'}
+              </p>
+              
+              <button 
+                onClick={() => setShowSuccessModal(false)}
+                className="mt-10 w-full h-16 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/30 active:scale-90 hover:scale-[1.02] transition-all text-sm uppercase tracking-[0.2em]"
+              >
+                {lang === 'bn' ? 'ঠিক আছে' : 'Awesome'}
+              </button>
             </div>
-            <h2 className={`text-2xl font-black mb-2 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
-              {t('success', lang)}
-            </h2>
-            <p className={`text-sm font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              {lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.'}
-            </p>
-            <button 
-              onClick={() => setShowSuccessModal(false)}
-              className="mt-8 w-full h-14 bg-emerald-500 text-white font-black rounded-xl shadow-lg shadow-emerald-500/30 active:scale-95 transition-all"
-            >
-              {lang === 'bn' ? 'ঠিক আছে' : 'OK'}
-            </button>
           </div>
         </div>
       )}
