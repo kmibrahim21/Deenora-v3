@@ -99,6 +99,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         'Student Name': s.student_name, 
         'Admission Number': s.admission_number || '',
         'Date of Birth': s.date_of_birth || '',
+        'Blood Group': s.blood_group || '',
         'Address': s.address || '',
         'Guardian Name': s.guardian_name || '',
         'Guardian Phone': s.guardian_phone,
@@ -161,10 +162,11 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             const studentName = String(row.C || '').trim();
             const admissionNumber = String(row.D || '').trim();
             const dob = String(row.E || '').trim();
-            const address = String(row.F || '').trim();
-            const guardianName = String(row.G || '').trim();
-            const phone = String(row.H || '').trim();
-            const phone2 = String(row.I || '').trim();
+            const bloodGroup = String(row.F || '').trim();
+            const address = String(row.G || '').trim();
+            const guardianName = String(row.H || '').trim();
+            const phone = String(row.I || '').trim();
+            const phone2 = String(row.J || '').trim();
 
             if (!studentName || !phone || !className) {
               skippedCount++;
@@ -225,6 +227,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 admission_number: admissionNumber || null,
                 roll: roll,
                 date_of_birth: dob || null,
+                blood_group: bloodGroup || null,
                 address: address || null,
                 guardian_name: guardianName || null,
                 guardian_phone: phone,

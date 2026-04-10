@@ -82,7 +82,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       // Fix: Add institution_id to the select query to satisfy the Student type requirements.
       let query = supabase
         .from('students')
-        .select('id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, class_id, admission_number, date_of_birth, address, academic_year_id, classes(class_name)')
+        .select('id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, classes(class_name)')
         .eq('institution_id', institutionId)
         .eq('class_id', selectedClass.id)
         .order('roll', { ascending: true })

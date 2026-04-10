@@ -33,6 +33,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
   const [roll, setRoll] = useState(student?.roll?.toString() || '');
   const [dob, setDob] = useState(student?.date_of_birth || '');
+  const [bloodGroup, setBloodGroup] = useState(student?.blood_group || '');
   const [phone, setPhone] = useState(student?.guardian_phone || '');
   const [phone2, setPhone2] = useState(student?.guardian_phone_2 || '');
   const [address, setAddress] = useState(student?.address || '');
@@ -97,6 +98,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         guardian_name: guardianName.trim(),
         roll: roll ? parseInt(roll) : null,
         date_of_birth: dob || null,
+        blood_group: bloodGroup || null,
         guardian_phone: phone.trim(),
         guardian_phone_2: phone2.trim() || null,
         address: address.trim() || null,
@@ -232,6 +234,28 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   value={dob} 
                   onChange={(e) => setDob(e.target.value)} 
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                  <AlertCircle size={11} className="text-[#2563EB]" /> 
+                  {lang === 'bn' ? 'রক্তের গ্রুপ' : 'Blood Group'}
+                </label>
+                <select 
+                  className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm appearance-none`} 
+                  value={bloodGroup} 
+                  onChange={(e) => setBloodGroup(e.target.value)} 
+                >
+                  <option value="">{lang === 'bn' ? 'নির্বাচন করুন' : 'Select'}</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                </select>
               </div>
             </div>
 

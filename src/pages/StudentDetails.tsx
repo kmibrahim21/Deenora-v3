@@ -147,23 +147,36 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         {/* Detailed Info Section */}
         <div className="mt-10 space-y-8">
           {/* Personal Details */}
-          {student.date_of_birth && (
+          {(student.date_of_birth || student.blood_group) && (
             <div className="space-y-5">
               <div className="flex items-center gap-3 px-2 mb-3">
                 <div className="w-1.5 h-6 bg-gradient-to-b from-indigo-500 to-indigo-800 rounded-full shadow-lg shadow-indigo-500/20" />
                 <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ব্যক্তিগত তথ্য' : 'Personal Details'}</h3>
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-                  <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-indigo-500 shrink-0 shadow-md border group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                    <AlertTriangle size={22} />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {student.date_of_birth && (
+                  <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                    <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-indigo-500 shrink-0 shadow-md border group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <AlertTriangle size={22} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('dob', lang)}</p>
+                      <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.date_of_birth}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('dob', lang)}</p>
-                    <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.date_of_birth}</p>
+                )}
+                {student.blood_group && (
+                  <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-red-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-red-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                    <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-red-500 shrink-0 shadow-md border group-hover:bg-red-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <AlertTriangle size={22} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'রক্তের গ্রুপ' : 'Blood Group'}</p>
+                      <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.blood_group}</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -191,7 +204,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                   <Smartphone size={22} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('guardian_phone', lang)}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'বাবা' : 'Father'}</p>
                   <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone}</p>
                 </div>
               </div>
@@ -210,7 +223,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                     <Smartphone size={22} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('guardian_phone_2', lang)}</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'মা' : 'Mother'}</p>
                     <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone_2}</p>
                   </div>
                 </div>

@@ -166,6 +166,7 @@ export interface Student {
   admission_number?: string;
   roll: number | null;
   date_of_birth?: string;
+  blood_group?: string;
   guardian_name?: string;
   guardian_phone: string;
   guardian_phone_2?: string;
