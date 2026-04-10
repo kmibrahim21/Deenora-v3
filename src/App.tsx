@@ -422,6 +422,7 @@ const App: React.FC = () => {
             setView={setView}
             onLogout={handleLogout}
             onProfileUpdate={refreshMadrasah}
+            setStatusModal={setStatusModal}
           />
         );
       case "admin-panel":

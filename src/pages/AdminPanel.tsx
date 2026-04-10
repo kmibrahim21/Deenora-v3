@@ -148,11 +148,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [selectedMonthsForPayment, setSelectedMonthsForPayment] = useState<string[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchPackages();
-  }, []);
-
-  const fetchPackages = async () => {
+  const fetchPackages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('subscription_packages')
@@ -190,7 +186,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       ];
       setPackages(defaults);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchPackages();
+  }, [fetchPackages]);
 
   const [editPassword, setEditPassword] = useState('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
@@ -288,6 +288,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     if (!silent) setLoading(true);
     let isMounted = true;
     try {
+      // Always fetch packages to ensure latest rates
+      fetchPackages();
+
       if (view === 'list' || view === 'dashboard') {
         const [mList, gStats, recent, history] = await Promise.all([
           fetchAllMadrasahs(),

@@ -13,9 +13,10 @@ interface SuperAccountProps {
   onLogout: () => void;
   onProfileUpdate?: () => void;
   initialMadrasah: Institution | null;
+  setStatusModal: (modal: { show: boolean; type: 'success' | 'error'; title: string; message: string }) => void;
 }
 
-const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onLogout, onProfileUpdate, initialMadrasah }) => {
+const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onLogout, onProfileUpdate, initialMadrasah, setStatusModal }) => {
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingBulkSMS, setIsEditingBulkSMS] = useState(false);
@@ -106,16 +107,11 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       }
       setShowPackageForm(false);
       fetchPackages();
+      if (onProfileUpdate) onProfileUpdate();
       setShowSuccessModal({ show: true, title: 'প্যাকেজ আপডেট', message: 'প্যাকেজ সফলভাবে সংরক্ষণ করা হয়েছে।' });
     } catch (err: any) { 
-      // If table doesn't exist, just update state for demo
-      if (editingPackage.id) {
-        setPackages(packages.map(p => p.id === editingPackage.id ? { ...p, ...editingPackage } as any : p));
-      } else {
-        setPackages([...packages, { ...editingPackage, id: Math.random().toString() } as any]);
-      }
-      setShowPackageForm(false);
-      setShowSuccessModal({ show: true, title: 'প্যাকেজ আপডেট', message: 'প্যাকেজ সফলভাবে সংরক্ষণ করা হয়েছে (Local)।' });
+      console.error('Error saving package:', err);
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'প্যাকেজ সেভ করা সম্ভব হয়নি। ডাটাবেজ কানেকশন চেক করুন।' });
     } finally { setSaving(false); }
   };
 
@@ -125,6 +121,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       const { error } = await supabase.from('subscription_packages').delete().eq('id', id);
       if (error) throw error;
       fetchPackages();
+      if (onProfileUpdate) onProfileUpdate();
     } catch (err) {
       setPackages(packages.filter(p => p.id !== id));
     }
