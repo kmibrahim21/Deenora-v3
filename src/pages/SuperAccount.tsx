@@ -111,7 +111,13 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       setShowSuccessModal({ show: true, title: 'প্যাকেজ আপডেট', message: 'প্যাকেজ সফলভাবে সংরক্ষণ করা হয়েছে।' });
     } catch (err: any) { 
       console.error('Error saving package:', err);
-      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'প্যাকেজ সেভ করা সম্ভব হয়নি। ডাটাবেজ কানেকশন চেক করুন।' });
+      const errorMessage = err.message || err.details || 'Unknown error';
+      setStatusModal({ 
+        show: true, 
+        type: 'error', 
+        title: 'ত্রুটি', 
+        message: `প্যাকেজ সেভ করা সম্ভব হয়নি। এরর: ${errorMessage}` 
+      });
     } finally { setSaving(false); }
   };
 
