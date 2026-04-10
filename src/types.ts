@@ -39,6 +39,7 @@ export interface Institution {
     attendance_settings?: {
       half_day_time?: string;
       full_day_time?: string;
+      sessions?: { id: string; name: string }[];
     };
     subscription?: {
       package_name?: string;
@@ -233,8 +234,9 @@ export interface Attendance {
   institution_id: string;
   student_id: string;
   class_id?: string;
-  status: 'present' | 'absent' | 'late' | 'half_day';
+  status: 'present' | 'absent' | 'late';
   date: string;
+  session?: string;
   recorded_by: string;
   academic_year_id?: string;
   students?: Student;
@@ -416,6 +418,7 @@ export interface Transaction {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   sms_count?: number;
+  module?: 'sms' | 'voice' | 'subscription';
   institutions?: Institution;
 }
 

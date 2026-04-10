@@ -477,13 +477,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (error) throw error;
 
       // Deduct balance
-      const newBalance = walletBalance - estimatedCost;
-      const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', madrasah?.id);
+      const { error: deductError } = await supabase.rpc('deduct_balance', {
+        p_institution_id: madrasah?.id,
+        p_amount: estimatedCost
+      });
       
-      if (balanceError) {
-        console.error('Failed to deduct balance:', balanceError);
+      if (deductError) {
+        console.error('Failed to deduct balance:', deductError);
       } else {
-        setWalletBalance(newBalance);
+        setWalletBalance(prev => prev - estimatedCost);
       }
 
       setStatusModal({ show: true, title: 'Success', type: 'success', message: `Successfully initiated retry for ${phoneNumbers.length} calls.` });
@@ -787,10 +789,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (error) throw error;
 
       // 3. Deduct balance from institution
-      const newBalance = walletBalance - estimatedCost;
-      const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', madrasah.id);
+      const { error: deductError } = await supabase.rpc('deduct_balance', {
+        p_institution_id: madrasah.id,
+        p_amount: estimatedCost
+      });
       
-      if (balanceError) throw balanceError;
+      if (deductError) throw deductError;
 
       setStatusModal({
         show: true,

@@ -16,6 +16,7 @@ interface SmartFeeAnalyticsProps {
   madrasah: Institution | null;
   role?: UserRole;
   profile?: Profile | null;
+  activeYear?: any;
 }
 
 const localT = {
@@ -46,7 +47,7 @@ const localT = {
   yearly: { en: 'Yearly', bn: 'বার্ষিক' },
 };
 
-const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, lang, month: initialMonth, refreshKey, classes = [], madrasah, role, profile }) => {
+const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, lang, month: initialMonth, refreshKey, classes = [], madrasah, role, profile, activeYear }) => {
   const [stats, setStats] = useState<any>(null);
   const [reminders, setReminders] = useState<any[]>([]);
   const [breakdown, setBreakdown] = useState<any[]>([]);
@@ -74,7 +75,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   // Filters
   const [viewMode, setViewMode] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
 
   const [localClasses, setLocalClasses] = useState<Class[]>([]);
@@ -513,6 +514,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     type="month" 
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
+                    min={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : undefined}
+                    max={activeYear?.end_date ? activeYear.end_date.slice(0, 7) : undefined}
                     className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
                 />
             ) : (

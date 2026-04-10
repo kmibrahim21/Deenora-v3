@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
-import { Institution, LedgerEntry, Language, UserRole, Class, Profile } from 'types';
+import { Institution, LedgerEntry, Language, UserRole, Class, Profile, AcademicYear } from 'types';
 import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle } from 'lucide-react';
 import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import { SchoolFeeEngine } from 'components/finance/SchoolFeeEngine';
@@ -17,9 +17,10 @@ interface AccountingProps {
   onBack: () => void;
   role: UserRole;
   profile?: Profile | null;
+  activeYear?: AcademicYear | null;
 }
 
-const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile }) => {
+const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear }) => {
   const isTeacher = role === 'teacher';
   const canManageAccounting = !isTeacher || profile?.permissions?.can_manage_accounting;
 
@@ -225,14 +226,14 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           {(activeTab === 'fees' || activeTab === 'structures') && madrasah && (
             <>
               {feeEngine === 'school' && (
-                <SchoolFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} />
+                <SchoolFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
               )}
               {feeEngine === 'qawmi' && (
-                <QawmiFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} />
+                <QawmiFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
               )}
               {/* Default to School Engine for others for now */}
               {feeEngine !== 'school' && feeEngine !== 'qawmi' && (
-                <SchoolFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} />
+                <SchoolFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
               )}
             </>
           )}
@@ -244,12 +245,13 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
               <SmartFeeAnalytics 
                 institutionId={madrasah.id} 
                 lang={lang} 
-                month={new Date().toISOString().slice(0, 7)} 
+                month={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : new Date().toISOString().slice(0, 7)} 
                 refreshKey={refreshKey}
                 classes={classes}
                 madrasah={madrasah}
                 role={role}
                 profile={profile}
+                activeYear={activeYear}
               />
             )}
           </div>

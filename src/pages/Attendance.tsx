@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -16,9 +16,10 @@ interface AttendanceProps {
   onBack: () => void;
   userId: string;
   profile?: Profile | null;
+  activeYear?: any;
 }
 
-const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId, profile }) => {
+const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId, profile, activeYear }) => {
   const isTeacher = profile?.role === 'teacher';
   const canManageAttendance = !isTeacher || profile?.permissions?.can_manage_attendance;
 
@@ -46,22 +47,25 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | 'half_day'>>({});
+  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late'>>({});
   const [reportData, setReportData] = useState<any[]>([]);
   const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
   const [reportView, setReportView] = useState<'list' | 'analytics'>('list');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingAlerts, setSendingAlerts] = useState(false);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [sessions, setSessions] = useState<{ id: string; name: string }[]>(madrasah?.config_json?.attendance_settings?.sessions || []);
+  const [newSessionName, setNewSessionName] = useState('');
   const [halfDayTime, setHalfDayTime] = useState(madrasah?.config_json?.attendance_settings?.half_day_time || '12:00');
   const [fullDayTime, setFullDayTime] = useState(madrasah?.config_json?.attendance_settings?.full_day_time || '14:00');
   const [savingSettings, setSavingSettings] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); 
+  const [date, setDate] = useState(activeYear?.start_date || new Date().toISOString().split('T')[0]);
+  const [selectedSession, setSelectedSession] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 7) : new Date().toISOString().slice(0, 7)); 
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [dayEvents, setDayEvents] = useState<any[]>([]);
   const [isHoliday, setIsHoliday] = useState(false);
@@ -85,7 +89,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       }
       else fetchReport(selectedClass.id);
     }
-  }, [selectedClass?.id, activeTab, date, selectedMonth, reportType, selectedYear, madrasah?.id]);
+  }, [selectedClass?.id, activeTab, date, selectedSession, selectedMonth, reportType, selectedYear, madrasah?.id]);
+
+  useEffect(() => {
+    if (madrasah?.config_json?.attendance_settings?.sessions) {
+      setSessions(madrasah.config_json.attendance_settings.sessions);
+    }
+  }, [madrasah?.id]);
 
   const fetchDayEvents = async () => {
     if (!madrasah) return;
@@ -116,6 +126,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       setClasses(sortMadrasahClasses(filteredClasses));
     }
   };
+
+  useEffect(() => {
+    if (sessions.length > 0 && selectedSession === 'all' && activeTab === 'daily') {
+      setSelectedSession(sessions[0].id);
+    } else if (sessions.length === 0 && selectedSession !== 'daily' && activeTab === 'daily') {
+      setSelectedSession('daily');
+    }
+  }, [sessions, activeTab]);
 
   const fetchStudents = async (cid: string) => {
     if (!madrasah) return;
@@ -152,12 +170,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
       }
       
-      // Also fetch attendance with institution_id
+      // Also fetch attendance with institution_id and session
       let attQuery = supabase.from('attendance')
         .select('*')
         .eq('institution_id', madrasah.id)
         .eq('class_id', cid)
-        .eq('date', date);
+        .eq('date', date)
+        .eq('session', selectedSession);
         
       const { data: attData, error: attError } = await attQuery;
       if (attError) {
@@ -167,7 +186,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
       if (finalStdData) {
         setStudents(finalStdData);
-        const initial: Record<string, 'present' | 'absent' | 'late' | 'half_day'> = {};
+        const initial: Record<string, 'present' | 'absent' | 'late'> = {};
         finalStdData.forEach(s => {
           const existing = attData?.find(a => a.student_id === s.id);
           initial[s.id] = existing ? (existing.status as any) : 'present';
@@ -207,7 +226,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const { data, error } = await supabase.rpc('get_attendance_report', {
         p_class_id: cid,
         p_start_date: startDate,
-        p_end_date: endDate
+        p_end_date: endDate,
+        p_session: selectedSession === 'all' ? null : selectedSession
       });
 
       if (error) throw error;
@@ -221,7 +241,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     } finally { setLoading(false); }
   };
 
-  const setStatus = (sid: string, status: 'present' | 'absent' | 'late' | 'half_day') => {
+  const setStatus = (sid: string, status: 'present' | 'absent' | 'late') => {
     setAttendance(prev => ({ ...prev, [sid]: status }));
   };
 
@@ -230,8 +250,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setSaving(true);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
-      // Clean delete for sync
-      let delQuery = supabase.from('attendance').delete().eq('class_id', selectedClass.id).eq('date', date);
+      // Clean delete for sync - now including session
+      let delQuery = supabase.from('attendance')
+        .delete()
+        .eq('class_id', selectedClass.id)
+        .eq('date', date)
+        .eq('session', selectedSession);
       const { error: delError } = await delQuery;
       if (delError) throw delError;
 
@@ -241,6 +265,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         student_id: sid,
         status: status,
         date: date,
+        session: selectedSession,
         recorded_by: userId,
         academic_year_id: activeYearId || null
       }));
@@ -291,7 +316,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         attendance_settings: {
           ...madrasah.config_json?.attendance_settings,
           half_day_time: halfDayTime,
-          full_day_time: fullDayTime
+          full_day_time: fullDayTime,
+          sessions: sessions
         }
       };
       
@@ -301,6 +327,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         .eq('id', madrasah.id);
         
       if (error) throw error;
+      madrasah.config_json = updatedConfig;
       alert('Settings saved successfully!');
       setShowSettingsModal(false);
     } catch (err: any) {
@@ -308,6 +335,20 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const addSession = () => {
+    if (!newSessionName.trim()) return;
+    const newSession = {
+      id: newSessionName.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
+      name: newSessionName.trim()
+    };
+    setSessions(prev => [...(Array.isArray(prev) ? prev : []), newSession]);
+    setNewSessionName('');
+  };
+
+  const removeSession = (id: string) => {
+    setSessions(prev => prev.filter(s => s.id !== id));
   };
 
   const isDark = madrasah?.theme === 'dark';
@@ -354,7 +395,36 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         {activeTab === 'daily' ? (
           <div className="relative animate-in fade-in">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">তারিখ</label>
-            <div className="relative"><input type="date" className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={date} onChange={(e) => setDate(e.target.value)} /><Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
+            <div className="relative"><input 
+              type="date" 
+              className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+              value={date} 
+              onChange={(e) => setDate(e.target.value)}
+              min={activeYear?.start_date}
+              max={activeYear?.end_date}
+            /><Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
+
+            <div className="relative mt-4">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">বেলা/সেশন</label>
+              <div className={`flex flex-wrap p-1.5 rounded-2xl border-2 shadow-inner gap-1 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                {sessions.length > 0 ? sessions.map(s => (
+                  <button 
+                    key={s.id}
+                    onClick={() => setSelectedSession(s.id)} 
+                    className={`flex-1 min-w-[80px] py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${selectedSession === s.id ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    {s.name}
+                  </button>
+                )) : (
+                  <button 
+                    onClick={() => setSelectedSession('daily')} 
+                    className={`flex-1 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${selectedSession === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    দৈনিক
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
             <div className="space-y-4 animate-in fade-in">
@@ -365,14 +435,38 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 
                 <div className="relative">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
+                        সেশন নির্বাচন করুন
+                    </label>
+                    <div className={`flex flex-wrap p-1 rounded-xl border transition-all gap-1 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                        <button onClick={() => setSelectedSession('all')} className={`flex-1 min-w-[60px] py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === 'all' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>সব</button>
+                        {sessions.length > 0 ? sessions.map(s => (
+                          <button key={s.id} onClick={() => setSelectedSession(s.id)} className={`flex-1 min-w-[60px] py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === s.id ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{s.name}</button>
+                        )) : (
+                          <button onClick={() => setSelectedSession('daily')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>দৈনিক</button>
+                        )}
+                    </div>
+                </div>
+                
+                <div className="relative">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
                         {reportType === 'monthly' ? 'মাস নির্বাচন করুন' : 'বছর নির্বাচন করুন'}
                     </label>
                     {reportType === 'monthly' ? (
-                        <div className="relative"><input type="month" className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} /><BarChart3 className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
+                        <div className="relative"><input 
+                          type="month" 
+                          className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                          value={selectedMonth} 
+                          onChange={(e) => setSelectedMonth(e.target.value)}
+                          min={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : undefined}
+                          max={activeYear?.end_date ? activeYear.end_date.slice(0, 7) : undefined}
+                        /><BarChart3 className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
                     ) : (
                         <div className="relative">
                             <select className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all appearance-none ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
-                                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                                {(activeYear ? 
+                                  Array.from({ length: parseInt(activeYear.end_date.slice(0, 4)) - parseInt(activeYear.start_date.slice(0, 4)) + 1 }, (_, i) => parseInt(activeYear.start_date.slice(0, 4)) + i) :
+                                  Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+                                ).map(y => (
                                     <option key={y} value={y}>{y}</option>
                                 ))}
                             </select>
@@ -436,10 +530,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
                         </div>
                         <div className="flex gap-2 shrink-0">
-                           <button onClick={() => setStatus(s.id, 'present')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={18}/></button>
-                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={18}/></button>
-                           <button onClick={() => setStatus(s.id, 'late')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={18}/></button>
-                           <button onClick={() => setStatus(s.id, 'half_day')} className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-[10px] font-black">1/2</span></button>
+                           <button onClick={() => setStatus(s.id, 'present')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={20}/></button>
                         </div>
                      </div>
                    ))}
@@ -517,7 +610,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                         </h3>
                         <div className="h-64 w-full">
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0, HalfDay: d.half_days || 0 }))}>
+                            <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0 }))}>
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
                               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
@@ -525,7 +618,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                               <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
                               <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
                               <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
-                              <Bar dataKey="HalfDay" stackId="a" fill="#a855f7" />
                               <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
@@ -568,10 +660,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 animate-in slide-in-from-bottom-5">
                     {reportData.length > 0 ? reportData.map((item: any) => {
-                        const late = item.late_days || (item.total_days - item.present_days - item.absent_days - (item.half_days || 0));
-                        const pct = item.total_days > 0 ? Math.round(((item.present_days + late + (item.half_days || 0) * 0.5) / item.total_days) * 100) : 0;
-                        const latePct = item.total_days > 0 ? Math.round((late / item.total_days) * 100) : 0;
-                        const halfDayPct = item.total_days > 0 ? Math.round(((item.half_days || 0) / item.total_days) * 100) : 0;
+                        const late = item.late_days || 0;
+                        const pct = item.total_days > 0 ? Math.round(((item.present_days + late) / item.total_days) * 100) : 0;
                         
                         return (
                             <div key={item.student_id} className={`p-6 rounded-[2.5rem] border shadow-lg space-y-4 group ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/95 border-white'}`}>
@@ -588,17 +678,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                 <div className={`w-full h-3 rounded-full overflow-hidden border flex shadow-inner ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                                     <div className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)]" style={{ width: `${pct}%` }}></div>
                                 </div>
-                                <div className="grid grid-cols-5 gap-2">
+                                <div className="grid grid-cols-4 gap-2">
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}><p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Total</p><p className={`font-black text-sm ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.total_days}</p></div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-green-900/10 border-green-900/20' : 'bg-green-50/50 border-green-50'}`}><p className="text-[8px] font-black text-green-400 uppercase mb-0.5">Present</p><p className="font-black text-green-600 text-sm">{item.present_days}</p></div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[8px] font-black text-red-400 uppercase mb-0.5">Absent</p><p className="font-black text-red-600 text-sm">{item.absent_days}</p></div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-amber-900/10 border-amber-900/20' : 'bg-amber-50/50 border-amber-50'}`}>
                                       <p className="text-[8px] font-black text-amber-400 uppercase mb-0.5">Late</p>
                                       <p className="font-black text-amber-600 text-sm">{late}</p>
-                                   </div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-purple-900/10 border-purple-900/20' : 'bg-purple-50/50 border-purple-50'}`}>
-                                      <p className="text-[8px] font-black text-purple-400 uppercase mb-0.5">Half</p>
-                                      <p className="font-black text-purple-600 text-sm">{item.half_days || 0}</p>
                                    </div>
                                 </div>
                             </div>
@@ -626,26 +712,43 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 <XCircle size={20} />
               </button>
             </div>
-            <div className="p-6 space-y-5">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Half Day Time</label>
-                <input 
-                  type="time" 
-                  value={halfDayTime}
-                  onChange={(e) => setHalfDayTime(e.target.value)}
-                  className={`w-full h-14 px-5 border-2 rounded-2xl font-bold outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-[#2563EB]/30' : 'bg-slate-50 border-slate-100 text-slate-700 focus:border-[#2563EB]/30 focus:bg-white'}`}
-                />
-                <p className="text-[10px] text-slate-400 font-bold">Students arriving after this time will be marked as Half Day.</p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Full Day Time</label>
-                <input 
-                  type="time" 
-                  value={fullDayTime}
-                  onChange={(e) => setFullDayTime(e.target.value)}
-                  className={`w-full h-14 px-5 border-2 rounded-2xl font-bold outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-[#2563EB]/30' : 'bg-slate-50 border-slate-100 text-slate-700 focus:border-[#2563EB]/30 focus:bg-white'}`}
-                />
-                <p className="text-[10px] text-slate-400 font-bold">Standard full day attendance time.</p>
+            <div className="p-6 space-y-6">
+              <div className="space-y-3">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Attendance Sessions</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Session Name (e.g. Morning)"
+                    value={newSessionName}
+                    onChange={(e) => setNewSessionName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSession();
+                      }
+                    }}
+                    className={`flex-1 h-12 px-4 border-2 rounded-xl font-bold outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-[#2563EB]/30' : 'bg-slate-50 border-slate-100 text-slate-700 focus:border-[#2563EB]/30 focus:bg-white'}`}
+                  />
+                  <button 
+                    onClick={addSession}
+                    className="w-12 h-12 bg-[#2563EB] text-white rounded-xl flex items-center justify-center shadow-md active:scale-95 transition-all"
+                  >
+                    <Plus size={24} />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {sessions.map(s => (
+                    <div key={s.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                      <span className={`font-bold text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{s.name}</span>
+                      <button onClick={() => removeSession(s.id)} className="text-red-400 hover:text-red-500 transition-colors">
+                        <XCircle size={18} />
+                      </button>
+                    </div>
+                  ))}
+                  {sessions.length === 0 && (
+                    <p className="text-[10px] text-slate-400 font-bold italic text-center py-2">No sessions added. Defaulting to "Daily".</p>
+                  )}
+                </div>
               </div>
             </div>
             <div className={`p-6 border-t flex gap-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}>

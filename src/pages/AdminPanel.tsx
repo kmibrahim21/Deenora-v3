@@ -575,7 +575,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   };
 
   const approveTransaction = async (tr: Transaction) => {
-    const isVoice = (tr.description || '').toLowerCase().includes('voice');
+    const isVoice = (tr.description || '').toLowerCase().includes('voice') || tr.module === 'voice';
     const sms = Number(smsToCredit[tr.id]);
     
     if (!isVoice && (!sms || sms <= 0)) {

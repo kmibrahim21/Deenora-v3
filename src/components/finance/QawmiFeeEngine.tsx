@@ -13,9 +13,10 @@ interface QawmiFeeEngineProps {
   onStudentClick?: (student: any) => void;
   role?: string;
   profile?: any;
+  activeYear?: any;
 }
 
-export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile }) => {
+export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear }) => {
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
   const [feesReport, setFeesReport] = useState<any[]>([]);
   const [structures, setStructures] = useState<any[]>([]);
@@ -24,7 +25,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   
   // Fee Collection State
   const [selectedClass, setSelectedClass] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedMonth, setSelectedMonth] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 7) : new Date().toISOString().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [anyStudentsInMadrasah, setAnyStudentsInMadrasah] = useState<boolean | null>(null);
@@ -435,7 +436,14 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
                {/* Month Selector */}
                <div className="relative flex-1 min-w-[140px]">
-                  <input type="month" className={`w-full h-11 px-4 border rounded-xl text-[11px] font-black outline-none transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
+                  <input 
+                    type="month" 
+                    className={`w-full h-11 px-4 border rounded-xl text-[11px] font-black outline-none transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
+                    value={selectedMonth} 
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    min={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : undefined}
+                    max={activeYear?.end_date ? activeYear.end_date.slice(0, 7) : undefined}
+                  />
                </div>
 
                {/* Status Filter */}

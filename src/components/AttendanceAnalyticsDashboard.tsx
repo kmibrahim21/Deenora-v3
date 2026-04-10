@@ -21,6 +21,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   
   const [reportData, setReportData] = useState<any[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -34,7 +35,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
     if (selectedClass) {
       fetchReport(selectedClass.id);
     }
-  }, [selectedClass?.id, reportType, selectedMonth, selectedYear]);
+  }, [selectedClass?.id, reportType, selectedMonth, selectedYear, selectedSession]);
 
   const fetchClasses = async () => {
     const { data } = await supabase.from('classes').select('*').eq('institution_id', institutionId);
@@ -64,7 +65,8 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
       const { data, error } = await supabase.rpc('get_attendance_report', {
         p_class_id: cid,
         p_start_date: startDate,
-        p_end_date: endDate
+        p_end_date: endDate,
+        p_session: selectedSession === 'all' ? null : selectedSession
       });
 
       if (error) throw error;
@@ -97,6 +99,16 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
         <div className="flex gap-2">
             <button onClick={() => setReportType('monthly')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reportType === 'monthly' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'মাসিক' : 'Monthly'}</button>
             <button onClick={() => setReportType('yearly')} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reportType === 'yearly' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'বাৎসরিক' : 'Yearly'}</button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+            <button onClick={() => setSelectedSession('all')} className={`flex-1 min-w-[60px] py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${selectedSession === 'all' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'সব' : 'All'}</button>
+            {madrasah?.config_json?.attendance_settings?.sessions?.map(s => (
+              <button key={s.id} onClick={() => setSelectedSession(s.id)} className={`flex-1 min-w-[60px] py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${selectedSession === s.id ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{s.name}</button>
+            ))}
+            {(!madrasah?.config_json?.attendance_settings?.sessions || madrasah.config_json.attendance_settings.sessions.length === 0) && (
+              <button onClick={() => setSelectedSession('daily')} className={`flex-1 min-w-[60px] py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${selectedSession === 'daily' ? 'bg-[#2563EB] text-white shadow-sm' : madrasah?.theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-50 text-slate-400'}`}>{lang === 'bn' ? 'দৈনিক' : 'Daily'}</button>
+            )}
         </div>
         
         <div className="relative">
@@ -137,7 +149,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
             </h3>
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0, HalfDay: d.half_days || 0 }))}>
+                <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0 }))}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={madrasah?.theme === 'dark' ? '#334155' : '#f1f5f9'} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
@@ -145,7 +157,6 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                   <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
                   <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
-                  <Bar dataKey="HalfDay" stackId="a" fill="#a855f7" />
                   <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

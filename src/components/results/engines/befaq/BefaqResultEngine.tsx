@@ -62,7 +62,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
   // Form states
   const [examName, setExamName] = useState('');
-  const [examYear, setExamYear] = useState(new Date().getFullYear().toString());
+  const [examYear, setExamYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
   const [classId, setClassId] = useState('');
   const [subName, setSubName] = useState('');
   const [totalMarks, setTotalMarks] = useState('100');

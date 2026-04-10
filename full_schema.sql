@@ -161,6 +161,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     class_id UUID REFERENCES classes(id) ON DELETE CASCADE,
     status TEXT CHECK (status IN ('present', 'absent', 'late', 'half_day')) NOT NULL,
     date DATE NOT NULL,
+    session TEXT DEFAULT 'morning',
     recorded_by UUID REFERENCES auth.users(id),
     academic_year_id UUID REFERENCES academic_years(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()

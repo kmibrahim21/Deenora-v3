@@ -58,6 +58,7 @@ const App: React.FC = () => {
     session,
     profile,
     madrasah,
+    activeYear,
     loading,
     authError,
     handleLogout,
@@ -561,6 +562,7 @@ const App: React.FC = () => {
             onBack={() => handleBack("home")}
             role={role}
             profile={profile}
+            activeYear={activeYear}
           />
         );
       case "attendance":
@@ -571,6 +573,7 @@ const App: React.FC = () => {
             onBack={() => handleBack("home")}
             userId={session?.user?.id}
             profile={profile}
+            activeYear={activeYear}
           />
         );
       case "exams":
@@ -582,6 +585,7 @@ const App: React.FC = () => {
             role={role}
             onNavigateToFinalResults={() => setView("final-results")}
             profile={profile}
+            activeYear={activeYear}
           />
         );
       case "final-results":
