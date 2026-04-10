@@ -136,6 +136,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editInstitutionType, setEditInstitutionType] = useState<'madrasah' | 'school' | 'kindergarten' | 'nurani' | 'system'>('madrasah');
   const [editFeeEngine, setEditFeeEngine] = useState<'school' | 'qawmi' | 'kindergarten' | 'simple'>('school');
   const [editAccountingMode, setEditAccountingMode] = useState<'qawmi_flexible' | 'school_system'>('school_system');
+  const [editSmsBalance, setEditSmsBalance] = useState<number>(0);
+  const [editBalance, setEditBalance] = useState<number>(0);
   const [editReveApiKey, setEditReveApiKey] = useState('');
   const [editReveSecretKey, setEditReveSecretKey] = useState('');
   const [editReveClientId, setEditReveClientId] = useState('');
@@ -367,6 +369,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditPhone(user.phone || '');
     setEditEmail(user.email || '');
     setEditAddress(user.address || '');
+    setEditSmsBalance(user.sms_balance || 0);
+    setEditBalance(user.balance || 0);
     setEditActive(user.is_active);
     setEditVoiceSenderId(user.voice_sender_id || '');
     let userConfig: any = user.config_json;
@@ -467,6 +471,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         email: editEmail.trim() || null,
         address: editAddress.trim() || null,
         is_active: editActive,
+        sms_balance: Number(editSmsBalance) || 0,
+        balance: Number(editBalance) || 0,
         voice_sender_id: editVoiceSenderId.trim() || null,
         institution_type: editInstitutionType,
         subscription_end: editSubscriptionEnd || null,
@@ -1303,6 +1309,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="relative">
                                     <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
                                     <Shield className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                 </div>
+                              </div>
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest px-2">SMS Balance</label>
+                                 <div className="relative">
+                                    <input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editSmsBalance} onChange={(e) => setEditSmsBalance(Number(e.target.value))} />
+                                    <MessageSquare className="absolute right-5 top-1/2 -translate-y-1/2 text-blue-400" size={20} />
+                                 </div>
+                              </div>
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-2">Voice Balance (৳)</label>
+                                 <div className="relative">
+                                    <input type="number" step="0.01" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editBalance} onChange={(e) => setEditBalance(Number(e.target.value))} />
+                                    <Mic className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-400" size={20} />
                                  </div>
                               </div>
                               <div className="md:col-span-2 space-y-2">
