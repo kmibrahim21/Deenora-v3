@@ -9,19 +9,19 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://drive.google.com/file/d/116C6GbpoV-btiTfFyeJu45s0Ti9oJDpf/view?usp=sharing",
+      "src": "/Deenora192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://drive.google.com/file/d/1_J8fuiW70hQ40MrYd2GzWbOxfsxMKS5-/view?usp=sharing",
+      "src": "/Deenora512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://drive.google.com/file/d/1_J8fuiW70hQ40MrYd2GzWbOxfsxMKS5-/view?usp=sharing",
+      "src": "/Deenora512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
