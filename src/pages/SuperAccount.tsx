@@ -145,12 +145,15 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSaveBulkSMS = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from('system_settings').update({
+      const { error } = await supabase.from('system_settings').upsert({
+        id: '00000000-0000-0000-0000-000000000001',
         reve_api_key: (globalSettings.reve_api_key || '').trim(),
         reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
+        reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
+        bkash_number: (globalSettings.bkash_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
         voice_rate: Number(globalSettings.voice_rate)
-      }).eq('id', '00000000-0000-0000-0000-000000000001');
+      });
       if (error) throw error;
       setIsEditingBulkSMS(false);
       setShowSuccessModal({ show: true, title: 'Bulk SMS আপডেট', message: 'Bulk SMS ও রেট সেটিংস আপডেট হয়েছে।' });
@@ -161,9 +164,15 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSavePayment = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from('system_settings').update({
-        bkash_number: (globalSettings.bkash_number || '').trim()
-      }).eq('id', '00000000-0000-0000-0000-000000000001');
+      const { error } = await supabase.from('system_settings').upsert({
+        id: '00000000-0000-0000-0000-000000000001',
+        reve_api_key: (globalSettings.reve_api_key || '').trim(),
+        reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
+        reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
+        bkash_number: (globalSettings.bkash_number || '').trim(),
+        sms_rate: Number(globalSettings.sms_rate),
+        voice_rate: Number(globalSettings.voice_rate)
+      });
       if (error) throw error;
       setIsEditingPayment(false);
       setShowSuccessModal({ show: true, title: 'পেমেন্ট আপডেট', message: 'পেমেন্ট সেটিংস আপডেট হয়েছে।' });

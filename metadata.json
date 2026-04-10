@@ -1,6 +1,6 @@
 {
-  "name": "Deenora V3 - Madrasah Management",
-  "description": "A comprehensive Madrasah management system (Deenora V3) with student tracking, attendance, exams, and accounting.",
+  "name": "Deenora V3 - Institute Management",
+  "description": "A comprehensive Institute management system (Deenora V3) with student tracking, attendance, exams, and accounting.",
   "requestFramePermissions": [
     "camera",
     "microphone"
