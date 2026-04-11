@@ -40,6 +40,7 @@ export interface Institution {
       half_day_time?: string;
       full_day_time?: string;
       sessions?: { id: string; name: string }[];
+      class_sessions?: Record<string, { id: string; name: string }[]>;
     };
     subscription?: {
       package_name?: string;

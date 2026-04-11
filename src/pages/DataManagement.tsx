@@ -129,6 +129,15 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
     }
   };
 
+  const excelDateToISO = (serial: any) => {
+    if (!serial) return null;
+    if (typeof serial === 'string' && serial.includes('-')) return serial;
+    const num = parseFloat(serial);
+    if (isNaN(num)) return null;
+    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+    return date.toISOString().split('T')[0];
+  };
+
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !madrasah) return;
@@ -142,10 +151,10 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       reader.onload = async (event) => {
         try {
           const data = event.target?.result;
-          const workbook = XLSX.read(data, { type: 'binary' });
+          const workbook = XLSX.read(data, { type: 'array' });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 'A' }) as any[];
+          const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 'A', defval: '' }) as any[];
 
           const rows = jsonData.slice(1);
           if (rows.length === 0) throw new Error("File is empty");
@@ -161,7 +170,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             const roll = isNaN(rollValue) ? null : rollValue;
             const studentName = String(row.C || '').trim();
             const admissionNumber = String(row.D || '').trim();
-            const dob = String(row.E || '').trim();
+            const dob = excelDateToISO(row.E);
             const bloodGroup = String(row.F || '').trim();
             const address = String(row.G || '').trim();
             const guardianName = String(row.H || '').trim();
@@ -258,7 +267,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           if (fileInputRef.current) fileInputRef.current.value = '';
         }
       };
-      reader.readAsBinaryString(file);
+      reader.readAsArrayBuffer(file);
     } catch (err: any) {
       setLoading(false);
       setStatus({ type: 'error', message: err.message });

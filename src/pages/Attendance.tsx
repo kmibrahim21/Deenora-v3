@@ -58,7 +58,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [sendingAlerts, setSendingAlerts] = useState(false);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [sessions, setSessions] = useState<{ id: string; name: string }[]>(madrasah?.config_json?.attendance_settings?.sessions || []);
+  const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
+  const [settingsClassId, setSettingsClassId] = useState<string>('global');
+  const [settingsSessions, setSettingsSessions] = useState<{ id: string; name: string }[]>([]);
   const [newSessionName, setNewSessionName] = useState('');
   const [halfDayTime, setHalfDayTime] = useState(madrasah?.config_json?.attendance_settings?.half_day_time || '12:00');
   const [fullDayTime, setFullDayTime] = useState(madrasah?.config_json?.attendance_settings?.full_day_time || '14:00');
@@ -92,10 +94,36 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   }, [selectedClass?.id, activeTab, date, selectedSession, selectedMonth, reportType, selectedYear, madrasah?.id]);
 
   useEffect(() => {
-    if (madrasah?.config_json?.attendance_settings?.sessions) {
-      setSessions(madrasah.config_json.attendance_settings.sessions);
+    if (madrasah) {
+      const settings = madrasah.config_json?.attendance_settings || {};
+      if (selectedClass) {
+        const classSessions = settings.class_sessions?.[selectedClass.id];
+        if (classSessions && classSessions.length > 0) {
+          setSessions(classSessions);
+        } else if (settings.sessions) {
+          setSessions(settings.sessions);
+        } else {
+          setSessions([]);
+        }
+      } else if (settings.sessions) {
+        setSessions(settings.sessions);
+      } else {
+        setSessions([]);
+      }
     }
-  }, [madrasah?.id]);
+  }, [madrasah?.id, selectedClass?.id, madrasah?.config_json]);
+
+  useEffect(() => {
+    if (madrasah) {
+      const settings = madrasah.config_json?.attendance_settings || {};
+      if (settingsClassId === 'global') {
+        setSettingsSessions(settings.sessions || []);
+      } else {
+        const classSessions = settings.class_sessions?.[settingsClassId];
+        setSettingsSessions(classSessions || []);
+      }
+    }
+  }, [settingsClassId, madrasah?.config_json]);
 
   const fetchDayEvents = async () => {
     if (!madrasah) return;
@@ -128,10 +156,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   };
 
   useEffect(() => {
-    if (sessions.length > 0 && selectedSession === 'all' && activeTab === 'daily') {
-      setSelectedSession(sessions[0].id);
-    } else if (sessions.length === 0 && selectedSession !== 'daily' && activeTab === 'daily') {
-      setSelectedSession('daily');
+    if (activeTab === 'daily') {
+      if (sessions.length > 0) {
+        // If current selectedSession is not in the new sessions list, reset it
+        const isValid = sessions.some(s => s.id === selectedSession);
+        if (!isValid || selectedSession === 'all' || selectedSession === 'daily') {
+          setSelectedSession(sessions[0].id);
+        }
+      } else {
+        if (selectedSession !== 'daily') {
+          setSelectedSession('daily');
+        }
+      }
     }
   }, [sessions, activeTab]);
 
@@ -311,13 +347,22 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     if (!madrasah) return;
     setSavingSettings(true);
     try {
+      const currentSettings = madrasah.config_json?.attendance_settings || {};
+      const classSessions = { ...(currentSettings.class_sessions || {}) };
+      
+      if (settingsClassId === 'global') {
+        currentSettings.sessions = settingsSessions;
+      } else {
+        classSessions[settingsClassId] = settingsSessions;
+        currentSettings.class_sessions = classSessions;
+      }
+
       const updatedConfig = {
         ...madrasah.config_json,
         attendance_settings: {
-          ...madrasah.config_json?.attendance_settings,
+          ...currentSettings,
           half_day_time: halfDayTime,
           full_day_time: fullDayTime,
-          sessions: sessions
         }
       };
       
@@ -328,6 +373,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         
       if (error) throw error;
       madrasah.config_json = updatedConfig;
+      
+      // Update current sessions if we edited the active class or global
+      if (settingsClassId === selectedClass?.id || (settingsClassId === 'global' && !classSessions[selectedClass?.id || ''])) {
+        setSessions(settingsSessions);
+      }
+      
       alert('Settings saved successfully!');
       setShowSettingsModal(false);
     } catch (err: any) {
@@ -343,12 +394,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       id: newSessionName.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
       name: newSessionName.trim()
     };
-    setSessions(prev => [...(Array.isArray(prev) ? prev : []), newSession]);
+    setSettingsSessions(prev => [...(Array.isArray(prev) ? prev : []), newSession]);
     setNewSessionName('');
   };
 
   const removeSession = (id: string) => {
-    setSessions(prev => prev.filter(s => s.id !== id));
+    setSettingsSessions(prev => prev.filter(s => s.id !== id));
   };
 
   const isDark = madrasah?.theme === 'dark';
@@ -726,10 +777,24 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
             <div className="p-8 space-y-8">
               <div className="space-y-4">
-                <div className="flex items-center justify-between px-1">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Select Class for Sessions</label>
+                  <select
+                    value={settingsClassId}
+                    onChange={(e) => setSettingsClassId(e.target.value)}
+                    className={`w-full h-14 px-6 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
+                  >
+                    <option value="global">Global (All Classes)</option>
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>{c.class_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between px-1 mt-6">
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Attendance Sessions</label>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                    {sessions.length} Active
+                    {settingsSessions.length} Active
                   </span>
                 </div>
                 
@@ -758,7 +823,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 </div>
 
                 <div className={`space-y-3 max-h-[280px] overflow-y-auto pr-2 scrollbar-hide rounded-3xl p-2 -mx-2 ${isDark ? 'bg-slate-800/30' : 'bg-slate-50/50'}`}>
-                  {sessions.length > 0 ? sessions.map((s, idx) => (
+                  {settingsSessions.length > 0 ? settingsSessions.map((s, idx) => (
                     <div 
                       key={s.id} 
                       className={`group flex items-center justify-between p-4 rounded-2xl border transition-all animate-in slide-in-from-right-4 duration-300`}
