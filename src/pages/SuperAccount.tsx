@@ -14,9 +14,11 @@ interface SuperAccountProps {
   onProfileUpdate?: () => void;
   initialMadrasah: Institution | null;
   setStatusModal: (modal: { show: boolean; type: 'success' | 'error'; title: string; message: string }) => void;
+  dataVersion?: number;
+  triggerRefresh?: () => void;
 }
 
-const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onLogout, onProfileUpdate, initialMadrasah, setStatusModal }) => {
+const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onLogout, onProfileUpdate, initialMadrasah, setStatusModal, dataVersion, triggerRefresh }) => {
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingBulkSMS, setIsEditingBulkSMS] = useState(false);
@@ -108,6 +110,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       setShowPackageForm(false);
       fetchPackages();
       if (onProfileUpdate) onProfileUpdate();
+      if (triggerRefresh) triggerRefresh();
       setShowSuccessModal({ show: true, title: 'প্যাকেজ আপডেট', message: 'প্যাকেজ সফলভাবে সংরক্ষণ করা হয়েছে।' });
     } catch (err: any) { 
       console.error('Error saving package:', err);
@@ -128,6 +131,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       if (error) throw error;
       fetchPackages();
       if (onProfileUpdate) onProfileUpdate();
+      if (triggerRefresh) triggerRefresh();
     } catch (err) {
       setPackages(packages.filter(p => p.id !== id));
     }

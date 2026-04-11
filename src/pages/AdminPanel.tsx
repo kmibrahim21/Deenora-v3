@@ -18,12 +18,13 @@ interface AdminPanelProps {
   currentView?: 'list' | 'dashboard' | 'approvals';
   dataVersion?: number;
   onProfileUpdate?: () => void;
+  triggerRefresh?: () => void;
   madrasah?: Institution | null;
   profile?: any;
   setStatusModal: (modal: {show: boolean, type: 'success' | 'error', title: string, message: string}) => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, madrasah, profile, setStatusModal }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal }) => {
   const [madrasahs, setMadrasahs] = useState<InstitutionWithStats[]>([]);
   const [pendingTrans, setPendingTrans] = useState<Transaction[]>([]);
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
@@ -190,7 +191,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   useEffect(() => {
     fetchPackages();
-  }, [fetchPackages]);
+  }, [fetchPackages, dataVersion]);
 
   const [editPassword, setEditPassword] = useState('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);

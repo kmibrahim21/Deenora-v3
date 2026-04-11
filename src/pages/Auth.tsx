@@ -216,13 +216,13 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
               onClick={() => { setLoginType('admin'); setError(''); }}
               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'admin' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
-              Admin Login
+              Admin
             </button>
             <button 
               onClick={() => { setLoginType('teacher'); setError(''); }}
               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'teacher' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
-              Teacher Login
+              Teacher
             </button>
           </div>
 

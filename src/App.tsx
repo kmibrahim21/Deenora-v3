@@ -421,8 +421,10 @@ const App: React.FC = () => {
             initialMadrasah={madrasah}
             setView={setView}
             onLogout={handleLogout}
-            onProfileUpdate={refreshMadrasah}
+            onProfileUpdate={triggerRefresh}
             setStatusModal={setStatusModal}
+            dataVersion={dataVersion}
+            triggerRefresh={triggerRefresh}
           />
         );
       case "admin-panel":
@@ -458,6 +460,7 @@ const App: React.FC = () => {
                   : "list"
             }
             dataVersion={dataVersion}
+            triggerRefresh={triggerRefresh}
             onProfileUpdate={refreshMadrasah}
             madrasah={madrasah}
             profile={profile}
