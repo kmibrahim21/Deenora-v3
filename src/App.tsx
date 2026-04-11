@@ -578,6 +578,7 @@ const App: React.FC = () => {
             userId={session?.user?.id}
             profile={profile}
             activeYear={activeYear}
+            triggerRefresh={triggerRefresh}
           />
         );
       case "exams":

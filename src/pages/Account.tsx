@@ -38,7 +38,45 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [logoUrl, setLogoUrl] = useState(initialMadrasah?.logo_url || '');
   
   const [copiedId, setCopiedId] = useState(false);
+  const [rechargeTrx, setRechargeTrx] = useState('');
+  const [rechargePhone, setRechargePhone] = useState('');
+  const [requestingUpgrade, setRequestingUpgrade] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpgradeRequest = async () => {
+    if (!selectedPackage || !madrasah || !rechargeTrx || !rechargePhone) return;
+    setRequestingUpgrade(true);
+    try {
+      const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
+      const amount = (selectedPackage.rate * stats.students) * duration;
+
+      const { error } = await supabase.from('transactions').insert({
+        institution_id: madrasah.id,
+        amount: amount,
+        transaction_id: rechargeTrx.trim().toUpperCase(),
+        sender_phone: rechargePhone.trim(),
+        description: `Subscription Upgrade: ${selectedPackage.name} (${subscriptionType})`,
+        type: 'credit',
+        status: 'pending',
+        module: 'subscription'
+      });
+
+      if (error) throw error;
+
+      setShowSuccessModal({ 
+        show: true, 
+        title: lang === 'bn' ? 'অনুরোধ সফল' : 'Request Successful', 
+        message: lang === 'bn' ? 'আপনার সাবস্ক্রিপশন আপগ্রেড অনুরোধটি গ্রহণ করা হয়েছে। অ্যাডমিন এটি যাচাই করে এপ্রুভ করবেন।' : 'Your subscription upgrade request has been received. Admin will verify and approve it.' 
+      });
+      setIsEditingSubscription(false);
+      setRechargeTrx('');
+      setRechargePhone('');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRequestingUpgrade(false);
+    }
+  };
 
   const toggleTheme = async () => {
     if (!madrasah) return;
@@ -65,6 +103,12 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       if (initialMadrasah) {
         fetchStats();
         fetchPackages();
+        
+        // Set subscription type based on config if available
+        const config = initialMadrasah.config_json as any;
+        if (config?.subscription_type) {
+          setSubscriptionType(config.subscription_type);
+        }
       }
     }
   }, [initialMadrasah]);
@@ -184,6 +228,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   if (!madrasah) return null;
 
   const displayName = madrasah?.name || 'User';
+  const isTeacher = profile?.role === 'teacher';
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-36 relative z-10">
@@ -212,7 +257,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           <div className="space-y-6 mt-4">
              <div className="space-y-1">
                <div className="px-4 pb-3">
-                 <h2 className={`text-[22px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{displayName}</h2>
+                 <h2 className={`text-[22px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{madrasah?.name || 'User'}</h2>
                </div>
                
                <div className="flex flex-col items-center gap-1 mt-3">
@@ -237,7 +282,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                </div>
              </div>
              
-             {madrasah && madrasah.id !== 'super_admin' && (
+             {madrasah && madrasah.id !== 'super_admin' && !isTeacher && (
                <>
                  <div className="pt-4 space-y-3">
                     <div onClick={() => copyToClipboard(madrasah.id)} className={`p-5 rounded-[2.5rem] border flex items-center gap-5 active:scale-[0.98] cursor-pointer group ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
@@ -289,80 +334,84 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </div>
         </button>
 
-        <button 
-          onClick={() => setIsEditingProfile(true)} 
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Edit3 size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('profile_settings', lang)}</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{t('branding', lang)}</p>
-          </div>
-        </button>
+        {!isTeacher && (
+          <>
+            <button 
+              onClick={() => setIsEditingProfile(true)} 
+              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+            >
+              <div className="w-14 h-14 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Edit3 size={24} />
+              </div>
+              <div>
+                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('profile_settings', lang)}</h5>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{t('branding', lang)}</p>
+              </div>
+            </button>
 
-        <button 
-          onClick={() => setView('academic-year')} 
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <GraduationCap size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}</p>
-          </div>
-        </button>
+            <button 
+              onClick={() => setView('academic-year')} 
+              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+            >
+              <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <GraduationCap size={24} />
+              </div>
+              <div>
+                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}</h5>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}</p>
+              </div>
+            </button>
 
-        {/* Subscription Card */}
-        <button 
-          onClick={() => setIsEditingSubscription(true)}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <CreditCard size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
-            </h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {lang === 'bn' ? 'প্যাকেজ ও পেমেন্ট' : 'Plans & Billing'}
-            </p>
-          </div>
-        </button>
+            {/* Subscription Card */}
+            <button 
+              onClick={() => setIsEditingSubscription(true)}
+              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+            >
+              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <CreditCard size={24} />
+              </div>
+              <div>
+                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
+                </h5>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                  {lang === 'bn' ? 'প্যাকেজ ও পেমেন্ট' : 'Plans & Billing'}
+                </p>
+              </div>
+            </button>
 
-        <button 
-          onClick={() => setView('data-management')} 
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Database size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('backup_restore', lang)}</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Excel Tools</p>
-          </div>
-        </button>
+            <button 
+              onClick={() => setView('data-management')} 
+              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+            >
+              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Database size={24} />
+              </div>
+              <div>
+                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('backup_restore', lang)}</h5>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Excel Tools</p>
+              </div>
+            </button>
 
-        {/* Teacher Management Card */}
-        <button 
-          onClick={() => setView('teachers')}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <UserCheck size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              {lang === 'bn' ? 'শিক্ষক ব্যবস্থাপনা' : 'Teacher Management'}
-            </h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {lang === 'bn' ? 'শিক্ষক ও স্টাফ' : 'Teachers & Staff'}
-            </p>
-          </div>
-        </button>
+            {/* Teacher Management Card */}
+            <button 
+              onClick={() => setView('teachers')}
+              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+            >
+              <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <UserCheck size={24} />
+              </div>
+              <div>
+                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {lang === 'bn' ? 'শিক্ষক ব্যবস্থাপনা' : 'Teacher Management'}
+                </h5>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                  {lang === 'bn' ? 'শিক্ষক ও স্টাফ' : 'Teachers & Staff'}
+                </p>
+              </div>
+            </button>
+          </>
+        )}
 
         {/* Video Tutorial Card */}
         <button 
@@ -384,54 +433,58 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
 
         {/* Language Card */}
-        <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
-              <Languages size={24} />
+        {!isTeacher && (
+          <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
+                <Languages size={24} />
+              </div>
+              <div className="text-left">
+                <h5 className={`text-base font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('language', lang)}</h5>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">{t('change_lang', lang)}</p>
+              </div>
             </div>
-            <div className="text-left">
-              <h5 className={`text-base font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('language', lang)}</h5>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">{t('change_lang', lang)}</p>
+            <div className={`flex p-1 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+              <button 
+                onClick={() => setLang('bn')} 
+                className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all ${lang === 'bn' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
+              >
+                বাংলা
+              </button>
+              <button 
+                onClick={() => setLang('en')} 
+                className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all ${lang === 'en' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
+              >
+                ENG
+              </button>
             </div>
           </div>
-          <div className={`flex p-1 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-            <button 
-              onClick={() => setLang('bn')} 
-              className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all ${lang === 'bn' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
-            >
-              বাংলা
-            </button>
-            <button 
-              onClick={() => setLang('en')} 
-              className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all ${lang === 'en' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
-            >
-              ENG
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Theme Switcher Card */}
-        <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-blue-50 text-[#2563EB]'}`}>
-              {madrasah?.theme === 'dark' ? <Moon size={24} /> : <Sun size={24} />}
+        {!isTeacher && (
+          <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-blue-50 text-[#2563EB]'}`}>
+                {madrasah?.theme === 'dark' ? <Moon size={24} /> : <Sun size={24} />}
+              </div>
+              <div className="text-left">
+                <h5 className={`text-base font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {lang === 'bn' ? 'ডার্ক মোড' : 'Dark Mode'}
+                </h5>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">
+                  {lang === 'bn' ? 'চোখের আরামের জন্য' : 'For eye comfort'}
+                </p>
+              </div>
             </div>
-            <div className="text-left">
-              <h5 className={`text-base font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                {lang === 'bn' ? 'ডার্ক মোড' : 'Dark Mode'}
-              </h5>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">
-                {lang === 'bn' ? 'চোখের আরামের জন্য' : 'For eye comfort'}
-              </p>
-            </div>
+            <button 
+              onClick={toggleTheme}
+              className={`w-14 h-8 rounded-full p-1 transition-colors relative ${madrasah?.theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'}`}
+            >
+              <div className={`w-6 h-6 rounded-full bg-white shadow-sm transition-transform ${madrasah?.theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
           </div>
-          <button 
-            onClick={toggleTheme}
-            className={`w-14 h-8 rounded-full p-1 transition-colors relative ${madrasah?.theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'}`}
-          >
-            <div className={`w-6 h-6 rounded-full bg-white shadow-sm transition-transform ${madrasah?.theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`} />
-          </button>
-        </div>
+        )}
 
         <button 
           onClick={onLogout} 
@@ -475,98 +528,83 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
               <div className="space-y-6">
                 {/* Current Status */}
-                <div className={`p-5 rounded-[2rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  <div className="flex justify-between items-center mb-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Status</p>
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${madrasah?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                      {madrasah?.status}
+                <div className={`p-6 rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className="flex justify-between items-center mb-6">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subscription Status</p>
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${madrasah?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                      {madrasah?.status || 'Trial'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400">Total Students</p>
-                      <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{stats.students}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Students</p>
+                      <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{stats.students}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400">Current Package</p>
-                      <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {(madrasah?.config_json as any)?.subscription?.package_name || 'None'}
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Package</p>
+                      <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {(madrasah?.config_json as any)?.package_name || 'None'}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing Cycle</p>
+                      <p className={`text-2xl font-black capitalize ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {(madrasah?.config_json as any)?.subscription_type || 'Monthly'}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Package Rate</p>
+                      <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {(madrasah?.config_json as any)?.package_rate || 0} ৳
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Subscription Type */}
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Subscription Type</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['monthly', 'quarterly', 'yearly'] as const).map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => setSubscriptionType(type)}
-                        className={`py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${subscriptionType === type ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-100 text-slate-500')}`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Package Selection */}
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Select Package</label>
+                {/* Package List (Read-only) */}
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Available Packages</label>
                   <div className="grid grid-cols-2 gap-3">
-                    {packages.map((pkg) => (
-                      <button
-                        key={pkg.id}
-                        onClick={() => setSelectedPackage(pkg)}
-                        className={`p-4 rounded-[2rem] border text-left transition-all relative overflow-hidden group ${selectedPackage?.id === pkg.id ? 'border-blue-500 ring-2 ring-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100')}`}
-                      >
-                        {selectedPackage?.id === pkg.id && (
-                          <div className="absolute top-2 right-2 text-blue-500">
-                            <CheckCircle2 size={16} />
-                          </div>
-                        )}
-                        <h4 className={`text-sm font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{pkg.name}</h4>
-                        <p className="text-[10px] font-bold text-blue-600 mt-1">{pkg.rate.toFixed(2)} TK / Student</p>
-                      </button>
-                    ))}
+                    {packages.map((pkg) => {
+                      const isCurrent = (madrasah?.config_json as any)?.package_name === pkg.name;
+                      return (
+                        <div
+                          key={pkg.id}
+                          className={`p-5 rounded-[2rem] border transition-all relative overflow-hidden ${isCurrent ? (madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/40' : 'bg-blue-50 border-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100')}`}
+                        >
+                          {isCurrent && (
+                            <div className="absolute top-3 right-3 text-blue-500">
+                              <CheckCircle2 size={18} />
+                            </div>
+                          )}
+                          <h4 className={`text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{pkg.name}</h4>
+                          <p className={`text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} TK / Student</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Price Calculation */}
-                {selectedPackage && (
-                  <div className={`p-6 rounded-[2.5rem] border animate-in slide-in-from-top-2 duration-300 ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
-                        <span>Package Rate</span>
-                        <span className="text-blue-600">{selectedPackage.rate.toFixed(2)} TK</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
-                        <span>Total Students</span>
-                        <span className="text-blue-600">{stats.students}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px] font-bold text-slate-500">
-                        <span>Duration</span>
-                        <span className="text-blue-600 capitalize">{subscriptionType}</span>
-                      </div>
-                      <div className="h-px bg-blue-200/30 my-2" />
-                      <div className="flex justify-between items-center">
-                        <span className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Total Price</span>
-                        <span className="text-xl font-black text-blue-600">
-                          {((selectedPackage.rate * stats.students) * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
-                        </span>
-                      </div>
+                {/* Price Calculation for Current Package */}
+                <div className={`p-8 rounded-[3rem] border ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
+                  <div className="flex flex-col items-center text-center space-y-4">
+                    <p className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Total Subscription Cost</p>
+                    <div className="space-y-1">
+                      <h4 className={`text-5xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {((Number((madrasah?.config_json as any)?.package_rate) || 0) * stats.students * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
+                      </h4>
+                      <p className="text-xs font-bold text-blue-600/60 uppercase tracking-widest">
+                        Based on {stats.students} students & {subscriptionType} billing
+                      </p>
                     </div>
                   </div>
-                )}
+                </div>
 
-                <button 
-                  disabled={!selectedPackage}
-                  className="w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/20 text-[13px] uppercase tracking-[0.25em] disabled:opacity-50 disabled:grayscale"
-                >
-                  {lang === 'bn' ? 'আপগ্রেড রিকোয়েস্ট' : 'Request Upgrade'}
-                </button>
+                <div className={`p-6 rounded-[2rem] border border-dashed ${madrasah?.theme === 'dark' ? 'border-slate-700 bg-slate-800/30' : 'border-slate-200 bg-slate-50/30'} text-center`}>
+                  <p className="text-[11px] font-bold text-slate-400 leading-relaxed">
+                    {lang === 'bn' ? 'সাবস্ক্রিপশন পরিবর্তন বা আপগ্রেড করতে অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।' : 'To change or upgrade your subscription, please contact the administrator.'}
+                  </p>
+                </div>
               </div>
            </div>
         </div>,
@@ -602,6 +640,37 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                  <button onClick={handleUpdate} disabled={saving} className="flex-[2] py-4 bg-[#2563EB] text-white font-black rounded-2xl text-[10px] uppercase shadow-premium flex items-center justify-center gap-2">{saving ? <Loader2 className="animate-spin" size={16} /> : 'সংরক্ষণ করুন'}</button>
               </div>
            </div>
+        </div>,
+        document.body
+      )}
+
+      {showSuccessModal.show && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className={`rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden border-4 animate-in zoom-in-95 duration-500 p-10 text-center relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-emerald-500/10' : 'bg-white border-white shadow-emerald-200/50'}`}>
+            <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+            
+            <div className="relative">
+              <div className="w-24 h-24 bg-emerald-500/10 text-emerald-500 rounded-[2rem] flex items-center justify-center mx-auto mb-8 relative">
+                <div className="absolute inset-0 bg-emerald-500/20 rounded-[2rem] animate-ping duration-1000"></div>
+                <CheckCircle2 size={48} strokeWidth={3} className="relative z-10" />
+              </div>
+              
+              <h2 className={`text-3xl font-black mb-3 tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                {showSuccessModal.title}
+              </h2>
+              
+              <p className={`text-sm font-bold leading-relaxed px-4 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                {showSuccessModal.message}
+              </p>
+              
+              <button 
+                onClick={() => setShowSuccessModal({ ...showSuccessModal, show: false })}
+                className="mt-10 w-full h-16 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/30 active:scale-90 hover:scale-[1.02] transition-all text-sm uppercase tracking-[0.2em]"
+              >
+                {lang === 'bn' ? 'ঠিক আছে' : 'Awesome'}
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

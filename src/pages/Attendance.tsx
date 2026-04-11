@@ -17,9 +17,10 @@ interface AttendanceProps {
   userId: string;
   profile?: Profile | null;
   activeYear?: any;
+  triggerRefresh?: () => void;
 }
 
-const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId, profile, activeYear }) => {
+const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId, profile, activeYear, triggerRefresh }) => {
   const isTeacher = profile?.role === 'teacher';
   const canManageAttendance = !isTeacher || profile?.permissions?.can_manage_attendance;
 
@@ -73,6 +74,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [isHoliday, setIsHoliday] = useState(false);
   const [showShortcodes, setShowShortcodes] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successTitle, setSuccessTitle] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'ছাত্রের নাম' : 'Student Name' },
@@ -313,6 +316,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
         throw error;
       }
+      setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
+      setSuccessMessage(lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.');
       setShowSuccessModal(true);
       setTimeout(() => setShowSuccessModal(false), 3000);
     } catch (err: any) { 
@@ -372,14 +377,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         .eq('id', madrasah.id);
         
       if (error) throw error;
-      madrasah.config_json = updatedConfig;
       
-      // Update current sessions if we edited the active class or global
-      if (settingsClassId === selectedClass?.id || (settingsClassId === 'global' && !classSessions[selectedClass?.id || ''])) {
-        setSessions(settingsSessions);
-      }
+      if (triggerRefresh) triggerRefresh();
       
-      alert('Settings saved successfully!');
+      setSuccessTitle(lang === 'bn' ? 'সেটিংস সংরক্ষিত!' : 'Settings Saved!');
+      setSuccessMessage(lang === 'bn' ? 'আপনার হাজিরা সেটিংস সফলভাবে আপডেট করা হয়েছে।' : 'Your attendance settings have been successfully updated.');
+      setShowSuccessModal(true);
       setShowSettingsModal(false);
     } catch (err: any) {
       alert(err.message);
@@ -779,20 +782,36 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Select Class for Sessions</label>
-                  <select
-                    value={settingsClassId}
-                    onChange={(e) => setSettingsClassId(e.target.value)}
-                    className={`w-full h-14 px-6 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
-                  >
-                    <option value="global">Global (All Classes)</option>
-                    {classes.map(c => (
-                      <option key={c.id} value={c.id}>{c.class_name}</option>
-                    ))}
-                  </select>
+                  <div className="flex gap-2">
+                    <select
+                      value={settingsClassId}
+                      onChange={(e) => setSettingsClassId(e.target.value)}
+                      className={`flex-1 h-14 px-6 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
+                    >
+                      <option value="global">Global (All Classes)</option>
+                      {classes.map(c => (
+                        <option key={c.id} value={c.id}>{c.class_name}</option>
+                      ))}
+                    </select>
+                    {settingsClassId !== 'global' && (
+                      <button 
+                        onClick={() => {
+                          const globalSessions = madrasah?.config_json?.attendance_settings?.sessions || [];
+                          setSettingsSessions(globalSessions);
+                        }}
+                        title="Copy Global Sessions"
+                        className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-blue-600 border-blue-100'}`}
+                      >
+                        <RefreshCw size={20} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between px-1 mt-6">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Attendance Sessions</label>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                    {settingsClassId === 'global' ? 'Global Sessions' : `${classes.find(c => c.id === settingsClassId)?.class_name} Sessions`}
+                  </label>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
                     {settingsSessions.length} Active
                   </span>
@@ -886,11 +905,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               </div>
               
               <h2 className={`text-3xl font-black mb-3 tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {lang === 'bn' ? 'সফল হয়েছে!' : 'Success!'}
+                {successTitle}
               </h2>
               
               <p className={`text-sm font-bold leading-relaxed px-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.'}
+                {successMessage}
               </p>
               
               <button 

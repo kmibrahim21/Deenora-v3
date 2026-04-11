@@ -479,7 +479,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         email: editEmail.trim() || null,
         address: editAddress.trim() || null,
         is_active: editActive,
-        sms_balance: Number(editSmsBalance) || 0,
+        sms_balance: Math.floor(Number(editSmsBalance) || 0),
         balance: Number(editBalance) || 0,
         voice_sender_id: editVoiceSenderId.trim() || null,
         institution_type: editInstitutionType,
@@ -592,9 +592,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const approveTransaction = async (tr: Transaction) => {
     const isVoice = (tr.description || '').toLowerCase().includes('voice') || tr.module === 'voice';
-    const sms = Number(smsToCredit[tr.id]);
+    const isSubscription = tr.module === 'subscription';
+    const sms = Math.floor(Number(smsToCredit[tr.id]) || 0);
     
-    if (!isVoice && (!sms || sms <= 0)) {
+    if (!isVoice && !isSubscription && (!sms || sms <= 0)) {
       setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'সঠিক SMS সংখ্যা লিখুন' });
       return;
     }
@@ -612,8 +613,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const newBalance = (instData.balance || 0) + tr.amount;
         const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', tr.institution_id);
         if (balanceError) throw balanceError;
+      } else if (isSubscription) {
+        // ২. সাবস্ক্রিপশন অনুমোদন (Just mark as approved, profile is usually updated manually or via trigger)
+        const { error: updateError } = await supabase.from('transactions').update({ status: 'approved' }).eq('id', tr.id);
+        if (updateError) throw updateError;
       } else {
-        // ১. ডাটাবেসে পেমেন্ট অনুমোদন করা (RPC handles transactions, madrasahs balance and admin stock)
+        // ৩. SMS রিচার্জ অনুমোদন (RPC handles transactions, madrasahs balance and admin stock)
         const { data, error } = await supabase.rpc('approve_payment_with_sms', { 
           t_id: tr.id, 
           m_id: tr.institution_id, 
@@ -634,9 +639,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (isSmsEnabled) {
         const userPhone = tr.institutions?.phone || tr.sender_phone;
         if (userPhone) {
-          const msg = isVoice 
-            ? `আস-সালামু আলাইকুম, আপনার পেমেন্ট অনুমোদিত হয়েছে। আপনার অ্যাকাউন্টে ${tr.amount} ৳ ভয়েস ব্যালেন্স যোগ করা হয়েছে। ধন্যবাদ।`
-            : `আস-সালামু আলাইকুম, আপনার পেমেন্ট অনুমোদিত হয়েছে। আপনার অ্যাকাউন্টে ${sms} টি SMS যোগ করা হয়েছে। ধন্যবাদ।`;
+          let msg = '';
+          if (isVoice) {
+            msg = `আস-সালামু আলাইকুম, আপনার পেমেন্ট অনুমোদিত হয়েছে। আপনার অ্যাকাউন্টে ${tr.amount} ৳ ভয়েস ব্যালেন্স যোগ করা হয়েছে। ধন্যবাদ।`;
+          } else if (isSubscription) {
+            msg = `আস-সালামু আলাইকুম, আপনার সাবস্ক্রিপশন পেমেন্ট (${tr.amount} ৳) অনুমোদিত হয়েছে। ধন্যবাদ।`;
+          } else {
+            msg = `আস-সালামু আলাইকুম, আপনার পেমেন্ট অনুমোদিত হয়েছে। আপনার অ্যাকাউন্টে ${sms} টি SMS যোগ করা হয়েছে। ধন্যবাদ।`;
+          }
           // Fire and forget SMS to avoid blocking UI
           smsApi.sendDirect(userPhone, msg).catch(err => console.error("SMS Send Error:", err));
         }
@@ -1135,7 +1145,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
                       <div className="flex flex-col gap-3">
                         <div className="flex flex-col gap-2.5">
-                          {paymentTab === 'sms' && (
+                          {paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && (
                             <input 
                               type="number" 
                               disabled={approvingIds.has(tr.id)}
@@ -1147,7 +1157,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                           )}
                           <button 
                             onClick={() => approveTransaction(tr)} 
-                            disabled={approvingIds.has(tr.id) || (paymentTab === 'sms' && !smsToCredit[tr.id])}
+                            disabled={approvingIds.has(tr.id) || (paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && !smsToCredit[tr.id])}
                             className="w-full h-14 bg-[#2563EB] text-white font-black rounded-[1.5rem] text-sm active:scale-95 transition-all shadow-premium disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center"
                           >
                             {approvingIds.has(tr.id) ? <Loader2 className="animate-spin" size={20} /> : 'অনুমোদন দিন'}
@@ -1681,7 +1691,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               {/* Payment Button */}
                               <button 
                                 onClick={async () => {
-                                  const amount = userStats.students * editPackageRate * selectedMonthsForPayment.length;
+                                  const amount = Math.floor(userStats.students * editPackageRate * selectedMonthsForPayment.length);
                                   if (amount <= 0) {
                                     setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'পেমেন্ট অ্যামাউন্ট ০ হতে পারে না। অনুগ্রহ করে প্যাকেজ এবং মাস সিলেক্ট করুন।' });
                                     return;
