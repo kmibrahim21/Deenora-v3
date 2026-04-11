@@ -49,29 +49,29 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   };
 
   return (
-    <div className="animate-in slide-in-from-right-4 duration-700 pb-24 space-y-8">
+    <div className="animate-in slide-in-from-right-4 duration-700 pb-20 space-y-4">
       {/* Enhanced Header */}
-      <div className="relative overflow-hidden rounded-[2.5rem] p-6 bg-gradient-to-br from-[#2563EB] via-[#1D4ED8] to-[#1E3A8A] shadow-[0_15px_40px_-10px_rgba(37,99,235,0.3)] border border-white/20">
-        <div className="absolute top-0 right-0 p-4 opacity-10 rotate-12 animate-pulse">
-          <UserIcon size={120} strokeWidth={1} />
+      <div className="relative overflow-hidden rounded-[1.2rem] p-5 bg-gradient-to-br from-[#2563EB] via-[#1D4ED8] to-[#1E3A8A] shadow-[0_10px_30px_-10px_rgba(37,99,235,0.3)] border border-white/20">
+        <div className="absolute top-0 right-0 p-2 opacity-10 rotate-12 animate-pulse">
+          <UserIcon size={60} strokeWidth={1} />
         </div>
-        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-white/10 rounded-full blur-3xl" />
         
         <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button 
               onClick={onBack} 
-              className="w-11 h-11 bg-white/20 backdrop-blur-2xl rounded-[1.2rem] flex items-center justify-center text-white active:scale-90 transition-all border border-white/30 shadow-lg shrink-0 hover:bg-white/30"
+              className="w-9 h-9 bg-white/20 backdrop-blur-2xl rounded-[1rem] flex items-center justify-center text-white active:scale-90 transition-all border border-white/30 shadow-lg shrink-0 hover:bg-white/30"
             >
-              <ArrowLeft size={22} strokeWidth={3} />
+              <ArrowLeft size={18} strokeWidth={3} />
             </button>
             <div>
-              <h1 className="text-xl font-black text-white font-noto tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.2)]">
+              <h1 className="text-2xl font-black text-white font-noto tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.2)]">
                 {t('student_details', lang, madrasah?.institution_type)}
               </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse" />
+                <p className="text-white/80 text-xs font-black uppercase tracking-[0.15em]">
                   {student.classes?.class_name || 'N/A'}
                 </p>
               </div>
@@ -79,18 +79,18 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
           </div>
           
           {!readOnly && (
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <button 
                 onClick={() => setShowDeleteConfirm(true)} 
-                className="w-11 h-11 bg-red-500/20 backdrop-blur-2xl rounded-[1.2rem] flex items-center justify-center text-red-100 active:scale-90 transition-all border border-red-500/30 shadow-lg hover:bg-red-500/30"
+                className="w-9 h-9 bg-red-500/20 backdrop-blur-2xl rounded-[1rem] flex items-center justify-center text-red-100 active:scale-90 transition-all border border-red-500/30 shadow-lg hover:bg-red-500/30"
               >
-                <Trash2 size={20} />
+                <Trash2 size={16} />
               </button>
               <button 
                 onClick={onEdit} 
-                className="w-11 h-11 bg-white rounded-[1.2rem] flex items-center justify-center text-[#2563EB] active:scale-90 transition-all border border-white shadow-lg hover:shadow-[#2563EB]/20"
+                className="w-9 h-9 bg-white rounded-[1rem] flex items-center justify-center text-[#2563EB] active:scale-90 transition-all border border-white shadow-lg hover:shadow-[#2563EB]/20"
               >
-                <Edit3 size={22} />
+                <Edit3 size={18} />
               </button>
             </div>
           )}
@@ -98,58 +98,58 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
       </div>
 
       {/* Profile Card */}
-      <div className={`p-8 rounded-[3.5rem] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.08)] border relative overflow-hidden ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-        <div className={`absolute top-0 left-0 w-full h-24 bg-gradient-to-b to-transparent ${isDark ? 'from-slate-800/50' : 'from-slate-50/50'}`} />
+      <div className={`p-5 rounded-[1.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] border relative overflow-hidden ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+        <div className={`absolute top-0 left-0 w-full h-14 bg-gradient-to-b to-transparent ${isDark ? 'from-slate-800/50' : 'from-slate-50/50'}`} />
         
         <div className="relative flex flex-col items-center text-center">
-          <div className="relative mb-6 group">
+          <div className="relative mb-2 group">
             <div className="absolute inset-0 bg-[#2563EB] blur-3xl opacity-20 group-hover:opacity-30 transition-opacity" />
-            <div className={`relative w-32 h-32 rounded-[2.5rem] flex items-center justify-center text-[#2563EB] border-4 shadow-xl overflow-hidden transform group-hover:scale-105 transition-transform duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'}`}>
-              <UserIcon size={64} strokeWidth={2.5} />
+            <div className={`relative w-24 h-24 rounded-[1rem] flex items-center justify-center text-[#2563EB] border-[2px] shadow-xl overflow-hidden transform group-hover:scale-105 transition-transform duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'}`}>
+              <UserIcon size={48} strokeWidth={2.5} />
             </div>
-            <div className={`absolute -bottom-2 -right-2 min-w-[2.75rem] h-11 px-3 bg-[#2563EB] text-white rounded-[1rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`}>
+            <div className={`absolute -bottom-0.5 -right-0.5 min-w-[1.75rem] h-6 px-1 bg-[#2563EB] text-white rounded-[0.6rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`}>
               <span className="text-xs font-black tracking-tighter">{student.admission_number || '#'}</span>
             </div>
           </div>
           
-          <h2 className={`text-xl font-black font-noto tracking-tight leading-tight mb-2 drop-shadow-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h2>
+          <h2 className={`text-xl font-black font-noto tracking-tight leading-tight mb-0.5 drop-shadow-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h2>
           
-          <div className="flex flex-wrap justify-center gap-3">
-            <div className={`inline-flex items-center gap-3 px-6 py-2 rounded-[1.2rem] border-2 shadow-inner ${isDark ? 'bg-blue-900/20 border-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB]/10'}`}>
-              <span className="text-[11px] font-black text-[#2563EB] uppercase tracking-[0.2em]">{t('roll', lang)}: {student.roll || '-'}</span>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[0.7rem] border-2 shadow-inner ${isDark ? 'bg-blue-900/20 border-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB]/10'}`}>
+              <span className="text-xs font-black text-[#2563EB] uppercase tracking-[0.15em]">{t('roll', lang)}: {student.roll || '-'}</span>
             </div>
           </div>
         </div>
 
         {/* Detailed Info Section */}
-        <div className="mt-10 space-y-8">
+        <div className="mt-4 space-y-4">
           {/* Personal Details */}
           {(student.date_of_birth || student.blood_group) && (
-            <div className="space-y-5">
-              <div className="flex items-center gap-3 px-2 mb-3">
-                <div className="w-1.5 h-6 bg-gradient-to-b from-indigo-500 to-indigo-800 rounded-full shadow-lg shadow-indigo-500/20" />
-                <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ব্যক্তিগত তথ্য' : 'Personal Details'}</h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 px-1.5 mb-1">
+                <div className="w-0.5 h-3.5 bg-gradient-to-b from-indigo-500 to-indigo-800 rounded-full shadow-lg shadow-indigo-500/20" />
+                <h3 className={`text-xs font-black uppercase tracking-[0.15em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ব্যক্তিগত তথ্য' : 'Personal Details'}</h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                 {student.date_of_birth && (
-                  <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-                    <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-indigo-500 shrink-0 shadow-md border group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                      <AlertTriangle size={22} />
+                  <div className={`flex items-center gap-2.5 p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                    <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-indigo-500 shrink-0 shadow-md border group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <AlertTriangle size={20} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('dob', lang)}</p>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{t('dob', lang)}</p>
                       <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.date_of_birth}</p>
                     </div>
                   </div>
                 )}
                 {student.blood_group && (
-                  <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-red-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-red-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-                    <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-red-500 shrink-0 shadow-md border group-hover:bg-red-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                      <AlertTriangle size={22} />
+                  <div className={`flex items-center gap-2.5 p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-red-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-red-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                    <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-red-500 shrink-0 shadow-md border group-hover:bg-red-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <AlertTriangle size={20} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'রক্তের গ্রুপ' : 'Blood Group'}</p>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'রক্তের গ্রুপ' : 'Blood Group'}</p>
                       <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.blood_group}</p>
                     </div>
                   </div>
@@ -158,102 +158,102 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
             </div>
           )}
 
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 px-2 mb-3">
-              <div className="w-1.5 h-6 bg-gradient-to-b from-[#2563EB] to-[#1E3A8A] rounded-full shadow-lg shadow-[#2563EB]/20" />
-              <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'অভিভাবকের তথ্য' : 'Guardian Details'}</h3>
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 px-1.5 mb-1">
+              <div className="w-0.5 h-3.5 bg-gradient-to-b from-[#2563EB] to-[#1E3A8A] rounded-full shadow-lg shadow-[#2563EB]/20" />
+              <h3 className={`text-xs font-black uppercase tracking-[0.15em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'অভিভাবকের তথ্য' : 'Guardian Details'}</h3>
             </div>
 
-          <div className="grid grid-cols-1 gap-3">
-            <div className={`flex items-center gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-              <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                <UserCheck size={22} />
+          <div className="grid grid-cols-1 gap-1.5">
+            <div className={`flex items-center gap-2.5 p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+              <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                <UserCheck size={20} />
               </div>
               <div className="min-w-0">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('guardian_name', lang)}</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{t('guardian_name', lang)}</p>
                 <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_name || 'N/A'}</p>
               </div>
             </div>
 
-            <div className={`flex flex-col p-5 rounded-[2.5rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                    <Smartphone size={22} />
+            <div className={`flex flex-col p-4 rounded-[1.2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                    <Smartphone size={20} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'বাবা' : 'Father'}</p>
-                    <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone}</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'বাবা' : 'Father'}</p>
+                    <p className={`text-base font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone}</p>
                   </div>
                 </div>
               </div>
               
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button 
                   onClick={() => window.location.href = `tel:${student.guardian_phone}`}
-                  className="flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
+                  className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
                 >
-                  <Phone size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
+                  <Phone size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'কল' : 'Call'}
                 </button>
                 <button 
                   onClick={() => initiateWhatsAppMessage(student.guardian_phone)}
-                  className="flex items-center justify-center gap-2 py-3 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                  className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
                 >
-                  <MessageCircle size={16} fill="currentColor" /> {lang === 'bn' ? 'মেসেজ' : 'SMS'}
+                  <MessageCircle size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'মেসেজ' : 'SMS'}
                 </button>
                 <button 
                   onClick={() => initiateWhatsAppCall(student.guardian_phone)}
-                  className="flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+                  className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-[#128C7E] to-[#075E54] text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
                 >
-                  <PhoneCall size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
+                  <PhoneCall size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'ওয়াটসঅ্যাপ' : 'WhatsApp'}
                 </button>
               </div>
             </div>
 
             {student.guardian_phone_2 && (
-              <div className={`flex flex-col p-5 rounded-[2.5rem] border-2 transition-all group animate-in slide-in-from-top-4 ${isDark ? 'bg-slate-800 border-slate-700 hover:border-blue-400/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-blue-400/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-blue-400 shrink-0 shadow-md border group-hover:bg-blue-400 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                      <Smartphone size={22} />
+              <div className={`flex flex-col p-4 rounded-[1.2rem] border-2 transition-all group animate-in slide-in-from-top-4 ${isDark ? 'bg-slate-800 border-slate-700 hover:border-blue-400/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-blue-400/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-blue-400 shrink-0 shadow-md border group-hover:bg-blue-400 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <Smartphone size={20} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'মা' : 'Mother'}</p>
-                      <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone_2}</p>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'মা' : 'Mother'}</p>
+                      <p className={`text-base font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone_2}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button 
                     onClick={() => window.location.href = `tel:${student.guardian_phone_2}`}
-                    className="flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                    className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-400/20 active:scale-95 transition-all"
                   >
-                    <Phone size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
+                    <Phone size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'কল' : 'Call'}
                   </button>
                   <button 
                     onClick={() => initiateWhatsAppMessage(student.guardian_phone_2)}
-                    className="flex items-center justify-center gap-2 py-3 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                    className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
                   >
-                    <MessageCircle size={16} fill="currentColor" /> {lang === 'bn' ? 'মেসেজ' : 'SMS'}
+                    <MessageCircle size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'মেসেজ' : 'SMS'}
                   </button>
                   <button 
                     onClick={() => initiateWhatsAppCall(student.guardian_phone_2)}
-                    className="flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+                    className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-[#128C7E] to-[#075E54] text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
                   >
-                    <PhoneCall size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
+                    <PhoneCall size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'ওয়াটসঅ্যাপ' : 'WhatsApp'}
                   </button>
                 </div>
               </div>
             )}
 
             {student.address && (
-              <div className={`flex items-start gap-4 p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-                <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                  <BookOpen size={22} />
+              <div className={`flex items-start gap-2.5 p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  <BookOpen size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{t('address', lang)}</p>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{t('address', lang)}</p>
                   <p className={`text-sm font-bold font-noto leading-relaxed ${isDark ? 'text-slate-300' : 'text-[#1E293B]'}`}>{student.address}</p>
                 </div>
               </div>

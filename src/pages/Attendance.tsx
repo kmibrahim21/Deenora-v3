@@ -429,36 +429,45 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       </div>
 
       <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-        <div className="relative">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{t('class_select', lang)}</label>
-          <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-14 px-6 rounded-2xl border-2 flex items-center justify-between group active:scale-[0.99] transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
-            <span className="font-black font-noto truncate">{selectedClass?.class_name || t('class_choose', lang)}</span>
-            <ChevronDown size={20} className="text-slate-300 transition-transform duration-300 group-focus:rotate-180" />
-          </button>
-          {showClassDropdown && (
-            <div className={`absolute top-full left-0 right-0 mt-3 rounded-[2rem] shadow-bubble border z-[100] p-2 max-h-56 overflow-y-auto animate-in slide-in-from-top-2 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
-              {classes.map(cls => (
-                <button key={cls.id} onClick={() => { setSelectedClass(cls); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-4 rounded-xl mb-1 transition-all ${selectedClass?.id === cls.id ? 'bg-[#2563EB] text-white shadow-premium' : (isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-50 text-slate-700')}`}>
-                  <span className="font-black font-noto text-[15px]">{cls.class_name}</span>
-                </button>
-              ))}
+        <div className={activeTab === 'daily' ? "grid grid-cols-2 gap-3" : "space-y-4"}>
+          <div className="relative">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{t('class_select', lang)}</label>
+            <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-14 px-4 rounded-2xl border-2 flex items-center justify-between group active:scale-[0.99] transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
+              <span className="font-black font-noto truncate text-sm">{selectedClass?.class_name || t('class_choose', lang)}</span>
+              <ChevronDown size={18} className="text-slate-300 transition-transform duration-300 group-focus:rotate-180" />
+            </button>
+            {showClassDropdown && (
+              <div className={`absolute top-full left-0 right-0 mt-3 rounded-[2rem] shadow-bubble border z-[100] p-2 max-h-56 overflow-y-auto animate-in slide-in-from-top-2 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+                {classes.map(cls => (
+                  <button key={cls.id} onClick={() => { setSelectedClass(cls); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-4 rounded-xl mb-1 transition-all ${selectedClass?.id === cls.id ? 'bg-[#2563EB] text-white shadow-premium' : (isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-50 text-slate-700')}`}>
+                    <span className="font-black font-noto text-[15px]">{cls.class_name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {activeTab === 'daily' && (
+            <div className="relative animate-in fade-in">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">তারিখ</label>
+              <div className="relative">
+                <input 
+                  type="date" 
+                  className={`w-full h-14 pl-10 pr-2 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-sm ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                  value={date} 
+                  onChange={(e) => setDate(e.target.value)}
+                  min={activeYear?.start_date}
+                  max={activeYear?.end_date}
+                />
+                <Calendar className="absolute left-3 top-4 text-[#2563EB]" size={18}/>
+              </div>
             </div>
           )}
         </div>
 
         {activeTab === 'daily' ? (
-          <div className="relative animate-in fade-in">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">তারিখ</label>
-            <div className="relative"><input 
-              type="date" 
-              className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
-              value={date} 
-              onChange={(e) => setDate(e.target.value)}
-              min={activeYear?.start_date}
-              max={activeYear?.end_date}
-            /><Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
-
-            <div className="relative mt-4">
+          <div className="relative mt-0 animate-in fade-in">
+            <div className="relative">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">বেলা/সেশন</label>
               <div className={`flex flex-wrap p-1.5 rounded-2xl border-2 shadow-inner gap-1 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                 {sessions.length > 0 ? sessions.map(s => (
