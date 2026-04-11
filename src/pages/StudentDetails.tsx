@@ -121,29 +121,6 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="mt-10 grid grid-cols-2 gap-4">
-          <button 
-            onClick={() => initiateWhatsAppCall(student.guardian_phone)} 
-            className={`flex flex-col items-center justify-center p-6 border-2 rounded-[2rem] text-emerald-600 active:scale-95 transition-all group shadow-sm ${isDark ? 'bg-emerald-900/20 border-emerald-800/50 hover:bg-emerald-900/30 hover:shadow-emerald-900/20' : 'bg-emerald-50 border-emerald-100 hover:bg-emerald-100/50 hover:shadow-emerald-100'}`}
-          >
-            <div className="w-12 h-12 bg-emerald-500 text-white rounded-[1rem] flex items-center justify-center mb-3 shadow-lg group-hover:rotate-12 transition-transform">
-              <PhoneCall size={24} fill="currentColor" />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.15em]">WA Call</span>
-          </button>
-          
-          <button 
-            onClick={() => initiateWhatsAppMessage(student.guardian_phone)} 
-            className={`flex flex-col items-center justify-center p-6 border-2 rounded-[2rem] text-blue-600 active:scale-95 transition-all group shadow-sm ${isDark ? 'bg-blue-900/20 border-blue-800/50 hover:bg-blue-900/30 hover:shadow-blue-900/20' : 'bg-blue-50 border-blue-100 hover:bg-blue-100/50 hover:shadow-blue-100'}`}
-          >
-            <div className="w-12 h-12 bg-blue-500 text-white rounded-[1rem] flex items-center justify-center mb-3 shadow-lg group-hover:-rotate-12 transition-transform">
-              <MessageCircle size={24} fill="currentColor" />
-            </div>
-            <span className="text-[9px] font-black uppercase tracking-[0.15em]">WA Chat</span>
-          </button>
-        </div>
-
         {/* Detailed Info Section */}
         <div className="mt-10 space-y-8">
           {/* Personal Details */}
@@ -198,41 +175,75 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
               </div>
             </div>
 
-            <div className={`flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-              <div className="flex items-center gap-4 min-w-0">
-                <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                  <Smartphone size={22} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'বাবা' : 'Father'}</p>
-                  <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => window.location.href = `tel:${student.guardian_phone}`}
-                className="w-11 h-11 bg-gradient-to-br from-[#2563EB] to-[#1E3A8A] text-white rounded-[1rem] flex items-center justify-center shadow-lg shadow-[#2563EB]/20 active:scale-90 transition-all hover:rotate-6"
-              >
-                <Phone size={20} fill="currentColor" />
-              </button>
-            </div>
-
-            {student.guardian_phone_2 && (
-              <div className={`flex items-center justify-between p-5 rounded-[2rem] border-2 transition-all group animate-in slide-in-from-top-4 ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-blue-400/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-blue-400/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+            <div className={`flex flex-col p-5 rounded-[2.5rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4 min-w-0">
-                  <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-blue-400 shrink-0 shadow-md border group-hover:bg-blue-400 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                     <Smartphone size={22} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'মা' : 'Mother'}</p>
-                    <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone_2}</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'বাবা' : 'Father'}</p>
+                    <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone}</p>
                   </div>
                 </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
                 <button 
-                  onClick={() => window.location.href = `tel:${student.guardian_phone_2}`}
-                  className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-[1rem] flex items-center justify-center shadow-lg shadow-blue-400/20 active:scale-90 transition-all hover:-rotate-6"
+                  onClick={() => window.location.href = `tel:${student.guardian_phone}`}
+                  className="flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-600/20 active:scale-95 transition-all"
                 >
-                  <Phone size={20} fill="currentColor" />
+                  <Phone size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
                 </button>
+                <button 
+                  onClick={() => initiateWhatsAppMessage(student.guardian_phone)}
+                  className="flex items-center justify-center gap-2 py-3 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                >
+                  <MessageCircle size={16} fill="currentColor" /> {lang === 'bn' ? 'মেসেজ' : 'SMS'}
+                </button>
+                <button 
+                  onClick={() => initiateWhatsAppCall(student.guardian_phone)}
+                  className="flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+                >
+                  <PhoneCall size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
+                </button>
+              </div>
+            </div>
+
+            {student.guardian_phone_2 && (
+              <div className={`flex flex-col p-5 rounded-[2.5rem] border-2 transition-all group animate-in slide-in-from-top-4 ${isDark ? 'bg-slate-800 border-slate-700 hover:border-blue-400/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-blue-400/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center text-blue-400 shrink-0 shadow-md border group-hover:bg-blue-400 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <Smartphone size={22} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{lang === 'bn' ? 'মা' : 'Mother'}</p>
+                      <p className={`text-lg font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone_2}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button 
+                    onClick={() => window.location.href = `tel:${student.guardian_phone_2}`}
+                    className="flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                  >
+                    <Phone size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
+                  </button>
+                  <button 
+                    onClick={() => initiateWhatsAppMessage(student.guardian_phone_2)}
+                    className="flex items-center justify-center gap-2 py-3 bg-emerald-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                  >
+                    <MessageCircle size={16} fill="currentColor" /> {lang === 'bn' ? 'মেসেজ' : 'SMS'}
+                  </button>
+                  <button 
+                    onClick={() => initiateWhatsAppCall(student.guardian_phone_2)}
+                    className="flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+                  >
+                    <PhoneCall size={16} fill="currentColor" /> {lang === 'bn' ? 'কল' : 'Call'}
+                  </button>
+                </div>
               </div>
             )}
 
