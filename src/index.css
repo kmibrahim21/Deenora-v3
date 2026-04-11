@@ -1,9 +1,5 @@
 @import "tailwindcss";
-
-@font-face {
-  font-family: 'Noto Sans Bengali';
-  src: url('https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/unhinted/ttf/NotoSansBengali/NotoSansBengali-Regular.ttf') format('truetype');
-}
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;900&display=swap');
 
 @theme {
   --color-brand-blue: #2563EB;
@@ -77,7 +73,9 @@ html, body {
   top: 0;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
-  font-size: 15px;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-size: 14px;
   transition: background-color 0.3s ease;
 }
 
@@ -89,6 +87,7 @@ body {
   font-family: 'Hind Siliguri', 'Noto Sans Bengali', sans-serif;
   -webkit-tap-highlight-color: transparent;
   color: #2D3142;
+  font-weight: 600;
 }
 
 .dark body {
