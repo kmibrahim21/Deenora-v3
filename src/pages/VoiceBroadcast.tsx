@@ -124,7 +124,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [isRecharging, setIsRecharging] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [adminBkash, setAdminBkash] = useState('০১৭৬৬-XXXXXX');
-  const [voiceRate, setVoiceRate] = useState(1.00);
+  const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.50);
+
+  useEffect(() => {
+    if (madrasah) {
+      setVoiceRate(madrasah.voice_rate || 0.50);
+    }
+  }, [madrasah]);
 
   // Error/Status Modal
   const [statusModal, setStatusModal] = useState<{show: boolean, type: 'error' | 'balance' | 'success', title: string, message: string}>({

@@ -58,6 +58,8 @@ export interface Institution {
   sms_balance: number;
   subscription_end?: string;
   voice_sender_id?: string;
+  sms_rate?: number;
+  voice_rate?: number;
   reve_api_key?: string;
   reve_secret_key?: string;
   reve_client_id?: string;

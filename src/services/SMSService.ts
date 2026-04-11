@@ -49,7 +49,7 @@ export const SMSService = {
 
   sendBulk: async (institutionId: string, students: Student[], message: string) => {
     const [mRes, global] = await Promise.all([
-      supabase.from('institutions').select('sms_balance').eq('id', institutionId).single(),
+      supabase.from('institutions').select('balance, sms_rate').eq('id', institutionId).single(),
       SMSService.getGlobalSettings()
     ]);
 
@@ -78,9 +78,12 @@ export const SMSService = {
       totalSmsNeeded = students.length * parts;
     }
 
-    const balance = mData.sms_balance || 0;
-    if (balance < totalSmsNeeded) {
-      throw new Error(`ব্যালেন্স পর্যাপ্ত নয়। প্রয়োজন: ${totalSmsNeeded}, আছে: ${balance}`);
+    const balance = mData.balance || 0;
+    const smsRate = mData.sms_rate || global.sms_rate || 0.50;
+    const totalCost = totalSmsNeeded * smsRate;
+    
+    if (balance < totalCost) {
+      throw new Error(`ব্যালেন্স পর্যাপ্ত নয়। প্রয়োজন: ${totalCost} ৳, আছে: ${balance} ৳`);
     }
 
     // Log and deduct balance via RPC
@@ -105,7 +108,10 @@ export const SMSService = {
       p_message: message // Template message
     });
 
-    if (rpcError) throw new Error("ট্রানজ্যাকশন সফল হয়নি। (RLS Refused)");
+    if (rpcError) {
+      console.error("RPC Error in sendBulk:", rpcError);
+      throw new Error(`ট্রানজ্যাকশন সফল হয়নি। (RLS Refused): ${rpcError.message}`);
+    }
     if (rpcData && rpcData.success === false) throw new Error(rpcData.error || "ট্রানজ্যাকশন সফল হয়নি।");
 
     const apiKey = global.reve_api_key;
@@ -131,6 +137,15 @@ export const SMSService = {
         let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
         if (clientId) apiUrl += `&clientid=${clientId}`;
         try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("Personalized SMS batch failed:", err); }
+        
+        // Insert logs
+        await supabase.from('sms_logs').insert(chunk.map(m => ({
+          institution_id: institutionId,
+          recipient: m.phone,
+          message: m.text,
+          parts: m.parts,
+          status: 'sent'
+        })));
       });
 
       await Promise.all(sendPromises);
@@ -138,17 +153,30 @@ export const SMSService = {
       // Original bulk logic (same message for all)
       const chunkSize = 15; 
       const batches: string[] = [];
+      const studentChunks: Student[][] = [];
       for (let i = 0; i < students.length; i += chunkSize) {
         const chunk = students.slice(i, i + chunkSize);
         const phoneList = chunk.map(s => normalizePhone(s.guardian_phone)).join(',');
         batches.push(phoneList);
+        studentChunks.push(chunk);
       }
 
-      const sendPromises = batches.map(async (toUsers) => {
+      const sendPromises = batches.map(async (toUsers, index) => {
         const content = [{ callerID: callerId, toUser: toUsers, messageContent: message }];
         let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
         if (clientId) apiUrl += `&clientid=${clientId}`;
         try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("SMS batch failed:", err); }
+        
+        // Insert logs
+        const chunkStudents = studentChunks[index];
+        const { parts } = getSmsLengthInfo(message);
+        await supabase.from('sms_logs').insert(chunkStudents.map(s => ({
+          institution_id: institutionId,
+          recipient: s.guardian_phone,
+          message: message,
+          parts: parts,
+          status: 'sent'
+        })));
       });
 
       await Promise.all(sendPromises);
@@ -172,33 +200,37 @@ export const SMSService = {
     let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
     if (clientId) apiUrl += `&clientid=${clientId}`;
     try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (e) { console.warn("Direct SMS failed:", e); }
+    
+    if (institutionId) {
+      const { parts } = getSmsLengthInfo(message);
+      await supabase.from('sms_logs').insert({
+        institution_id: institutionId,
+        recipient: phone,
+        message: message,
+        parts: parts,
+        status: 'sent'
+      });
+    }
   },
 
   getHistory: async (institutionId: string) => {
     try {
-      const [mRes, global] = await Promise.all([
-        supabase.from('institutions').select('sms_balance').eq('id', institutionId).single(),
-        SMSService.getGlobalSettings()
-      ]);
-
-      const mData = mRes.data;
-      const apiKey = global.reve_api_key;
-      const secretKey = global.reve_secret_key;
-
-      // REVE SMS Report API (Hypothetical CORS-enabled or proxied endpoint)
-      // Since we don't have a confirmed CORS-enabled endpoint, we provide a structured mock 
-      // that represents what would be on the provider's platform.
-      // In a production environment with a backend proxy, this would call the proxy.
+      const { data, error } = await supabase
+        .from('sms_logs')
+        .select('*')
+        .eq('institution_id', institutionId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+        
+      if (error) throw error;
       
-      // For now, we return mock data to fulfill the UI requirement while keeping it 
-      // decoupled from Supabase as requested.
-      return [
-        { date: new Date().toISOString(), recipient: '8801712345678', message: 'আস-সালামু আলাইকুম, আপনার সন্তানের হাজিরা রিপোর্ট...', status: 'sent' },
-        { date: new Date(Date.now() - 3600000).toISOString(), recipient: '8801812345678', message: 'পরীক্ষার ফলাফল প্রকাশিত হয়েছে।', status: 'delivered' },
-        { date: new Date(Date.now() - 86400000).toISOString(), recipient: '8801912345678', message: 'বকেয়া ফি পরিশোধ করুন।', status: 'failed', reason: 'Invalid Number' },
-        { date: new Date(Date.now() - 172800000).toISOString(), recipient: '8801612345678', message: 'ছুটির নোটিশ।', status: 'sent' },
-        { date: new Date(Date.now() - 259200000).toISOString(), recipient: '8801512345678', message: 'মাসিক সভার আমন্ত্রণ।', status: 'failed', reason: 'Insufficient Balance' },
-      ];
+      return data.map(log => ({
+        date: log.created_at,
+        recipient: log.recipient,
+        message: log.message,
+        status: log.status,
+        reason: null
+      }));
     } catch (error) {
       console.error("Error in getHistory:", error);
       return [];

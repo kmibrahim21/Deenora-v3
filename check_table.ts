@@ -7,15 +7,9 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function check() {
-  const { data, error } = await supabase.from('subscription_packages').select('*').limit(1);
-  if (error) {
-    console.error('Error fetching subscription_packages:', error);
-  } else {
-    console.log('Successfully fetched subscription_packages:', data);
-    if (data && data.length > 0) {
-      console.log('Columns in subscription_packages:', Object.keys(data[0]));
-    }
-  }
+  const { data, error } = await supabase.from('sms_history').select('*').limit(1);
+  console.log('sms_history:', { data, error });
 }
+
 
 check();

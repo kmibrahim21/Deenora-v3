@@ -142,6 +142,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editReveApiKey, setEditReveApiKey] = useState('');
   const [editReveSecretKey, setEditReveSecretKey] = useState('');
   const [editReveClientId, setEditReveClientId] = useState('');
+  const [editSmsRate, setEditSmsRate] = useState<number>(0.50);
+  const [editVoiceRate, setEditVoiceRate] = useState<number>(0.50);
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
   const [editPackageRate, setEditPackageRate] = useState<number>(0);
   const [editPackageName, setEditPackageName] = useState<string>('');
@@ -421,6 +423,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditReveApiKey(user.reve_api_key || '');
     setEditReveSecretKey(user.reve_secret_key || '');
     setEditReveClientId(user.reve_client_id || '');
+    setEditSmsRate(user.sms_rate || 0.50);
+    setEditVoiceRate(user.voice_rate || 0.50);
     setEditPaidMonths(userConfig?.paid_months || []);
     setEditPackageRate(userConfig?.package_rate || 0);
     setEditPackageName(userConfig?.package_name || '');
@@ -484,6 +488,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         reve_api_key: editReveApiKey.trim() || null,
         reve_secret_key: editReveSecretKey.trim() || null,
         reve_client_id: editReveClientId.trim() || null,
+        sms_rate: Number(editSmsRate) || 0.50,
+        voice_rate: Number(editVoiceRate) || 0.50,
         config_json: {
           ...(typeof userConfig === 'object' && userConfig !== null ? userConfig : {}),
           modules: editModules,
@@ -1443,6 +1449,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">REVE Client ID</label>
                                     <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">SMS Rate (BDT)</label>
+                                    <input type="number" step="0.01" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editSmsRate} onChange={(e) => setEditSmsRate(Number(e.target.value))} placeholder="0.50" />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Voice Rate (BDT)</label>
+                                    <input type="number" step="0.01" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editVoiceRate} onChange={(e) => setEditVoiceRate(Number(e.target.value))} placeholder="0.50" />
                                   </div>
                                </div>
                             </div>

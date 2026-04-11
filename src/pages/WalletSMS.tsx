@@ -101,8 +101,16 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [requesting, setRequesting] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [adminBkash, setAdminBkash] = useState('০১৭৬৬-XXXXXX');
-  const [smsRate, setSmsRate] = useState<number>(0.50);
-  const [voiceRate, setVoiceRate] = useState<number>(1.00);
+  const [smsRate, setSmsRate] = useState<number>(madrasah?.sms_rate || 0.50);
+
+  const [voiceRate, setVoiceRate] = useState<number>(madrasah?.voice_rate || 0.50);
+
+  useEffect(() => {
+    if (madrasah) {
+      setSmsRate(madrasah.sms_rate || 0.50);
+      setVoiceRate(madrasah.voice_rate || 0.50);
+    }
+  }, [madrasah]);
 
   useEffect(() => { 
     if (activeTab === 'templates') fetchTemplates(); 
@@ -209,6 +217,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     const { data } = await supabase.from('transactions')
       .select('*')
       .eq('institution_id', madrasah.id)
+      .eq('module', 'sms')
       .order('created_at', { ascending: false })
       .limit(10);
     if (data) setUserTransactions(data);
