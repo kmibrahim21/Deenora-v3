@@ -196,6 +196,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   }, [fetchPackages, dataVersion]);
 
   const [editPassword, setEditPassword] = useState('');
+  const [editDiscount, setEditDiscount] = useState(0);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [showConfirm, setShowConfirm] = useState<{
     show: boolean;
@@ -1682,18 +1683,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     <div className="text-right space-y-1">
                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Total Price</p>
                                        <p className={`text-4xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                                          {(userStats.students * editPackageRate * selectedMonthsForPayment.length).toLocaleString('bn-BD')} ৳
+                                          {Math.max(0, (userStats.students * editPackageRate * selectedMonthsForPayment.length) - editDiscount).toLocaleString('bn-BD')} ৳
                                        </p>
+                                       {editDiscount > 0 && (
+                                         <p className="text-[10px] font-bold text-emerald-500">
+                                           Discount: -{editDiscount.toLocaleString('bn-BD')} ৳
+                                         </p>
+                                       )}
                                     </div>
+                                 </div>
+
+                                 <div className="mt-4">
+                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Discount (৳)</p>
+                                    <input 
+                                      type="number" 
+                                      value={editDiscount || ''} 
+                                      onChange={(e) => setEditDiscount(Number(e.target.value) || 0)}
+                                      placeholder="0"
+                                      className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
+                                    />
                                  </div>
                               </div>
 
                               {/* Payment Button */}
                               <button 
                                 onClick={async () => {
-                                  const amount = Math.floor(userStats.students * editPackageRate * selectedMonthsForPayment.length);
-                                  if (amount <= 0) {
-                                    setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'পেমেন্ট অ্যামাউন্ট ০ হতে পারে না। অনুগ্রহ করে প্যাকেজ এবং মাস সিলেক্ট করুন।' });
+                                  const baseAmount = userStats.students * editPackageRate * selectedMonthsForPayment.length;
+                                  const amount = Math.floor(Math.max(0, baseAmount - editDiscount));
+                                  if (amount < 0) {
+                                    setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'পেমেন্ট অ্যামাউন্ট ০ এর কম হতে পারে না।' });
                                     return;
                                   }
                                   
@@ -1703,7 +1721,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     const { error: trError } = await supabase.from('transactions').insert({
                                       institution_id: selectedUser.id,
                                       amount,
-                                      description: `Subscription Payment - ${editPackageName} Package (${selectedMonthsForPayment.length} Months)`,
+                                      description: `Subscription Payment - ${editPackageName} Package (${selectedMonthsForPayment.length} Months)${editDiscount > 0 ? ` (Discount: ${editDiscount} ৳)` : ''}`,
                                       status: 'approved',
                                       transaction_id: `SUB-${Date.now()}`,
                                       sender_phone: 'ADMIN',
@@ -1735,6 +1753,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
                                     setEditPaidMonths(updatedPaidMonths);
                                     setSelectedMonthsForPayment([]);
+                                    setEditDiscount(0);
                                     setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'পেমেন্ট রিসিভ করা হয়েছে এবং প্রোফাইল আপডেট হয়েছে।' });
                                     initData(true);
                                   } catch (err: any) {

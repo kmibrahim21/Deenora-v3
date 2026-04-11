@@ -118,6 +118,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         }
         const { data: feesData } = await feesQuery;
 
+        // Fetch student fee settings for the whole institution
+        const { data: allSettings } = await supabase.from('student_fee_settings')
+            .select('*')
+            .eq('institution_id', madrasah.id);
+
         // For Qawmi, we might use a different report or the same one but interpret it differently
         let studentQuery = supabase.from('students')
           .select('id, student_name, roll, class_id, classes(class_name), guardian_phone')
@@ -150,7 +155,15 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         }
 
         const correctedData = filteredData.map((student: any) => {
-            const studentFeeStructures = feeStructures?.filter(fs => fs.class_id === student.class_id || fs.class_id === null) || [];
+            const studentSettings = allSettings?.filter(as => as.student_id === student.student_id) || [];
+            const studentFeeStructures = feeStructures?.filter(fs => {
+                const isClassMatch = fs.class_id === student.class_id || fs.class_id === null;
+                if (!isClassMatch) return false;
+                
+                const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
+                return setting ? setting.is_enabled : true;
+            }) || [];
+            
             const totalPayable = studentFeeStructures.reduce((sum, fs) => sum + Number(fs.amount), 0);
             
             const studentFees = feesData?.filter(f => f.student_id === student.student_id) || [];

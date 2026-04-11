@@ -182,12 +182,29 @@ const App: React.FC = () => {
         <ShieldAlert size={80} className="mb-6 animate-bounce" />
         <h1 className="text-3xl font-black mb-4">নিরাপত্তা সতর্কতা!</h1>
         <p className="text-lg opacity-80 mb-8">{authError}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-10 py-4 bg-white text-red-600 rounded-full font-black shadow-2xl active:scale-95 transition-all"
-        >
-          পুনরায় চেষ্টা করুন
-        </button>
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-10 py-4 bg-white text-red-600 rounded-full font-black shadow-2xl active:scale-95 transition-all w-full"
+          >
+            পুনরায় চেষ্টা করুন
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-10 py-4 bg-red-700 text-white rounded-full font-black shadow-lg active:scale-95 transition-all w-full border border-white/20"
+          >
+            লগ আউট করুন
+          </button>
+          <button
+            onClick={() => {
+              localStorage.clear();
+              window.location.reload();
+            }}
+            className="px-10 py-4 bg-slate-800 text-white rounded-full font-black shadow-lg active:scale-95 transition-all w-full border border-white/10"
+          >
+            ক্যাশ ক্লিয়ার করুন
+          </button>
+        </div>
       </div>
     );
 

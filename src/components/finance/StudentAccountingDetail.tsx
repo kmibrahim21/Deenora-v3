@@ -120,7 +120,11 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const isDark = madrasah.theme === 'dark';
   const className = classes.find(c => c.id === student.class_id)?.class_name || '';
 
-  const totalPayablePerMonth = structures.reduce((sum, s) => sum + Number(s.amount), 0);
+  const totalPayablePerMonth = structures.reduce((sum, s) => {
+    const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+    const isEnabled = setting ? setting.is_enabled : true;
+    return isEnabled ? sum + Number(s.amount) : sum;
+  }, 0);
   const totalPaid = ledgerEntries.reduce((sum, l) => sum + Number(l.amount), 0);
   
   // Calculate total due for the year up to current month

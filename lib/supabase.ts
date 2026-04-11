@@ -11,6 +11,11 @@ if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KE
 const finalUrl = supabaseUrl || '';
 const finalKey = supabaseAnonKey || '';
 
+console.log("Supabase Client Init:", { 
+  url: finalUrl ? `${finalUrl.substring(0, 15)}...` : 'MISSING',
+  hasKey: !!finalKey 
+});
+
 /**
  * Global Supabase client instance.
  * Persistent session enabled for PWA functionality.

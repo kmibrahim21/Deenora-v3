@@ -142,6 +142,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       }
       const { data: students, error: studError } = await studentQuery;
       console.log("Students:", students, "Error:", studError);
+
+      // Fetch student fee settings for the whole institution
+      const { data: allSettings } = await supabase.from('student_fee_settings')
+          .select('*')
+          .eq('institution_id', institutionId);
       
       const studentCounts: Record<string, number> = {};
       const studentClassMap: Record<string, string> = {};
@@ -178,10 +183,22 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       console.log("Total Expense calculated:", totalExpense);
 
       structures.forEach(s => {
-        // If class_id is null, it's a global fee and applies to all students
-        const count = s.class_id === null 
-            ? (students?.length || 0) 
-            : (studentCounts[s.class_id] || 0);
+        // Calculate correct count based on enabled settings
+        let count = 0;
+        if (s.class_id === null) {
+          // Global fee: count students who have this fee enabled
+          count = students?.filter(st => {
+            const setting = allSettings?.find(as => as.student_id === st.id && as.fee_structure_id === s.id);
+            return setting ? setting.is_enabled : true;
+          }).length || 0;
+        } else {
+          // Class fee: count students in this class who have this fee enabled
+          count = students?.filter(st => {
+            if (st.class_id !== s.class_id) return false;
+            const setting = allSettings?.find(as => as.student_id === st.id && as.fee_structure_id === s.id);
+            return setting ? setting.is_enabled : true;
+          }).length || 0;
+        }
             
         // If yearly, multiply monthly fee by 12 (approximate)
         const multiplier = viewMode === 'yearly' ? 12 : 1;

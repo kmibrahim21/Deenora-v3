@@ -47,7 +47,9 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     totalTeachers: 0,
     smsBalance: 0,
     voiceBalance: 0,
-    attendanceToday: 0
+    attendanceToday: 0,
+    totalIncome: 0,
+    totalExpense: 0
   });
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -125,7 +127,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         studentQuery,
         classQuery,
         supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId),
-        supabase.from('institutions').select('sms_balance, balance').eq('id', institutionId).maybeSingle()
+        supabase.from('institutions').select('sms_balance, balance').eq('id', institutionId).maybeSingle(),
+        supabase.from('ledger').select('type, amount').eq('institution_id', institutionId).gte('transaction_date', new Date().toISOString().slice(0, 7) + '-01')
       ];
 
       if (modules.modules.attendance) {
@@ -134,7 +137,10 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         promises.push(Promise.resolve({ count: 0 }));
       }
 
-      const [stdRes, clsRes, teacherRes, mRes, attRes] = await Promise.all(promises);
+      const [stdRes, clsRes, teacherRes, mRes, ledgerRes, attRes] = await Promise.all(promises);
+
+      const income = ledgerRes.data?.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0) || 0;
+      const expense = ledgerRes.data?.filter((e: any) => e.type === 'expense').reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0) || 0;
 
       const newStats = {
         totalStudents: stdRes.count || 0,
@@ -142,7 +148,9 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         totalTeachers: teacherRes.count || 0,
         smsBalance: mRes.data?.sms_balance || 0,
         voiceBalance: mRes.data?.balance || 0,
-        attendanceToday: attRes.count || 0
+        attendanceToday: attRes.count || 0,
+        totalIncome: income,
+        totalExpense: expense
       };
 
       setStats(newStats);
@@ -209,6 +217,20 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><CheckCircle2 size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.attendanceToday}</h4>
              <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>আজকের হাজিরা</p>
+          </button>
+        )}
+        {canManageAccounting && modules.modules.accounting && (
+          <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-225 active:scale-95 transition-all border`}>
+             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" /></div>
+             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-emerald-600'}`}>{loadingStats ? '...' : stats.totalIncome.toLocaleString()}</h4>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>চলতি মাসের আয়</p>
+          </button>
+        )}
+        {canManageAccounting && modules.modules.accounting && (
+          <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-250 active:scale-95 transition-all border`}>
+             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" style={{ transform: 'rotate(180deg)' }} /></div>
+             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-red-600'}`}>{loadingStats ? '...' : stats.totalExpense.toLocaleString()}</h4>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>চলতি মাসের ব্যয়</p>
           </button>
         )}
       </div>

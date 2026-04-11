@@ -38,7 +38,15 @@ export const useAuth = () => {
     }
     
     const userEmail = email?.trim().toLowerCase();
-    const isSuperAdminEmail = userEmail === 'kmibrahim@gmail.com' || userEmail === 'thedevomix@gmail.com' || userEmail === 'ibrahimkhan269596@gmail.com';
+    const superAdminEmails = [
+      'kmibrahim@gmail.com',
+      'thedevomix@gmail.com',
+      'ibrahimkhan269596@gmail.com',
+      'admin@deenora.com'
+    ];
+    const isSuperAdminEmail = superAdminEmails.includes(userEmail || '');
+
+    console.log("Auth Debug:", { userId, userEmail, isSuperAdminEmail });
 
     try {
       // First, get the profile
@@ -142,10 +150,21 @@ export const useAuth = () => {
         setAuthError("Profile not found in database. Please check if SQL triggers are running.");
       }
     } catch (err: any) {
-      console.error("fetchUserProfile error:", err);
+      console.error("fetchUserProfile error details:", {
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        fullError: err
+      });
       
+      const isNetworkError = 
+        err?.message?.toLowerCase().includes('fetch') || 
+        err?.message?.toLowerCase().includes('network') ||
+        err?.name === 'TypeError' ||
+        !navigator.onLine;
+
       // Resilience: If it's a network error and we are super admin, we can still load
-      if (isSuperAdminEmail && (err.message?.includes('fetch') || err.name === 'TypeError')) {
+      if (isSuperAdminEmail && isNetworkError) {
         console.log("Network error but super admin detected, using local fallback...");
         setProfile({
           id: userId,
@@ -184,13 +203,17 @@ export const useAuth = () => {
         if (cachedProfile) setProfile(cachedProfile);
         
         // If we have cached data, don't show a fatal auth error for network issues
-        if (err.message?.includes('fetch') || err.name === 'TypeError' || !navigator.onLine) {
+        if (isNetworkError) {
           setLoading(false);
           return;
         }
       }
 
-      setAuthError(err.message);
+      if (isNetworkError) {
+        setAuthError("নেটওয়ার্ক সমস্যা! আপনার ইন্টারনেট কানেকশন চেক করুন এবং পুনরায় চেষ্টা করুন। (Network Error: Failed to fetch)");
+      } else {
+        setAuthError(err.message || "An unknown authentication error occurred.");
+      }
     } finally {
       setLoading(false);
     }
