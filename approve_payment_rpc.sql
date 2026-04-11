@@ -46,7 +46,9 @@ BEGIN
     WHERE id = m_id;
 
     -- 5. Deduct from admin SMS stock
-    UPDATE public.admin_sms_stock SET remaining_sms = remaining_sms - sms_to_give;
+    UPDATE public.admin_sms_stock 
+    SET remaining_sms = remaining_sms - sms_to_give
+    WHERE id = (SELECT id FROM public.admin_sms_stock LIMIT 1);
 
     RETURN jsonb_build_object('success', true);
 EXCEPTION WHEN OTHERS THEN

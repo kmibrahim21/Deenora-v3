@@ -511,13 +511,13 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       {/* Subscription Modal */}
       {isEditingSubscription && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className={`w-full max-w-lg rounded-[3.5rem] p-6 shadow-2xl space-y-6 animate-in zoom-in-95 duration-500 relative max-h-[90vh] overflow-y-auto custom-scrollbar ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
+           <div className={`w-full max-w-lg rounded-[2.5rem] sm:rounded-[3.5rem] p-5 sm:p-8 shadow-2xl space-y-5 sm:space-y-6 animate-in zoom-in-95 duration-500 relative max-h-[92vh] overflow-y-auto custom-scrollbar ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white'}`}>
               <div className="flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
                     <CreditCard size={20} />
                   </div>
-                  <h3 className={`text-xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  <h3 className={`text-lg sm:text-xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
                     {lang === 'bn' ? 'সাবস্ক্রিপশন ম্যানেজমেন্ট' : 'Subscription Management'}
                   </h3>
                 </div>
@@ -526,35 +526,35 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                 </button>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-5 sm:space-y-6">
                 {/* Current Status */}
-                <div className={`p-6 rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  <div className="flex justify-between items-center mb-6">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subscription Status</p>
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${madrasah?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                <div className={`p-5 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className="flex justify-between items-center mb-5 sm:mb-6">
+                    <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Subscription Status</p>
+                    <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${madrasah?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
                       {madrasah?.status || 'Trial'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Students</p>
-                      <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{stats.students}</p>
+                  <div className="grid grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Students</p>
+                      <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{stats.students}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Package</p>
-                      <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Package</p>
+                      <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
                         {(madrasah?.config_json as any)?.package_name || 'None'}
                       </p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing Cycle</p>
-                      <p className={`text-2xl font-black capitalize ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing Cycle</p>
+                      <p className={`text-xl sm:text-2xl font-black capitalize ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
                         {(madrasah?.config_json as any)?.subscription_type || 'Monthly'}
                       </p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Package Rate</p>
-                      <p className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Package Rate</p>
+                      <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
                         {(madrasah?.config_json as any)?.package_rate || 0} ৳
                       </p>
                     </div>
@@ -562,23 +562,23 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                 </div>
 
                 {/* Package List (Read-only) */}
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Available Packages</label>
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3 sm:space-y-4">
+                  <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Available Packages</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {packages.map((pkg) => {
                       const isCurrent = (madrasah?.config_json as any)?.package_name === pkg.name;
                       return (
                         <div
                           key={pkg.id}
-                          className={`p-5 rounded-[2rem] border transition-all relative overflow-hidden ${isCurrent ? (madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/40' : 'bg-blue-50 border-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100')}`}
+                          className={`p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border transition-all relative overflow-hidden ${isCurrent ? (madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/40' : 'bg-blue-50 border-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100')}`}
                         >
                           {isCurrent && (
                             <div className="absolute top-3 right-3 text-blue-500">
-                              <CheckCircle2 size={18} />
+                              <CheckCircle2 className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
                             </div>
                           )}
-                          <h4 className={`text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{pkg.name}</h4>
-                          <p className={`text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} TK / Student</p>
+                          <h4 className={`text-xs sm:text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{pkg.name}</h4>
+                          <p className={`text-[9px] sm:text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} TK / Student</p>
                         </div>
                       );
                     })}
@@ -586,22 +586,22 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                 </div>
 
                 {/* Price Calculation for Current Package */}
-                <div className={`p-8 rounded-[3rem] border ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
-                  <div className="flex flex-col items-center text-center space-y-4">
-                    <p className="text-[11px] font-black text-blue-500 uppercase tracking-[0.3em]">Total Subscription Cost</p>
+                <div className={`p-6 sm:p-8 rounded-[2rem] sm:rounded-[3rem] border ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
+                  <div className="flex flex-col items-center text-center space-y-3 sm:space-y-4">
+                    <p className="text-[10px] sm:text-[11px] font-black text-blue-500 uppercase tracking-[0.2em] sm:tracking-[0.3em]">Total Subscription Cost</p>
                     <div className="space-y-1">
-                      <h4 className={`text-5xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                      <h4 className={`text-3xl sm:text-5xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
                         {((Number((madrasah?.config_json as any)?.package_rate) || 0) * stats.students * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
                       </h4>
-                      <p className="text-xs font-bold text-blue-600/60 uppercase tracking-widest">
+                      <p className="text-[10px] sm:text-xs font-bold text-blue-600/60 uppercase tracking-widest">
                         Based on {stats.students} students & {subscriptionType} billing
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className={`p-6 rounded-[2rem] border border-dashed ${madrasah?.theme === 'dark' ? 'border-slate-700 bg-slate-800/30' : 'border-slate-200 bg-slate-50/30'} text-center`}>
-                  <p className="text-[11px] font-bold text-slate-400 leading-relaxed">
+                <div className={`p-5 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] border border-dashed ${madrasah?.theme === 'dark' ? 'border-slate-700 bg-slate-800/30' : 'border-slate-200 bg-slate-50/30'} text-center`}>
+                  <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 leading-relaxed">
                     {lang === 'bn' ? 'সাবস্ক্রিপশন পরিবর্তন বা আপগ্রেড করতে অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।' : 'To change or upgrade your subscription, please contact the administrator.'}
                   </p>
                 </div>
