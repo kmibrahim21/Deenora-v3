@@ -7,8 +7,8 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function check() {
-  const { data, error } = await supabase.from('sms_history').select('*').limit(1);
-  console.log('sms_history:', { data, error });
+  const { data, error } = await supabase.from('admin_sms_stock').select('*').limit(1);
+  console.log('admin_sms_stock:', { data, error });
 }
 
 

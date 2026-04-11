@@ -49,7 +49,7 @@ export const SMSService = {
 
   sendBulk: async (institutionId: string, students: Student[], message: string) => {
     const [mRes, global] = await Promise.all([
-      supabase.from('institutions').select('balance, sms_rate').eq('id', institutionId).single(),
+      supabase.from('institutions').select('sms_balance').eq('id', institutionId).single(),
       SMSService.getGlobalSettings()
     ]);
 
@@ -78,12 +78,10 @@ export const SMSService = {
       totalSmsNeeded = students.length * parts;
     }
 
-    const balance = mData.balance || 0;
-    const smsRate = mData.sms_rate || global.sms_rate || 0.50;
-    const totalCost = totalSmsNeeded * smsRate;
+    const balance = mData.sms_balance || 0;
     
-    if (balance < totalCost) {
-      throw new Error(`ব্যালেন্স পর্যাপ্ত নয়। প্রয়োজন: ${totalCost} ৳, আছে: ${balance} ৳`);
+    if (balance < totalSmsNeeded) {
+      throw new Error(`এসএমএস ব্যালেন্স পর্যাপ্ত নয়। প্রয়োজন: ${totalSmsNeeded} টি, আছে: ${balance} টি`);
     }
 
     // Log and deduct balance via RPC
