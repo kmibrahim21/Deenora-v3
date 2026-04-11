@@ -53,12 +53,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         'Class': 'Class 1',
         'Roll': 1,
         'Student Name': 'Abdur Rahman',
-        'Admission Number': '12345',
-        'Date of Birth': '2010-01-01',
-        'Address': 'Dhaka, Bangladesh',
         'Guardian Name': 'Abdullah',
         'Phone 1': '01700000000',
-        'Phone 2': ''
+        'Phone 2': '',
+        'Admission ID': '12345',
+        'Address': 'Dhaka, Bangladesh',
+        'Date of birth': '2010-01-01'
       }
     ];
     
@@ -97,13 +97,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         'Class': (s as any).classes?.class_name || 'N/A', 
         'Roll': s.roll || '', 
         'Student Name': s.student_name, 
-        'Admission Number': s.admission_number || '',
-        'Date of Birth': s.date_of_birth || '',
-        'Blood Group': s.blood_group || '',
-        'Address': s.address || '',
         'Guardian Name': s.guardian_name || '',
-        'Guardian Phone': s.guardian_phone,
-        'Guardian Phone 2': s.guardian_phone_2 || ''
+        'Phone 1': s.guardian_phone,
+        'Phone 2': s.guardian_phone_2 || '',
+        'Admission ID': s.admission_number || '',
+        'Address': s.address || '',
+        'Date of birth': s.date_of_birth || ''
       }));
       
       const ws = XLSX.utils.json_to_sheet(excelData);
@@ -169,13 +168,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             const rollValue = parseInt(row.B);
             const roll = isNaN(rollValue) ? null : rollValue;
             const studentName = String(row.C || '').trim();
-            const admissionNumber = String(row.D || '').trim();
-            const dob = excelDateToISO(row.E);
-            const bloodGroup = String(row.F || '').trim();
-            const address = String(row.G || '').trim();
-            const guardianName = String(row.H || '').trim();
-            const phone = String(row.I || '').trim();
-            const phone2 = String(row.J || '').trim();
+            const guardianName = String(row.D || '').trim();
+            const phone = String(row.E || '').trim();
+            const phone2 = String(row.F || '').trim();
+            const admissionNumber = String(row.G || '').trim();
+            const address = String(row.H || '').trim();
+            const dob = excelDateToISO(row.I);
 
             if (!studentName || !phone || !className) {
               skippedCount++;
@@ -236,7 +234,6 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 admission_number: admissionNumber || null,
                 roll: roll,
                 date_of_birth: dob || null,
-                blood_group: bloodGroup || null,
                 address: address || null,
                 guardian_name: guardianName || null,
                 guardian_phone: phone,
@@ -366,12 +363,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col A</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Class</p></div>
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col B</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Roll</p></div>
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col C</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Student Name</p></div>
-           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col D</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Admission ID</p></div>
-           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col E</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>DOB</p></div>
-           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col F</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Address</p></div>
-           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col G</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Guardian Name</p></div>
-           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col H</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Phone 1</p></div>
-           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col I</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Phone 2</p></div>
+           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col D</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Guardian Name</p></div>
+           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col E</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Phone 1</p></div>
+           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col F</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Phone 2</p></div>
+           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col G</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Admission ID</p></div>
+           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col H</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Address</p></div>
+           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col I</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Date of birth</p></div>
         </div>
       </div>
     </div>
