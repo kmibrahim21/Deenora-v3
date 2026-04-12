@@ -35,6 +35,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [newName, setNewName] = useState(initialMadrasah?.name || '');
   const [newAddress, setNewAddress] = useState(initialMadrasah?.address || '');
   const [newPhone, setNewPhone] = useState(initialMadrasah?.phone || '');
+  const [newPin, setNewPin] = useState((initialMadrasah?.config_json as any)?.user_pin || '');
   const [logoUrl, setLogoUrl] = useState(initialMadrasah?.logo_url || '');
   
   const [copiedId, setCopiedId] = useState(false);
@@ -98,6 +99,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       setNewName(initialMadrasah.name || '');
       setNewAddress(initialMadrasah.address || '');
       setNewPhone(initialMadrasah.phone || '');
+      setNewPin((initialMadrasah.config_json as any)?.user_pin || '');
       setLogoUrl(initialMadrasah.logo_url || '');
       
       if (initialMadrasah) {
@@ -156,16 +158,20 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     if (!madrasah) return;
     setSaving(true);
     try {
+      const currentConfig = (madrasah.config_json as any) || {};
+      const updatedConfig = { ...currentConfig, user_pin: newPin.trim() };
+      
       const { error } = await supabase.from('institutions').update({ 
         name: newName.trim(), 
         address: newAddress.trim() || null,
         phone: newPhone.trim(), 
-        logo_url: logoUrl
+        logo_url: logoUrl,
+        config_json: updatedConfig
       }).eq('id', madrasah.id);
       if (error) throw error;
       if (onProfileUpdate) onProfileUpdate();
       setIsEditingProfile(false);
-      setMadrasah(prev => prev ? { ...prev, name: newName, address: newAddress, phone: newPhone } : null);
+      setMadrasah(prev => prev ? { ...prev, name: newName, address: newAddress, phone: newPhone, config_json: updatedConfig } : null);
       setShowSuccessModal({ show: true, title: t('success', lang), message: 'Profile updated successfully' });
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
   };
@@ -296,17 +302,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                        {copiedId ? <Check size={22} className="text-emerald-500 shrink-0" /> : <Copy size={20} className="text-slate-200 shrink-0" />}
                     </div>
                     
-                    <div className={`p-5 rounded-[2.5rem] border flex items-center gap-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
-                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-purple-400' : 'bg-white border-slate-100 text-purple-600'}`}>
-                        <Key size={24} />
-                       </div>
-                       <div className="flex-1 text-left min-w-0">
-                           <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{lang === 'bn' ? 'অ্যাকাউন্ট পিন' : 'Account PIN'}</p>
-                          <p className={`text-[14px] font-black tracking-widest ${madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`}>
-                            {madrasah?.config_json?.user_pin || '****'}
-                          </p>
-                       </div>
-                    </div>
+
                  </div>
                </>
              )}
@@ -631,8 +627,16 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                  </div>
                  <div className="space-y-1 opacity-70 cursor-not-allowed">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center justify-between">
+                      {lang === 'bn' ? 'অ্যাকাউন্ট পিন' : 'Account PIN'}
+                      <span className="text-[8px] text-red-400 lowercase tracking-normal bg-red-500/10 px-1.5 py-0.5 rounded-md">read-only</span>
                     </label>
-                    {/* removed */}
+                    <input 
+                      type="text" 
+                      readOnly 
+                      disabled
+                      className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none cursor-not-allowed ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`} 
+                      value={newPin || ''} 
+                    />
                  </div>
               </div>
               <div className="flex gap-2 pt-2 shrink-0">
