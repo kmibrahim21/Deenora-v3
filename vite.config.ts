@@ -115,13 +115,13 @@ export default defineConfig(({ mode }) => {
         VitePWA({
           registerType: 'autoUpdate',
           injectRegister: 'inline',
-          includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+          includeAssets: [],
           manifest: {
-            name: 'Deenora Madrasah Management',
+            name: 'Deenora',
             short_name: 'Deenora',
-            description: 'Professional Madrasah Management System',
-            theme_color: '#2563EB',
-            background_color: '#FFFFFF',
+            description: 'Professional Institute Management System',
+            theme_color: '#0F172A',
+            background_color: '#01114C',
             display: 'standalone',
             orientation: 'portrait',
             start_url: '/',
