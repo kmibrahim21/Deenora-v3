@@ -127,19 +127,19 @@ export default defineConfig(({ mode }) => {
             start_url: '/',
             icons: [
               {
-                src: 'https://github.com/kmibrahim21/Deenora/blob/main/public/Deenora192.png',
+                src: 'https://raw.githubusercontent.com/kmibrahim21/Deenora/main/public/Deenora192.png',
                 sizes: '192x192',
                 type: 'image/png',
                 purpose: 'any'
               },
               {
-                src: 'https://github.com/kmibrahim21/Deenora/blob/main/public/Deenora512.png',
+                src: 'https://raw.githubusercontent.com/kmibrahim21/Deenora/main/public/Deenora512.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'any'
               },
               {
-                src: 'https://github.com/kmibrahim21/Deenora/blob/main/public/Deenora512.png',
+                src: 'https://raw.githubusercontent.com/kmibrahim21/Deenora/main/public/Deenora512.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable'
