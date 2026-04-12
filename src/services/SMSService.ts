@@ -120,9 +120,22 @@ export const SMSService = {
     if (hasShortcodes) {
       // Send personalized messages in batches
       const sendPromises = personalizedMessages.map(async (m) => {
-        let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${normalizePhone(m.phone)}&messageContent=${encodeURIComponent(m.text)}&type=3`;
-        if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("Personalized SMS failed:", err); }
+        try {
+          await fetch('/api/sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              apiKey,
+              secretKey,
+              callerId,
+              toUser: normalizePhone(m.phone),
+              message: m.text,
+              clientId
+            })
+          });
+        } catch (err) {
+          console.warn("Personalized SMS failed:", err);
+        }
       });
       
       // Execute in chunks to avoid overwhelming the browser
@@ -148,10 +161,22 @@ export const SMSService = {
     } else {
       // Send individually to ensure compatibility with sendtext
       const sendPromises = students.map(async (s) => {
-        const target = normalizePhone(s.guardian_phone);
-        let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
-        if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("SMS failed:", err); }
+        try {
+          await fetch('/api/sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              apiKey,
+              secretKey,
+              callerId,
+              toUser: normalizePhone(s.guardian_phone),
+              message: message,
+              clientId
+            })
+          });
+        } catch (err) {
+          console.warn("SMS failed:", err);
+        }
       });
 
       // Execute in chunks
@@ -192,9 +217,22 @@ export const SMSService = {
     }
 
     const target = normalizePhone(phone);
-    let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
-    if (clientId) apiUrl += `&clientid=${clientId}`;
-    try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (e) { console.warn("Direct SMS failed:", e); }
+    try {
+      await fetch('/api/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey,
+          secretKey,
+          callerId,
+          toUser: target,
+          message: message,
+          clientId
+        })
+      });
+    } catch (e) {
+      console.warn("Direct SMS failed:", e);
+    }
     
     if (institutionId) {
       const { parts } = getSmsLengthInfo(message);

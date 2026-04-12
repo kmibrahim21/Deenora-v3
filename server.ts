@@ -3,6 +3,9 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +19,7 @@ async function startServer() {
 
   // API Routes handler
   app.all('/api/*', async (req, res) => {
+    console.log(`[Server] API Request: ${req.method} ${req.url}`);
     try {
       const urlPath = req.url.split('?')[0];
       let filePath = path.join(__dirname, urlPath);
@@ -24,6 +28,8 @@ async function startServer() {
         filePath = path.join(__dirname, '/api/teachers.ts');
       } else if (urlPath.startsWith('/api/awaj')) {
         filePath = path.join(__dirname, '/api/awaj.ts');
+      } else if (urlPath.startsWith('/api/sms')) {
+        filePath = path.join(__dirname, '/api/sms.ts');
       } else if (fs.existsSync(filePath + '.ts')) {
         filePath += '.ts';
       } else if (fs.existsSync(path.join(filePath, 'index.ts'))) {
