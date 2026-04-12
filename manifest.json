@@ -9,19 +9,19 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://res.cloudinary.com/dpeubhykd/image/upload/v1775975918/Deenora192_kotqve.png",
+      "src": "https://github.com/kmibrahim21/Deenora-v3/blob/main/public/Deenora192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://res.cloudinary.com/dpeubhykd/image/upload/v1775975991/Deenora512_zvmrgj.png",
+      "src": "https://github.com/kmibrahim21/Deenora-v3/blob/main/public/Deenora512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://res.cloudinary.com/dpeubhykd/image/upload/v1775975991/Deenora512_zvmrgj.png",
+      "src": "https://github.com/kmibrahim21/Deenora-v3/blob/main/public/Deenora512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

@@ -127,19 +127,19 @@ export default defineConfig(({ mode }) => {
             start_url: '/',
             icons: [
               {
-                src: 'https://res.cloudinary.com/dpeubhykd/image/upload/v1775975918/Deenora192_kotqve.png',
+                src: 'https://img.icons8.com/ios-filled/192/2563EB/mosque.png',
                 sizes: '192x192',
                 type: 'image/png',
                 purpose: 'any'
               },
               {
-                src: 'https://res.cloudinary.com/dpeubhykd/image/upload/v1775975991/Deenora512_zvmrgj.png',
+                src: 'https://img.icons8.com/ios-filled/512/2563EB/mosque.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'any'
               },
               {
-                src: 'https://res.cloudinary.com/dpeubhykd/image/upload/v1775975991/Deenora512_zvmrgj.png',
+                src: 'https://img.icons8.com/ios-filled/512/2563EB/mosque.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable'
@@ -183,20 +183,6 @@ export default defineConfig(({ mode }) => {
                 handler: 'CacheFirst',
                 options: {
                   cacheName: 'icons-cache',
-                  expiration: {
-                    maxEntries: 50,
-                    maxAgeSeconds: 60 * 60 * 24 * 30 // <== 30 days
-                  },
-                  cacheableResponse: {
-                    statuses: [0, 200]
-                  }
-                }
-              },
-              {
-                urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
-                handler: 'CacheFirst',
-                options: {
-                  cacheName: 'cloudinary-icons-cache',
                   expiration: {
                     maxEntries: 50,
                     maxAgeSeconds: 60 * 60 * 24 * 30 // <== 30 days
