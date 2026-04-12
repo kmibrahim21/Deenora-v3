@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, ChevronRight, BookOpen, Users, Edit3, Trash2, X, Check, Loader2, AlertCircle, AlertTriangle, Hash } from 'lucide-react';
 import { supabase, offlineApi } from 'supabase';
 import { Class, Language, Institution, Profile } from 'types';
 import { t } from 'translations';
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate } from 'react-router-dom';
 
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
@@ -18,17 +20,58 @@ export const sortMadrasahClasses = (classes: any[]) => {
   });
 };
 
-interface ClassesProps {
-  onClassClick: (cls: Class) => void;
+interface ClassCardProps {
+  cls: Class & { student_count?: number };
+  isDark: boolean;
   lang: Language;
-  madrasah: Institution | null;
-  dataVersion: number;
-  triggerRefresh: () => void;
-  readOnly?: boolean;
-  profile?: Profile | null;
+  readOnly: boolean;
+  institutionType: string | undefined;
+  onEdit: (cls: Class) => void;
+  onDelete: (cls: Class) => void;
+  onNavigate: (id: string) => void;
 }
 
-const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVersion, triggerRefresh, readOnly, profile }) => {
+const ClassCard = memo(({ cls, isDark, lang, readOnly, institutionType, onEdit, onDelete, onNavigate }: ClassCardProps) => {
+  return (
+    <div onClick={() => onNavigate(cls.id)} className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 sm:p-5 rounded-[2.2rem] border flex items-center justify-between active:scale-[0.98] transition-all group shadow-bubble relative overflow-hidden`}>
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+        <div className={`w-12 h-12 sm:w-14 sm:h-14 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-2xl flex items-center justify-center shrink-0 border shadow-inner`}>
+          <BookOpen size={20} className="sm:size-6" />
+        </div>
+        <div className="min-w-0 flex-1 pr-2">
+          <div className="flex items-center gap-2">
+            <h3 className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} text-[16px] sm:text-[18px] font-noto line-clamp-2 leading-tight tracking-tight break-words`}>
+              {cls.class_name}
+            </h3>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1">
+            <Users size={12} className={isDark ? 'text-blue-400/60' : 'text-[#2563EB]/60'} />
+            <p className={`text-[9px] font-black ${isDark ? 'text-slate-400' : 'text-slate-400'} uppercase tracking-[0.1em]`}>{cls.student_count || 0} {t('students_count', lang, institutionType)}</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {!readOnly && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onEdit(cls); }} 
+              className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
+              <Edit3 size={14} className="sm:size-4" />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(cls); }} 
+              className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-500'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
+              <Trash2 size={14} className="sm:size-4" />
+            </button>
+          </>
+        )}
+        <ChevronRight className={`${isDark ? 'text-slate-600 group-hover:text-blue-400' : 'text-blue-200 group-hover:text-[#2563EB]'} transition-colors ml-0.5`} size={18} strokeWidth={3} />
+      </div>
+    </div>
+  );
+});
+
+const Classes: React.FC = () => {
+  const { madrasah, lang, dataVersion, triggerRefresh, profile, isAdmin } = useMadrasah();
+  const navigate = useNavigate();
   const [classes, setClasses] = useState<(Class & { student_count?: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -38,6 +81,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Class | null>(null);
   const isDark = madrasah?.theme === 'dark';
+  const readOnly = !isAdmin && !profile?.permissions?.can_manage_classes;
 
   useEffect(() => { 
     if (madrasah?.id) {
@@ -144,6 +188,21 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     } catch (err: any) { alert(err.message); } finally { setModalLoading(false); }
   };
 
+  const handleEdit = useCallback((cls: Class) => {
+    setNewClassName(cls.class_name || '');
+    setNewSortOrder(cls.sort_order?.toString() || '');
+    setEditingClass(cls);
+    setShowModal(true);
+  }, []);
+
+  const handleDelete = useCallback((cls: Class) => {
+    setShowDeleteConfirm(cls);
+  }, []);
+
+  const handleNavigate = useCallback((id: string) => {
+    navigate(`/classes/${id}/students`);
+  }, [navigate]);
+
   return (
     <>
       <div className="space-y-6 animate-in slide-in-from-right-4 duration-500 pb-20">
@@ -159,39 +218,17 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
 
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
           {classes.map(cls => (
-            <div key={cls.id} onClick={() => onClassClick(cls)} className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 sm:p-5 rounded-[2.2rem] border flex items-center justify-between active:scale-[0.98] transition-all group shadow-bubble relative overflow-hidden`}>
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-2xl flex items-center justify-center shrink-0 border shadow-inner`}>
-                  <BookOpen size={20} className="sm:size-6" />
-                </div>
-                <div className="min-w-0 flex-1 pr-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} text-[16px] sm:text-[18px] font-noto line-clamp-2 leading-tight tracking-tight break-words`}>
-                      {cls.class_name}
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Users size={12} className={isDark ? 'text-blue-400/60' : 'text-[#2563EB]/60'} />
-                    <p className={`text-[9px] font-black ${isDark ? 'text-slate-400' : 'text-slate-400'} uppercase tracking-[0.1em]`}>{cls.student_count || 0} {t('students_count', lang, madrasah?.institution_type)}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                {!readOnly && (
-                  <>
-                    <button onClick={(e) => { e.stopPropagation(); setNewClassName(cls.class_name || ''); setNewSortOrder(cls.sort_order?.toString() || ''); setEditingClass(cls); setShowModal(true); }} 
-                      className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
-                      <Edit3 size={14} className="sm:size-4" />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(cls); }} 
-                      className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-500'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
-                      <Trash2 size={14} className="sm:size-4" />
-                    </button>
-                  </>
-                )}
-                <ChevronRight className={`${isDark ? 'text-slate-600 group-hover:text-blue-400' : 'text-blue-200 group-hover:text-[#2563EB]'} transition-colors ml-0.5`} size={18} strokeWidth={3} />
-              </div>
-            </div>
+            <ClassCard 
+              key={cls.id}
+              cls={cls}
+              isDark={isDark}
+              lang={lang}
+              readOnly={readOnly}
+              institutionType={madrasah?.institution_type}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onNavigate={handleNavigate}
+            />
           ))}
         </div>
       </div>

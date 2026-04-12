@@ -7,22 +7,57 @@ import { OfflineService } from 'services/OfflineService';
 import { Student, Class, Language, Institution } from 'types';
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 
-interface StudentFormProps {
-  student?: Student | null;
-  madrasah: Institution | null;
-  defaultClassId?: string;
-  isEditing: boolean;
-  onSuccess: () => void;
-  onCancel: () => void;
-  lang: Language;
-  title?: string;
-}
+const StudentForm: React.FC = () => {
+  const { studentId } = useParams<{ studentId: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { madrasah, lang, triggerRefresh } = useMadrasah();
+  const defaultClassId = location.state?.defaultClassId;
+  const isEditing = !!studentId;
+  
+  const [student, setStudent] = useState<Student | null>(null);
+  const [name, setName] = useState('');
+  const [admissionNumber, setAdmissionNumber] = useState('');
+  const [guardianName, setGuardianName] = useState('');
+  const [roll, setRoll] = useState('');
+  const [dob, setDob] = useState('');
+  const [bloodGroup, setBloodGroup] = useState('');
+  const [phone, setPhone] = useState('');
+  const [phone2, setPhone2] = useState('');
+  const [address, setAddress] = useState('');
+  const [classId, setClassId] = useState(defaultClassId || '');
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(isEditing);
+  const [showClassModal, setShowClassModal] = useState(false);
+  const [errorModal, setErrorModal] = useState<{show: boolean, message: string}>({show: false, message: ''});
 
-const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultClassId, isEditing, onSuccess, onCancel, lang, title }) => {
-  const [name, setName] = useState(student?.student_name || '');
-  const [admissionNumber, setAdmissionNumber] = useState(student?.admission_number || '');
-  const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
+  const isDark = madrasah?.theme === 'dark';
+
+  useEffect(() => {
+    const fetchStudent = async () => {
+      if (!studentId) return;
+      const { data } = await supabase.from('students').select('*').eq('id', studentId).single();
+      if (data) {
+        setStudent(data);
+        setName(data.student_name || '');
+        setAdmissionNumber(data.admission_number || '');
+        setGuardianName(data.guardian_name || '');
+        setRoll(data.roll?.toString() || '');
+        setDob(data.date_of_birth || '');
+        setBloodGroup(data.blood_group || '');
+        setPhone(data.guardian_phone || '');
+        setPhone2(data.guardian_phone_2 || '');
+        setAddress(data.address || '');
+        setClassId(data.class_id || '');
+      }
+      setFetching(false);
+    };
+    fetchStudent();
+  }, [studentId]);
 
   useEffect(() => {
     if (!isEditing && !admissionNumber) {
@@ -30,21 +65,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
       setAdmissionNumber(randomNum);
     }
   }, [isEditing, admissionNumber]);
-
-  const [roll, setRoll] = useState(student?.roll?.toString() || '');
-  const [dob, setDob] = useState(student?.date_of_birth || '');
-  const [bloodGroup, setBloodGroup] = useState(student?.blood_group || '');
-  const [phone, setPhone] = useState(student?.guardian_phone || '');
-  const [phone2, setPhone2] = useState(student?.guardian_phone_2 || '');
-  const [address, setAddress] = useState(student?.address || '');
-  const [classId, setClassId] = useState(student?.class_id || defaultClassId || '');
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showClassModal, setShowClassModal] = useState(false);
-  
-  const [errorModal, setErrorModal] = useState<{show: boolean, message: string}>({show: false, message: ''});
-
-  const isDark = madrasah?.theme === 'dark';
 
   useEffect(() => {
     fetchClasses();
@@ -128,7 +148,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         }
       }
       
-      onSuccess();
+      if (triggerRefresh) triggerRefresh();
+      navigate(-1);
     } catch (err: any) { 
       let msg = err.message;
       if (err.code === '23505') {
@@ -143,6 +164,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
     setter(numericValue);
   };
 
+  if (fetching) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-blue-500" /></div>;
+
   return (
     <div className="animate-in slide-in-from-bottom-6 duration-700 pb-24 space-y-8">
       {/* Enhanced Header */}
@@ -152,14 +175,14 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         </div>
         <div className="relative z-10 flex items-center gap-5">
           <button 
-            onClick={onCancel} 
+            onClick={() => navigate(-1)} 
             className="w-10 h-10 bg-white/10 backdrop-blur-xl rounded-[1rem] flex items-center justify-center text-white active:scale-90 transition-all border border-white/20 shadow-lg shrink-0"
           >
             <ArrowLeft size={20} strokeWidth={3} />
           </button>
           <div>
             <h1 className="text-lg font-black text-white font-noto tracking-tight drop-shadow-sm">
-              {title || (isEditing ? t('edit_student', lang, madrasah?.institution_type) : t('add_student', lang, madrasah?.institution_type))}
+              {isEditing ? t('edit_student', lang, madrasah?.institution_type) : t('add_student', lang, madrasah?.institution_type)}
             </h1>
             <p className="text-white/60 text-[9px] font-bold uppercase tracking-[0.2em] mt-1">
               {isEditing ? 'Update existing record' : 'Register new student'}

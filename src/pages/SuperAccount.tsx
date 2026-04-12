@@ -5,20 +5,12 @@ import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphon
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, View, SubscriptionPackage } from 'types';
 import { t } from 'translations';
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate } from 'react-router-dom';
 
-interface SuperAccountProps {
-  lang: Language;
-  setLang: (l: Language) => void;
-  setView: (view: View) => void;
-  onLogout: () => void;
-  onProfileUpdate?: () => void;
-  initialMadrasah: Institution | null;
-  setStatusModal: (modal: { show: boolean; type: 'success' | 'error'; title: string; message: string }) => void;
-  dataVersion?: number;
-  triggerRefresh?: () => void;
-}
-
-const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onLogout, onProfileUpdate, initialMadrasah, setStatusModal, dataVersion, triggerRefresh }) => {
+const SuperAccount: React.FC = () => {
+  const { lang, setLang, triggerRefresh, madrasah: initialMadrasah, handleLogout: onLogout, setStatusModal } = useMadrasah();
+  const navigate = useNavigate();
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingBulkSMS, setIsEditingBulkSMS] = useState(false);
@@ -109,7 +101,6 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       }
       setShowPackageForm(false);
       fetchPackages();
-      if (onProfileUpdate) onProfileUpdate();
       if (triggerRefresh) triggerRefresh();
       setShowSuccessModal({ show: true, title: 'প্যাকেজ আপডেট', message: 'প্যাকেজ সফলভাবে সংরক্ষণ করা হয়েছে।' });
     } catch (err: any) { 
@@ -130,7 +121,6 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       const { error } = await supabase.from('subscription_packages').delete().eq('id', id);
       if (error) throw error;
       fetchPackages();
-      if (onProfileUpdate) onProfileUpdate();
       if (triggerRefresh) triggerRefresh();
     } catch (err) {
       setPackages(packages.filter(p => p.id !== id));
@@ -192,7 +182,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     const newTheme = currentTheme === 'dark' ? 'default' : 'dark';
     localStorage.setItem('super_admin_theme', newTheme);
     setMadrasah(prev => prev ? { ...prev, theme: newTheme } : { id: 'super_admin', name: 'Super Admin', theme: newTheme } as any);
-    if (onProfileUpdate) onProfileUpdate();
+    if (triggerRefresh) triggerRefresh();
   };
 
   const displayName = lang === 'bn' ? 'সুপার অ্যাডমিন' : 'Super Admin';
@@ -224,7 +214,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mx-1">
         <button 
-          onClick={() => setView('admin-tutorials')} 
+          onClick={() => navigate('/admin-tutorials')} 
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
         >
           <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -237,7 +227,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         </button>
 
         <button 
-          onClick={() => setView('admin-voice-service')} 
+          onClick={() => navigate('/admin-voice-service')} 
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
         >
           <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">

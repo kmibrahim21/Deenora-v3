@@ -10,17 +10,13 @@ import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-interface AttendanceProps {
-  lang: Language;
-  madrasah: Institution | null;
-  onBack: () => void;
-  userId: string;
-  profile?: Profile | null;
-  activeYear?: any;
-  triggerRefresh?: () => void;
-}
+import { useNavigate } from 'react-router-dom';
+import { useMadrasah } from '../contexts/MadrasahContext';
 
-const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId, profile, activeYear, triggerRefresh }) => {
+const Attendance: React.FC = () => {
+  const { lang, madrasah, userId, profile, activeYear, triggerRefresh } = useMadrasah();
+  const navigate = useNavigate();
+  const onBack = () => navigate(-1);
   const isTeacher = profile?.role === 'teacher';
   const canManageAttendance = !isTeacher || profile?.permissions?.can_manage_attendance;
 

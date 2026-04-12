@@ -11,16 +11,13 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 
-interface AccountingProps {
-  lang: Language;
-  madrasah: Institution | null;
-  onBack: () => void;
-  role: UserRole;
-  profile?: Profile | null;
-  activeYear?: AcademicYear | null;
-}
+import { useNavigate } from 'react-router-dom';
+import { useMadrasah } from '../contexts/MadrasahContext';
 
-const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear }) => {
+const Accounting: React.FC = () => {
+  const { lang, madrasah, role, profile, activeYear } = useMadrasah();
+  const navigate = useNavigate();
+  const onBack = () => navigate(-1);
   const isTeacher = role === 'teacher';
   const canManageAccounting = !isTeacher || profile?.permissions?.can_manage_accounting;
 

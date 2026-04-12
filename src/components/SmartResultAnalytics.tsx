@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { supabase } from 'supabase';
 import { Language } from 'types';
 import { t } from 'translations';
@@ -46,7 +46,7 @@ const localT = {
   roll: { en: 'Roll', bn: 'রোল' },
 };
 
-const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institutionId, lang, madrasah }) => {
+const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = memo(({ institutionId, lang, madrasah }) => {
   const isDark = madrasah?.theme === 'dark';
   const [loading, setLoading] = useState(true);
   const [showFilter, setShowFilter] = useState(false);
@@ -823,6 +823,6 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
       </div>
     </div>
   );
-};
+});
 
 export default SmartResultAnalytics;

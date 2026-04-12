@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import { GraduationCap, ArrowRight, Plus, Loader2, AlertCircle, Users, Banknote } from 'lucide-react';
-import { AcademicYearManager } from './AcademicYearManager';
 import { Institution, Language } from 'types';
+import { useNavigate } from 'react-router-dom';
 
 interface AcademicYearSetupRequiredProps {
   madrasah: Institution;
@@ -12,23 +12,8 @@ interface AcademicYearSetupRequiredProps {
 }
 
 export const AcademicYearSetupRequired: React.FC<AcademicYearSetupRequiredProps> = ({ madrasah, lang, onUpdate, isAdmin }) => {
-  const [showManager, setShowManager] = useState(false);
+  const navigate = useNavigate();
   const isDark = madrasah.theme === 'dark';
-
-  if (showManager && isAdmin) {
-    return (
-      <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-3xl shadow-2xl">
-          <AcademicYearManager 
-            institution={madrasah} 
-            onClose={() => setShowManager(false)} 
-            onUpdate={onUpdate}
-            lang={lang === 'bn' ? 'bn' : 'en'}
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`min-h-[80vh] flex flex-col items-center justify-center p-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-700`}>
@@ -51,7 +36,7 @@ export const AcademicYearSetupRequired: React.FC<AcademicYearSetupRequiredProps>
 
       {isAdmin ? (
         <button
-          onClick={() => setShowManager(true)}
+          onClick={() => navigate('/academic-year')}
           className="group relative flex items-center gap-4 px-12 py-5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-[2rem] font-black text-xl shadow-2xl shadow-blue-600/30 transition-all hover:scale-105 active:scale-95"
         >
           <Plus size={28} />

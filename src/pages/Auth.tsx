@@ -7,12 +7,10 @@ import { Language } from 'types';
 import { t } from 'translations';
 import { isValidUUID } from 'utils/validation';
 import { useOfflineStatus } from '../hooks/useOffline';
+import { useMadrasah } from '../contexts/MadrasahContext';
 
-interface AuthProps {
-  lang: Language;
-}
-
-const Auth: React.FC<AuthProps> = ({ lang }) => {
+const Auth: React.FC = () => {
+  const { lang } = useMadrasah();
   const isOnline = useOfflineStatus();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');

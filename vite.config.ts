@@ -127,19 +127,19 @@ export default defineConfig(({ mode }) => {
             start_url: '/',
             icons: [
               {
-                src: 'https://github.com/kmibrahim21/Deenora/blob/main/public/Deenora192.png',
+                src: 'https://img.icons8.com/ios-filled/192/2563EB/mosque.png',
                 sizes: '192x192',
                 type: 'image/png',
                 purpose: 'any'
               },
               {
-                src: 'https://github.com/kmibrahim21/Deenora/blob/main/public/Deenora512.png',
+                src: 'https://img.icons8.com/ios-filled/512/2563EB/mosque.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'any'
               },
               {
-                src: 'https://github.com/kmibrahim21/Deenora/blob/main/public/Deenora512.png',
+                src: 'https://img.icons8.com/ios-filled/512/2563EB/mosque.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable'

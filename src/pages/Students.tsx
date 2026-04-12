@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap } from 'lucide-react';
 import { supabase, offlineApi, smsApi } from 'supabase';
@@ -7,29 +7,72 @@ import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
-
-
-interface StudentsProps {
-  selectedClass: Class;
-  onStudentClick: (student: Student) => void;
-  onAddClick: () => void;
-  onBack: () => void;
-  lang: Language;
-  dataVersion: number;
-  triggerRefresh: () => void;
-  canAdd?: boolean;
-  canSendSMS?: boolean;
-  canUseVoice?: boolean;
-  institutionId?: string;
-  madrasah?: Institution | null;
-  onNavigateToWallet?: () => void;
-  onNavigateToVoiceBroadcast?: (ids: string[]) => void;
-}
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const PAGE_SIZE = 50;
 
-const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
+interface StudentCardProps {
+  student: Student;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  isDark: boolean;
+  lang: Language;
+  onToggleSelect: (id: string) => void;
+  onNavigate: (id: string) => void;
+}
+
+const StudentCard = memo(({ student, isSelectionMode, isSelected, isDark, lang, onToggleSelect, onNavigate }: StudentCardProps) => {
+  return (
+    <div 
+      onClick={() => isSelectionMode ? onToggleSelect(student.id) : onNavigate(student.id)}
+      className={`group p-4 rounded-[2rem] border-2 transition-all flex items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer ${isSelectionMode && isSelected ? (isDark ? 'bg-blue-600/20 border-[#2563EB] shadow-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB] shadow-[#2563EB]/10') : (isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/40 hover:bg-slate-700/50' : 'bg-white border-slate-100 hover:border-[#2563EB]/20')}`}
+    >
+      <div className="flex items-center gap-4 flex-1 min-w-0">
+        <div className="relative shrink-0">
+          <div className={`w-14 h-14 rounded-[1rem] flex flex-col items-center justify-center shrink-0 border-2 shadow-inner transition-all duration-300 ${isSelectionMode && isSelected ? 'bg-[#2563EB] text-white border-[#2563EB]' : (isDark ? 'bg-slate-800 text-blue-400 border-slate-700 group-hover:bg-slate-700 group-hover:border-[#2563EB]/40' : 'bg-slate-50 text-[#2563EB] border-slate-100 group-hover:bg-blue-50 group-hover:border-[#2563EB]/20')}`}>
+            <span className={`text-[8px] font-black leading-none uppercase tracking-widest ${isSelectionMode && isSelected ? 'opacity-70' : 'opacity-40'}`}>{t('roll', lang)}</span>
+            <span className="text-lg font-black leading-none mt-1">{student.roll || '-'}</span>
+          </div>
+          {isSelectionMode && (
+            <div className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg border-2 transition-all duration-300 ${isSelected ? 'bg-[#2563EB] text-white border-white scale-110' : (isDark ? 'bg-slate-800 text-slate-600 border-slate-700' : 'bg-white text-slate-200 border-slate-100')}`}>
+              <Check size={14} strokeWidth={4} />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className={`font-black text-base font-noto truncate leading-tight group-hover:text-[#2563EB] transition-colors ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h3>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5 group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
+        </div>
+      </div>
+      {!isSelectionMode && (
+        <div className="flex items-center gap-2 shrink-0 ml-3">
+          <button 
+            onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${student.guardian_phone}`; }} 
+            className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-slate-50 text-[#2563EB] border-slate-100'}`}
+          >
+            <Phone size={18} fill="currentColor" />
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); window.location.href = `https://wa.me/88${student.guardian_phone.replace(/\D/g, '')}`; }} 
+            className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
+          >
+            <PhoneCall size={18} fill="currentColor" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+const Students: React.FC = () => {
+  const { classId } = useParams<{ classId: string }>();
+  const { madrasah, lang, dataVersion, triggerRefresh, profile, isAdmin } = useMadrasah();
+  const navigate = useNavigate();
+  const institutionId = madrasah?.id;
+  
   const isOnline = useOfflineStatus();
+  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -43,9 +86,23 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [sending, setSending] = useState(false);
   
+  const canAdd = isAdmin || !!profile?.permissions?.can_manage_students;
+  const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
+  const canUseVoice = isAdmin || !!profile?.permissions?.can_use_voice_call;
+
   const [statusModal, setStatusModal] = useState<{show: boolean, type: 'success' | 'error' | 'balance', title: string, message: string}>({
     show: false, type: 'success', title: '', message: ''
   });
+
+  // Fetch Class Details
+  useEffect(() => {
+    const fetchClass = async () => {
+      if (!classId) return;
+      const { data } = await supabase.from('classes').select('*').eq('id', classId).single();
+      if (data) setSelectedClass(data);
+    };
+    fetchClass();
+  }, [classId]);
 
   // Fetch Templates (Cached)
   const fetchTemplates = useCallback(async () => {
@@ -56,7 +113,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
   // Paginated Fetching
   const fetchStudents = useCallback(async (reset = false) => {
-    if (!institutionId) return;
+    if (!institutionId || !selectedClass) return;
     if (reset) { setLoading(true); setPage(0); } else { setLoadingMore(true); }
 
     const currentPage = reset ? 0 : page;
@@ -136,12 +193,14 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [institutionId, selectedClass.id, page, searchQuery]);
+  }, [institutionId, selectedClass?.id, page, searchQuery]);
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchStudents(true), 400); // Optimized debounced search
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    if (selectedClass) {
+      const timer = setTimeout(() => fetchStudents(true), 400); // Optimized debounced search
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery, selectedClass]);
 
   useEffect(() => {
     fetchTemplates();
@@ -170,8 +229,25 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     } finally { setSending(false); }
   };
 
+  const onNavigateToVoiceBroadcast = (ids: string[]) => {
+    navigate('/voice-broadcast', { state: { preSelectedStudentIds: ids } });
+  };
+
   const canSendSystemSMS = true;
   const canSendFreeSMS = true;
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
+
+  const handleNavigate = useCallback((id: string) => {
+    navigate(`/students/${id}`);
+  }, [navigate]);
+
   const isDark = madrasah?.theme === 'dark';
 
   return (
@@ -187,14 +263,14 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button 
-                onClick={onBack} 
+                onClick={() => navigate('/classes')} 
                 className="w-12 h-12 bg-white/20 backdrop-blur-2xl rounded-[1.2rem] flex items-center justify-center text-white active:scale-90 transition-all border border-white/30 shadow-xl shrink-0 hover:bg-white/30"
               >
                 <ArrowLeft size={24} strokeWidth={3} />
               </button>
               <div>
                 <h1 className="text-xl font-black text-white font-noto tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.2)]">
-                  {selectedClass.class_name}
+                  {selectedClass?.class_name || '...'}
                 </h1>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
@@ -228,7 +304,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                   setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 3000);
                   return;
                 }
-                onAddClick();
+                navigate('/students/new', { state: { defaultClassId: classId } });
               }} 
               className={`w-11 h-11 rounded-[1.2rem] flex items-center justify-center active:scale-90 transition-all border shadow-xl ${!isOnline ? 'bg-slate-400 text-white border-slate-400 cursor-not-allowed' : 'bg-white text-[#2563EB] border-white hover:shadow-[#2563EB]/20'}`}
             >
@@ -255,45 +331,16 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       {/* Student List Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {students.map(student => (
-          <div 
-            key={student.id} 
-            onClick={() => isSelectionMode ? (setSelectedIds(prev => { const n = new Set(prev); if(n.has(student.id)) n.delete(student.id); else n.add(student.id); return n; })) : onStudentClick(student)}
-            className={`group p-4 rounded-[2rem] border-2 transition-all flex items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer ${isSelectionMode && selectedIds.has(student.id) ? (isDark ? 'bg-blue-600/20 border-[#2563EB] shadow-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB] shadow-[#2563EB]/10') : (isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/40 hover:bg-slate-700/50' : 'bg-white border-slate-100 hover:border-[#2563EB]/20')}`}
-          >
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              <div className="relative shrink-0">
-                <div className={`w-14 h-14 rounded-[1rem] flex flex-col items-center justify-center shrink-0 border-2 shadow-inner transition-all duration-300 ${isSelectionMode && selectedIds.has(student.id) ? 'bg-[#2563EB] text-white border-[#2563EB]' : (isDark ? 'bg-slate-800 text-blue-400 border-slate-700 group-hover:bg-slate-700 group-hover:border-[#2563EB]/40' : 'bg-slate-50 text-[#2563EB] border-slate-100 group-hover:bg-blue-50 group-hover:border-[#2563EB]/20')}`}>
-                  <span className={`text-[8px] font-black leading-none uppercase tracking-widest ${isSelectionMode && selectedIds.has(student.id) ? 'opacity-70' : 'opacity-40'}`}>{t('roll', lang)}</span>
-                  <span className="text-lg font-black leading-none mt-1">{student.roll || '-'}</span>
-                </div>
-                {isSelectionMode && (
-                  <div className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg border-2 transition-all duration-300 ${selectedIds.has(student.id) ? 'bg-[#2563EB] text-white border-white scale-110' : (isDark ? 'bg-slate-800 text-slate-600 border-slate-700' : 'bg-white text-slate-200 border-slate-100')}`}>
-                    <Check size={14} strokeWidth={4} />
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className={`font-black text-base font-noto truncate leading-tight group-hover:text-[#2563EB] transition-colors ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h3>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5 group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
-              </div>
-            </div>
-            {!isSelectionMode && (
-              <div className="flex items-center gap-2 shrink-0 ml-3">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${student.guardian_phone}`; }} 
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-slate-50 text-[#2563EB] border-slate-100'}`}
-                >
-                  <Phone size={18} fill="currentColor" />
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); window.location.href = `https://wa.me/88${student.guardian_phone.replace(/\D/g, '')}`; }} 
-                  className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
-                >
-                  <PhoneCall size={18} fill="currentColor" />
-                </button>
-              </div>
-            )}
-          </div>
+          <StudentCard 
+            key={student.id}
+            student={student}
+            isSelectionMode={isSelectionMode}
+            isSelected={selectedIds.has(student.id)}
+            isDark={isDark}
+            lang={lang}
+            onToggleSelect={handleToggleSelect}
+            onNavigate={handleNavigate}
+          />
         ))}
         
         {loading && (

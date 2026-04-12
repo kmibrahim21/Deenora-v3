@@ -11,29 +11,14 @@ import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import SmartResultAnalytics from 'components/SmartResultAnalytics';
 import { isValidUUID } from 'utils/validation';
 import { CacheService } from 'services/cacheService';
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate } from 'react-router-dom';
 
-interface HomeProps {
-  onStudentClick: (student: Student) => void;
-  lang: Language;
-  dataVersion: number;
-  triggerRefresh: () => void;
-  institutionId?: string;
-  madrasah: Institution | null;
-  profile?: any;
-  onNavigateToWallet?: () => void;
-  onNavigateToAccounting?: () => void;
-  onNavigateToAttendance?: () => void;
-  onNavigateToExams?: () => void;
-  onNavigateToClasses?: () => void;
-  onNavigateToTeachers?: () => void;
-  onNavigateToVoiceBroadcast?: () => void;
-}
-
-const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast }) => {
+const Home: React.FC = () => {
+  const { madrasah, profile, lang, triggerRefresh, dataVersion, role, isAdmin } = useMadrasah();
+  const navigate = useNavigate();
+  const institutionId = madrasah?.id;
   const [fetchError, setFetchError] = useState<string | null>(null);
-  
-  const role = profile?.role || 'teacher';
-  const isAdmin = role === 'madrasah_admin' || role === 'super_admin';
   const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
   const canUseVoice = isAdmin || !!profile?.permissions?.can_use_voice_call;
   const canManageStudents = isAdmin || !!profile?.permissions?.can_manage_students;
@@ -175,74 +160,97 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     fetchDashboardStats();
   }, [dataVersion, institutionId, modules.modules.attendance]);
 
+  const handleStudentClick = useCallback((s: any) => {
+    navigate(`/students/${s.id}`);
+  }, [navigate]);
+
   return (
-    <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500 pb-20 lg:pb-8">
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 lg:gap-6 px-1">
+    <div className="space-y-8 lg:space-y-10 animate-in fade-in duration-500 pb-20 lg:pb-8">
+      {/* Greeting Section */}
+      <div className="px-4 py-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className={`text-2xl lg:text-3xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+              {lang === 'bn' ? 'আস-সালামু আলাইকুম' : 'Assalamu Alaikum'}, {profile?.full_name?.split(' ')[0] || (lang === 'bn' ? 'ইউজার' : 'User')}
+            </h1>
+            <p className="text-xs lg:text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">
+              {new Date().toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          </div>
+          <div className="hidden sm:flex items-center gap-3">
+            <div className={`p-3 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
+              <Clock size={20} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-5 lg:gap-6 px-1">
 
         {canManageStudents && (
-          <button onClick={onNavigateToClasses} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><Users size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalStudents}</h4>
-             <p className="text-[10px] lg:text-[12px] font-black text-slate-400 uppercase tracking-widest mt-1 lg:mt-2">শিক্ষার্থী</p>
+          <button onClick={() => navigate('/classes')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 active:scale-95 transition-all group border-transparent hover:border-purple-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><Users size={28} className="lg:w-8 lg:h-8" /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalStudents}</h4>
+             <p className="text-[11px] lg:text-[13px] font-black text-slate-400 uppercase tracking-[0.2em] mt-2 lg:mt-3">শিক্ষার্থী</p>
           </button>
         )}
         {canManageStudents && (
-          <button onClick={onNavigateToClasses} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-75 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><BookOpen size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalClasses}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>শ্রেনী</p>
+          <button onClick={() => navigate('/classes')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 delay-75 active:scale-95 transition-all group border-transparent hover:border-blue-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><BookOpen size={28} className="lg:w-8 lg:h-8" /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalClasses}</h4>
+             <p className={`text-[11px] lg:text-[13px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-[0.2em] mt-2 lg:mt-3`}>শ্রেনী</p>
           </button>
         )}
-        <button onClick={onNavigateToTeachers} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-100 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-green-50 text-green-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><UserIcon size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalTeachers}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>শিক্ষক</p>
+        <button onClick={() => navigate('/teachers')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 delay-100 active:scale-95 transition-all group border-transparent hover:border-green-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-green-50 text-green-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><UserIcon size={28} className="lg:w-8 lg:h-8" /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalTeachers}</h4>
+             <p className={`text-[11px] lg:text-[13px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-[0.2em] mt-2 lg:mt-3`}>শিক্ষক</p>
         </button>
         {canSendSMS && (
-          <button onClick={onNavigateToWallet} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-150 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><Zap size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.smsBalance}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>এসএমএস</p>
+          <button onClick={() => navigate('/wallet-sms')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 delay-150 active:scale-95 transition-all group border-transparent hover:border-amber-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><Zap size={28} className="lg:w-8 lg:h-8" /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.smsBalance}</h4>
+             <p className={`text-[11px] lg:text-[13px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-[0.2em] mt-2 lg:mt-3`}>এসএমএস</p>
           </button>
         )}
         {canUseVoice && modules.modules.voice_broadcast && (
-          <button onClick={onNavigateToVoiceBroadcast} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-175 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><Mic size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.voiceBalance.toFixed(2)}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>ভয়েস</p>
+          <button onClick={() => navigate('/voice-broadcast')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 delay-175 active:scale-95 transition-all group border-transparent hover:border-purple-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><Mic size={28} className="lg:w-8 lg:h-8" /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.voiceBalance.toFixed(2)}</h4>
+             <p className={`text-[11px] lg:text-[13px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-[0.2em] mt-2 lg:mt-3`}>ভয়েস</p>
           </button>
         )}
         {canManageAttendance && modules.modules.attendance && (
-          <button onClick={onNavigateToAttendance} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-200 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><CheckCircle2 size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.attendanceToday}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>আজকের হাজিরা</p>
+          <button onClick={() => navigate('/attendance')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 delay-200 active:scale-95 transition-all group border-transparent hover:border-emerald-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><CheckCircle2 size={28} className="lg:w-8 lg:h-8" /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.attendanceToday}</h4>
+             <p className={`text-[11px] lg:text-[13px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-[0.2em] mt-2 lg:mt-3`}>আজকের হাজিরা</p>
           </button>
         )}
         {canManageAccounting && modules.modules.accounting && (
-          <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-225 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-emerald-600'}`}>{loadingStats ? '...' : stats.totalIncome.toLocaleString()}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>চলতি মাসের আয়</p>
+          <button onClick={() => navigate('/accounting')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 delay-225 active:scale-95 transition-all group border-transparent hover:border-emerald-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><TrendingUp size={28} className="lg:w-8 lg:h-8" /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-emerald-600'}`}>{loadingStats ? '...' : stats.totalIncome.toLocaleString()}</h4>
+             <p className={`text-[11px] lg:text-[13px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-[0.2em] mt-2 lg:mt-3`}>চলতি মাসের আয়</p>
           </button>
         )}
         {canManageAccounting && modules.modules.accounting && (
-          <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-250 active:scale-95 transition-all border`}>
-             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" style={{ transform: 'rotate(180deg)' }} /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-red-600'}`}>{loadingStats ? '...' : stats.totalExpense.toLocaleString()}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>চলতি মাসের ব্যয়</p>
+          <button onClick={() => navigate('/accounting')} className="glass-card p-6 lg:p-7 flex flex-col items-center text-center animate-in zoom-in duration-300 delay-250 active:scale-95 transition-all group border-transparent hover:border-red-500/20">
+             <div className="w-14 h-14 lg:w-16 lg:h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-5 shadow-premium group-hover:scale-110 transition-transform"><TrendingUp size={28} className="lg:w-8 lg:h-8" style={{ transform: 'rotate(180deg)' }} /></div>
+             <h4 className={`text-2xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-red-600'}`}>{loadingStats ? '...' : stats.totalExpense.toLocaleString()}</h4>
+             <p className={`text-[11px] lg:text-[13px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-[0.2em] mt-2 lg:mt-3`}>চলতি মাসের ব্যয়</p>
           </button>
         )}
       </div>
 
       {institutionId && (
-        <div className="space-y-10 lg:space-y-12">
+        <div className="space-y-12 lg:space-y-16">
           {/* Accounting Section */}
           {canManageAccounting && modules.modules.accounting && (
             <div className="px-1 space-y-4">
-               <div className="flex items-center gap-3 px-3">
-                  <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                  <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+               <div className="section-header">
+                  <div className="section-header-dot bg-blue-600"></div>
+                  <h2 className="section-title">
                     হিসাব রিপোর্ট
                   </h2>
                </div>
@@ -257,30 +265,30 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-12 gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-12 gap-8 lg:gap-10">
             {/* Attendance Section */}
             {canManageAttendance && modules.modules.attendance && (
-              <div className="space-y-6 lg:space-y-8 xl:col-span-7">
-                <div className="px-1 space-y-8">
+              <div className="space-y-8 lg:space-y-10 xl:col-span-7">
+                <div className="px-1 space-y-10">
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3 px-3">
-                       <div className="w-1.5 h-6 bg-emerald-600 rounded-full"></div>
-                       <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <div className="section-header">
+                       <div className="section-header-dot bg-emerald-600"></div>
+                       <h2 className="section-title">
                          ঝুঁকি বিশ্লেষণ
                        </h2>
                     </div>
                     <StudentRiskAnalysis 
                       institutionId={institutionId} 
                       lang={lang} 
-                      onStudentClick={onStudentClick} 
+                      onStudentClick={handleStudentClick} 
                       madrasah={madrasah}
                     />
                   </div>
 
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3 px-3">
-                       <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-                       <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <div className="section-header">
+                       <div className="section-header-dot bg-blue-600"></div>
+                       <h2 className="section-title">
                          হাজিরা অ্যানালিটিক্স
                        </h2>
                     </div>
@@ -295,12 +303,12 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
             )}
             
             {/* Result Section */}
-            <div className="space-y-6 lg:space-y-8 xl:col-span-5">
+            <div className="space-y-8 lg:space-y-10 xl:col-span-5">
               {canManageExams && modules.modules.results && (
                 <div className="px-1 space-y-4">
-                   <div className="flex items-center gap-3 px-3">
-                      <div className="w-1.5 h-6 bg-purple-600 rounded-full"></div>
-                      <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                   <div className="section-header">
+                      <div className="section-header-dot bg-purple-600"></div>
+                      <h2 className="section-title">
                         রেজাল্ট রিপোর্ট
                       </h2>
                    </div>

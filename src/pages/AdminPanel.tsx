@@ -7,24 +7,25 @@ import { createClient } from '@supabase/supabase-js';
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History as HistoryIcon, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface InstitutionWithStats extends Institution {
   student_count?: number;
   class_count?: number;
 }
 
-interface AdminPanelProps {
-  lang: Language;
-  currentView?: 'list' | 'dashboard' | 'approvals';
-  dataVersion?: number;
-  onProfileUpdate?: () => void;
-  triggerRefresh?: () => void;
-  madrasah?: Institution | null;
-  profile?: any;
-  setStatusModal: (modal: {show: boolean, type: 'success' | 'error', title: string, message: string}) => void;
-}
+const AdminPanel: React.FC = () => {
+  const { lang, dataVersion, triggerRefresh, madrasah, profile, setStatusModal } = useMadrasah();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const currentViewFromPath = useMemo(() => {
+    if (location.pathname === '/admin-approvals') return 'approvals';
+    if (location.pathname === '/admin-dashboard') return 'dashboard';
+    return 'list';
+  }, [location.pathname]);
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal }) => {
   const [madrasahs, setMadrasahs] = useState<InstitutionWithStats[]>([]);
   const [pendingTrans, setPendingTrans] = useState<Transaction[]>([]);
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
@@ -32,7 +33,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'madrasah' | 'school' | 'kindergarten' | 'nurani'>('all');
   const [view, setView] = useState<'list' | 'approvals' | 'details' | 'dashboard'>(
-    currentView === 'approvals' ? 'approvals' : currentView === 'dashboard' ? 'dashboard' : 'list'
+    currentViewFromPath === 'approvals' ? 'approvals' : currentViewFromPath === 'dashboard' ? 'dashboard' : 'list'
   );
   const [paymentTab, setPaymentTab] = useState<'sms' | 'voice'>('sms');
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
@@ -364,10 +365,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   }, [dataVersion, view]);
 
   useEffect(() => {
-    if (currentView === 'approvals') setView('approvals');
-    else if (currentView === 'dashboard') setView('dashboard');
-    else if (currentView === 'list') setView('list');
-  }, [currentView]);
+    if (currentViewFromPath === 'approvals') setView('approvals');
+    else if (currentViewFromPath === 'dashboard') setView('dashboard');
+    else if (currentViewFromPath === 'list') setView('list');
+  }, [currentViewFromPath]);
 
   // Fix: Add missing handleUserClick function to manage details view and stats
   const handleUserClick = async (user: InstitutionWithStats) => {
@@ -532,7 +533,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'মাদরাসা প্রোফাইল আপডেট হয়েছে।' });
       setEditPassword('');
       initData(true);
-      if (onProfileUpdate) onProfileUpdate();
+      if (triggerRefresh) triggerRefresh();
       setView('list');
     } catch (err: any) {
       let message = err.message;

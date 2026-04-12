@@ -1,6 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { supabase, smsApi } from 'supabase';
+import React, { useState, useEffect, memo } from 'react';
+import { supabase } from 'lib/supabase';
+import { SMSService } from 'services/SMSService';
 import { Language, Class, SMSTemplate, Institution, UserRole, Profile } from 'types';
 import { t } from 'translations';
 import { ShortcodeService } from 'services/ShortcodeService';
@@ -47,7 +48,7 @@ const localT = {
   yearly: { en: 'Yearly', bn: 'বার্ষিক' },
 };
 
-const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, lang, month: initialMonth, refreshKey, classes = [], madrasah, role, profile, activeYear }) => {
+const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = memo(({ institutionId, lang, month: initialMonth, refreshKey, classes = [], madrasah, role, profile, activeYear }) => {
   const [stats, setStats] = useState<any>(null);
   const [reminders, setReminders] = useState<any[]>([]);
   const [breakdown, setBreakdown] = useState<any[]>([]);
@@ -119,7 +120,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     setLoading(true);
     console.log("Fetching analytics for:", { institutionId, viewMode, selectedMonth, selectedYear, selectedClassId });
     try {
-      const activeYearId = madrasah?.config_json?.active_academic_year_id;
+      const activeYearId = activeYear?.id || madrasah?.config_json?.active_academic_year_id;
       // Determine date filter for ledger
       const dateFilter = viewMode === 'monthly' ? selectedMonth : selectedYear;
 
@@ -129,11 +130,10 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         structureQuery = structureQuery.or(`class_id.eq.${selectedClassId},class_id.is.null`);
       }
       const { data: structures, error: structError } = await structureQuery;
-      console.log("Structures:", structures, "Error:", structError);
       if (!structures) return;
 
       // 2. Fetch Students for counts and class mapping
-      let studentQuery = supabase.from('students').select('id, student_name, class_id').eq('institution_id', institutionId);
+      let studentQuery = supabase.from('students').select('id, student_name, class_id, academic_year_id').eq('institution_id', institutionId);
       if (selectedClassId !== 'all') {
         studentQuery = studentQuery.eq('class_id', selectedClassId);
       }
@@ -141,32 +141,28 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
       }
       const { data: students, error: studError } = await studentQuery;
-      console.log("Students:", students, "Error:", studError);
 
       // Fetch student fee settings for the whole institution
       const { data: allSettings } = await supabase.from('student_fee_settings')
           .select('*')
           .eq('institution_id', institutionId);
       
-      const studentCounts: Record<string, number> = {};
       const studentClassMap: Record<string, string> = {};
       
       students?.forEach(s => {
-        studentCounts[s.class_id] = (studentCounts[s.class_id] || 0) + 1;
         studentClassMap[s.student_name] = s.class_id;
       });
 
       // 3. Fetch Ledger for transaction counts (Income) AND Expenses
       let ledgerQuery = supabase.from('ledger')
-        .select('description, amount, type, category, transaction_date')
+        .select('description, amount, type, category, transaction_date, academic_year_id')
         .eq('institution_id', institutionId);
       
       if (activeYearId) {
-        ledgerQuery = ledgerQuery.eq('academic_year_id', activeYearId);
+        ledgerQuery = ledgerQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
       }
 
       const { data: ledger, error: ledgerError } = await ledgerQuery;
-      console.log("Ledger:", ledger, "Error:", ledgerError);
 
       // 4. Process Data
       const breakdownMap: Record<string, { expected: number, collected: number, students: number, transactions: number }> = {};
@@ -489,7 +485,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                      .replace(/\[name\]/g, '{student_name}');
         }
 
-        await smsApi.sendBulk(institutionId, pseudoStudents, body);
+        await SMSService.sendBulk(institutionId, pseudoStudents, body);
         alert(lang === 'bn' ? 'রিমাইন্ডার সফলভাবে পাঠানো হয়েছে' : 'Reminders sent successfully');
       } catch (err: any) {
         alert(err.message || 'Failed to send SMS');
@@ -506,21 +502,21 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-700">
       
       {/* Filters */}
-      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-2xl border shadow-sm flex flex-wrap gap-4 items-center justify-between`}>
-        <div className="flex items-center gap-2">
-            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'} p-1 rounded-xl flex`}>
+      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white/60 border-white/80'} backdrop-blur-xl p-5 rounded-3xl border shadow-soft flex flex-wrap gap-5 items-center justify-between`}>
+        <div className="flex items-center gap-3">
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900/60' : 'bg-slate-100/60'} p-1.5 rounded-2xl flex`}>
                 <button 
                     onClick={() => setViewMode('monthly')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'monthly' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-sm text-blue-400' : 'bg-white shadow-sm text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${viewMode === 'monthly' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-premium text-blue-400' : 'bg-white shadow-premium text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     {localT.monthly[lang]}
                 </button>
                 <button 
                     onClick={() => setViewMode('yearly')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'yearly' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-sm text-blue-400' : 'bg-white shadow-sm text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${viewMode === 'yearly' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-premium text-blue-400' : 'bg-white shadow-premium text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
                 >
                     {localT.yearly[lang]}
                 </button>
@@ -533,13 +529,13 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     onChange={(e) => setSelectedMonth(e.target.value)}
                     min={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : undefined}
                     max={activeYear?.end_date ? activeYear.end_date.slice(0, 7) : undefined}
-                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    className={`px-5 py-2.5 border rounded-2xl text-xs font-black focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900/60 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
                 />
             ) : (
                 <select 
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    className={`px-5 py-2.5 border rounded-2xl text-xs font-black focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900/60 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
                 >
                     {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
                         <option key={y} value={y}>{y}</option>
@@ -548,12 +544,12 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             )}
         </div>
 
-        <div className="flex items-center gap-2">
-            <Filter size={16} className="text-slate-400" />
+        <div className="flex items-center gap-3">
+            <Filter size={18} className="text-slate-400" />
             <select 
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
-                className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 min-w-[150px] ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                className={`px-5 py-2.5 border rounded-2xl text-xs font-black focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all min-w-[180px] ${madrasah?.theme === 'dark' ? 'bg-slate-900/60 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
             >
                 <option value="all">{localT.allClasses[lang]}</option>
                 {localClasses.map(c => (
@@ -563,44 +559,44 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         </div>
       </div>
 
-      {/* Stats Cards - Responsive Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-5">
         {/* Expected Income */}
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-500'}`}>
-              <DollarSign size={24} />
+        <div className={`glass-card p-6 group`}>
+          <div className="flex items-center justify-between mb-5">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+              <DollarSign size={28} />
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('expected_income', lang)}</p>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.expected_income?.toLocaleString('bn-BD')}</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{t('expected_income', lang)}</p>
+              <h3 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.expected_income?.toLocaleString('bn-BD')}</h3>
             </div>
           </div>
-          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+          <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
             <span>{localT.targetMonthly[lang]}</span>
             <span className="text-blue-500">{localT.goal100[lang]}</span>
           </div>
         </div>
 
         {/* Predicted Collection */}
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
-              <TrendingUp size={24} />
+        <div className={`glass-card p-6 group`}>
+          <div className="flex items-center justify-between mb-5">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+              <TrendingUp size={28} />
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{viewMode === 'yearly' ? localT.totalCollected[lang] : t('predicted_total', lang)}</p>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.prediction?.toLocaleString('bn-BD')}</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{viewMode === 'yearly' ? localT.totalCollected[lang] : t('predicted_total', lang)}</p>
+              <h3 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.prediction?.toLocaleString('bn-BD')}</h3>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
+          <div className="space-y-2">
+            <div className="flex justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
               <span>{localT.progress[lang]}</span>
-              <span>{Math.round((stats?.prediction / stats?.expected_income) * 100) || 0}%</span>
+              <span className="text-emerald-500">{Math.round((stats?.prediction / stats?.expected_income) * 100) || 0}%</span>
             </div>
-            <div className={`h-2 w-full rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
+            <div className={`h-2.5 w-full rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
               <div 
-                className="h-full bg-emerald-500 transition-all duration-1000" 
+                className="h-full bg-emerald-500 transition-all duration-1000 shadow-[0_0_12px_rgba(16,185,129,0.4)]" 
                 style={{ width: `${Math.min(100, (stats?.prediction / stats?.expected_income) * 100)}%` }}
               />
             </div>
@@ -608,127 +604,131 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         </div>
 
         {/* Collection Rate */}
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-50 text-indigo-500'}`}>
-              <BarChart3 size={24} />
+        <div className={`glass-card p-6 group`}>
+          <div className="flex items-center justify-between mb-5">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+              <BarChart3 size={28} />
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('collection_rate_label', lang)}</p>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-indigo-400' : 'text-[#1E3A8A]'}`}>{stats?.collection_rate}%</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{t('collection_rate_label', lang)}</p>
+              <h3 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-indigo-400' : 'text-[#1E3A8A]'}`}>{stats?.collection_rate}%</h3>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
-              <div className="h-full bg-indigo-500" style={{ width: `${stats?.collection_rate}%` }} />
+          <div className="flex items-center gap-3">
+            <div className={`flex-1 h-2 rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
+              <div className="h-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.4)]" style={{ width: `${stats?.collection_rate}%` }} />
             </div>
-            <span className="text-[9px] font-black text-indigo-500 uppercase">{localT.active[lang]}</span>
+            <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{localT.active[lang]}</span>
           </div>
         </div>
 
         {/* Total Expense */}
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-500'}`}>
-              <TrendingUp size={24} className="rotate-180" />
+        <div className={`glass-card p-6 group`}>
+          <div className="flex items-center justify-between mb-5">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
+              <TrendingUp size={28} className="rotate-180" />
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{localT.totalExpense[lang]}</p>
-              <h3 className="text-xl font-black text-red-500">৳ {stats?.total_expense?.toLocaleString('bn-BD')}</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{localT.totalExpense[lang]}</p>
+              <h3 className="text-2xl font-black text-red-500">৳ {stats?.total_expense?.toLocaleString('bn-BD')}</h3>
             </div>
           </div>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{localT.monthlyOutflow[lang]}</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{localT.monthlyOutflow[lang]}</p>
         </div>
 
         {/* Net Income */}
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${stats?.net_income >= 0 ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500') : (madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-500')}`}>
-              <Wallet size={24} />
+        <div className={`glass-card p-6 group`}>
+          <div className="flex items-center justify-between mb-5">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${stats?.net_income >= 0 ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600') : (madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600')}`}>
+              <Wallet size={28} />
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{localT.netIncome[lang]}</p>
-              <h3 className={`text-xl font-black ${stats?.net_income >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{localT.netIncome[lang]}</p>
+              <h3 className={`text-2xl font-black ${stats?.net_income >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                 ৳ {stats?.net_income?.toLocaleString('bn-BD')}
               </h3>
             </div>
           </div>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{localT.remainingBalance[lang]}</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{localT.remainingBalance[lang]}</p>
         </div>
       </div>
 
       {/* Fee Breakdown Section */}
-      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble space-y-4`}>
-        <div className="flex items-center gap-3 mb-2">
-           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-50 text-purple-500'}`}>
-              <PieChart size={20} />
-           </div>
-           <h3 className={`text-lg font-black font-noto ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{localT.feeBreakdown[lang]} ({viewMode === 'monthly' ? selectedMonth : selectedYear})</h3>
+      <div className="glass-card p-8 space-y-6">
+        <div className="section-header">
+          <div className="section-header-dot bg-purple-500"></div>
+          <h3 className="section-title">{localT.feeBreakdown[lang]} ({viewMode === 'monthly' ? selectedMonth : selectedYear})</h3>
         </div>
         
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            {breakdown.length > 0 ? breakdown.map((item, idx) => (
-              <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
-                 <div>
-                    <h4 className={`font-black text-sm ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-[#1E3A8A]'}`}>{item.name}</h4>
-                    <div className="flex items-center gap-3 mt-1">
-                       <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Users size={10}/> {item.students} {localT.students[lang]}</span>
-                       <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-1"><CheckCircle2 size={10}/> {item.transactions} {localT.paid[lang]}</span>
+              <div key={idx} className={`p-5 rounded-2xl border flex items-center justify-between transition-all hover:shadow-md group ${madrasah?.theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                 <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${madrasah?.theme === 'dark' ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>
+                       <PieChart size={22} />
+                    </div>
+                    <div>
+                       <h4 className={`font-black text-[15px] ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{item.name}</h4>
+                       <div className="flex items-center gap-4 mt-1.5">
+                          <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Users size={12}/> {item.students} {localT.students[lang]}</span>
+                          <span className="text-[11px] font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1.5"><CheckCircle2 size={12}/> {item.transactions} {localT.paid[lang]}</span>
+                       </div>
                     </div>
                  </div>
                  <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">{localT.expectedCollected[lang]}</p>
-                    <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-[#1E3A8A]'}`}>৳{item.expected.toLocaleString()} / <span className="text-emerald-500">৳{item.collected.toLocaleString()}</span></p>
-                    <p className="text-[10px] font-bold text-red-400 mt-1">{localT.due[lang]}: ৳{(item.expected - item.collected).toLocaleString()}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{localT.expectedCollected[lang]}</p>
+                    <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>৳{item.expected.toLocaleString()} / <span className="text-emerald-500">৳{item.collected.toLocaleString()}</span></p>
+                    <p className="text-[11px] font-black text-red-400 mt-1.5 uppercase tracking-wider">{localT.due[lang]}: ৳{(item.expected - item.collected).toLocaleString()}</p>
                  </div>
               </div>
            )) : (
-              <div className="text-center py-8 text-slate-400 text-xs font-bold">{localT.noFeeStructures[lang]}</div>
+              <div className="col-span-full text-center py-12 text-slate-400 text-sm font-black uppercase tracking-widest opacity-60">{localT.noFeeStructures[lang]}</div>
            )}
         </div>
       </div>
 
       {/* Reminders Section - Only show for Monthly View */}
       {viewMode === 'monthly' && (
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-100 text-[#1E293B]'} p-8 rounded-[2.5rem] shadow-bubble border space-y-6`}>
+        <div className="glass-card p-10 space-y-8">
             <div className="flex items-center justify-between">
-            <div>
-                <h3 className="text-xl font-black font-noto">{t('reminders', lang)}</h3>
-                <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">{reminders.length} {localT.studentsPending[lang]}</p>
-            </div>
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                <AlertCircle size={24} />
-            </div>
+              <div className="section-header">
+                  <div className="section-header-dot bg-blue-500"></div>
+                  <h3 className="section-title">{t('reminders', lang)}</h3>
+                  <span className="ml-4 px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-widest">{reminders.length} {localT.studentsPending[lang]}</span>
+              </div>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border shadow-premium ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                  <AlertCircle size={28} />
+              </div>
             </div>
 
             {/* Template Selection */}
-            <div className="relative">
-              <div className="flex items-center justify-between px-1 mb-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <div className="relative max-w-2xl">
+              <div className="flex items-center justify-between px-1 mb-2.5">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
                   {t('template_title', lang)}
                 </label>
                 <button 
                   onClick={() => setShowShortcodes(!showShortcodes)}
-                  className="text-[10px] font-black text-[#8D30F4] uppercase tracking-widest flex items-center gap-1 hover:opacity-80 transition-all"
+                  className="text-[11px] font-black text-[#8D30F4] uppercase tracking-widest flex items-center gap-1.5 hover:opacity-80 transition-all"
                 >
-                  <Info size={12} /> Shortcodes
+                  <Info size={14} /> Shortcodes
                 </button>
               </div>
 
               {showShortcodes && (
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-purple-500/10 border-purple-500/20' : 'bg-purple-50/50 border-purple-100/50'} p-3 rounded-2xl border mb-3 animate-in slide-in-from-top-2`}>
-                  <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-2">{localT.availableShortcodes[lang]}</p>
-                  <div className="flex flex-wrap gap-1.5">
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-purple-500/10 border-purple-500/20' : 'bg-purple-50/50 border-purple-100/50'} p-5 rounded-3xl border mb-5 animate-in slide-in-from-top-3`}>
+                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3">{localT.availableShortcodes[lang]}</p>
+                  <div className="flex flex-wrap gap-2">
                     {availableShortcodes.map(sc => (
                       <div
                         key={sc.code}
-                        className={`px-2 py-1 rounded-lg text-[9px] font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-purple-300' : 'bg-white border-purple-100 text-[#2E0B5E]'}`}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wider border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-purple-300' : 'bg-white border-purple-100 text-[#2E0B5E]'}`}
                       >
-                        {sc.code} <span className="text-slate-400 font-normal">({sc.label})</span>
+                        {sc.code} <span className="text-slate-400 font-bold ml-1">({sc.label})</span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-[8px] font-bold text-slate-400 mt-2 italic">
+                  <p className="text-[9px] font-bold text-slate-400 mt-3 italic opacity-80">
                     {localT.useShortcodes[lang]}
                   </p>
                 </div>
@@ -736,36 +736,36 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
               <button 
                 onClick={() => setShowTemplateDropdown(!showTemplateDropdown)} 
-                className={`w-full flex items-center justify-between px-5 py-3.5 border rounded-xl text-sm font-bold shadow-sm ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-100 text-slate-600'}`}
+                className={`w-full flex items-center justify-between px-6 py-4 border rounded-2xl text-sm font-black shadow-soft transition-all hover:border-purple-300 ${madrasah?.theme === 'dark' ? 'bg-slate-900/60 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-700'}`}
               >
-                <div className="flex items-center gap-2">
-                  <BookOpen size={16} className="text-[#8D30F4]" />
+                <div className="flex items-center gap-3">
+                  <BookOpen size={18} className="text-[#8D30F4]" />
                   <span className="truncate">{selectedTemplate ? selectedTemplate.title : t('template_title', lang)}</span>
                 </div>
-                <ChevronDown size={18} className={`text-slate-300 transition-all ${showTemplateDropdown ? 'rotate-180' : ''}`} />
+                <ChevronDown size={20} className={`text-slate-400 transition-all duration-300 ${showTemplateDropdown ? 'rotate-180' : ''}`} />
               </button>
               
               {showTemplateDropdown && (
-                <div className={`absolute top-full left-0 right-0 mt-2 rounded-2xl shadow-xl border z-[510] max-h-48 overflow-y-auto p-1 animate-in slide-in-from-top-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className={`absolute top-full left-0 right-0 mt-3 rounded-3xl shadow-2xl border z-[510] max-h-64 overflow-y-auto p-2 animate-in slide-in-from-top-4 backdrop-blur-2xl ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
                   <button 
                     onClick={() => { setSelectedTemplate(null); setShowTemplateDropdown(false); }}
-                    className={`w-full text-left px-4 py-3 border-b last:border-0 rounded-lg ${madrasah?.theme === 'dark' ? 'border-slate-700 hover:bg-slate-900' : 'border-slate-50 hover:bg-slate-50'}`}
+                    className={`w-full text-left px-5 py-4 border-b last:border-0 rounded-2xl transition-all ${madrasah?.theme === 'dark' ? 'border-slate-700 hover:bg-slate-900' : 'border-slate-50 hover:bg-slate-50'}`}
                   >
-                    <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">{localT.default[lang]}</p>
-                    <p className="text-xs font-bold text-slate-500 truncate">{localT.defaultReminder[lang]}</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{localT.default[lang]}</p>
+                    <p className="text-xs font-black text-slate-500 truncate">{localT.defaultReminder[lang]}</p>
                   </button>
                   {templates.map(tmp => (
                     <button 
                       key={tmp.id} 
                       onClick={() => { setSelectedTemplate(tmp); setShowTemplateDropdown(false); }} 
-                      className={`w-full text-left px-4 py-3 border-b last:border-0 rounded-lg ${madrasah?.theme === 'dark' ? 'border-slate-700 hover:bg-slate-900' : 'border-slate-50 hover:bg-slate-50'}`}
+                      className={`w-full text-left px-5 py-4 border-b last:border-0 rounded-2xl transition-all ${madrasah?.theme === 'dark' ? 'border-slate-700 hover:bg-slate-900' : 'border-slate-50 hover:bg-slate-50'}`}
                     >
-                      <p className="text-[8px] font-black text-[#8D30F4] uppercase mb-0.5">{tmp.title}</p>
-                      <p className="text-xs font-bold text-slate-500 truncate">{tmp.body}</p>
+                      <p className="text-[9px] font-black text-[#8D30F4] uppercase tracking-widest mb-1">{tmp.title}</p>
+                      <p className="text-xs font-black text-slate-500 truncate">{tmp.body}</p>
                     </button>
                   ))}
                   {templates.length === 0 && (
-                    <div className="p-4 text-center text-[10px] font-bold text-slate-400 uppercase">
+                    <div className="p-6 text-center text-[11px] font-black text-slate-400 uppercase tracking-widest opacity-60">
                       {t('no_templates', lang)}
                     </div>
                   )}
@@ -773,40 +773,40 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <button 
                 onClick={() => sendBulkReminder('system')}
                 disabled={sending}
-                className="h-14 bg-[#2563EB] text-white rounded-2xl font-black text-[10px] uppercase shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                className="premium-btn h-16 rounded-2xl font-black text-[11px] uppercase tracking-[0.15em] flex items-center justify-center gap-3 disabled:opacity-50"
             >
-                {sending ? <Loader2 className="animate-spin" size={16} /> : <MessageSquare size={16} fill="currentColor" />} {t('system_sms', lang)}
+                {sending ? <Loader2 className="animate-spin" size={20} /> : <MessageSquare size={20} fill="currentColor" />} {t('system_sms', lang)}
             </button>
             <button 
                 onClick={() => sendBulkReminder('native')}
                 disabled={sending}
-                className={`h-14 rounded-2xl font-black text-[10px] uppercase border flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                className={`h-16 rounded-2xl font-black text-[11px] uppercase tracking-[0.15em] border shadow-soft flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
             >
-                <Smartphone size={16} fill="currentColor" /> {t('native_sms', lang)}
+                <Smartphone size={20} fill="currentColor" /> {t('native_sms', lang)}
             </button>
             {(!role || role === 'madrasah_admin' || profile?.permissions?.can_use_voice_call) && (
               <button 
                   onClick={fetchVoices}
                   disabled={sending || isFetchingVoices}
-                  className={`h-14 rounded-2xl font-black text-[10px] uppercase border flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 border-emerald-900/50 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
+                  className={`h-16 rounded-2xl font-black text-[11px] uppercase tracking-[0.15em] border shadow-soft flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/20 border-emerald-800/40 text-emerald-400 hover:bg-emerald-900/30' : 'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100'}`}
               >
-                  {isFetchingVoices ? <Loader2 className="animate-spin" size={16} /> : <PhoneCall size={16} fill="currentColor" />} {t('voice_call', lang)}
+                  {isFetchingVoices ? <Loader2 className="animate-spin" size={20} /> : <PhoneCall size={20} fill="currentColor" />} {t('voice_call', lang)}
               </button>
             )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto pr-3 custom-scrollbar">
             {reminders.map((r, idx) => (
-                <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between group transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:bg-slate-800' : 'bg-slate-50 border-slate-100 hover:bg-white hover:shadow-sm'}`}>
+                <div key={idx} className={`p-5 rounded-2xl border flex items-center justify-between group transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900/60 border-slate-800 hover:bg-slate-800' : 'bg-slate-50 border-slate-100 hover:bg-white hover:shadow-md'}`}>
                 <div className="min-w-0">
-                    <h4 className={`font-black text-sm font-noto truncate ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{r.student_name}</h4>
-                    <p className="text-[9px] font-bold opacity-60 uppercase">{r.class_name || localT.noClass[lang]} • {localT.due[lang]}: ৳{Math.max(0, Number(r.balance_due))}</p>
+                    <h4 className={`font-black text-[15px] font-noto truncate ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{r.student_name}</h4>
+                    <p className="text-[10px] font-black opacity-60 uppercase tracking-wider mt-1">{r.class_name || localT.noClass[lang]} • {localT.due[lang]}: ৳{Math.max(0, Number(r.balance_due))}</p>
                 </div>
-                <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase shrink-0 ${
+                <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest shrink-0 shadow-sm ${
                     r.reminder_type === 'final' ? 'bg-red-500 text-white' : r.reminder_type === 'strong' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'
                 }`}>
                     {r.reminder_type === 'final' ? t('final_warning', lang) : r.reminder_type === 'strong' ? t('strong_reminder', lang) : t('soft_reminder', lang)}
@@ -814,9 +814,9 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 </div>
             ))}
             {reminders.length === 0 && (
-                <div className="col-span-full text-center py-10 opacity-40">
-                <CheckCircle2 size={32} className="mx-auto mb-2" />
-                <p className="text-[10px] font-black uppercase tracking-widest">{localT.allFeesCollected[lang]}</p>
+                <div className="col-span-full text-center py-16 opacity-40">
+                <CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-500" />
+                <p className="text-[11px] font-black uppercase tracking-[0.2em]">{localT.allFeesCollected[lang]}</p>
                 </div>
             )}
             </div>
@@ -887,6 +887,6 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       )}
     </div>
   );
-};
+});
 
 export default SmartFeeAnalytics;

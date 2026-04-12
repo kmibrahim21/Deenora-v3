@@ -20,12 +20,162 @@ interface SchoolResultEngineProps {
   profile?: Profile | null;
 }
 
+const ClassCard = React.memo(({ cls, onSelect, theme }: { cls: Class, onSelect: (id: string) => void, theme?: string }) => (
+  <button
+    onClick={() => onSelect(cls.id)}
+    className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble flex items-center justify-between hover:border-blue-200 transition-all active:scale-95`}
+  >
+    <div className="flex items-center gap-4">
+      <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center"><BookOpen size={24}/></div>
+      <h3 className={`text-lg font-black ${theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{cls.class_name}</h3>
+    </div>
+    <ChevronRight className="text-slate-300" />
+  </button>
+));
+
+const ExamCard = React.memo(({ 
+  exam, 
+  lang, 
+  theme, 
+  role, 
+  onEdit, 
+  onDelete, 
+  onViewSubjects, 
+  onEnterMarks, 
+  onViewReport, 
+  onDownloadAdmitCard 
+}: { 
+  exam: Exam, 
+  lang: Language, 
+  theme?: string, 
+  role: UserRole,
+  onEdit: (exam: Exam) => void,
+  onDelete: (id: string) => void,
+  onViewSubjects: (exam: Exam) => void,
+  onEnterMarks: (exam: Exam) => void,
+  onViewReport: (exam: Exam) => void,
+  onDownloadAdmitCard: (exam: Exam) => void
+}) => (
+  <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] border shadow-bubble space-y-4`}>
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center shadow-inner"><GraduationCap size={24}/></div>
+        <div>
+          <h3 className={`text-lg font-black ${theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>{exam.exam_name}</h3>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(exam as any).classes?.class_name}</span>
+            {exam.is_published && <span className="px-2 py-0.5 bg-green-50 text-green-500 rounded-full text-[8px] font-black uppercase">Published</span>}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-2">
+        <div className="text-[10px] font-black text-slate-300 uppercase">{new Date(exam.exam_date).toLocaleDateString('bn-BD')}</div>
+        {role === 'madrasah_admin' && (
+          <div className="flex gap-2">
+            <button onClick={() => onEdit(exam)} className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-100 transition-colors">
+              <Edit3 size={14} />
+            </button>
+            <button onClick={() => onDelete(exam.id)} className="w-8 h-8 bg-red-50 text-red-600 rounded-lg flex items-center justify-center hover:bg-red-100 transition-colors">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+    <div className="grid grid-cols-3 gap-2">
+      <button onClick={() => onViewSubjects(exam)} className="py-2.5 bg-slate-50 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest border border-slate-100 active:scale-95 transition-all">{t('subject', lang)}</button>
+      <button onClick={() => onEnterMarks(exam)} className="py-2.5 bg-blue-50 text-[#2563EB] rounded-xl text-[9px] font-black uppercase tracking-widest border border-blue-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
+      <button onClick={() => onViewReport(exam)} className="py-2.5 bg-[#2563EB] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
+    </div>
+    <button onClick={() => onDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
+      <CreditCard size={14}/> Admit Card
+    </button>
+  </div>
+));
+
+const SubjectCard = React.memo(({ subject, theme }: { subject: ExamSubject, theme?: string }) => (
+  <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
+    <div className="flex items-center gap-4">
+      <div className="w-10 h-10 bg-blue-50 text-[#2563EB] rounded-xl flex items-center justify-center"><BookOpen size={20}/></div>
+      <h5 className={`font-black ${theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto text-lg`}>{subject.subject_name}</h5>
+    </div>
+    <div className="text-right">
+      <p className="text-[9px] font-black text-slate-400 uppercase">পূর্ণমান: {subject.full_marks}</p>
+      <p className="text-[9px] font-black text-red-400 uppercase">পাস: {subject.pass_marks}</p>
+    </div>
+  </div>
+));
+
+const MarksEntryRow = React.memo(({ 
+  student, 
+  subjects, 
+  marks, 
+  onMarkChange, 
+  theme, 
+  getGradeInfo 
+}: { 
+  student: Student, 
+  subjects: ExamSubject[], 
+  marks: Record<string, string>, 
+  onMarkChange: (studentId: string, subjectId: string, value: string) => void,
+  theme?: string,
+  getGradeInfo: (total: number, passStatus: boolean) => { gpa: string, grade: string }
+}) => {
+  const total = React.useMemo(() => 
+    Object.values(marks || {}).reduce((sum, m) => sum + (parseFloat(m) || 0), 0)
+  , [marks]);
+
+  const average = React.useMemo(() => 
+    subjects.length > 0 ? (total / subjects.length).toFixed(1) : '0'
+  , [total, subjects.length]);
+
+  const passStatus = React.useMemo(() => 
+    subjects.length > 0 && subjects.every(sub => {
+      const mark = parseFloat(marks?.[sub.id] || '0');
+      return mark >= sub.pass_marks;
+    })
+  , [marks, subjects]);
+
+  const gradeInfo = React.useMemo(() => getGradeInfo(total, passStatus), [total, passStatus, getGradeInfo]);
+
+  return (
+    <tr className="border-b border-slate-50 last:border-0">
+      <td className="py-4 pr-4">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-[#2563EB] leading-none mb-1">#{student.roll}</span>
+          <span className={`font-black ${theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto truncate max-w-[100px]`}>{student.student_name}</span>
+        </div>
+      </td>
+      {subjects.map(sub => (
+        <td key={sub.id} className="py-4 px-2">
+          <input 
+            type="number" 
+            className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg text-center font-black text-xs outline-none focus:border-[#2563EB] transition-all"
+            value={marks?.[sub.id] || ''}
+            onChange={(e) => onMarkChange(student.id, sub.id, e.target.value)}
+          />
+        </td>
+      ))}
+      <td className={`py-4 px-2 text-center font-black ${theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
+        {total}
+      </td>
+      <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
+        {average}
+      </td>
+      <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
+        {gradeInfo.gpa}
+      </td>
+    </tr>
+  );
+});
+
 const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah, onBack, role, activeYear, onNavigateToFinalResults, profile }) => {
   const [activeTab, setActiveTab] = useState<'exams' | 'final-results' | 'seat-plan' | 'analytics'>('exams');
   const [view, setView] = useState<'list' | 'subjects' | 'marks' | 'report'>('list');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [exams, setExams] = useState<Exam[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [classesLoading, setClassesLoading] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [subjects, setSubjects] = useState<ExamSubject[]>([]);
   const [marksData, setMarksData] = useState<any>({});
@@ -100,13 +250,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   };
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah?.id);
-    if (data) {
-      let filteredClasses = data;
-      if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+    if (!madrasah?.id) return;
+    setClassesLoading(true);
+    try {
+      const { data, error } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
+      if (error) throw error;
+      if (data) {
+        let filteredClasses = data;
+        if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+          filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+        }
+        setClasses(sortMadrasahClasses(filteredClasses));
       }
-      setClasses(sortMadrasahClasses(filteredClasses));
+    } catch (err) {
+      console.error('Error fetching classes:', err);
+    } finally {
+      setClassesLoading(false);
     }
   };
 
@@ -357,13 +516,32 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     }
   };
 
-  const handleEditClick = (exam: Exam) => {
+  const handleMarkChange = React.useCallback((studentId: string, subjectId: string, value: string) => {
+    setMarksData(prev => ({
+      ...prev,
+      [studentId]: {
+        ...(prev[studentId] || {}),
+        [subjectId]: value
+      }
+    }));
+  }, []);
+
+  const memoizedGetGradeInfo = React.useCallback(getGradeInfo, [subjects]);
+
+  const handleEditExam = React.useCallback((exam: Exam) => {
     setEditingExam(exam);
     setExamName(exam.exam_name || '');
     setExamDate(exam.exam_date || '');
     setClassId(exam.class_id || '');
     setShowAddExam(true);
-  };
+  }, []);
+  const handleDeleteExamClick = React.useCallback((id: string) => { setExamToDelete(id); setShowDeleteConfirm(true); }, []);
+  const handleViewSubjects = React.useCallback((exam: Exam) => { setSelectedExam(exam); setView('subjects'); fetchSubjects(exam.id); }, []);
+  const handleEnterMarks = React.useCallback((exam: Exam) => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }, []);
+  const handleViewReport = React.useCallback((exam: Exam) => { setSelectedExam(exam); setView('report'); fetchSubjects(exam.id); fetchRanking(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }, []);
+  const handleDownloadAdmitCardClick = React.useCallback((exam: Exam) => handleDownloadAdmitCard(exam), []);
+
+  const handleClassSelect = React.useCallback((id: string) => setSelectedClassId(id), []);
 
   const handleDeleteExam = async (examId: string) => {
     setIsSaving(true);
@@ -687,19 +865,27 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
       {activeTab === 'exams' && view === 'list' && !selectedClassId && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classes.map(cls => (
-            <button
-              key={cls.id}
-              onClick={() => setSelectedClassId(cls.id)}
-              className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble flex items-center justify-between hover:border-blue-200 transition-all active:scale-95`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center"><BookOpen size={24}/></div>
-                <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{cls.class_name}</h3>
+          {classesLoading ? (
+            <div className="col-span-full flex justify-center py-20">
+              <Loader2 className="animate-spin text-[#2563EB]" size={40} />
+            </div>
+          ) : classes.length === 0 ? (
+            <div className="col-span-full text-center py-20">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="text-slate-300" size={40} />
               </div>
-              <ChevronRight className="text-slate-300" />
-            </button>
-          ))}
+              <p className="text-slate-400 font-bold">{t('no_classes', lang)}</p>
+            </div>
+          ) : (
+            classes.map(cls => (
+              <ClassCard 
+                key={cls.id} 
+                cls={cls} 
+                onSelect={handleClassSelect} 
+                theme={madrasah?.theme} 
+              />
+            ))
+          )}
         </div>
       )}
 
@@ -719,44 +905,33 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             )}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          {loading ? <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" /></div> : exams.map(exam => (
-            <div key={exam.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] border shadow-bubble space-y-4`}>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center shadow-inner"><GraduationCap size={24}/></div>
-                        <div>
-                            <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>{exam.exam_name}</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{exam.classes?.class_name}</span>
-                                {exam.is_published && <span className="px-2 py-0.5 bg-green-50 text-green-500 rounded-full text-[8px] font-black uppercase">Published</span>}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                        <div className="text-[10px] font-black text-slate-300 uppercase">{new Date(exam.exam_date).toLocaleDateString('bn-BD')}</div>
-                        {role === 'madrasah_admin' && (
-                        <div className="flex gap-2">
-                            <button onClick={() => handleEditClick(exam)} className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-100 transition-colors">
-                                <Edit3 size={14} />
-                            </button>
-                            <button onClick={() => { setExamToDelete(exam.id); setShowDeleteConfirm(true); }} className="w-8 h-8 bg-red-50 text-red-600 rounded-lg flex items-center justify-center hover:bg-red-100 transition-colors">
-                                <Trash2 size={14} />
-                            </button>
-                        </div>
-                        )}
-                    </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => { setSelectedExam(exam); setView('subjects'); fetchSubjects(exam.id); }} className="py-2.5 bg-slate-50 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest border border-slate-100 active:scale-95 transition-all">{t('subject', lang)}</button>
-                    <button onClick={() => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-blue-50 text-[#2563EB] rounded-xl text-[9px] font-black uppercase tracking-widest border border-blue-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
-                    <button onClick={() => { setSelectedExam(exam); setView('report'); fetchSubjects(exam.id); fetchRanking(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-[#2563EB] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
-                </div>
-                <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
-                    <CreditCard size={14}/> Admit Card
-                </button>
+          {loading ? (
+            <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" /></div>
+          ) : exams.length === 0 ? (
+            <div className="col-span-full text-center py-20">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="text-slate-300" size={40} />
+              </div>
+              <p className="text-slate-400 font-bold">{t('no_exams', lang)}</p>
             </div>
-          ))}
-        </div>
+          ) : (
+            exams.map(exam => (
+              <ExamCard 
+                key={exam.id} 
+                exam={exam} 
+                lang={lang} 
+                theme={madrasah?.theme} 
+                role={role} 
+                onEdit={handleEditExam}
+                onDelete={handleDeleteExamClick}
+                onViewSubjects={handleViewSubjects}
+                onEnterMarks={handleEnterMarks}
+                onViewReport={handleViewReport}
+                onDownloadAdmitCard={handleDownloadAdmitCardClick}
+              />
+            ))
+          )}
+          </div>
       </div>
       )}
 
@@ -767,16 +942,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
            </button>
            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {subjects.map(s => (
-                <div key={s.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
-                   <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-blue-50 text-[#2563EB] rounded-xl flex items-center justify-center"><BookOpen size={20}/></div>
-                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto text-lg`}>{s.subject_name}</h5>
-                   </div>
-                   <div className="text-right">
-                      <p className="text-[9px] font-black text-slate-400 uppercase">পূর্ণমান: {s.full_marks}</p>
-                      <p className="text-[9px] font-black text-red-400 uppercase">পাস: {s.pass_marks}</p>
-                   </div>
-                </div>
+                <SubjectCard key={s.id} subject={s} theme={madrasah?.theme} />
               ))}
            </div>
         </div>
@@ -799,49 +965,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     </thead>
                     <tbody>
                         {students.map(std => (
-                            <tr key={std.id} className="border-b border-slate-50 last:border-0">
-                                <td className="py-4 pr-4">
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-[#2563EB] leading-none mb-1">#{std.roll}</span>
-                                        <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto truncate max-w-[100px]`}>{std.student_name}</span>
-                                    </div>
-                                </td>
-                                {subjects.map(sub => (
-                                    <td key={sub.id} className="py-4 px-2">
-                                        <input 
-                                            type="number" 
-                                            className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg text-center font-black text-xs outline-none focus:border-[#2563EB] transition-all"
-                                            value={marksData[std.id]?.[sub.id] || ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                setMarksData(prev => ({
-                                                    ...prev,
-                                                    [std.id]: {
-                                                        ...prev[std.id],
-                                                        [sub.id]: val
-                                                    }
-                                                }));
-                                            }}
-                                        />
-                                    </td>
-                                ))}
-                                <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
-                                    {(Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0)}
-                                </td>
-                                <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
-                                    {subjects.length > 0 ? ((Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0) / subjects.length).toFixed(1) : '0'}
-                                </td>
-                                <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
-                                    {(() => {
-                                        const total = (Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0);
-                                        const passStatus = subjects.length > 0 && subjects.every(sub => {
-                                            const mark = parseFloat((marksData[std.id] || {})[sub.id] || '0');
-                                            return mark >= sub.pass_marks;
-                                        });
-                                        return getGradeInfo(total, passStatus).gpa;
-                                    })()}
-                                </td>
-                            </tr>
+                            <MarksEntryRow 
+                                key={std.id} 
+                                student={std} 
+                                subjects={subjects} 
+                                marks={marksData[std.id]} 
+                                onMarkChange={handleMarkChange} 
+                                theme={madrasah?.theme} 
+                                getGradeInfo={memoizedGetGradeInfo} 
+                            />
                         ))}
                     </tbody>
                 </table>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, AlertCircle, Loader2, Mic, Trash2, CheckCircle2, Smartphone, PhoneCall, ChevronRight, X } from 'lucide-react';
 import { supabase } from 'supabase';
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate } from 'react-router-dom';
 
 interface VoiceServiceDashboardProps {
   onBack: () => void;
@@ -8,7 +10,10 @@ interface VoiceServiceDashboardProps {
   setStatusModal: (modal: any) => void;
 }
 
-export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ onBack, madrasah, setStatusModal }) => {
+export const VoiceServiceDashboard: React.FC = () => {
+  const { madrasah, setStatusModal } = useMadrasah();
+  const navigate = useNavigate();
+  const onBack = () => navigate(-1);
   const [activeTab, setActiveTab] = useState<'voices' | 'assigned_voices' | 'senders' | 'broadcasts'>('voices');
   const [voices, setVoices] = useState<any[]>([]);
   const [assignedVoices, setAssignedVoices] = useState<any[]>([]);

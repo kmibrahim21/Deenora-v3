@@ -7,18 +7,12 @@ import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
 import MultiCalendar from 'components/MultiCalendar';
+import { useMadrasah } from '../contexts/MadrasahContext';
+import { useNavigate } from 'react-router-dom';
 
-interface AccountProps {
-  lang: Language;
-  setLang: (l: Language) => void;
-  onProfileUpdate?: () => void;
-  setView: (view: View) => void;
-  initialMadrasah: Institution | null;
-  onLogout: () => void;
-  profile?: Profile | null;
-}
-
-const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setView, initialMadrasah, onLogout, profile }) => {
+const Account: React.FC = () => {
+  const { lang, setLang, triggerRefresh, madrasah: initialMadrasah, handleLogout: onLogout, profile } = useMadrasah();
+  const navigate = useNavigate();
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -86,7 +80,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       const { error } = await supabase.from('institutions').update({ theme: newTheme }).eq('id', madrasah.id);
       if (error) throw error;
       setMadrasah({ ...madrasah, theme: newTheme });
-      if (onProfileUpdate) onProfileUpdate();
+      if (triggerRefresh) triggerRefresh();
     } catch (err: any) {
       console.error('Error toggling theme:', err);
     }
@@ -163,7 +157,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         logo_url: logoUrl
       }).eq('id', madrasah.id);
       if (error) throw error;
-      if (onProfileUpdate) onProfileUpdate();
+      if (triggerRefresh) triggerRefresh();
       setIsEditingProfile(false);
       setMadrasah(prev => prev ? { ...prev, name: newName, address: newAddress, phone: newPhone } : null);
       setShowSuccessModal({ show: true, title: t('success', lang), message: 'Profile updated successfully' });
@@ -217,7 +211,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
       setLogoUrl(publicUrl);
       setMadrasah(prev => prev ? { ...prev, logo_url: publicUrl } : null);
-      if (onProfileUpdate) onProfileUpdate();
+      if (triggerRefresh) triggerRefresh();
       setShowSuccessModal({ show: true, title: 'সফল', message: 'লোগো আপডেট হয়েছে।' });
     } catch (e: any) { 
       console.error('Upload error:', e);
@@ -318,7 +312,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mx-1">
         {/* Academic Calendar Card */}
         <button 
-          onClick={() => setView('academic-calendar')}
+          onClick={() => navigate('/academic-calendar')}
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
         >
           <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -350,7 +344,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
             </button>
 
             <button 
-              onClick={() => setView('academic-year')} 
+              onClick={() => navigate('/academic-year')} 
               className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
             >
               <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -381,7 +375,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
             </button>
 
             <button 
-              onClick={() => setView('data-management')} 
+              onClick={() => navigate('/data-management')} 
               className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
             >
               <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -395,7 +389,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
             {/* Teacher Management Card */}
             <button 
-              onClick={() => setView('teachers')}
+              onClick={() => navigate('/teachers')}
               className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
             >
               <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -415,7 +409,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
         {/* Video Tutorial Card */}
         <button 
-          onClick={() => setView('tutorials')}
+          onClick={() => navigate('/tutorials')}
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
         >
           <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
