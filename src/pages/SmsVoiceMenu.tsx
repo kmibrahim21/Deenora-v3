@@ -3,15 +3,17 @@ import { MessageSquare, Mic, ArrowLeft } from 'lucide-react';
 import { Language, Institution, Profile, UserRole } from 'types';
 import { t } from 'translations';
 
-import { useNavigate } from 'react-router-dom';
-import { useMadrasah } from '../contexts/MadrasahContext';
+interface SmsVoiceMenuProps {
+  lang: Language;
+  madrasah: Institution | null;
+  onBack: () => void;
+  onNavigateToSms: () => void;
+  onNavigateToVoice: () => void;
+  role: UserRole;
+  profile?: Profile | null;
+}
 
-const SmsVoiceMenu: React.FC = () => {
-  const { lang, madrasah, role, profile } = useMadrasah();
-  const navigate = useNavigate();
-  const onBack = () => navigate(-1);
-  const onNavigateToSms = () => navigate('/wallet-sms');
-  const onNavigateToVoice = () => navigate('/voice-broadcast');
+const SmsVoiceMenu: React.FC<SmsVoiceMenuProps> = ({ lang, madrasah, onBack, onNavigateToSms, onNavigateToVoice, role, profile }) => {
   const isDark = madrasah?.theme === 'dark';
   const isTeacher = role === 'teacher';
   const canSendSms = !isTeacher || profile?.permissions?.can_send_sms;

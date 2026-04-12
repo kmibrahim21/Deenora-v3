@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Loader2, Play, Trash2, X, CheckCircle2 } from 'lucide-react';
 import { supabase } from 'supabase';
-import { useMadrasah } from '../contexts/MadrasahContext';
-import { useNavigate } from 'react-router-dom';
 
 interface TutorialsManagerProps {
   onBack: () => void;
@@ -10,10 +8,7 @@ interface TutorialsManagerProps {
   setStatusModal: (modal: any) => void;
 }
 
-export const TutorialsManager: React.FC = () => {
-  const { madrasah, setStatusModal } = useMadrasah();
-  const navigate = useNavigate();
-  const onBack = () => navigate(-1);
+export const TutorialsManager: React.FC<TutorialsManagerProps> = ({ onBack, madrasah, setStatusModal }) => {
   const [tutorials, setTutorials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);

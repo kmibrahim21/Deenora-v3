@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class } from 'types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -11,7 +11,7 @@ interface Props {
   madrasah: Institution | null;
 }
 
-const AttendanceAnalyticsDashboard: React.FC<Props> = memo(({ institutionId, lang, madrasah }) => {
+const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, madrasah }) => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
@@ -197,6 +197,6 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = memo(({ institutionId, lan
       )}
     </div>
   );
-});
+};
 
 export default AttendanceAnalyticsDashboard;

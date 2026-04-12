@@ -7,12 +7,18 @@ import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
 import MultiCalendar from 'components/MultiCalendar';
-import { useMadrasah } from '../contexts/MadrasahContext';
-import { useNavigate } from 'react-router-dom';
 
-const Account: React.FC = () => {
-  const { lang, setLang, triggerRefresh, madrasah: initialMadrasah, handleLogout: onLogout, profile } = useMadrasah();
-  const navigate = useNavigate();
+interface AccountProps {
+  lang: Language;
+  setLang: (l: Language) => void;
+  onProfileUpdate?: () => void;
+  setView: (view: View) => void;
+  initialMadrasah: Institution | null;
+  onLogout: () => void;
+  profile?: Profile | null;
+}
+
+const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setView, initialMadrasah, onLogout, profile }) => {
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -80,7 +86,7 @@ const Account: React.FC = () => {
       const { error } = await supabase.from('institutions').update({ theme: newTheme }).eq('id', madrasah.id);
       if (error) throw error;
       setMadrasah({ ...madrasah, theme: newTheme });
-      if (triggerRefresh) triggerRefresh();
+      if (onProfileUpdate) onProfileUpdate();
     } catch (err: any) {
       console.error('Error toggling theme:', err);
     }
@@ -157,7 +163,7 @@ const Account: React.FC = () => {
         logo_url: logoUrl
       }).eq('id', madrasah.id);
       if (error) throw error;
-      if (triggerRefresh) triggerRefresh();
+      if (onProfileUpdate) onProfileUpdate();
       setIsEditingProfile(false);
       setMadrasah(prev => prev ? { ...prev, name: newName, address: newAddress, phone: newPhone } : null);
       setShowSuccessModal({ show: true, title: t('success', lang), message: 'Profile updated successfully' });
@@ -211,7 +217,7 @@ const Account: React.FC = () => {
 
       setLogoUrl(publicUrl);
       setMadrasah(prev => prev ? { ...prev, logo_url: publicUrl } : null);
-      if (triggerRefresh) triggerRefresh();
+      if (onProfileUpdate) onProfileUpdate();
       setShowSuccessModal({ show: true, title: 'সফল', message: 'লোগো আপডেট হয়েছে।' });
     } catch (e: any) { 
       console.error('Upload error:', e);
@@ -312,7 +318,7 @@ const Account: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mx-1">
         {/* Academic Calendar Card */}
         <button 
-          onClick={() => navigate('/academic-calendar')}
+          onClick={() => setView('academic-calendar')}
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
         >
           <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -344,7 +350,7 @@ const Account: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => navigate('/academic-year')} 
+              onClick={() => setView('academic-year')} 
               className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
             >
               <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -375,7 +381,7 @@ const Account: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => navigate('/data-management')} 
+              onClick={() => setView('data-management')} 
               className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
             >
               <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -389,7 +395,7 @@ const Account: React.FC = () => {
 
             {/* Teacher Management Card */}
             <button 
-              onClick={() => navigate('/teachers')}
+              onClick={() => setView('teachers')}
               className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
             >
               <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -409,7 +415,7 @@ const Account: React.FC = () => {
 
         {/* Video Tutorial Card */}
         <button 
-          onClick={() => navigate('/tutorials')}
+          onClick={() => setView('tutorials')}
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
         >
           <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">

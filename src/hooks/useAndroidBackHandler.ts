@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 
 /**
  * Android-like back button handler for SPAs
@@ -8,25 +7,32 @@ import { useNavigate, useLocation } from 'react-router-dom';
  * - Mobile/WebView only
  * - Desktop behavior remains unchanged
  */
-export const useAndroidBackHandler = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+export const useAndroidBackHandler = (currentView: string, setView: (view: any) => void) => {
   const lastBackPress = useRef<number>(0);
-  const isRoot = location.pathname === '/' || location.pathname === '/admin-dashboard';
+  const isRoot = currentView === 'home' || currentView === 'admin-dashboard';
 
   useEffect(() => {
     // Only run on mobile/webview
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (!isMobile) return;
 
+    // Push state when view changes to enable back button navigation
+    // We only push if the current history state doesn't already match the current view
+    if (window.history.state?.view !== currentView) {
+      window.history.pushState({ view: currentView }, '');
+    }
+
     const handlePopState = (event: PopStateEvent) => {
-      if (isRoot) {
+      // If we have a state in history, it means we can navigate back to a previous view
+      if (event.state && event.state.view) {
+        setView(event.state.view);
+      } else if (isRoot) {
         // We are on root and trying to go back further - handle double-back to exit
         const now = Date.now();
         if (now - lastBackPress.current < 2000) {
           // Second press within 2 seconds - let it exit
           // This will go back to the browser's previous page or exit the WebView
-          // No action needed, browser will handle it
+          window.history.back();
         } else {
           // First press - show toast and stay
           lastBackPress.current = now;
@@ -72,12 +78,16 @@ export const useAndroidBackHandler = () => {
           }, 2000);
 
           // Push state back to stay on page and intercept next back press
-          window.history.pushState(null, '');
+          window.history.pushState({ view: currentView }, '');
         }
+      } else {
+        // No state in history, but not on root - go home
+        setView('home');
+        window.history.pushState({ view: 'home' }, '');
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [isRoot]);
+  }, [currentView, setView, isRoot]);
 };

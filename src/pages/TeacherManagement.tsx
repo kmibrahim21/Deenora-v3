@@ -44,8 +44,13 @@ import { supabase } from "supabase";
 import { useOfflineStatus } from "hooks/useOffline";
 import { CacheService } from "services/cacheService";
 
-import { useNavigate } from "react-router-dom";
-import { useMadrasah } from "../contexts/MadrasahContext";
+interface TeacherManagementProps {
+  lang: Language;
+  madrasah: Institution | null;
+  onBack: () => void;
+  role?: string;
+  profile?: any;
+}
 
 const initialPermissions: TeacherPermissions = {
   can_manage_students: false,
@@ -62,10 +67,13 @@ const initialPermissions: TeacherPermissions = {
   allowed_classes: [],
 };
 
-const TeacherManagement: React.FC = () => {
-  const { lang, madrasah, role, profile } = useMadrasah();
-  const navigate = useNavigate();
-  const onBack = () => navigate(-1);
+const TeacherManagement: React.FC<TeacherManagementProps> = ({
+  lang,
+  madrasah,
+  onBack,
+  role,
+  profile,
+}) => {
   const isTeacher = role === "teacher";
   const canManageTeachers =
     !isTeacher || profile?.permissions?.can_manage_teachers;

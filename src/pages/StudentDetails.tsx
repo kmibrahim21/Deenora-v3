@@ -4,40 +4,22 @@ import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, M
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
 import { t } from 'translations';
-import { useMadrasah } from '../contexts/MadrasahContext';
-import { useNavigate, useParams } from 'react-router-dom';
 
-const StudentDetails: React.FC = () => {
-  const { studentId } = useParams<{ studentId: string }>();
-  const { madrasah, lang, triggerRefresh, profile, isAdmin } = useMadrasah();
-  const navigate = useNavigate();
-  const [student, setStudent] = useState<Student | null>(null);
-  const [loading, setLoading] = useState(true);
+interface StudentDetailsProps {
+  student: Student;
+  madrasah: Institution | null;
+  onEdit: () => void;
+  onBack: () => void;
+  lang: Language;
+  readOnly?: boolean;
+  institutionId?: string;
+  triggerRefresh?: () => void;
+}
+
+const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEdit, onBack, lang, readOnly, institutionId, triggerRefresh }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const isDark = madrasah?.theme === 'dark';
-  const readOnly = !isAdmin && !profile?.permissions?.can_manage_students;
-
-  useEffect(() => {
-    const fetchStudent = async () => {
-      if (!studentId) return;
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('students')
-        .select('*, classes(class_name)')
-        .eq('id', studentId)
-        .single();
-      
-      if (data) {
-        setStudent({
-          ...data,
-          classes: Array.isArray(data.classes) ? data.classes[0] : data.classes
-        } as Student);
-      }
-      setLoading(false);
-    };
-    fetchStudent();
-  }, [studentId]);
 
   const initiateWhatsAppCall = async (phone: string) => {
     window.location.href = `https://wa.me/88${phone.replace(/\D/g, '')}`;
@@ -58,16 +40,13 @@ const StudentDetails: React.FC = () => {
       if (error) throw error;
       
       if (triggerRefresh) triggerRefresh();
-      navigate(-1);
+      onBack();
     } catch (err: any) {
       alert(err.message);
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
   };
-
-  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-blue-500" /></div>;
-  if (!student) return <div className="text-center py-10">Student not found</div>;
 
   return (
     <div className="animate-in slide-in-from-right-4 duration-700 pb-20 space-y-4">
@@ -81,7 +60,7 @@ const StudentDetails: React.FC = () => {
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => navigate(-1)} 
+              onClick={onBack} 
               className="w-9 h-9 bg-white/20 backdrop-blur-2xl rounded-[1rem] flex items-center justify-center text-white active:scale-90 transition-all border border-white/30 shadow-lg shrink-0 hover:bg-white/30"
             >
               <ArrowLeft size={18} strokeWidth={3} />
@@ -108,7 +87,7 @@ const StudentDetails: React.FC = () => {
                 <Trash2 size={16} />
               </button>
               <button 
-                onClick={() => navigate(`/students/${student.id}/edit`)} 
+                onClick={onEdit} 
                 className="w-9 h-9 bg-white rounded-[1rem] flex items-center justify-center text-[#2563EB] active:scale-90 transition-all border border-white shadow-lg hover:shadow-[#2563EB]/20"
               >
                 <Edit3 size={18} />

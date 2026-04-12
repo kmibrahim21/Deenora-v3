@@ -2,8 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { supabase } from "lib/supabase";
 import { Institution, Class, Exam, Student, AcademicYear } from "types";
-import { useMadrasah } from "../contexts/MadrasahContext";
-import { useNavigate } from "react-router-dom";
 import {
   Loader2,
   Calendar,
@@ -31,10 +29,12 @@ interface AcademicYearManagerProps {
   lang?: "en" | "bn";
 }
 
-export const AcademicYearManager: React.FC = () => {
-  const { madrasah: institution, lang = "en", triggerRefresh: onUpdate } = useMadrasah();
-  const navigate = useNavigate();
-  const onClose = () => navigate(-1);
+export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
+  institution,
+  onClose,
+  onUpdate,
+  lang = "en",
+}) => {
   const isDark = institution?.theme === "dark";
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"years" | "promotion" | "reports">(

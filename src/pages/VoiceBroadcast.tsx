@@ -27,16 +27,19 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { normalizePhone } from 'utils/smsUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useMadrasah } from '../contexts/MadrasahContext';
+interface VoiceBroadcastProps {
+  lang: Language;
+  madrasah: Institution | null;
+  triggerRefresh: () => void;
+  dataVersion: number;
+  isEmbedded?: boolean;
+  role: UserRole;
+  profile?: Profile | null;
+  onBack: () => void;
+  preSelectedStudentIds?: string[];
+}
 
-const VoiceBroadcast: React.FC = () => {
-  const { lang, madrasah, triggerRefresh, dataVersion, role, profile } = useMadrasah();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isEmbedded = location.state?.isEmbedded || false;
-  const preSelectedStudentIds = location.state?.preSelectedStudentIds || [];
-  const onBack = () => navigate(-1);
+const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, triggerRefresh, dataVersion, isEmbedded = false, role, profile, onBack, preSelectedStudentIds = [] }) => {
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canUseVoice = !isTeacher || profile?.permissions?.can_use_voice_call;

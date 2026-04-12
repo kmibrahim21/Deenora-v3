@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import { supabase } from "supabase";
 import { Language, Tutorial, Institution } from "types";
-import { useMadrasah } from "../contexts/MadrasahContext";
-import { useNavigate } from "react-router-dom";
 
 interface TutorialsProps {
   lang: Language;
@@ -18,10 +16,7 @@ interface TutorialsProps {
   madrasah: Institution | null;
 }
 
-const Tutorials: React.FC = () => {
-  const { lang, madrasah } = useMadrasah();
-  const navigate = useNavigate();
-  const onBack = () => navigate(-1);
+const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
   const [loading, setLoading] = useState(true);
 

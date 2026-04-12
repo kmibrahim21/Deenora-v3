@@ -4,8 +4,6 @@ import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangl
 import { supabase } from 'supabase';
 import { Institution, Language } from 'types';
 import * as XLSX from 'xlsx';
-import { useMadrasah } from '../contexts/MadrasahContext';
-import { useNavigate } from 'react-router-dom';
 
 // Declare the Android interface for TypeScript
 declare global {
@@ -23,10 +21,7 @@ interface DataManagementProps {
   triggerRefresh: () => void;
 }
 
-const DataManagement: React.FC = () => {
-  const { lang, madrasah, triggerRefresh } = useMadrasah();
-  const navigate = useNavigate();
-  const onBack = () => navigate(-1);
+const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack, triggerRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });

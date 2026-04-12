@@ -10,15 +10,18 @@ import { getSmsLengthInfo } from 'utils/smsUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 import VoiceBroadcast from './VoiceBroadcast';
 
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useMadrasah } from '../contexts/MadrasahContext';
+interface WalletSMSProps {
+  lang: Language;
+  madrasah: Institution | null;
+  triggerRefresh: () => void;
+  dataVersion: number;
+  initialTab?: 'templates' | 'bulk-sms' | 'history' | 'recharge';
+  role: UserRole;
+  profile?: Profile | null;
+  onBack: () => void;
+}
 
-const WalletSMS: React.FC = () => {
-  const { lang, madrasah, triggerRefresh, dataVersion, role, profile } = useMadrasah();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const initialTab = location.state?.initialTab as 'templates' | 'bulk-sms' | 'history' | 'recharge' | undefined;
-  const onBack = () => navigate(-1);
+const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, dataVersion, initialTab, role, profile, onBack }) => {
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canSendSms = !isTeacher || profile?.permissions?.can_send_sms;

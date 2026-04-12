@@ -119,37 +119,24 @@ export const SMSService = {
 
     if (hasShortcodes) {
       // Send personalized messages in batches
-      const sendPromises = personalizedMessages.map(async (m) => {
-        try {
-          await fetch('/api/sms', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              apiKey,
-              secretKey,
-              callerId,
-              toUser: normalizePhone(m.phone),
-              message: m.text,
-              clientId
-            })
-          });
-        } catch (err) {
-          console.warn("Personalized SMS failed:", err);
-        }
-      });
-      
-      // Execute in chunks to avoid overwhelming the browser
-      const chunkSize = 10;
-      for (let i = 0; i < sendPromises.length; i += chunkSize) {
-        await Promise.all(sendPromises.slice(i, i + chunkSize));
+      const chunkSize = 50;
+      const batches = [];
+      for (let i = 0; i < personalizedMessages.length; i += chunkSize) {
+        batches.push(personalizedMessages.slice(i, i + chunkSize));
       }
 
-      // Insert logs
-      const logChunks = [];
-      for (let i = 0; i < personalizedMessages.length; i += 50) {
-        logChunks.push(personalizedMessages.slice(i, i + 50));
-      }
-      for (const chunk of logChunks) {
+      const sendPromises = batches.map(async (chunk) => {
+        const content = chunk.map(m => ({
+          callerID: callerId,
+          toUser: normalizePhone(m.phone),
+          messageContent: m.text
+        }));
+
+        let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
+        if (clientId) apiUrl += `&clientid=${clientId}`;
+        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("Personalized SMS batch failed:", err); }
+        
+        // Insert logs
         await supabase.from('sms_logs').insert(chunk.map(m => ({
           institution_id: institutionId,
           recipient: m.phone,
@@ -157,49 +144,40 @@ export const SMSService = {
           parts: m.parts,
           status: 'sent'
         })));
-      }
-    } else {
-      // Send individually to ensure compatibility with sendtext
-      const sendPromises = students.map(async (s) => {
-        try {
-          await fetch('/api/sms', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              apiKey,
-              secretKey,
-              callerId,
-              toUser: normalizePhone(s.guardian_phone),
-              message: message,
-              clientId
-            })
-          });
-        } catch (err) {
-          console.warn("SMS failed:", err);
-        }
       });
 
-      // Execute in chunks
-      const chunkSize = 10;
-      for (let i = 0; i < sendPromises.length; i += chunkSize) {
-        await Promise.all(sendPromises.slice(i, i + chunkSize));
+      await Promise.all(sendPromises);
+    } else {
+      // Original bulk logic (same message for all)
+      const chunkSize = 15; 
+      const batches: string[] = [];
+      const studentChunks: Student[][] = [];
+      for (let i = 0; i < students.length; i += chunkSize) {
+        const chunk = students.slice(i, i + chunkSize);
+        const phoneList = chunk.map(s => normalizePhone(s.guardian_phone)).join(',');
+        batches.push(phoneList);
+        studentChunks.push(chunk);
       }
 
-      // Insert logs
-      const { parts } = getSmsLengthInfo(message);
-      const logChunks = [];
-      for (let i = 0; i < students.length; i += 50) {
-        logChunks.push(students.slice(i, i + 50));
-      }
-      for (const chunk of logChunks) {
-        await supabase.from('sms_logs').insert(chunk.map(s => ({
+      const sendPromises = batches.map(async (toUsers, index) => {
+        const content = [{ callerID: callerId, toUser: toUsers, messageContent: message }];
+        let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
+        if (clientId) apiUrl += `&clientid=${clientId}`;
+        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("SMS batch failed:", err); }
+        
+        // Insert logs
+        const chunkStudents = studentChunks[index];
+        const { parts } = getSmsLengthInfo(message);
+        await supabase.from('sms_logs').insert(chunkStudents.map(s => ({
           institution_id: institutionId,
           recipient: s.guardian_phone,
           message: message,
           parts: parts,
           status: 'sent'
         })));
-      }
+      });
+
+      await Promise.all(sendPromises);
     }
 
     return { success: true };
@@ -217,22 +195,9 @@ export const SMSService = {
     }
 
     const target = normalizePhone(phone);
-    try {
-      await fetch('/api/sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey,
-          secretKey,
-          callerId,
-          toUser: target,
-          message: message,
-          clientId
-        })
-      });
-    } catch (e) {
-      console.warn("Direct SMS failed:", e);
-    }
+    let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
+    if (clientId) apiUrl += `&clientid=${clientId}`;
+    try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (e) { console.warn("Direct SMS failed:", e); }
     
     if (institutionId) {
       const { parts } = getSmsLengthInfo(message);

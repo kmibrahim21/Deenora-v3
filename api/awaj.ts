@@ -19,7 +19,6 @@ const getAwajHeaders = () => {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  console.log(`[AwajAPI] Request: ${req.method} ${req.url}`);
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
   const parts = pathname.split('/').filter(Boolean);

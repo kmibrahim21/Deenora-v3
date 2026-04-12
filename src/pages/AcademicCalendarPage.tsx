@@ -2,8 +2,6 @@ import React from "react";
 import { ChevronLeft, Calendar as CalendarIcon, ArrowLeft } from "lucide-react";
 import MultiCalendar from "components/MultiCalendar";
 import { Language, View, Institution } from "types";
-import { useMadrasah } from "../contexts/MadrasahContext";
-import { useNavigate } from "react-router-dom";
 
 interface AcademicCalendarPageProps {
   lang: Language;
@@ -12,10 +10,12 @@ interface AcademicCalendarPageProps {
   role: string;
 }
 
-const AcademicCalendarPage: React.FC = () => {
-  const { lang, madrasah, role } = useMadrasah();
-  const navigate = useNavigate();
-  const onBack = () => navigate(-1);
+const AcademicCalendarPage: React.FC<AcademicCalendarPageProps> = ({
+  lang,
+  onBack,
+  madrasah,
+  role,
+}) => {
   const isDark = madrasah?.theme === "dark";
 
   return (
