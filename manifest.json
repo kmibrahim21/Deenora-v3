@@ -9,19 +9,19 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://imgur.com/Gpat7ME",
+      "src": "https://res.cloudinary.com/dpeubhykd/image/upload/v1775975918/Deenora192_kotqve.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://imgur.com/8ZeIWwk",
+      "src": "https://res.cloudinary.com/dpeubhykd/image/upload/v1775975991/Deenora512_zvmrgj.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://imgur.com/8ZeIWwk",
+      "src": "https://res.cloudinary.com/dpeubhykd/image/upload/v1775975991/Deenora512_zvmrgj.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
