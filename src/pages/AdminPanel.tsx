@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@supabase/supabase-js';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History as HistoryIcon, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
 
@@ -195,9 +195,106 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     fetchPackages();
   }, [fetchPackages, dataVersion]);
 
+  const fetchPaymentHistory = async (institutionId: string) => {
+    setIsLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('institution_id', institutionId)
+        .eq('module', 'subscription')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setPaymentHistory(data || []);
+    } catch (err) {
+      console.error("Error fetching history:", err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleDownloadReceipt = (transaction: any) => {
+    const receiptWindow = window.open('', '_blank');
+    if (!receiptWindow) return;
+    
+    const html = `
+      <html>
+        <head>
+          <title>Receipt - ${transaction.transaction_id}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
+            .logo { font-size: 28px; font-weight: 900; color: #2563eb; letter-spacing: 2px; text-transform: uppercase; }
+            .title { font-size: 18px; color: #666; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px; }
+            .details { margin-bottom: 40px; background: #f8fafc; padding: 20px; border-radius: 12px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
+            .row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+            .label { color: #64748b; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+            .value { font-weight: 700; color: #0f172a; font-size: 15px; text-align: right; }
+            .total { font-size: 24px; font-weight: 900; margin-top: 30px; border-top: 3px solid #0f172a; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; }
+            .footer { text-align: center; margin-top: 60px; font-size: 13px; color: #94a3b8; border-top: 1px solid #eee; padding-top: 20px; }
+            @media print {
+              body { padding: 0; }
+              .details { background: transparent; border: 1px solid #e2e8f0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">Deenora</div>
+            <div class="title">Payment Receipt</div>
+          </div>
+          <div class="details">
+            <div class="row">
+              <span class="label">Transaction ID</span>
+              <span class="value">${transaction.transaction_id}</span>
+            </div>
+            <div class="row">
+              <span class="label">Date</span>
+              <span class="value">${new Date(transaction.created_at).toLocaleString('bn-BD')}</span>
+            </div>
+            <div class="row">
+              <span class="label">Institution</span>
+              <span class="value">${selectedUser?.name || 'N/A'}</span>
+            </div>
+            <div class="row">
+              <span class="label">Phone</span>
+              <span class="value">${selectedUser?.phone || 'N/A'}</span>
+            </div>
+            <div class="row">
+              <span class="label">Description</span>
+              <span class="value">${transaction.description || 'Subscription Payment'}</span>
+            </div>
+            <div class="row">
+              <span class="label">Status</span>
+              <span class="value" style="color: #10b981; text-transform: uppercase;">${transaction.status}</span>
+            </div>
+          </div>
+          <div class="total">
+            <span>Total Paid</span>
+            <span>${transaction.amount.toLocaleString('bn-BD')} ৳</span>
+          </div>
+          <div class="footer">
+            <p>Thank you for your business!</p>
+            <p>Generated by Deenora Management System</p>
+          </div>
+          <script>
+            window.onload = () => { window.print(); }
+          </script>
+        </body>
+      </html>
+    `;
+    receiptWindow.document.write(html);
+    receiptWindow.document.close();
+  };
+
   const [editPassword, setEditPassword] = useState('');
   const [editDiscount, setEditDiscount] = useState(0);
+  const [overrideTotal, setOverrideTotal] = useState<number | ''>('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [showConfirm, setShowConfirm] = useState<{
     show: boolean;
     title: string;
@@ -429,6 +526,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditPaidMonths(userConfig?.paid_months || []);
     setEditPackageRate(userConfig?.package_rate || 0);
     setEditPackageName(userConfig?.package_name || '');
+    setEditDiscount(0);
+    setOverrideTotal('');
     
     // Refresh packages to ensure they match Super Admin settings
     fetchPackages();
@@ -832,68 +931,71 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   }), [madrasahs, searchQuery, filterType]);
 
   return (
-    <div className={`space-y-6 pb-20 animate-in fade-in relative ${madrasah?.theme === 'dark' ? 'text-white' : ''}`}>
+    <div className={`min-h-screen pb-24 animate-in fade-in relative ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-          <Loader2 className="animate-spin mb-4" size={40} />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Loading System Data...</p>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400">
+          <Loader2 className="animate-spin mb-4 text-blue-500" size={40} />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">System Initializing...</p>
         </div>
       ) : (
-        <>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
           {view === 'dashboard' && (
-            <div className="space-y-6 animate-in slide-in-from-bottom-5">
-              <div className="flex items-center justify-between px-2">
-                <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>সিস্টেম ড্যাশবোর্ড</h1>
-                <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
-                   <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
-                </button>
+            <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
+              <div className="flex items-center justify-between">
+                 <div>
+                    <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>সিস্টেম ড্যাশবোর্ড</h1>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Real-time System Overview</p>
+                 </div>
+                 <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                    <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                 </button>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-5 rounded-[2.2rem] border flex flex-col items-center text-center`}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center text-center group hover:border-blue-500/30 transition-all duration-300`}>
+                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
+                    <Users2 size={24} />
+                  </div>
+                  <h4 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalInstitutions}</h4>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Portals</p>
+                </div>
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center text-center group hover:border-emerald-500/30 transition-all duration-300`}>
+                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
+                    <Activity size={24} />
+                  </div>
+                  <h4 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.activeInstitutions}</h4>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Active Portals</p>
+                </div>
+                <div onClick={() => setView('approvals')} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-yellow-900' : 'bg-white border-slate-100 shadow-premium hover:border-yellow-200'} p-6 rounded-[2.5rem] border flex flex-col items-center text-center cursor-pointer transition-all active:scale-95 group`}>
+                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
+                    <CreditCard size={24} />
+                  </div>
+                  <h4 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.pendingApprovals}</h4>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Pending Approvals</p>
+                </div>
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center text-center group hover:border-purple-500/30 transition-all duration-300`}>
+                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
+                    <Banknote size={24} />
+                  </div>
+                  <h4 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalRevenue.toLocaleString('bn-BD')}</h4>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Revenue (৳)</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center text-center`}>
                   <div className={`w-10 h-10 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center mb-2 shadow-inner`}>
-                    <Users2 size={20} />
+                    <GraduationCap size={20} />
                   </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{globalStats.totalInstitutions}</h4>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Portals</p>
+                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalStudents.toLocaleString('bn-BD')}</h4>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Students</p>
                 </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-5 rounded-[2.2rem] border flex flex-col items-center text-center`}>
-                  <div className={`w-10 h-10 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center mb-2 shadow-inner`}>
-                    <Activity size={20} />
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center text-center`}>
+                  <div className={`w-10 h-10 ${madrasah?.theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-500'} rounded-2xl flex items-center justify-center mb-2 shadow-inner`}>
+                    <Layers size={20} />
                   </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{globalStats.activeInstitutions}</h4>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Active Portals</p>
-                </div>
-                <div onClick={() => setView('approvals')} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-yellow-900' : 'bg-white border-slate-100 shadow-bubble hover:border-yellow-200'} p-5 rounded-[2.2rem] border flex flex-col items-center text-center cursor-pointer transition-all active:scale-95`}>
-                  <div className={`w-10 h-10 ${madrasah?.theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-500'} rounded-2xl flex items-center justify-center mb-2 shadow-inner`}>
-                    <CreditCard size={20} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{globalStats.pendingApprovals}</h4>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Pending Approvals</p>
-                </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-5 rounded-[2.2rem] border flex flex-col items-center text-center`}>
-                  <div className={`w-10 h-10 ${madrasah?.theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-500'} rounded-2xl flex items-center justify-center mb-2 shadow-inner`}>
-                    <Banknote size={20} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{globalStats.totalRevenue.toLocaleString('bn-BD')}</h4>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Revenue (৳)</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-4 rounded-[2rem] border flex flex-col items-center text-center`}>
-                  <div className={`w-8 h-8 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-xl flex items-center justify-center mb-1 shadow-inner`}>
-                    <GraduationCap size={16} />
-                  </div>
-                  <h4 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{globalStats.totalStudents.toLocaleString('bn-BD')}</h4>
-                  <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Students</p>
-                </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-4 rounded-[2rem] border flex flex-col items-center text-center`}>
-                  <div className={`w-8 h-8 ${madrasah?.theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-500'} rounded-xl flex items-center justify-center mb-1 shadow-inner`}>
-                    <Layers size={16} />
-                  </div>
-                  <h4 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{globalStats.totalClasses.toLocaleString('bn-BD')}</h4>
-                  <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Classes</p>
+                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalClasses.toLocaleString('bn-BD')}</h4>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Classes</p>
                 </div>
               </div>
 
@@ -980,7 +1082,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
                 <div className="flex items-center justify-between">
                   <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>সাম্প্রতিক লেনদেন</h3>
-                  <HistoryIcon size={24} className="text-slate-300" />
+                  <History size={24} className="text-slate-300" />
                 </div>
                 <div className="space-y-3">
                   {transactionHistory.slice(0, 5).map(tr => (
@@ -1012,64 +1114,91 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           )}
 
           {view === 'list' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between px-2">
-                <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>মাদরাসা লিস্ট</h1>
-                <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
-                   <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
-                </button>
-              </div>
-
-              <div className="flex gap-2 px-1">
-                <div className="relative group flex-1">
-                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                  <input type="text" placeholder="Search name or code..." className={`w-full h-14 pl-14 pr-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'} border rounded-[2rem] outline-none font-bold shadow-bubble`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>মাদরাসা লিস্ট</h1>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Registered Institutions</p>
                 </div>
-                <select 
-                  className={`h-14 px-4 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'} border rounded-[2rem] outline-none font-bold shadow-bubble text-xs`}
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value as any)}
-                >
-                  <option value="all">All</option>
-                  <option value="madrasah">Madrasah</option>
-                  <option value="school">School</option>
-                  <option value="kindergarten">Kindergarten</option>
-                  <option value="nurani">Nurani</option>
-                </select>
+                <div className="flex items-center gap-3">
+                  <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                    <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                  </button>
+                  <button onClick={() => setShowCreateModal(true)} className="flex-1 sm:flex-none h-12 px-6 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-widest">
+                    <Plus size={20} /> New Portal
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative group flex-1">
+                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                  <input 
+                    type="text" 
+                    placeholder="Search by name, phone or ID..." 
+                    className={`w-full h-14 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100 text-slate-800 focus:bg-slate-50'} border rounded-2xl outline-none font-bold shadow-premium transition-all focus:border-blue-500/50`} 
+                    value={searchQuery} 
+                    onChange={(e) => setSearchQuery(e.target.value)} 
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <select 
+                    className={`h-14 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'} border rounded-2xl outline-none font-bold shadow-premium text-xs uppercase tracking-widest flex-1 md:flex-none`}
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value as any)}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="madrasah">Madrasah</option>
+                    <option value="school">School</option>
+                    <option value="kindergarten">Kindergarten</option>
+                    <option value="nurani">Nurani</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filtered.length > 0 ? filtered.map(m => (
-                  <div key={m.id} onClick={() => handleUserClick(m)} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-blue-900' : 'bg-white border-slate-100 shadow-bubble hover:border-[#2563EB]/30'} p-5 rounded-[2.2rem] border active:scale-[0.98] transition-all cursor-pointer`}>
-                    <div className="flex items-center justify-between mb-3">
+                  <div key={m.id} onClick={() => handleUserClick(m)} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-100 shadow-premium hover:border-blue-500/30'} p-6 rounded-[2.5rem] border active:scale-[0.98] transition-all cursor-pointer group relative overflow-hidden`}>
+                    <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-4 min-w-0">
-                        <div className={`w-14 h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} rounded-2xl flex items-center justify-center text-slate-300 border shadow-inner shrink-0 overflow-hidden`}>
-                          {m.logo_url ? <img src={m.logo_url} className="w-full h-full object-contain" /> : <UserIcon size={24} />}
+                        <div className={`w-16 h-16 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} rounded-[1.5rem] flex items-center justify-center text-slate-300 border shadow-inner shrink-0 overflow-hidden group-hover:scale-105 transition-transform`}>
+                          {m.logo_url ? <img src={m.logo_url} className="w-full h-full object-contain" /> : <UserIcon size={28} />}
                         </div>
                         <div className="min-w-0">
-                          <h3 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} truncate font-noto text-lg`}>{m.name}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${m.is_active ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                              {m.is_active ? 'Active' : 'Blocked'}
-                            </p>
-                            <span className="text-[10px] text-slate-300">•</span>
-                            <p className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
-                              {m.institution_type || 'madrasah'}
-                            </p>
-                            {m.config_json?.modules?.voice_broadcast !== false && (
-                              <p className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">
-                                Voice
-                              </p>
-                            )}
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{m.phone || 'No Phone'}</p>
-                          </div>
+                          <h3 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} truncate font-noto text-lg leading-tight`}>{m.name}</h3>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 truncate">{m.phone || 'No Phone'}</p>
                         </div>
                       </div>
+                      <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${m.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                        {m.is_active ? 'Active' : 'Blocked'}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                        {m.institution_type || 'madrasah'}
+                      </span>
+                      {m.config_json?.modules?.voice_broadcast !== false && (
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-500">
+                          Voice
+                        </span>
+                      )}
+                      <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500">
+                        {m.balance || 0} ৳
+                      </span>
+                    </div>
+
+                    <div className="absolute bottom-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ChevronRight size={20} className="text-blue-500" />
                     </div>
                   </div>
                 )) : (
-                  <div className={`text-center py-20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'} rounded-[2.5rem] border-2 border-dashed`}>
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">No Madrasahs Found</p>
+                  <div className={`col-span-full text-center py-24 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'} rounded-[3rem] border-2 border-dashed`}>
+                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Search size={32} className="text-slate-300" />
+                    </div>
+                    <h4 className="text-lg font-black text-slate-900">No Madrasahs Found</h4>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Try adjusting your search or filter</p>
                   </div>
                 )}
               </div>
@@ -1077,24 +1206,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           )}
 
           {view === 'approvals' && (
-            <div className="space-y-8 px-1">
-              <div className="flex items-center justify-between px-2">
-                <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>পেমেন্ট ম্যানেজমেন্ট</h1>
-                <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
-                   <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+            <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>পেমেন্ট ম্যানেজমেন্ট</h1>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Approve and Manage Transactions</p>
+                </div>
+                <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                   <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
                 </button>
               </div>
 
-              <div className={`flex ${madrasah?.theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'} p-1 rounded-2xl`}>
+              <div className={`flex ${madrasah?.theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'} p-1.5 rounded-2xl`}>
                 <button 
                   onClick={() => setPaymentTab('sms')}
-                  className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${paymentTab === 'sms' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
+                  className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentTab === 'sms' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : 'text-slate-400'}`}
                 >
                   SMS Recharge
                 </button>
                 <button 
                   onClick={() => setPaymentTab('voice')}
-                  className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${paymentTab === 'voice' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
+                  className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentTab === 'voice' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : 'text-slate-400'}`}
                 >
                   Voice Recharge
                 </button>
@@ -1104,7 +1236,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
                    <AlertCircle size={14} className="text-amber-400" /> Pending Requests
                 </h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {pendingTrans.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
                     return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
@@ -1112,80 +1244,83 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     const desc = (tr.description || '').toLowerCase();
                     return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
                   }).map(tr => (
-                    <div key={tr.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-bubble space-y-4 animate-in slide-in-from-left-4">
+                    <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border space-y-5 animate-in slide-in-from-left-4`}>
                       <div className="flex items-center justify-between">
-                        <div className="bg-emerald-50 text-emerald-600 px-4 py-1.5 rounded-full text-[16px] font-black border border-emerald-100">{tr.amount} ৳</div>
+                        <div className="bg-emerald-500/10 text-emerald-600 px-4 py-2 rounded-2xl text-lg font-black">{tr.amount} ৳</div>
                         <div className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5">
                            <Clock size={12} /> {new Date(tr.created_at).toLocaleDateString('bn-BD')}
                         </div>
                       </div>
-                      <div className="px-1 space-y-1">
-                        <p className="text-[15px] font-black text-[#1E3A8A] font-noto">{tr.institutions?.name}</p>
-                        <div className="flex flex-col gap-0.5">
-                           <p className="text-[10px] font-bold text-slate-400">TrxID: <span className="text-[#2563EB]">{tr.transaction_id}</span></p>
-                           <p className="text-[11px] font-black text-[#1E3A8A] flex items-center gap-1.5">
-                               <Smartphone size={12} className="text-[#2563EB]" /> 
-                               বিকাশ নম্বর: <span className="text-slate-800">{tr.sender_phone || 'N/A'}</span>
+                      <div className="px-1 space-y-2">
+                        <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight`}>{tr.institutions?.name}</p>
+                        <div className="flex flex-col gap-1">
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TrxID: <span className="text-blue-500 font-mono">{tr.transaction_id}</span></p>
+                           <p className={`text-xs font-black flex items-center gap-2 ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                               <Smartphone size={14} className="text-blue-500" /> 
+                               বিকাশ নম্বর: <span className="font-mono">{tr.sender_phone || 'N/A'}</span>
                            </p>
                         </div>
                       </div>
                       
-                      <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <div className="flex items-center gap-2">
-                           <MessageSquare size={16} className={smsEnabledMap[tr.id] ? "text-[#2563EB]" : "text-slate-300"} />
-                           <span className="text-[10px] font-black text-slate-500 uppercase">অ্যাপ্রুভ হলে SMS পাঠান</span>
+                      <div className={`flex items-center justify-between ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} p-4 rounded-2xl border`}>
+                        <div className="flex items-center gap-3">
+                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${smsEnabledMap[tr.id] ? 'bg-blue-500/20 text-blue-500' : 'bg-slate-200 text-slate-400'}`}>
+                              <MessageSquare size={16} />
+                           </div>
+                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight">অ্যাপ্রুভ হলে SMS পাঠান</span>
                         </div>
                         <button onClick={() => toggleSmsForRequest(tr.id)} className="transition-all active:scale-90">
                            {smsEnabledMap[tr.id] ? (
-                             <ToggleRight className="text-[#2563EB]" size={28} />
+                             <ToggleRight className="text-blue-500" size={32} />
                            ) : (
-                             <ToggleLeft className="text-slate-300" size={28} />
+                             <ToggleLeft className="text-slate-300" size={32} />
                            )}
                         </button>
                       </div>
 
-                      <div className="flex flex-col gap-3">
-                        <div className="flex flex-col gap-2.5">
-                          {paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && (
-                            <input 
-                              type="number" 
-                              disabled={approvingIds.has(tr.id)}
-                              className="w-full h-14 px-6 bg-slate-50 border border-slate-100 rounded-[1.5rem] font-black text-base text-center outline-none focus:border-[#2563EB]/20 disabled:opacity-50" 
-                              value={smsToCredit[tr.id] || ''} 
-                              onChange={(e) => setSmsToCredit({...smsToCredit, [tr.id]: e.target.value})} 
-                              placeholder="SMS Quantity" 
-                            />
-                          )}
-                          <button 
-                            onClick={() => approveTransaction(tr)} 
-                            disabled={approvingIds.has(tr.id) || (paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && !smsToCredit[tr.id])}
-                            className="w-full h-14 bg-[#2563EB] text-white font-black rounded-[1.5rem] text-sm active:scale-95 transition-all shadow-premium disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center"
-                          >
-                            {approvingIds.has(tr.id) ? <Loader2 className="animate-spin" size={20} /> : 'অনুমোদন দিন'}
-                          </button>
-                        </div>
+                      <div className="space-y-3">
+                        {paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && (
+                          <input 
+                            type="number" 
+                            disabled={approvingIds.has(tr.id)}
+                            className={`w-full h-14 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl font-black text-base text-center outline-none focus:border-blue-500/30 disabled:opacity-50 transition-all`} 
+                            value={smsToCredit[tr.id] || ''} 
+                            onChange={(e) => setSmsToCredit({...smsToCredit, [tr.id]: e.target.value})} 
+                            placeholder="SMS Quantity" 
+                          />
+                        )}
+                        <button 
+                          onClick={() => approveTransaction(tr)} 
+                          disabled={approvingIds.has(tr.id) || (paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && !smsToCredit[tr.id])}
+                          className="w-full h-14 bg-blue-600 text-white font-black rounded-2xl text-sm active:scale-95 transition-all shadow-lg shadow-blue-600/20 disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center gap-2"
+                        >
+                          {approvingIds.has(tr.id) ? <Loader2 className="animate-spin" size={20} /> : <><CheckCircle size={18} /> অনুমোদন দিন</>}
+                        </button>
                         <button 
                           onClick={() => setRejectConfirm(tr)} 
                           disabled={approvingIds.has(tr.id)}
-                          className="w-full h-12 bg-red-50 text-red-500 font-black rounded-[1.5rem] text-xs active:scale-95 transition-all border border-red-100 disabled:opacity-50"
+                          className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-500 border-red-100'} font-black rounded-2xl text-xs active:scale-95 transition-all border disabled:opacity-50`}
                         >
                           রিকোয়েস্ট বাতিল করুন
                         </button>
                       </div>
                     </div>
                   )) : (
-                    <div className="text-center py-10 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                    <div className={`col-span-full text-center py-24 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'} rounded-[3rem] border-2 border-dashed`}>
+                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <AlertCircle size={28} className="text-slate-300" />
+                      </div>
                       <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">No Pending Requests</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-6 pt-4 border-t border-slate-100">
+              <div className="space-y-6 pt-8 border-t border-slate-100">
                 <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                   <HistoryIcon size={14} className="text-blue-400" /> Recent Transactions
+                   <History size={14} className="text-blue-400" /> Recent Transactions
                 </h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {transactionHistory.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
                     return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
@@ -1193,31 +1328,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     const desc = (tr.description || '').toLowerCase();
                     return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
                   }).map(tr => (
-                    <div key={tr.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-bubble flex items-center justify-between">
+                    <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-5 rounded-[2rem] border flex items-center justify-between group hover:border-blue-500/30 transition-all`}>
                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                             <p className="text-[15px] font-black text-[#1E3A8A] leading-none">{tr.amount} ৳</p>
-                             <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                             <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} leading-none`}>{tr.amount} ৳</p>
+                             <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
                                 {tr.status}
                              </span>
                           </div>
-                          <p className="text-[12px] font-black text-[#1E3A8A] font-noto truncate">{tr.institutions?.name}</p>
+                          <p className={`text-xs font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'} font-noto truncate`}>{tr.institutions?.name}</p>
                           <p className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-2">
-                             <Smartphone size={10} /> বিকাশ: {tr.sender_phone || 'N/A'}
-                             {tr.sms_count && <span className="text-[#2563EB] font-black">({tr.sms_count} SMS)</span>}
+                             <Smartphone size={10} /> {tr.sender_phone || 'N/A'}
+                             {tr.sms_count && <span className="text-blue-500 font-black">({tr.sms_count} SMS)</span>}
                           </p>
-                          <div className="flex items-center gap-2 mt-1.5 text-slate-400">
+                          <div className="flex items-center gap-2 mt-2 text-slate-400">
                              <Clock size={10} />
                              <p className="text-[9px] font-bold">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
                           </div>
                        </div>
-                       <div className="text-right ml-4">
-                          <p className="text-[9px] font-black text-slate-300 uppercase tracking-tighter">TrxID</p>
-                          <p className="text-[10px] font-black text-[#2563EB] uppercase leading-tight">{tr.transaction_id}</p>
+                       <div className="text-right ml-4 shrink-0">
+                          <p className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">TrxID</p>
+                          <p className="text-[10px] font-black text-blue-500 font-mono uppercase leading-tight">{tr.transaction_id}</p>
                        </div>
                     </div>
                   )) : (
-                    <div className="text-center py-10 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+                    <div className={`col-span-full text-center py-20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'} rounded-[2.5rem] border-2 border-dashed`}>
                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">No History Found</p>
                     </div>
                   )}
@@ -1227,10 +1362,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           )}
 
           {view === 'details' && selectedUser && (
-             <div className="animate-in slide-in-from-right-10 duration-500 pb-24 space-y-6 pt-2 max-w-5xl mx-auto">
+             <div className="animate-in slide-in-from-right-10 duration-500 pb-24 space-y-8 pt-2">
                 {/* Header */}
-                <div className="flex items-center gap-4 px-2">
-                   <button onClick={() => setView('list')} className={`w-12 h-12 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-white text-[#2563EB] border-slate-200 hover:bg-slate-50'} rounded-2xl flex items-center justify-center active:scale-95 transition-all border shadow-sm`}>
+                <div className="flex items-center gap-4">
+                   <button onClick={() => setView('list')} className={`w-12 h-12 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-white text-blue-600 border-slate-200 hover:bg-slate-50'} rounded-2xl flex items-center justify-center active:scale-95 transition-all border shadow-sm`}>
                       <ArrowLeft size={24} strokeWidth={2.5} />
                    </button>
                    <div className="min-w-0 flex-1">
@@ -1239,22 +1374,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                    </div>
                 </div>
 
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-200 shadow-xl shadow-slate-200/40'} rounded-[2.5rem] md:rounded-[3rem] p-5 md:p-8 border space-y-8`}>
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-200 shadow-premium'} rounded-[3rem] p-6 md:p-10 border space-y-10`}>
                    {/* Profile Header */}
-                   <div className="flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-                      <div className={`w-28 h-28 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-white'} rounded-[2rem] flex items-center justify-center border-4 shadow-lg overflow-hidden relative group`}>
-                         {selectedUser.logo_url ? <img src={selectedUser.logo_url} className="w-full h-full object-contain" /> : <UserIcon size={48} className="text-slate-300" />}
-                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                   <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+                      <div className={`w-32 h-32 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-white'} rounded-[2.5rem] flex items-center justify-center border-4 shadow-xl overflow-hidden relative group`}>
+                         {selectedUser.logo_url ? <img src={selectedUser.logo_url} className="w-full h-full object-contain" /> : <UserIcon size={56} className="text-slate-300" />}
+                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm cursor-pointer">
                             <Camera size={24} className="text-white" />
                          </div>
                       </div>
-                      <div className="flex-1 space-y-3">
-                        <h2 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight`}>{selectedUser.name}</h2>
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                          <div className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border ${editActive ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border-emerald-200') : (madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 text-red-600 border-red-200')}`}>
+                      <div className="flex-1 space-y-4">
+                        <h2 className={`text-3xl md:text-4xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight tracking-tight`}>{selectedUser.name}</h2>
+                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                          <div className={`px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border ${editActive ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200') : (madrasah?.theme === 'dark' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-red-50 text-red-600 border-red-200')}`}>
                              <Activity size={14} /> {editActive ? 'Active Portal' : 'Access Restricted'}
                           </div>
-                          <div className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                          <div className={`px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest flex items-center gap-2 border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                              {editInstitutionType || 'Institution'}
                           </div>
                         </div>
@@ -1262,50 +1397,50 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                    </div>
 
                    {/* Stats Grid */}
-                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-blue-500/30 transition-all`}>
                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Students</p>
-                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{userStats.students}</h5>
+                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{userStats.students}</h5>
                       </div>
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-blue-500/30 transition-all`}>
                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Classes</p>
-                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{userStats.classes}</h5>
+                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{userStats.classes}</h5>
                       </div>
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-blue-500/50 transition-all`}>
                          <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">SMS Balance</p>
-                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{selectedUser.sms_balance || 0}</h5>
+                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>{selectedUser.sms_balance || 0}</h5>
                       </div>
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'} p-5 rounded-3xl border flex flex-col justify-center`}>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} p-6 rounded-[2rem] border flex flex-col justify-center group hover:border-emerald-500/50 transition-all`}>
                          <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Voice Balance</p>
-                         <h5 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>৳ {Number(selectedUser.balance || 0).toFixed(2)}</h5>
+                         <h5 className={`text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>৳ {Number(selectedUser.balance || 0).toFixed(2)}</h5>
                       </div>
                    </div>
 
                    {/* Tab Navigation */}
-                   <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-5 px-5 md:mx-0 md:px-0">
+                   <div className="flex items-center gap-2 overflow-x-auto pb-4 custom-scrollbar -mx-6 px-6 md:mx-0 md:px-0">
                       <button 
                         onClick={() => setDetailsTab('institution')}
-                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'institution' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
+                        className={`px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-3 shrink-0 ${detailsTab === 'institution' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <Building2 size={16} /> {lang === 'bn' ? 'প্রতিষ্ঠান তথ্য' : 'Institution Info'}
+                         <Building2 size={18} /> {lang === 'bn' ? 'প্রতিষ্ঠান তথ্য' : 'Institution Info'}
                       </button>
                       <button 
                         onClick={() => setDetailsTab('api')}
-                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'api' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
+                        className={`px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-3 shrink-0 ${detailsTab === 'api' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <Key size={16} /> {lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}
+                         <Key size={18} /> {lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}
                       </button>
                       <button 
                         onClick={() => setDetailsTab('permissions')}
-                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'permissions' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
+                        className={`px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-3 shrink-0 ${detailsTab === 'permissions' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <ShieldCheck size={16} /> {lang === 'bn' ? 'পারমিশন' : 'Permissions'}
+                         <Shield size={18} /> {lang === 'bn' ? 'পারমিশন' : 'Permissions'}
                       </button>
                       <button 
                         onClick={() => setDetailsTab('subscription')}
-                        className={`px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2.5 shrink-0 ${detailsTab === 'subscription' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
+                        className={`px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-3 shrink-0 ${detailsTab === 'subscription' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
                       >
-                         <CreditCard size={16} /> {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
+                         <CreditCard size={18} /> {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
                       </button>
                    </div>
 
@@ -1504,6 +1639,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                     <CreditCard size={16} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-500'} /> Subscription Info
                                  </h4>
+                                 <button 
+                                   onClick={() => {
+                                     setShowPaymentHistory(true);
+                                     fetchPaymentHistory(selectedUser.id);
+                                   }}
+                                   className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors"
+                                 >
+                                   <History size={14} /> Payment History
+                                 </button>
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                  <div className="space-y-2">
@@ -1683,7 +1827,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     <div className="text-right space-y-1">
                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Total Price</p>
                                        <p className={`text-4xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                                          {Math.max(0, (userStats.students * editPackageRate * selectedMonthsForPayment.length) - editDiscount).toLocaleString('bn-BD')} ৳
+                                          {overrideTotal !== '' ? overrideTotal.toLocaleString('bn-BD') : Math.max(0, ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length) - editDiscount).toLocaleString('bn-BD')} ৳
                                        </p>
                                        {editDiscount > 0 && (
                                          <p className="text-[10px] font-bold text-emerald-500">
@@ -1693,23 +1837,40 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     </div>
                                  </div>
 
-                                 <div className="mt-4">
-                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Discount (৳)</p>
-                                    <input 
-                                      type="number" 
-                                      value={editDiscount || ''} 
-                                      onChange={(e) => setEditDiscount(Number(e.target.value) || 0)}
-                                      placeholder="0"
-                                      className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
-                                    />
+                                 <div className="mt-4 grid grid-cols-2 gap-4">
+                                    <div>
+                                       <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Discount (৳)</p>
+                                       <input 
+                                         type="number" 
+                                         value={editDiscount || ''} 
+                                         onChange={(e) => {
+                                           setEditDiscount(Number(e.target.value) || 0);
+                                           setOverrideTotal('');
+                                         }}
+                                         placeholder="0"
+                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
+                                       />
+                                    </div>
+                                    <div>
+                                       <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Custom Total (৳)</p>
+                                       <input 
+                                         type="number" 
+                                         value={overrideTotal} 
+                                         onChange={(e) => setOverrideTotal(e.target.value === '' ? '' : Number(e.target.value))}
+                                         placeholder="Auto"
+                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
+                                       />
+                                    </div>
                                  </div>
                               </div>
 
                               {/* Payment Button */}
                               <button 
                                 onClick={async () => {
-                                  const baseAmount = userStats.students * editPackageRate * selectedMonthsForPayment.length;
-                                  const amount = Math.floor(Math.max(0, baseAmount - editDiscount));
+                                  const effectiveStudents = userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students;
+                                  const baseAmount = effectiveStudents * editPackageRate * selectedMonthsForPayment.length;
+                                  const calculatedAmount = Math.floor(Math.max(0, baseAmount - editDiscount));
+                                  const amount = overrideTotal !== '' ? overrideTotal : calculatedAmount;
                                   if (amount < 0) {
                                     setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'পেমেন্ট অ্যামাউন্ট ০ এর কম হতে পারে না।' });
                                     return;
@@ -1754,6 +1915,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     setEditPaidMonths(updatedPaidMonths);
                                     setSelectedMonthsForPayment([]);
                                     setEditDiscount(0);
+                                    setOverrideTotal('');
                                     setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'পেমেন্ট রিসিভ করা হয়েছে এবং প্রোফাইল আপডেট হয়েছে।' });
                                     initData(true);
                                   } catch (err: any) {
@@ -1762,8 +1924,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     setIsUpdatingUser(false);
                                   }
                                 }}
-                                disabled={isUpdatingUser || (userStats.students * editPackageRate * selectedMonthsForPayment.length) <= 0}
-                                className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${isUpdatingUser || (userStats.students * editPackageRate * selectedMonthsForPayment.length) <= 0 ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400') : 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20 active:scale-95'}`}
+                                disabled={isUpdatingUser || (overrideTotal !== '' ? overrideTotal : ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length)) <= 0}
+                                className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${isUpdatingUser || (overrideTotal !== '' ? overrideTotal : ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length)) <= 0 ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400') : 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20 active:scale-95'}`}
                               >
                                 <Banknote size={24} /> Receive Payment
                               </button>
@@ -1778,7 +1940,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </div>
              </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Create Institution Modal - PORTALED */}
@@ -1880,6 +2042,78 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     {isRejecting ? <Loader2 className="animate-spin" size={18} /> : 'হ্যাঁ, বাতিল করুন'}
                  </button>
                  <button onClick={() => setRejectConfirm(null)} disabled={isRejecting} className="w-full py-3 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-[10px] uppercase tracking-widest">পিছনে যান</button>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
+
+      {showPaymentHistory && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className={`w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-500 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white border border-slate-100'}`}>
+              <div className={`p-6 md:p-8 border-b flex items-center justify-between ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
+                 <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                       <History size={24} />
+                    </div>
+                    <div>
+                       <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Payment History</h3>
+                       <p className={`text-xs font-bold mt-1 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{selectedUser?.name}</p>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setShowPaymentHistory(false)}
+                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900'}`}
+                 >
+                   <X size={20} />
+                 </button>
+              </div>
+
+              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+                 {isLoadingHistory ? (
+                   <div className="flex flex-col items-center justify-center py-12">
+                      <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
+                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Loading history...</p>
+                   </div>
+                 ) : paymentHistory.length === 0 ? (
+                   <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'}`}>
+                         <History size={32} />
+                      </div>
+                      <h4 className={`text-lg font-black mb-1 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>No Payments Found</h4>
+                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no subscription payment history.</p>
+                   </div>
+                 ) : (
+                   <div className="space-y-4">
+                      {paymentHistory.map((tr) => (
+                        <div key={tr.id} className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-50 border-slate-100'}`}>
+                           <div className="space-y-2">
+                              <div className="flex items-center gap-3">
+                                 <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${tr.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : tr.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                                    {tr.status}
+                                 </span>
+                                 <span className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    {new Date(tr.created_at).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                 </span>
+                              </div>
+                              <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{tr.description}</p>
+                              <p className={`text-[10px] font-mono ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>ID: {tr.transaction_id}</p>
+                           </div>
+                           <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 shrink-0">
+                              <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                 +{tr.amount.toLocaleString('bn-BD')} ৳
+                              </p>
+                              <button 
+                                onClick={() => handleDownloadReceipt(tr)}
+                                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                              >
+                                <Download size={14} /> Receipt
+                              </button>
+                           </div>
+                        </div>
+                      ))}
+                   </div>
+                 )}
               </div>
            </div>
         </div>,

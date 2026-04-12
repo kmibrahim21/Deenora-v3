@@ -574,7 +574,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                             </div>
                           )}
                           <h4 className={`text-xs sm:text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{pkg.name}</h4>
-                          <p className={`text-[9px] sm:text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} TK / Student</p>
+                          <p className={`text-[9px] sm:text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} ৳ {stats.students <= 200 ? '(Flat)' : '/ Student'}</p>
                         </div>
                       );
                     })}
@@ -587,7 +587,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                     <p className="text-[10px] sm:text-[11px] font-black text-blue-500 uppercase tracking-[0.2em] sm:tracking-[0.3em]">Total Subscription Cost</p>
                     <div className="space-y-1">
                       <h4 className={`text-3xl sm:text-5xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {((Number((madrasah?.config_json as any)?.package_rate) || 0) * stats.students * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
+                        {((Number((madrasah?.config_json as any)?.package_rate) || 0) * (stats.students > 0 && stats.students <= 200 ? 1 : stats.students) * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
                       </h4>
                       <p className="text-[10px] sm:text-xs font-bold text-blue-600/60 uppercase tracking-widest">
                         Based on {stats.students} students & {subscriptionType} billing
