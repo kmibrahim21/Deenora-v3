@@ -119,24 +119,24 @@ export const SMSService = {
 
     if (hasShortcodes) {
       // Send personalized messages in batches
-      const chunkSize = 50;
-      const batches = [];
-      for (let i = 0; i < personalizedMessages.length; i += chunkSize) {
-        batches.push(personalizedMessages.slice(i, i + chunkSize));
+      const sendPromises = personalizedMessages.map(async (m) => {
+        let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${normalizePhone(m.phone)}&messageContent=${encodeURIComponent(m.text)}&type=3`;
+        if (clientId) apiUrl += `&clientid=${clientId}`;
+        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("Personalized SMS failed:", err); }
+      });
+      
+      // Execute in chunks to avoid overwhelming the browser
+      const chunkSize = 10;
+      for (let i = 0; i < sendPromises.length; i += chunkSize) {
+        await Promise.all(sendPromises.slice(i, i + chunkSize));
       }
 
-      const sendPromises = batches.map(async (chunk) => {
-        const content = chunk.map(m => ({
-          callerID: callerId,
-          toUser: normalizePhone(m.phone),
-          messageContent: m.text
-        }));
-
-        let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
-        if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("Personalized SMS batch failed:", err); }
-        
-        // Insert logs
+      // Insert logs
+      const logChunks = [];
+      for (let i = 0; i < personalizedMessages.length; i += 50) {
+        logChunks.push(personalizedMessages.slice(i, i + 50));
+      }
+      for (const chunk of logChunks) {
         await supabase.from('sms_logs').insert(chunk.map(m => ({
           institution_id: institutionId,
           recipient: m.phone,
@@ -144,40 +144,37 @@ export const SMSService = {
           parts: m.parts,
           status: 'sent'
         })));
+      }
+    } else {
+      // Send individually to ensure compatibility with sendtext
+      const sendPromises = students.map(async (s) => {
+        const target = normalizePhone(s.guardian_phone);
+        let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
+        if (clientId) apiUrl += `&clientid=${clientId}`;
+        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("SMS failed:", err); }
       });
 
-      await Promise.all(sendPromises);
-    } else {
-      // Original bulk logic (same message for all)
-      const chunkSize = 15; 
-      const batches: string[] = [];
-      const studentChunks: Student[][] = [];
-      for (let i = 0; i < students.length; i += chunkSize) {
-        const chunk = students.slice(i, i + chunkSize);
-        const phoneList = chunk.map(s => normalizePhone(s.guardian_phone)).join(',');
-        batches.push(phoneList);
-        studentChunks.push(chunk);
+      // Execute in chunks
+      const chunkSize = 10;
+      for (let i = 0; i < sendPromises.length; i += chunkSize) {
+        await Promise.all(sendPromises.slice(i, i + chunkSize));
       }
 
-      const sendPromises = batches.map(async (toUsers, index) => {
-        const content = [{ callerID: callerId, toUser: toUsers, messageContent: message }];
-        let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
-        if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("SMS batch failed:", err); }
-        
-        // Insert logs
-        const chunkStudents = studentChunks[index];
-        const { parts } = getSmsLengthInfo(message);
-        await supabase.from('sms_logs').insert(chunkStudents.map(s => ({
+      // Insert logs
+      const { parts } = getSmsLengthInfo(message);
+      const logChunks = [];
+      for (let i = 0; i < students.length; i += 50) {
+        logChunks.push(students.slice(i, i + 50));
+      }
+      for (const chunk of logChunks) {
+        await supabase.from('sms_logs').insert(chunk.map(s => ({
           institution_id: institutionId,
           recipient: s.guardian_phone,
           message: message,
           parts: parts,
           status: 'sent'
         })));
-      });
-
-      await Promise.all(sendPromises);
+      }
     }
 
     return { success: true };
