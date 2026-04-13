@@ -4,6 +4,7 @@ import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, Refre
 import { View, Language, Institution, Transaction, Profile } from 'types';
 import { t } from 'translations';
 import { supabase } from 'supabase';
+import { hardReload } from 'utils/reloadUtils';
 import { useOfflineStatus } from '../hooks/useOffline';
 import MultiCalendarHeader from './MultiCalendarHeader';
 
@@ -259,7 +260,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               <Bell size={18} />
               {notifications.length > 0 && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>}
             </button>
-            <button onClick={() => window.location.reload()} className={`p-2.5 rounded-[1rem] active:scale-95 transition-all border shadow-sm ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+            <button onClick={hardReload} className={`p-2.5 rounded-[1rem] active:scale-95 transition-all border shadow-sm ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
               <RefreshCw size={18} />
             </button>
           </div>
@@ -275,7 +276,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               <Bell size={20} />
               {notifications.length > 0 && <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>}
             </button>
-            <button onClick={() => window.location.reload()} className={`p-3 rounded-xl active:scale-95 transition-all border shadow-sm hover:shadow-md ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-slate-100'}`}>
+            <button onClick={hardReload} className={`p-3 rounded-xl active:scale-95 transition-all border shadow-sm hover:shadow-md ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-slate-100'}`}>
               <RefreshCw size={20} />
             </button>
           </div>

@@ -4,6 +4,7 @@ import { supabase } from 'lib/supabase';
 import { OfflineService } from 'services/OfflineService';
 import { Profile, Institution, AcademicYear } from 'types';
 import { isValidUUID } from '../utils/validation';
+import { hardReload } from '../utils/reloadUtils';
 
 export const useAuth = () => {
   const [session, setSession] = useState<any>(null);
@@ -229,7 +230,7 @@ export const useAuth = () => {
     await supabase.auth.signOut();
     localStorage.removeItem('teacher_session');
     OfflineService.removeCache('profile');
-    window.location.reload();
+    hardReload();
   };
 
   useEffect(() => {

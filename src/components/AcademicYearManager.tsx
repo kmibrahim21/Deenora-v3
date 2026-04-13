@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { supabase } from "lib/supabase";
+import { hardReload } from "utils/reloadUtils";
 import { Institution, Class, Exam, Student, AcademicYear } from "types";
 import {
   Loader2,
@@ -570,7 +571,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
       setTimeout(() => {
         onClose();
-        window.location.reload(); // Refresh to show changes
+        hardReload(); // Refresh to show changes
       }, 2000);
     } catch (error: any) {
       console.error(error);

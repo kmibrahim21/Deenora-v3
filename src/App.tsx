@@ -4,6 +4,7 @@ import { useSyncEngine } from "hooks/useOffline";
 import { useAndroidBackHandler } from "hooks/useAndroidBackHandler";
 import { OfflineIndicator } from "components/OfflineIndicator";
 import { useAuth } from "hooks/useAuth";
+import { hardReload } from "utils/reloadUtils";
 import Layout from "components/Layout";
 import { View, Class, Student, Language } from "types";
 import { t } from "translations";
@@ -184,7 +185,7 @@ const App: React.FC = () => {
         <p className="text-lg opacity-80 mb-8">{authError}</p>
         <div className="flex flex-col gap-4 w-full max-w-xs">
           <button
-            onClick={() => window.location.reload()}
+            onClick={hardReload}
             className="px-10 py-4 bg-white text-red-600 rounded-full font-black shadow-2xl active:scale-95 transition-all w-full"
           >
             পুনরায় চেষ্টা করুন
@@ -198,7 +199,7 @@ const App: React.FC = () => {
           <button
             onClick={() => {
               localStorage.clear();
-              window.location.reload();
+              hardReload();
             }}
             className="px-10 py-4 bg-slate-800 text-white rounded-full font-black shadow-lg active:scale-95 transition-all w-full border border-white/10"
           >

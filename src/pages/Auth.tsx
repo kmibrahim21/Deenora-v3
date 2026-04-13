@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Language } from 'types';
 import { t } from 'translations';
 import { isValidUUID } from 'utils/validation';
+import { hardReload } from 'utils/reloadUtils';
 import { useOfflineStatus } from '../hooks/useOffline';
 
 interface AuthProps {
@@ -101,7 +102,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         if (signInError) throw signInError;
 
         localStorage.setItem('teacher_session', JSON.stringify(data.user));
-        window.location.reload();
+        hardReload();
       } else {
         setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
       }

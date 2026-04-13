@@ -1,5 +1,6 @@
 import React from 'react';
 import { WifiOff, RefreshCw } from 'lucide-react';
+import { hardReload } from '../utils/reloadUtils';
 
 const Offline: React.FC = () => {
   return (
@@ -14,7 +15,7 @@ const Offline: React.FC = () => {
         অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন এবং আবার চেষ্টা করুন।
       </p>
       <button 
-        onClick={() => window.location.reload()}
+        onClick={hardReload}
         className="flex items-center gap-2 px-8 py-4 bg-[#2563EB] text-white rounded-2xl font-black shadow-premium active:scale-95 transition-all font-noto"
       >
         <RefreshCw size={20} />
