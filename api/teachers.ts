@@ -61,7 +61,16 @@ export default async function handler(req, res) {
       
       // Generate deterministic auth credentials
       const authEmail = `t_${teacherData.id}@deenora.local`;
-      const authPassword = crypto.createHash('sha256').update(teacherData.id + (process.env.VITE_SUPABASE_URL || '')).digest('hex').substring(0, 16) + 'Aa1!';
+      const isSuperAdmin = mobile === 'kmibrahim@gmail.com' || mobile === 'thedevomix@gmail.com' || mobile === 'ibrahimkhan269596@gmail.com' || mobile === 'admin@deenora.com';
+      
+      let authPassword;
+      if (isSuperAdmin) {
+        // For super admins, use the PIN they just entered as the password
+        // This allows them to keep their Supabase password in sync with their PIN if they choose
+        authPassword = password;
+      } else {
+        authPassword = crypto.createHash('sha256').update(teacherData.id + (process.env.VITE_SUPABASE_URL || '')).digest('hex').substring(0, 16) + 'Aa1!';
+      }
       
       // Ensure Supabase Auth user exists with the same ID
       const { data: existingUser, error: getUserError } = await supabase.auth.admin.getUserById(teacherData.id);
@@ -72,13 +81,14 @@ export default async function handler(req, res) {
           email: authEmail,
           password: authPassword,
           email_confirm: true,
-          user_metadata: { role: 'teacher' }
+          user_metadata: { role: isSuperAdmin ? 'super_admin' : 'teacher' }
         });
         if (createError && !createError.message.includes('already exists')) {
           console.error('Failed to create auth user for teacher:', createError);
         }
       } else {
-        // Update password just in case
+        // Update password just in case for all teachers (including super admins)
+        // This ensures that if a super admin logs in with a PIN, their Supabase password is kept in sync
         await supabase.auth.admin.updateUserById(teacherData.id, { password: authPassword });
       }
       
