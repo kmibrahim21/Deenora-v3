@@ -31,11 +31,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
   const isSuperAdmin = profile?.role === 'super_admin';
   const role = profile?.role || 'teacher';
   
-  const canAccess = (module: string) => {
-    if (profile?.role === 'super_admin') return true;
-    return false;
-  };
-  
   // Dynamic module configuration
   const modules = React.useMemo(() => {
     console.log('Layout: Recomputing modules, madrasah:', madrasah);
@@ -69,6 +64,26 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     console.log('Layout: Computed modules:', result);
     return result;
   }, [madrasah]) as any;
+
+  const canAccess = (module: string) => {
+    if (profile?.role === 'super_admin') return true;
+    
+    // For regular admins, check module permissions
+    const moduleMap: Record<string, boolean> = {
+      'dashboard': true,
+      'attendance': modules.modules.attendance,
+      'exams': modules.modules.results,
+      'accounting': modules.modules.accounting,
+      'sms-voice-menu': modules.modules.sms || modules.modules.voice_broadcast,
+      'teachers': true,
+      'classes': true,
+      'students': true,
+      'settings': true,
+      'academic-year': modules.modules.academic_year_promotion
+    };
+
+    return moduleMap[module] ?? true;
+  };
 
   const fetchDynamicNotifications = async () => {
     if (!madrasah?.id) return;

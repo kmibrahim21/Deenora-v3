@@ -28,12 +28,6 @@ const AppLayout: React.FC<LayoutProps> = ({ children, currentView, setView, lang
   const isSuperAdmin = profile?.role === 'super_admin';
   const role = profile?.role || 'madrasah_admin';
   
-  const canAccess = (module: string) => {
-    if (profile?.role !== 'super_admin') return true;
-    if (!profile.permissions) return true;
-    return profile.permissions[module as keyof typeof profile.permissions] !== false;
-  };
-  
   const modules = React.useMemo(() => {
     let config = madrasah?.config_json as any;
     if (typeof config === 'string') {
@@ -59,6 +53,25 @@ const AppLayout: React.FC<LayoutProps> = ({ children, currentView, setView, lang
       ui_mode: configObj.ui_mode || 'madrasah'
     } as any;
   }, [madrasah]);
+
+  const canAccess = (module: string) => {
+    if (profile?.role === 'super_admin') return true;
+    
+    const moduleMap: Record<string, boolean> = {
+      'dashboard': true,
+      'attendance': modules.modules.attendance,
+      'exams': modules.modules.results,
+      'accounting': modules.modules.accounting,
+      'sms-voice-menu': modules.modules.sms || modules.modules.voice_broadcast,
+      'teachers': true,
+      'classes': true,
+      'students': true,
+      'settings': true,
+      'academic-year': modules.modules.academic_year_promotion
+    };
+
+    return moduleMap[module] ?? true;
+  };
 
   const fetchDynamicNotifications = async () => {
     if (!madrasah?.id) return;

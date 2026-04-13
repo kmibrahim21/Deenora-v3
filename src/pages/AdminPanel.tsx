@@ -132,7 +132,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editStatus, setEditStatus] = useState<'active' | 'suspended' | 'trial'>('active');
   const [editResultEngine, setEditResultEngine] = useState<'school' | 'befaq' | 'qawmi_custom'>('school');
   const [editResultSystem, setEditResultSystem] = useState<'grading' | 'marks'>('grading');
-  const [editAttendanceType, setEditAttendanceType] = useState<'daily' | 'period'>('daily');
   const [editFeeStructure, setEditFeeStructure] = useState<'monthly' | 'session'>('monthly');
   const [editInstitutionType, setEditInstitutionType] = useState<'madrasah' | 'school' | 'kindergarten' | 'nurani' | 'system'>('madrasah');
   const [editFeeEngine, setEditFeeEngine] = useState<'school' | 'qawmi' | 'kindergarten' | 'simple'>('school');
@@ -513,7 +512,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditStatus(user.status || 'active');
     setEditResultEngine(userConfig?.result_engine || 'school');
     setEditResultSystem(userConfig?.result_system || 'grading');
-    setEditAttendanceType(userConfig?.attendance_type || 'daily');
     setEditFeeStructure(userConfig?.fee_structure || 'monthly');
     setEditInstitutionType(user.institution_type || 'madrasah');
     setEditFeeEngine(userConfig?.fee_engine || 'school');
@@ -568,7 +566,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         modules: editModules,
         result_engine: editResultEngine,
         result_system: editResultSystem,
-        attendance_type: editAttendanceType,
         fee_structure: editFeeStructure,
         fee_engine: editFeeEngine,
         accounting_mode: editAccountingMode
@@ -595,7 +592,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           modules: editModules,
           result_engine: editResultEngine,
           result_system: editResultSystem,
-          attendance_type: editAttendanceType,
           fee_structure: editFeeStructure,
           subscription_type: editSubscriptionType,
           fee_engine: editFeeEngine,
@@ -868,7 +864,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           },
           result_engine: 'school',
           result_system: 'grading',
-          attendance_type: 'daily',
           fee_structure: 'monthly',
           ui_mode: 'madrasah'
         }
@@ -900,7 +895,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             },
             result_engine: 'school',
             result_system: 'grading',
-            attendance_type: 'daily',
             fee_structure: 'monthly',
             ui_mode: 'madrasah'
           }
@@ -1542,17 +1536,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     >
                                       <option value="grading">Grading (GPA)</option>
                                       <option value="marks">Marks Only</option>
-                                    </select>
-                                 </div>
-                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Attendance Type</label>
-                                    <select 
-                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
-                                      value={editAttendanceType}
-                                      onChange={(e) => setEditAttendanceType(e.target.value as any)}
-                                    >
-                                      <option value="daily">Daily</option>
-                                      <option value="period">Period Wise</option>
                                     </select>
                                  </div>
                                  <div className="space-y-2">

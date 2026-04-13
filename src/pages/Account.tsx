@@ -549,76 +549,69 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               </div>
 
               <div className="space-y-5 sm:space-y-6">
-                {/* Current Status */}
-                <div className={`p-5 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  <div className="flex justify-between items-center mb-5 sm:mb-6">
-                    <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Subscription Status</p>
-                    <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${madrasah?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                      {madrasah?.status || 'Trial'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 sm:gap-6">
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Students</p>
-                      <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{stats.students}</p>
+                {/* Current Package Details */}
+                <div className={`p-5 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border relative overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-blue-900/10 border-blue-500/30' : 'bg-blue-50/50 border-blue-200'}`}>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16"></div>
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-center mb-5 sm:mb-6">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
+                          <CheckCircle2 size={16} />
+                        </div>
+                        <div>
+                          <p className="text-[9px] sm:text-[10px] font-black text-blue-600/60 uppercase tracking-widest">Current Package</p>
+                          <h4 className={`text-lg sm:text-xl font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                            {(madrasah?.config_json as any)?.package_name || 'None'}
+                          </h4>
+                        </div>
+                      </div>
+                      <span className={`px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${madrasah?.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                        {madrasah?.status || 'Trial'}
+                      </span>
                     </div>
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Package</p>
-                      <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {(madrasah?.config_json as any)?.package_name || 'None'}
-                      </p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing Cycle</p>
-                      <p className={`text-xl sm:text-2xl font-black capitalize ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {(madrasah?.config_json as any)?.subscription_type || 'Monthly'}
-                      </p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Package Rate</p>
-                      <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {(madrasah?.config_json as any)?.package_rate || 0} ৳
-                      </p>
+
+                    <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-6">
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Students</p>
+                        <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{stats.students}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing Cycle</p>
+                        <p className={`text-xl sm:text-2xl font-black capitalize ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                          {(madrasah?.config_json as any)?.subscription_type || 'Monthly'}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Package Rate</p>
+                        <p className={`text-xl sm:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                          {(madrasah?.config_json as any)?.package_rate || 0} ৳
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] sm:text-[10px] font-bold text-blue-500 uppercase tracking-wider">Total Cost</p>
+                        <p className={`text-xl sm:text-2xl font-black text-blue-600`}>
+                          {((Number((madrasah?.config_json as any)?.package_rate) || 0) * (stats.students > 0 && stats.students <= 200 ? 1 : stats.students) * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Package List (Read-only) */}
+                {/* Other Packages */}
                 <div className="space-y-3 sm:space-y-4">
-                  <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Available Packages</label>
+                  <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Other Available Packages</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {packages.map((pkg) => {
-                      const isCurrent = (madrasah?.config_json as any)?.package_name === pkg.name;
+                    {packages.filter(pkg => pkg.name !== (madrasah?.config_json as any)?.package_name).map((pkg) => {
                       return (
                         <div
                           key={pkg.id}
-                          className={`p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border transition-all relative overflow-hidden ${isCurrent ? (madrasah?.theme === 'dark' ? 'bg-blue-500/10 border-blue-500/40' : 'bg-blue-50 border-blue-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100')}`}
+                          className={`p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border transition-all relative overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}
                         >
-                          {isCurrent && (
-                            <div className="absolute top-3 right-3 text-blue-500">
-                              <CheckCircle2 className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
-                            </div>
-                          )}
-                          <h4 className={`text-xs sm:text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{pkg.name}</h4>
-                          <p className={`text-[9px] sm:text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} ৳ {stats.students <= 200 ? '(Flat)' : '/ Student'}</p>
+                          <h4 className={`text-xs sm:text-sm font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{pkg.name}</h4>
+                          <p className={`text-[9px] sm:text-[10px] font-bold mt-1 text-slate-400`}>{pkg.rate.toFixed(2)} ৳ {stats.students <= 200 ? '(Flat)' : '/ Student'}</p>
                         </div>
                       );
                     })}
-                  </div>
-                </div>
-
-                {/* Price Calculation for Current Package */}
-                <div className={`p-6 sm:p-8 rounded-[2rem] sm:rounded-[3rem] border ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/30' : 'bg-blue-50/50 border-blue-100'}`}>
-                  <div className="flex flex-col items-center text-center space-y-3 sm:space-y-4">
-                    <p className="text-[10px] sm:text-[11px] font-black text-blue-500 uppercase tracking-[0.2em] sm:tracking-[0.3em]">Total Subscription Cost</p>
-                    <div className="space-y-1">
-                      <h4 className={`text-3xl sm:text-5xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {((Number((madrasah?.config_json as any)?.package_rate) || 0) * (stats.students > 0 && stats.students <= 200 ? 1 : stats.students) * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
-                      </h4>
-                      <p className="text-[10px] sm:text-xs font-bold text-blue-600/60 uppercase tracking-widest">
-                        Based on {stats.students} students & {subscriptionType} billing
-                      </p>
-                    </div>
                   </div>
                 </div>
 

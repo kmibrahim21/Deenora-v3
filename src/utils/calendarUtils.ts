@@ -11,7 +11,7 @@ export const BN_MONTHS = [
   { en: 'Agrahayan', bn: 'অগ্রহায়ণ', days: 30 },
   { en: 'Poush', bn: 'পৌষ', days: 30 },
   { en: 'Magh', bn: 'মাঘ', days: 30 },
-  { en: 'Falgun', bn: 'ফাল্গুন', days: 30 }, // 31 in leap year
+  { en: 'Falgun', bn: 'ফাল্গুন', days: 29 }, // 30 in leap year
   { en: 'Chaitra', bn: 'চৈত্র', days: 30 }
 ];
 
@@ -22,7 +22,7 @@ export const isLeapYear = (year: number) => {
 export const toBnDigit = (num: string | number) => 
   num.toString().replace(/\d/g, d => "০১২৩৪৫৬৭৮৯"[parseInt(d)]);
 
-export const getBengaliDate = (date: Date, offset: number = 2) => {
+export const getBengaliDate = (date: Date, offset: number = 0) => {
   const adjustedDate = new Date(date);
   adjustedDate.setDate(date.getDate() + offset);
 
@@ -49,7 +49,7 @@ export const getBengaliDate = (date: Date, offset: number = 2) => {
   for (let i = 0; i < 12; i++) {
     let daysInMonth = BN_MONTHS[i].days;
     if (i === 10 && isLeapYear(boishakh1.getFullYear() + 1)) {
-      daysInMonth = 31;
+      daysInMonth = 30;
     }
     
     if (remainingDays < daysInMonth) {

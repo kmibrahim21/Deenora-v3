@@ -1,4 +1,7 @@
 -- Run this SQL in your Supabase SQL Editor to enable user creation from the Super Admin panel.
+-- This script also ensures the pgcrypto extension is enabled.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION public.create_user_by_admin(
   p_email text,
@@ -8,7 +11,7 @@ CREATE OR REPLACE FUNCTION public.create_user_by_admin(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, auth, extensions
 AS $$
 DECLARE
   new_user_id uuid;
@@ -38,7 +41,9 @@ BEGIN
     confirmation_token,
     email_change,
     email_change_token_new,
-    recovery_token
+    recovery_token,
+    is_super_admin,
+    confirmed_at
   )
   VALUES (
     '00000000-0000-0000-0000-000000000000',
@@ -46,7 +51,7 @@ BEGIN
     'authenticated',
     'authenticated',
     p_email,
-    crypt(p_password, gen_salt('bf')),
+    extensions.crypt(p_password, extensions.gen_salt('bf')),
     now(),
     now(),
     now(),
@@ -57,16 +62,20 @@ BEGIN
     '',
     '',
     '',
-    ''
+    '',
+    false,
+    now()
   )
   RETURNING id INTO new_user_id;
 
   -- Create identity for the user
+  -- provider_id is required and should be the user's email for email provider
   INSERT INTO auth.identities (
     id,
     user_id,
     identity_data,
     provider,
+    provider_id,
     last_sign_in_at,
     created_at,
     updated_at
@@ -76,6 +85,7 @@ BEGIN
     new_user_id,
     format('{"sub": "%s", "email": "%s"}', new_user_id::text, p_email)::jsonb,
     'email',
+    p_email, -- provider_id is the email for email provider
     now(),
     now(),
     now()

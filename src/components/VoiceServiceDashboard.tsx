@@ -27,6 +27,10 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   const [isAssigning, setIsAssigning] = useState(false);
   const [institutions, setInstitutions] = useState<any[]>([]);
 
+  const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
+  const [assignedVoiceSearchQuery, setAssignedVoiceSearchQuery] = useState('');
+  const [broadcastSearchQuery, setBroadcastSearchQuery] = useState('');
+
   useEffect(() => {
     const fetchInstitutions = async () => {
       const { data } = await supabase.from('institutions').select('id, name').eq('is_super_admin', false).order('name');
@@ -137,20 +141,32 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         }
       };
 
-      const [voicesRes, sendersRes, broadcastsRes] = await Promise.all([
+      const [voicesRes, sendersRes] = await Promise.all([
         fetchJson('/api/awaj/voices'),
-        fetchJson('/api/awaj/senders'),
-        fetchJson('/api/awaj/broadcasts')
+        fetchJson('/api/awaj/senders')
       ]);
 
-      if (voicesRes.error || sendersRes.error || broadcastsRes.error) {
-        setApiError(voicesRes.error || sendersRes.error || broadcastsRes.error);
+      if (voicesRes.error || sendersRes.error) {
+        setApiError(voicesRes.error || sendersRes.error);
       }
 
       const apiVoices = voicesRes.voices || voicesRes.data || [];
       setVoices(apiVoices);
       setSenders(sendersRes.senders || sendersRes.data || []);
-      setBroadcasts(broadcastsRes.broadcasts || broadcastsRes.data || []);
+
+      // Fetch broadcasts from Supabase
+      const { data: broadcastsData, error: broadcastsError } = await supabase
+        .from('voice_broadcasts')
+        .select(`
+          *,
+          institutions (name),
+          voice_templates (title)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (!broadcastsError && broadcastsData) {
+        setBroadcasts(broadcastsData);
+      }
 
       // Fetch assigned voices from Supabase
       const { data: assignedData, error: assignedError } = await supabase
@@ -271,9 +287,18 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         <div className="space-y-4">
           {activeTab === 'voices' && (
             <div className="space-y-4">
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Search voices by name..."
+                  value={voiceSearchQuery}
+                  onChange={(e) => setVoiceSearchQuery(e.target.value)}
+                  className={`w-full max-w-md h-12 px-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-                {voices.length > 0 ? (
-                  voices.map((voice) => (
+                {voices.filter(v => v.name?.toLowerCase().includes(voiceSearchQuery.toLowerCase())).length > 0 ? (
+                  voices.filter(v => v.name?.toLowerCase().includes(voiceSearchQuery.toLowerCase())).map((voice) => (
                     <div key={voice.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-5 rounded-[2rem] border flex flex-col md:flex-row md:items-center justify-between gap-4`}>
                       <div className="flex items-center gap-4">
                         <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center shadow-inner shrink-0`}>
@@ -330,9 +355,19 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
           )}
 
           {activeTab === 'assigned_voices' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {assignedVoices.length > 0 ? (
-                assignedVoices.map((voice) => (
+            <div className="space-y-4">
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Search by voice or institute name..."
+                  value={assignedVoiceSearchQuery}
+                  onChange={(e) => setAssignedVoiceSearchQuery(e.target.value)}
+                  className={`w-full max-w-md h-12 px-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                {assignedVoices.filter(v => v.title?.toLowerCase().includes(assignedVoiceSearchQuery.toLowerCase()) || v.institutions?.name?.toLowerCase().includes(assignedVoiceSearchQuery.toLowerCase())).length > 0 ? (
+                  assignedVoices.filter(v => v.title?.toLowerCase().includes(assignedVoiceSearchQuery.toLowerCase()) || v.institutions?.name?.toLowerCase().includes(assignedVoiceSearchQuery.toLowerCase())).map((voice) => (
                   <div key={voice.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-5 rounded-[2rem] border flex flex-col md:flex-row md:items-center justify-between gap-4`}>
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center shadow-inner shrink-0`}>
@@ -370,6 +405,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                 </div>
               )}
             </div>
+            </div>
           )}
 
           {activeTab === 'senders' && (
@@ -403,9 +439,19 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
           )}
 
           {activeTab === 'broadcasts' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {broadcasts.length > 0 ? (
-                broadcasts.map((b) => (
+            <div className="space-y-4">
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Search by voice or institute name..."
+                  value={broadcastSearchQuery}
+                  onChange={(e) => setBroadcastSearchQuery(e.target.value)}
+                  className={`w-full max-w-md h-12 px-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                {broadcasts.filter(b => b.voice_templates?.title?.toLowerCase().includes(broadcastSearchQuery.toLowerCase()) || b.institutions?.name?.toLowerCase().includes(broadcastSearchQuery.toLowerCase())).length > 0 ? (
+                  broadcasts.filter(b => b.voice_templates?.title?.toLowerCase().includes(broadcastSearchQuery.toLowerCase()) || b.institutions?.name?.toLowerCase().includes(broadcastSearchQuery.toLowerCase())).map((b) => (
                   <div key={b.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-5 rounded-[2rem] border`}>
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-4 gap-3">
                       <div className="flex items-center gap-4">
@@ -413,14 +459,17 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                           <PhoneCall size={20} />
                         </div>
                         <div>
-                          <h4 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{b.name}</h4>
+                          <h4 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{b.voice_templates?.title || 'Unknown Voice'}</h4>
                           <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                            {new Date(b.createdAt || b.created_at).toLocaleString()}
+                            Institute: <span className={madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>{b.institutions?.name || 'Unknown'}</span>
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                            {new Date(b.created_at).toLocaleString()}
                           </p>
                         </div>
                       </div>
                       <button 
-                        onClick={() => { setSelectedItem(b); fetchBroadcastResult(b.id); }}
+                        onClick={() => { setSelectedItem(b); fetchBroadcastResult(b.provider_campaign_id || b.id); }}
                         className={`p-2 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} rounded-xl transition-colors self-end sm:self-auto`}
                       >
                         <ChevronRight size={20} />
@@ -434,19 +483,19 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-50 mt-4">
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Total</p>
-                        <p className="font-black text-slate-700">{b.totalNumbers || 0}</p>
+                        <p className="font-black text-slate-700">{b.total_numbers || 0}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Success</p>
-                        <p className="font-black text-emerald-600">{b.successCount || 0}</p>
+                        <p className="font-black text-emerald-600">{b.success_count || 0}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Failed</p>
-                        <p className="font-black text-red-600">{b.failedCount || 0}</p>
+                        <p className="font-black text-red-600">{b.failed_count || 0}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Cost</p>
-                        <p className="font-black text-slate-700">{b.cost || 0} ৳</p>
+                        <p className="font-black text-slate-700">{b.estimated_cost || 0} ৳</p>
                       </div>
                     </div>
                   </div>
@@ -459,6 +508,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                   <p className="text-slate-400 text-xs font-black uppercase tracking-widest">No Broadcasts Found</p>
                 </div>
               )}
+            </div>
             </div>
           )}
           
