@@ -149,24 +149,24 @@ export const SMSService = {
       await Promise.all(sendPromises);
     } else {
       // Original bulk logic (same message for all)
-      const chunkSize = 15; 
-      const batches: string[] = [];
-      const studentChunks: Student[][] = [];
+      const chunkSize = 50; 
+      const batches: Student[][] = [];
       for (let i = 0; i < students.length; i += chunkSize) {
-        const chunk = students.slice(i, i + chunkSize);
-        const phoneList = chunk.map(s => normalizePhone(s.guardian_phone)).join(',');
-        batches.push(phoneList);
-        studentChunks.push(chunk);
+        batches.push(students.slice(i, i + chunkSize));
       }
 
-      const sendPromises = batches.map(async (toUsers, index) => {
-        const content = [{ callerID: callerId, toUser: toUsers, messageContent: message }];
+      const sendPromises = batches.map(async (chunkStudents) => {
+        const content = chunkStudents.map(s => ({
+          callerID: callerId,
+          toUser: normalizePhone(s.guardian_phone),
+          messageContent: message
+        }));
+        
         let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
         if (clientId) apiUrl += `&clientid=${clientId}`;
         try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("SMS batch failed:", err); }
         
         // Insert logs
-        const chunkStudents = studentChunks[index];
         const { parts } = getSmsLengthInfo(message);
         await supabase.from('sms_logs').insert(chunkStudents.map(s => ({
           institution_id: institutionId,
