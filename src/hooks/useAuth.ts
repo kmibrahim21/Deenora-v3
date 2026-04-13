@@ -240,20 +240,27 @@ export const useAuth = () => {
         if (error) {
           console.error("Auth session error:", error);
           const errorMessage = error.message.toLowerCase();
-          if (errorMessage.includes('refresh token') || errorMessage.includes('refresh_token_not_found')) {
-            try {
-              await supabase.auth.signOut();
-            } catch (signOutErr) {
-              console.error("Error during sign out:", signOutErr);
-            }
+          
+          // Only force logout on definitive token errors
+          const isTokenError = errorMessage.includes('refresh token') || 
+                               errorMessage.includes('refresh_token_not_found') ||
+                               errorMessage.includes('invalid_grant');
+
+          if (isTokenError) {
+            console.warn("Definitive token error detected, signing out...");
+            await supabase.auth.signOut();
             localStorage.removeItem('madrasah_auth_token');
             localStorage.removeItem('teacher_session');
             OfflineService.removeCache('profile');
             setSession(null);
             setProfile(null);
             setMadrasah(null);
-            window.location.reload();
+            // Don't reload immediately to avoid loops, let the UI handle the state change
+            return;
           }
+          
+          // For other errors (like network), we might still have a session in memory or cache
+          // We'll try to proceed with what we have
         }
 
         if (currentSession && currentSession.user) {
@@ -267,7 +274,7 @@ export const useAuth = () => {
               if (teacherData && teacherData.id) {
                 // Fetch latest teacher data to get updated permissions and check active status
                 try {
-                  const { data: latestTeacher, error: tError } = await supabase
+                  const { data: latestTeacher } = await supabase
                     .from('teachers')
                     .select('*')
                     .eq('id', teacherData.id)
@@ -349,14 +356,17 @@ export const useAuth = () => {
       } catch (err: any) {
         console.error("Auth initialization error:", err);
         const errorMessage = (err?.message || '').toLowerCase();
-        if (errorMessage.includes('refresh token') || errorMessage.includes('refresh_token_not_found')) {
+        const isTokenError = errorMessage.includes('refresh token') || 
+                             errorMessage.includes('refresh_token_not_found') ||
+                             errorMessage.includes('invalid_grant');
+
+        if (isTokenError) {
           localStorage.removeItem('madrasah_auth_token');
           localStorage.removeItem('teacher_session');
           OfflineService.removeCache('profile');
           setSession(null);
           setProfile(null);
           setMadrasah(null);
-          window.location.reload();
         }
       } finally {
         setLoading(false);
@@ -366,21 +376,32 @@ export const useAuth = () => {
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth Event:", event);
       if (event === 'SIGNED_OUT') {
         setSession(null); 
         setMadrasah(null); 
         setProfile(null);
         localStorage.removeItem('teacher_session');
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session) {
+          setSession(session);
+          if (session.user) {
+            fetchUserProfile(session.user.id, session.user.email);
+          }
+        }
       } else if (session) {
         setSession(session);
-        if (session.user) {
-          fetchUserProfile(session.user.id, session.user.email);
-        }
       }
     });
 
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     let channel: any;
-    if (profile?.institution_id) {
+    if (profile?.institution_id && profile.institution_id !== 'super_admin') {
       channel = supabase
         .channel('institution-changes')
         .on(
@@ -400,7 +421,6 @@ export const useAuth = () => {
     }
 
     return () => {
-      subscription.unsubscribe();
       if (channel) supabase.removeChannel(channel);
     };
   }, [profile?.institution_id]);

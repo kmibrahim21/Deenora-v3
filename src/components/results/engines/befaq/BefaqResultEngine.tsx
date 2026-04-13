@@ -41,6 +41,30 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => void) | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // Dynamic module configuration
+  const modules = React.useMemo(() => {
+    let config = madrasah?.config_json as any;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
+    const configObj: any = (typeof config === 'object' && config !== null) ? config : {};
+    
+    return {
+      attendance: configObj.modules?.attendance ?? true,
+      results: configObj.modules?.results ?? true,
+      admit_card: configObj.modules?.admit_card ?? true,
+      seat_plan: configObj.modules?.seat_plan ?? true,
+      accounting: configObj.modules?.accounting ?? true,
+      academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
+      voice_broadcast: configObj.modules?.voice_broadcast ?? true,
+      sms: configObj.modules?.sms ?? true,
+    };
+  }, [madrasah]);
+
   // Admit Card States
   const [showAdmitCardModal, setShowAdmitCardModal] = useState(false);
   const [examForAdmitCard, setExamForAdmitCard] = useState<BefaqExam | null>(null);
@@ -455,9 +479,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'exams' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
             {t('exams', lang)}
         </button>
-        <button onClick={() => setActiveTab('seat-plan')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'seat-plan' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
-            Seat Plan
-        </button>
+        {modules.seat_plan && (
+          <button onClick={() => setActiveTab('seat-plan')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'seat-plan' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
+              Seat Plan
+          </button>
+        )}
         <button onClick={() => setActiveTab('analytics')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'analytics' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
             Analytics
         </button>
@@ -665,9 +691,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                     <button onClick={() => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.marhala_id); }} className="py-2.5 bg-emerald-50 text-emerald-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-emerald-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
                     <button onClick={() => { setSelectedExam(exam); setView('rank'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.marhala_id); }} className="py-2.5 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
                 </div>
-                <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
-                    <CreditCard size={14}/> Admit Card
-                </button>
+                {modules.admit_card && (
+                  <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
+                      <CreditCard size={14}/> Admit Card
+                  </button>
+                )}
             </div>
           ))}
         </div>

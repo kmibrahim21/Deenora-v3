@@ -52,6 +52,30 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // Dynamic module configuration
+  const modules = React.useMemo(() => {
+    let config = madrasah?.config_json as any;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
+    const configObj: any = (typeof config === 'object' && config !== null) ? config : {};
+    
+    return {
+      attendance: configObj.modules?.attendance ?? true,
+      results: configObj.modules?.results ?? true,
+      admit_card: configObj.modules?.admit_card ?? true,
+      seat_plan: configObj.modules?.seat_plan ?? true,
+      accounting: configObj.modules?.accounting ?? true,
+      academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
+      voice_broadcast: configObj.modules?.voice_broadcast ?? true,
+      sms: configObj.modules?.sms ?? true,
+    };
+  }, [madrasah]);
+
   // Form states
   const [examName, setExamName] = useState('');
   const [examDate, setExamDate] = useState(activeYear?.start_date || new Date().toISOString().split('T')[0]);
@@ -531,9 +555,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         <button onClick={() => setActiveTab('exams')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'exams' ? 'bg-[#2563EB] text-white shadow-premium' : 'text-slate-400'}`}>
             {t('exams', lang)}
         </button>
-        <button onClick={() => setActiveTab('seat-plan')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'seat-plan' ? 'bg-[#2563EB] text-white shadow-premium' : 'text-slate-400'}`}>
-            Seat Plan
-        </button>
+        {modules.seat_plan && (
+          <button onClick={() => setActiveTab('seat-plan')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'seat-plan' ? 'bg-[#2563EB] text-white shadow-premium' : 'text-slate-400'}`}>
+              Seat Plan
+          </button>
+        )}
         <button onClick={() => setActiveTab('analytics')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'analytics' ? 'bg-[#2563EB] text-white shadow-premium' : 'text-slate-400'}`}>
             Analytics
         </button>
@@ -751,9 +777,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     <button onClick={() => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-blue-50 text-[#2563EB] rounded-xl text-[9px] font-black uppercase tracking-widest border border-blue-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
                     <button onClick={() => { setSelectedExam(exam); setView('report'); fetchSubjects(exam.id); fetchRanking(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-[#2563EB] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
                 </div>
-                <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
-                    <CreditCard size={14}/> Admit Card
-                </button>
+                {modules.admit_card && (
+                  <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
+                      <CreditCard size={14}/> Admit Card
+                  </button>
+                )}
             </div>
           ))}
         </div>

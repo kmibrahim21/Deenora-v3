@@ -44,6 +44,30 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [requestingUpgrade, setRequestingUpgrade] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Dynamic module configuration
+  const modules = React.useMemo(() => {
+    let config = madrasah?.config_json as any;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
+    const configObj: any = (typeof config === 'object' && config !== null) ? config : {};
+    
+    return {
+      attendance: configObj.modules?.attendance ?? true,
+      results: configObj.modules?.results ?? true,
+      admit_card: configObj.modules?.admit_card ?? true,
+      seat_plan: configObj.modules?.seat_plan ?? true,
+      accounting: configObj.modules?.accounting ?? true,
+      academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
+      voice_broadcast: configObj.modules?.voice_broadcast ?? true,
+      sms: configObj.modules?.sms ?? true,
+    };
+  }, [madrasah]);
+
   const handleUpgradeRequest = async () => {
     if (!selectedPackage || !madrasah || !rechargeTrx || !rechargePhone) return;
     setRequestingUpgrade(true);
@@ -344,19 +368,21 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{t('branding', lang)}</p>
               </div>
             </button>
-
-            <button 
-              onClick={() => setView('academic-year')} 
-              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-            >
-              <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <GraduationCap size={24} />
-              </div>
-              <div>
-                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}</h5>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}</p>
-              </div>
-            </button>
+            
+            {modules.academic_year_promotion && (
+              <button 
+                onClick={() => setView('academic-year')} 
+                className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+              >
+                <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <GraduationCap size={24} />
+                </div>
+                <div>
+                  <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}</h5>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}</p>
+                </div>
+              </button>
+            )}
 
             {/* Subscription Card */}
             <button 
