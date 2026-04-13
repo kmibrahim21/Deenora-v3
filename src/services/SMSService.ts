@@ -134,7 +134,13 @@ export const SMSService = {
 
         let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
         if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("Personalized SMS batch failed:", err); }
+        try { 
+          await fetch('/api/sms', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiUrl })
+          }); 
+        } catch (err) { console.warn("Personalized SMS batch failed:", err); }
         
         // Insert logs
         await supabase.from('sms_logs').insert(chunk.map(m => ({
@@ -164,7 +170,13 @@ export const SMSService = {
         
         let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
         if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (err) { console.warn("SMS batch failed:", err); }
+        try { 
+          await fetch('/api/sms', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiUrl })
+          }); 
+        } catch (err) { console.warn("SMS batch failed:", err); }
         
         // Insert logs
         const { parts } = getSmsLengthInfo(message);
@@ -197,7 +209,13 @@ export const SMSService = {
     const target = normalizePhone(phone);
     let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
     if (clientId) apiUrl += `&clientid=${clientId}`;
-    try { await fetch(apiUrl, { mode: 'no-cors', cache: 'no-cache' }); } catch (e) { console.warn("Direct SMS failed:", e); }
+    try { 
+      await fetch('/api/sms', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiUrl })
+      }); 
+    } catch (e) { console.warn("Direct SMS failed:", e); }
     
     if (institutionId) {
       const { parts } = getSmsLengthInfo(message);
