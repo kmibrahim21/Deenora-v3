@@ -597,18 +597,40 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                   </div>
                 </div>
 
-                {/* Other Packages */}
+                {/* All Packages */}
                 <div className="space-y-3 sm:space-y-4">
-                  <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Other Available Packages</label>
+                  <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                    {lang === 'bn' ? 'সকল সাবস্ক্রিপশন প্যাকেজ' : 'All Subscription Packages'}
+                  </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {packages.filter(pkg => pkg.name !== (madrasah?.config_json as any)?.package_name).map((pkg) => {
+                    {packages.map((pkg) => {
+                      const isCurrent = pkg.name === (madrasah?.config_json as any)?.package_name;
                       return (
                         <div
                           key={pkg.id}
-                          className={`p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border transition-all relative overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}
+                          className={`p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border transition-all relative overflow-hidden flex flex-col ${
+                            isCurrent 
+                              ? (madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-500/50' : 'bg-blue-50 border-blue-200')
+                              : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100')
+                          }`}
                         >
-                          <h4 className={`text-xs sm:text-sm font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{pkg.name}</h4>
-                          <p className={`text-[9px] sm:text-[10px] font-bold mt-1 text-slate-400`}>{pkg.rate.toFixed(2)} ৳ {stats.students <= 200 ? '(Flat)' : '/ Student'}</p>
+                          {isCurrent && (
+                            <div className="absolute top-0 right-0 bg-blue-500 text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl">
+                              Current
+                            </div>
+                          )}
+                          <div className="mb-3">
+                            <h4 className={`text-xs sm:text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{pkg.name}</h4>
+                            <p className={`text-[9px] sm:text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500/80' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} ৳ {stats.students <= 200 ? '(Flat)' : '/ Student'}</p>
+                          </div>
+                          <div className="space-y-1.5 mt-auto pt-2 border-t border-slate-100/10">
+                            {pkg.features?.map((f: string, i: number) => (
+                              <div key={i} className={`flex items-center gap-2 text-[9px] sm:text-[10px] font-bold ${isCurrent ? 'text-blue-600/70' : 'text-slate-500'}`}>
+                                <CheckCircle2 size={10} className={isCurrent ? 'text-blue-500' : 'text-emerald-500'} />
+                                <span>{f}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       );
                     })}
