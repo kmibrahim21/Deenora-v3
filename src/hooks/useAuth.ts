@@ -403,9 +403,30 @@ export const useAuth = () => {
   }, []);
 
   useEffect(() => {
-    let channel: any;
+    let profileChannel: any;
+    let institutionChannel: any;
+
+    if (profile?.id) {
+      profileChannel = supabase
+        .channel('profile-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${profile.id}`,
+          },
+          (payload) => {
+            console.log('useAuth: Received real-time update for profile:', payload.new);
+            setProfile(payload.new as Profile);
+          }
+        )
+        .subscribe();
+    }
+
     if (profile?.institution_id && profile.institution_id !== 'super_admin') {
-      channel = supabase
+      institutionChannel = supabase
         .channel('institution-changes')
         .on(
           'postgres_changes',
@@ -426,9 +447,10 @@ export const useAuth = () => {
     }
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      if (profileChannel) supabase.removeChannel(profileChannel);
+      if (institutionChannel) supabase.removeChannel(institutionChannel);
     };
-  }, [profile?.institution_id]);
+  }, [profile?.id, profile?.institution_id]);
 
   return { session, profile, madrasah, activeYear, loading, authError, handleLogout, refreshMadrasah };
 };
