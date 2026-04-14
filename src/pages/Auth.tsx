@@ -42,7 +42,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
       });
       if (signInError) throw signInError;
       if (data.user) {
-        if (email.trim() === 'thedevomix@gmail.com' || email.trim() === 'kmibrahim@gmail.com' || email.trim() === 'ibrahimkhan269596@gmail.com' || email.trim() === 'admin@deenora.com') {
+        if (email.trim() === 'thedevomix@gmail.com' || email.trim() === 'kmibrahim@gmail.com' || email.trim() === 'ibrahimkhan269596@gmail.com') {
           try {
             await supabase.rpc('bootstrap_super_admin', {
               p_uid: data.user.id,
