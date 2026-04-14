@@ -26,6 +26,8 @@ export const useAuth = () => {
       
       if (year) {
         setActiveYear(year);
+      } else {
+        setActiveYear(null);
       }
     } catch (err) {
       console.error("Error fetching active year:", err);
@@ -415,7 +417,9 @@ export const useAuth = () => {
           },
           (payload) => {
             console.log('useAuth: Received real-time update for institution:', payload.new);
-            setMadrasah(payload.new as Institution);
+            const newMadrasah = payload.new as Institution;
+            setMadrasah(newMadrasah);
+            fetchActiveYear(newMadrasah.id);
           }
         )
         .subscribe();
