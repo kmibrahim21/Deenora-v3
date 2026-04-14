@@ -810,96 +810,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     
     setIsCreatingInst(true);
     try {
-      // First try to sign up the user normally to let Supabase handle the identities table
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: newInstEmail.trim(),
-        password: newInstPassword.trim(),
-        options: {
-          data: {
-            name: newInstName.trim(),
-            madrasah_name: newInstName.trim()
-          }
-        }
+      // Use the Admin API for reliable user creation without affecting current session
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'create_institution',
+          name: newInstName.trim(),
+          phone: newInstPhone.trim(),
+          email: newInstEmail.trim(),
+          password: newInstPassword.trim(),
+          institution_type: newInstType
+        })
       });
 
-      let newUserId = signUpData?.user?.id;
+      const result = await response.json();
 
-      // If signup fails (e.g., due to rate limits), fallback to RPC
-      if (signUpError || !newUserId) {
-        console.log("Signup failed, falling back to RPC:", signUpError);
-        const { data: rpcUserId, error: rpcError } = await supabase.rpc('create_user_by_admin', {
-          p_email: newInstEmail.trim(),
-          p_password: newInstPassword.trim(),
-          p_user_data: {
-            name: newInstName.trim(),
-            madrasah_name: newInstName.trim()
-          }
-        });
-
-        if (rpcError) throw rpcError;
-        if (!rpcUserId) throw new Error("User creation failed via RPC");
-        newUserId = rpcUserId;
-      }
-
-      // Wait a moment for the trigger to create the initial record
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Update the institution record with specific details
-      const { error: updateError } = await supabase.from('institutions').update({
-        phone: newInstPhone.trim(),
-        email: newInstEmail.trim(),
-        institution_type: newInstType,
-        status: 'active',
-        is_active: true,
-        config_json: {
-          modules: {
-            attendance: true,
-            results: true,
-            admit_card: true,
-            seat_plan: true,
-            accounting: true,
-            academic_year_promotion: true,
-            voice_broadcast: true,
-            sms: true
-          },
-          result_engine: 'school',
-          result_system: 'grading',
-          fee_structure: 'monthly',
-          ui_mode: 'madrasah'
-        }
-      }).eq('id', newUserId);
-      
-      if (updateError) {
-        // If update fails, try inserting (in case trigger failed or was slow)
-        const { error: insertError } = await supabase.from('institutions').upsert({
-          id: newUserId,
-          name: newInstName.trim(),
-          email: newInstEmail.trim(),
-          phone: newInstPhone.trim(),
-          institution_type: newInstType,
-          is_active: true,
-          is_super_admin: false,
-          balance: 0,
-          sms_balance: 0,
-          status: 'active',
-          config_json: {
-            modules: {
-              attendance: true,
-              results: true,
-              admit_card: true,
-              seat_plan: true,
-              accounting: true,
-              academic_year_promotion: true,
-              voice_broadcast: true,
-              sms: true
-            },
-            result_engine: 'school',
-            result_system: 'grading',
-            fee_structure: 'monthly',
-            ui_mode: 'madrasah'
-          }
-        });
-        if (insertError) throw insertError;
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create institution');
       }
       
       setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'নতুন প্রতিষ্ঠান এবং ইউজার তৈরি করা হয়েছে।' });
