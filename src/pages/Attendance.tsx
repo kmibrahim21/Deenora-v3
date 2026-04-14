@@ -865,7 +865,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       </div>
                       <button 
                         onClick={() => removeSession(s.id)} 
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 ${isDark ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isDark ? 'bg-red-500/10 text-red-400 active:bg-red-500/20' : 'bg-red-50 text-red-500 active:bg-red-100'}`}
                       >
                         <Trash2 size={18} />
                       </button>
