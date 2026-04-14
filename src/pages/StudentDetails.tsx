@@ -182,7 +182,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                     <Smartphone size={20} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'বাবা' : 'Father'}</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'প্রাথমিক নাম্বার' : 'Primary Number'}</p>
                     <p className={`text-base font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone}</p>
                   </div>
                 </div>
@@ -218,7 +218,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                       <Smartphone size={20} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'মা' : 'Mother'}</p>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'অপশনাল নাম্বার' : 'Optional Number'}</p>
                       <p className={`text-base font-black tracking-tight leading-none ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.guardian_phone_2}</p>
                     </div>
                   </div>
