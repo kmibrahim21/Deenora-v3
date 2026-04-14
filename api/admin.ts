@@ -19,33 +19,60 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      console.log('Admin API: Creating institution:', { name, email, phone });
+      const trimmedEmail = email.trim().toLowerCase();
+      console.log('Admin API: Creating institution:', { name, email: trimmedEmail, phone });
 
-      // 1. Create the auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: email.trim(),
-        password: password.trim(),
-        email_confirm: true,
-        user_metadata: { 
-          name: name.trim(),
-          madrasah_name: name.trim()
+      // 1. Check if user already exists in auth to avoid "Database error checking email"
+      let userId: string | null = null;
+      
+      try {
+        // Try to find user by email using Admin API
+        const { data: userData, error: findError } = await supabase.auth.admin.listUsers();
+        if (!findError && userData?.users) {
+          const existingUser = userData.users.find(u => u.email?.toLowerCase() === trimmedEmail);
+          if (existingUser) {
+            userId = existingUser.id;
+            console.log('User already exists in auth:', userId);
+          }
         }
-      });
-
-      if (authError) {
-        if (authError.message.includes('already registered')) {
-          // User exists, try to find them
-          const { data: existingUsers, error: findError } = await supabase.auth.admin.listUsers();
-          if (findError) throw findError;
-          const existingUser = existingUsers.users.find(u => u.email === email.trim());
-          if (!existingUser) throw new Error('User already exists but could not be found');
-          
-          return await setupInstitution(supabase, existingUser.id, body, res);
-        }
-        throw authError;
+      } catch (e) {
+        console.warn('Error checking for existing user:', e);
       }
 
-      return await setupInstitution(supabase, authData.user.id, body, res);
+      if (!userId) {
+        // 2. Create the auth user if not found
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: trimmedEmail,
+          password: password.trim(),
+          email_confirm: true,
+          user_metadata: { 
+            name: name.trim(),
+            madrasah_name: name.trim()
+          }
+        });
+
+        if (authError) {
+          console.error('Auth creation error:', authError);
+          // If it still says already registered, try one more time to find them
+          if (authError.message.includes('already registered')) {
+            const { data: listData } = await supabase.auth.admin.listUsers();
+            const found = listData?.users?.find(u => u.email?.toLowerCase() === trimmedEmail);
+            if (found) {
+              userId = found.id;
+            } else {
+              throw authError;
+            }
+          } else {
+            throw authError;
+          }
+        } else {
+          userId = authData.user.id;
+        }
+      }
+
+      if (!userId) throw new Error('Failed to obtain User ID');
+
+      return await setupInstitution(supabase, userId, body, res);
     }
 
     return res.status(404).json({ error: 'Action not found' });
