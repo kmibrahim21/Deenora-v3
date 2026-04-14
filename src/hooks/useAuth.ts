@@ -26,8 +26,6 @@ export const useAuth = () => {
       
       if (year) {
         setActiveYear(year);
-      } else {
-        setActiveYear(null);
       }
     } catch (err) {
       console.error("Error fetching active year:", err);
@@ -403,30 +401,9 @@ export const useAuth = () => {
   }, []);
 
   useEffect(() => {
-    let profileChannel: any;
-    let institutionChannel: any;
-
-    if (profile?.id) {
-      profileChannel = supabase
-        .channel('profile-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'profiles',
-            filter: `id=eq.${profile.id}`,
-          },
-          (payload) => {
-            console.log('useAuth: Received real-time update for profile:', payload.new);
-            setProfile(payload.new as Profile);
-          }
-        )
-        .subscribe();
-    }
-
+    let channel: any;
     if (profile?.institution_id && profile.institution_id !== 'super_admin') {
-      institutionChannel = supabase
+      channel = supabase
         .channel('institution-changes')
         .on(
           'postgres_changes',
@@ -438,19 +415,16 @@ export const useAuth = () => {
           },
           (payload) => {
             console.log('useAuth: Received real-time update for institution:', payload.new);
-            const newMadrasah = payload.new as Institution;
-            setMadrasah(newMadrasah);
-            fetchActiveYear(newMadrasah.id);
+            setMadrasah(payload.new as Institution);
           }
         )
         .subscribe();
     }
 
     return () => {
-      if (profileChannel) supabase.removeChannel(profileChannel);
-      if (institutionChannel) supabase.removeChannel(institutionChannel);
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [profile?.id, profile?.institution_id]);
+  }, [profile?.institution_id]);
 
   return { session, profile, madrasah, activeYear, loading, authError, handleLogout, refreshMadrasah };
 };

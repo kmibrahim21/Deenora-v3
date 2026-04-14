@@ -553,14 +553,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     if (!selectedUser) return;
     setIsUpdatingUser(true);
     try {
-      let userConfig: any = selectedUser.config_json;
-      if (typeof userConfig === 'string') {
-        try {
-          userConfig = JSON.parse(userConfig);
-        } catch (e) {
-          userConfig = {};
-        }
+      // Fetch latest config_json to avoid overwriting academic year setup
+      const { data: latestInst, error: fetchError } = await supabase
+        .from('institutions')
+        .select('config_json')
+        .eq('id', selectedUser.id)
+        .single();
+        
+      if (fetchError) throw fetchError;
+      
+      let latestConfig: any = latestInst?.config_json;
+      if (typeof latestConfig === 'string') {
+        try { latestConfig = JSON.parse(latestConfig); } catch (e) { latestConfig = {}; }
       }
+      latestConfig = typeof latestConfig === 'object' && latestConfig !== null ? latestConfig : {};
 
       console.log('Saving config_json:', {
         modules: editModules,
@@ -588,7 +594,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         sms_rate: Number(editSmsRate) || 0.50,
         voice_rate: Number(editVoiceRate) || 0.50,
         config_json: {
-          ...(typeof userConfig === 'object' && userConfig !== null ? userConfig : {}),
+          ...latestConfig,
           modules: editModules,
           result_engine: editResultEngine,
           result_system: editResultSystem,
@@ -1805,17 +1811,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     if (trError) throw trError;
 
                                     // 2. Update Institution Profile (Save paid months and package info)
-                                    let userConfig: any = selectedUser.config_json;
-                                    if (typeof userConfig === 'string') {
-                                      try { userConfig = JSON.parse(userConfig); } catch (e) { userConfig = {}; }
+                                    // Fetch latest config_json to avoid overwriting academic year setup
+                                    const { data: latestInst, error: fetchError } = await supabase
+                                      .from('institutions')
+                                      .select('config_json')
+                                      .eq('id', selectedUser.id)
+                                      .single();
+                                      
+                                    if (fetchError) throw fetchError;
+                                    
+                                    let latestConfig: any = latestInst?.config_json;
+                                    if (typeof latestConfig === 'string') {
+                                      try { latestConfig = JSON.parse(latestConfig); } catch (e) { latestConfig = {}; }
                                     }
+                                    latestConfig = typeof latestConfig === 'object' && latestConfig !== null ? latestConfig : {};
 
                                     // Merge new paid months with history
                                     const updatedPaidMonths = Array.from(new Set([...editPaidMonths, ...selectedMonthsForPayment]));
 
                                     const { error: updateError } = await supabase.from('institutions').update({
                                       config_json: {
-                                        ...(typeof userConfig === 'object' && userConfig !== null ? userConfig : {}),
+                                        ...latestConfig,
                                         paid_months: updatedPaidMonths,
                                         package_rate: editPackageRate,
                                         package_name: editPackageName,
