@@ -1,8 +1,12 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@supabase/supabase-js';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { toPng } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
@@ -212,79 +216,80 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   };
 
-  const handleDownloadReceipt = (transaction: any) => {
-    const receiptWindow = window.open('', '_blank');
-    if (!receiptWindow) return;
+  const handleDownloadReceipt = async (transaction: any) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+    const root = createRoot(container);
     
-    const html = `
-      <html>
-        <head>
-          <title>Receipt - ${transaction.transaction_id}</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
-            .logo { font-size: 28px; font-weight: 900; color: #2563eb; letter-spacing: 2px; text-transform: uppercase; }
-            .title { font-size: 18px; color: #666; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px; }
-            .details { margin-bottom: 40px; background: #f8fafc; padding: 20px; border-radius: 12px; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
-            .row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-            .label { color: #64748b; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-            .value { font-weight: 700; color: #0f172a; font-size: 15px; text-align: right; }
-            .total { font-size: 24px; font-weight: 900; margin-top: 30px; border-top: 3px solid #0f172a; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; }
-            .footer { text-align: center; margin-top: 60px; font-size: 13px; color: #94a3b8; border-top: 1px solid #eee; padding-top: 20px; }
-            @media print {
-              body { padding: 0; }
-              .details { background: transparent; border: 1px solid #e2e8f0; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo">Deenora</div>
-            <div class="title">Payment Receipt</div>
+    const ReceiptComponent = () => (
+      <div style={{ width: '794px', minHeight: '1123px', padding: '40px', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", color: '#333', backgroundColor: '#fff' }}>
+        <div style={{ textAlign: 'center', borderBottom: '2px solid #eee', paddingBottom: '20px', marginBottom: '30px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 900, color: '#2563eb', letterSpacing: '2px', textTransform: 'uppercase' }}>Deenora</div>
+          <div style={{ fontSize: '18px', color: '#666', marginTop: '5px', textTransform: 'uppercase', letterSpacing: '1px' }}>Payment Receipt</div>
+        </div>
+        <div style={{ marginBottom: '40px', background: '#f8fafc', padding: '20px', borderRadius: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Transaction ID</span>
+            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{transaction.transaction_id}</span>
           </div>
-          <div class="details">
-            <div class="row">
-              <span class="label">Transaction ID</span>
-              <span class="value">${transaction.transaction_id}</span>
-            </div>
-            <div class="row">
-              <span class="label">Date</span>
-              <span class="value">${new Date(transaction.created_at).toLocaleString('bn-BD')}</span>
-            </div>
-            <div class="row">
-              <span class="label">Institution</span>
-              <span class="value">${selectedUser?.name || 'N/A'}</span>
-            </div>
-            <div class="row">
-              <span class="label">Phone</span>
-              <span class="value">${selectedUser?.phone || 'N/A'}</span>
-            </div>
-            <div class="row">
-              <span class="label">Description</span>
-              <span class="value">${transaction.description || 'Subscription Payment'}</span>
-            </div>
-            <div class="row">
-              <span class="label">Status</span>
-              <span class="value" style="color: #10b981; text-transform: uppercase;">${transaction.status}</span>
-            </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Date</span>
+            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{new Date(transaction.created_at).toLocaleString('bn-BD')}</span>
           </div>
-          <div class="total">
-            <span>Total Paid</span>
-            <span>${transaction.amount.toLocaleString('bn-BD')} ৳</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Institution</span>
+            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{selectedUser?.name || 'N/A'}</span>
           </div>
-          <div class="footer">
-            <p>Thank you for your business!</p>
-            <p>Generated by Deenora Management System</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Phone</span>
+            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{selectedUser?.phone || 'N/A'}</span>
           </div>
-          <script>
-            window.onload = () => { window.print(); }
-          </script>
-        </body>
-      </html>
-    `;
-    receiptWindow.document.write(html);
-    receiptWindow.document.close();
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Description</span>
+            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{transaction.description || 'Subscription Payment'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Status</span>
+            <span style={{ fontWeight: 700, color: '#10b981', fontSize: '15px', textAlign: 'right', textTransform: 'uppercase' }}>{transaction.status}</span>
+          </div>
+        </div>
+        <div style={{ fontSize: '24px', fontWeight: 900, marginTop: '30px', borderTop: '3px solid #0f172a', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Total Paid</span>
+          <span style={{ color: '#2563eb' }}>{transaction.amount.toLocaleString('bn-BD')} ৳</span>
+        </div>
+        <div style={{ textAlign: 'center', marginTop: '60px', fontSize: '13px', color: '#94a3b8', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+          <p>Thank you for your business!</p>
+          <p style={{ marginTop: '5px' }}>Generated by Deenora Management System</p>
+        </div>
+      </div>
+    );
+
+    await new Promise<void>((resolve) => {
+      root.render(<ReceiptComponent />);
+      setTimeout(resolve, 500);
+    });
+
+    const imgData = await toPng(container.firstElementChild as HTMLElement, {
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+      width: 794,
+      height: 1123,
+    });
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    
+    root.unmount();
+    document.body.removeChild(container);
+    
+    const pdfBlob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(pdfBlob);
+    window.open(blobUrl, '_blank');
   };
 
   const [editPassword, setEditPassword] = useState('');
