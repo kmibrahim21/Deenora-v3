@@ -863,7 +863,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const filtered = useMemo(() => madrasahs.filter(m => {
     const query = (searchQuery || '').toLowerCase();
-    const matchesSearch = (m.name || '').toLowerCase().includes(query);
+    const matchesSearch = 
+      (m.name || '').toLowerCase().includes(query) || 
+      (m.phone || '').toLowerCase().includes(query) || 
+      ((m.config_json as any)?.institute_code || '').toLowerCase().includes(query);
     const matchesType = filterType === 'all' || (m.institution_type || 'madrasah') === filterType;
     return matchesSearch && matchesType;
   }), [madrasahs, searchQuery, filterType]);

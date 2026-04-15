@@ -48,6 +48,7 @@ export interface Institution {
       subscription_type?: string;
       paid_months?: string[];
     };
+    institute_code?: string;
   };
   theme: string;
   status: 'active' | 'suspended' | 'trial';
