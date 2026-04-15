@@ -297,7 +297,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editDiscount, setEditDiscount] = useState(0);
   const [overrideTotal, setOverrideTotal] = useState<number | ''>('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
-  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [showConfirm, setShowConfirm] = useState<{
@@ -312,7 +311,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     onConfirm: () => {},
   });
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
-  const [detailsTab, setDetailsTab] = useState<'institution' | 'api' | 'permissions' | 'subscription'>('institution');
+  const [detailsTab, setDetailsTab] = useState<'institution' | 'api' | 'permissions' | 'subscription' | 'history'>('institution');
   const [showRefreshPopup, setShowRefreshPopup] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -1383,6 +1382,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       >
                          <CreditCard size={18} /> {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
                       </button>
+                      <button 
+                        onClick={() => {
+                          setDetailsTab('history');
+                          if (selectedUser) fetchPaymentHistory(selectedUser.id);
+                        }}
+                        className={`px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-3 shrink-0 ${detailsTab === 'history' ? (madrasah?.theme === 'dark' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20') : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200')}`}
+                      >
+                         <History size={18} /> {lang === 'bn' ? 'ইতিহাস' : 'History'}
+                      </button>
                    </div>
 
                    <div className={`space-y-6 pt-4 border-t ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
@@ -1573,15 +1581,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                     <CreditCard size={16} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-500'} /> Subscription Info
                                  </h4>
-                                 <button 
-                                   onClick={() => {
-                                     setShowPaymentHistory(true);
-                                     fetchPaymentHistory(selectedUser.id);
-                                   }}
-                                   className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors"
-                                 >
-                                   <History size={14} /> Payment History
-                                 </button>
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                  <div className="space-y-2">
@@ -1877,6 +1876,65 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         </div>
                       )}
 
+                      {detailsTab === 'history' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-8`}>
+                              <div className="flex items-center justify-between px-1">
+                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <History size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-500'} /> Payment History
+                                 </h4>
+                              </div>
+
+                              <div className="overflow-y-auto custom-scrollbar max-h-[500px] pr-2">
+                                 {isLoadingHistory ? (
+                                   <div className="flex flex-col items-center justify-center py-12">
+                                      <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
+                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Loading history...</p>
+                                   </div>
+                                 ) : paymentHistory.length === 0 ? (
+                                   <div className="flex flex-col items-center justify-center py-12 text-center">
+                                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'}`}>
+                                         <History size={32} />
+                                      </div>
+                                      <h4 className={`text-lg font-black mb-1 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>No Payments Found</h4>
+                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no subscription payment history.</p>
+                                   </div>
+                                 ) : (
+                                   <div className="space-y-4">
+                                      {paymentHistory.map((tr) => (
+                                        <div key={tr.id} className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-50 border-slate-100'}`}>
+                                           <div className="space-y-2">
+                                              <div className="flex items-center gap-3">
+                                                 <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${tr.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : tr.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                    {tr.status}
+                                                 </span>
+                                                 <span className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                    {new Date(tr.created_at).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                 </span>
+                                              </div>
+                                              <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{tr.description}</p>
+                                              <p className={`text-[10px] font-mono ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>ID: {tr.transaction_id}</p>
+                                           </div>
+                                           <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 shrink-0">
+                                              <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                                 +{tr.amount.toLocaleString('bn-BD')} ৳
+                                              </p>
+                                              <button 
+                                                onClick={() => handleDownloadReceipt(tr)}
+                                                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                                              >
+                                                <Download size={14} /> Receipt
+                                              </button>
+                                           </div>
+                                        </div>
+                                      ))}
+                                   </div>
+                                 )}
+                              </div>
+                           </div>
+                        </div>
+                      )}
+
                       <button onClick={handleUserUpdate} disabled={isUpdatingUser} className={`w-full h-16 ${madrasah?.theme === 'dark' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black rounded-[2rem] shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 text-lg mt-8`}>
                          {isUpdatingUser ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} /> Save Profile Changes</>}
                       </button>
@@ -1992,77 +2050,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         document.body
       )}
 
-      {showPaymentHistory && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className={`w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-500 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white border border-slate-100'}`}>
-              <div className={`p-6 md:p-8 border-b flex items-center justify-between ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
-                 <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                       <History size={24} />
-                    </div>
-                    <div>
-                       <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Payment History</h3>
-                       <p className={`text-xs font-bold mt-1 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{selectedUser?.name}</p>
-                    </div>
-                 </div>
-                 <button 
-                   onClick={() => setShowPaymentHistory(false)}
-                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900'}`}
-                 >
-                   <X size={20} />
-                 </button>
-              </div>
-
-              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
-                 {isLoadingHistory ? (
-                   <div className="flex flex-col items-center justify-center py-12">
-                      <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
-                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Loading history...</p>
-                   </div>
-                 ) : paymentHistory.length === 0 ? (
-                   <div className="flex flex-col items-center justify-center py-12 text-center">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'}`}>
-                         <History size={32} />
-                      </div>
-                      <h4 className={`text-lg font-black mb-1 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>No Payments Found</h4>
-                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no subscription payment history.</p>
-                   </div>
-                 ) : (
-                   <div className="space-y-4">
-                      {paymentHistory.map((tr) => (
-                        <div key={tr.id} className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-50 border-slate-100'}`}>
-                           <div className="space-y-2">
-                              <div className="flex items-center gap-3">
-                                 <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${tr.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : tr.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
-                                    {tr.status}
-                                 </span>
-                                 <span className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                                    {new Date(tr.created_at).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
-                                 </span>
-                              </div>
-                              <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{tr.description}</p>
-                              <p className={`text-[10px] font-mono ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>ID: {tr.transaction_id}</p>
-                           </div>
-                           <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 shrink-0">
-                              <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                 +{tr.amount.toLocaleString('bn-BD')} ৳
-                              </p>
-                              <button 
-                                onClick={() => handleDownloadReceipt(tr)}
-                                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                              >
-                                <Download size={14} /> Receipt
-                              </button>
-                           </div>
-                        </div>
-                      ))}
-                   </div>
-                 )}
-              </div>
-           </div>
-        </div>,
-        document.body
-      )}
 
       {showConfirm.show && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
