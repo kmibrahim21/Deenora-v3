@@ -114,8 +114,6 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         
         if (activeYearId) {
             feesQuery = feesQuery.eq('academic_year_id', activeYearId);
-        } else if (yearStart) {
-            feesQuery = feesQuery.gte('created_at', yearStart);
         }
         const { data: feesData } = await feesQuery;
 

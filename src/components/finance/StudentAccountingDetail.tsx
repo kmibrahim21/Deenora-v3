@@ -31,33 +31,21 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       const yearStart = madrasah.config_json?.academic_year_start;
 
       // 1. Fetch all fees for the student in the selected year
-      let feesQuery = supabase
+      const { data: feesData } = await supabase
         .from('fees')
         .select('*')
         .eq('student_id', student.student_id)
         .like('month', `${selectedYear}-%`);
       
-      if (yearStart) {
-        feesQuery = feesQuery.gte('created_at', yearStart);
-      }
-
-      const { data: feesData } = await feesQuery;
-      
       if (feesData) setFees(feesData);
 
       // 2. Fetch ledger entries mentioning this student
-      let ledgerQuery = supabase
+      const { data: ledgerData } = await supabase
         .from('ledger')
         .select('*')
         .eq('institution_id', madrasah.id)
         .eq('category', 'Student Fee')
         .ilike('description', `%${student.student_name}%`);
-      
-      if (yearStart) {
-        ledgerQuery = ledgerQuery.gte('created_at', yearStart);
-      }
-
-      const { data: ledgerData } = await ledgerQuery;
       
       if (ledgerData) setLedgerEntries(ledgerData.sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()));
 
@@ -125,7 +113,9 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
     const isEnabled = setting ? setting.is_enabled : true;
     return isEnabled ? sum + Number(s.amount) : sum;
   }, 0);
-  const totalPaid = ledgerEntries.reduce((sum, l) => sum + Number(l.amount), 0);
+  
+  // Use fees table for total paid as it's more accurate (linked by student_id)
+  const totalPaid = fees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
   
   // Calculate total due for the year up to current month
   const currentMonth = new Date().getMonth() + 1;
@@ -229,9 +219,16 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   const monthStr = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
                   const monthName = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'][i];
                   
-                  const monthFee = fees.find(f => f.month === monthStr);
-                  const status = monthFee?.status || 'unpaid';
-                  const paidAmt = (Number(monthFee?.amount_paid) || 0) + (Number(monthFee?.discount) || 0);
+                  const monthFees = fees.filter(f => f.month === monthStr);
+                  const paidAmt = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+                  
+                  let status = 'unpaid';
+                  if (totalPayablePerMonth > 0) {
+                    if (paidAmt >= totalPayablePerMonth) status = 'paid';
+                    else if (paidAmt > 0) status = 'partial';
+                  } else {
+                    status = paidAmt > 0 ? 'paid' : 'unpaid';
+                  }
 
                   return (
                     <div key={monthStr} className={`p-5 rounded-3xl border transition-all hover:scale-[1.02] ${status === 'paid' ? (isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100') : (isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>

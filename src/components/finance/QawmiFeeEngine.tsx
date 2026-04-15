@@ -113,8 +113,6 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         
         if (activeYearId) {
             feesQuery = feesQuery.eq('academic_year_id', activeYearId);
-        } else if (yearStart) {
-            feesQuery = feesQuery.gte('created_at', yearStart);
         }
         const { data: feesData } = await feesQuery;
 
