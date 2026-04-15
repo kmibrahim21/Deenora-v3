@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, LedgerEntry, Language, UserRole, Class, Profile, AcademicYear } from 'types';
-import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle } from 'lucide-react';
+import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2 } from 'lucide-react';
 import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import { SchoolFeeEngine } from 'components/finance/SchoolFeeEngine';
 import { QawmiFeeEngine } from 'components/finance/QawmiFeeEngine';
@@ -52,6 +52,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [isSaving, setIsSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, ids: string[]}>({show: false, ids: []});
 
   // Ledger State
   const [type, setType] = useState<'income' | 'expense'>('income');
@@ -114,6 +116,28 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       } catch (e: any) { 
         console.error("Accounting Fetch Error:", e);
       } finally { setLoading(false); }
+    }
+  };
+
+  const handleDeleteLedger = async () => {
+    if (!madrasah?.id || deleteConfirm.ids.length === 0) return;
+    if (!isOnline) {
+      alert("Internet required to delete ledger entry.");
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('ledger').delete().in('id', deleteConfirm.ids);
+      if (error) throw error;
+      
+      setSelectedLedgerIds([]);
+      setDeleteConfirm({show: false, ids: []});
+      fetchData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -266,25 +290,43 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
               <span className="text-[10px] font-bold text-slate-400 uppercase">{ledger.length} লেনদেন</span>
             </div>
             
-            <div className={`flex p-1 rounded-xl border shadow-inner w-fit ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200/50'}`}>
-              <button 
-                onClick={() => setLedgerFilter('all')}
-                className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'all' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
-              >
-                ইতিহাস
-              </button>
-              <button 
-                onClick={() => setLedgerFilter('income')}
-                className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'income' ? (isDark ? 'bg-slate-900 text-emerald-400 shadow-sm' : 'bg-white text-emerald-500 shadow-sm') : 'text-slate-400'}`}
-              >
-                আয়
-              </button>
-              <button 
-                onClick={() => setLedgerFilter('expense')}
-                className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'expense' ? (isDark ? 'bg-slate-900 text-red-400 shadow-sm' : 'bg-white text-red-500 shadow-sm') : 'text-slate-400'}`}
-              >
-                ব্যয়
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedLedgerIds.length > 0 && (
+                <button
+                  onClick={() => setDeleteConfirm({show: true, ids: selectedLedgerIds})}
+                  className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all bg-red-500 text-white shadow-sm hover:bg-red-600 flex items-center gap-1"
+                >
+                  <Trash2 size={12} /> {selectedLedgerIds.length} টি মুছুন
+                </button>
+              )}
+              {ledger.length > 0 && (
+                <button
+                  onClick={() => setDeleteConfirm({show: true, ids: ledger.map(l => l.id)})}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 ${isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+                >
+                  <Trash2 size={12} /> সব মুছুন
+                </button>
+              )}
+              <div className={`flex p-1 rounded-xl border shadow-inner w-fit ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200/50'}`}>
+                <button 
+                  onClick={() => setLedgerFilter('all')}
+                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'all' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
+                >
+                  ইতিহাস
+                </button>
+                <button 
+                  onClick={() => setLedgerFilter('income')}
+                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'income' ? (isDark ? 'bg-slate-900 text-emerald-400 shadow-sm' : 'bg-white text-emerald-500 shadow-sm') : 'text-slate-400'}`}
+                >
+                  আয়
+                </button>
+                <button 
+                  onClick={() => setLedgerFilter('expense')}
+                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'expense' ? (isDark ? 'bg-slate-900 text-red-400 shadow-sm' : 'bg-white text-red-500 shadow-sm') : 'text-slate-400'}`}
+                >
+                  ব্যয়
+                </button>
+              </div>
             </div>
           </div>
           
@@ -314,31 +356,54 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
                 return (
                   <div key={entry.id} className={`group p-5 rounded-[2.5rem] border-2 transition-all flex items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] ${isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center shrink-0 shadow-inner border transition-transform group-hover:scale-110 ${entry.type === 'income' ? (isDark ? 'bg-emerald-900/20 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100') : (isDark ? 'bg-red-900/20 text-red-400 border-red-800/50' : 'bg-red-50 text-red-600 border-red-100')}`}>
-                          {entry.type === 'income' ? <ArrowUpCircle size={24} /> : <ArrowDownCircle size={24} />}
-                        </div>
-                        <div>
-                          <h5 className={`font-black font-noto text-sm mb-0.5 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{displayName}</h5>
-                          <div className="flex items-center gap-2">
-                            {entry.category === 'Student Fee' ? (
-                              <>
-                                <span className="text-[10px] text-slate-400 font-bold">{details}</span>
-                                <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
-                                <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter">{feeType}</span>
-                              </>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long' })}</span>
-                            )}
+                    <div className="flex items-center gap-3 w-full">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedLedgerIds.includes(entry.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedLedgerIds([...selectedLedgerIds, entry.id]);
+                          } else {
+                            setSelectedLedgerIds(selectedLedgerIds.filter(id => id !== entry.id));
+                          }
+                        }}
+                        className={`w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ${isDark ? 'bg-slate-800 border-slate-600' : ''}`}
+                      />
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center shrink-0 shadow-inner border transition-transform group-hover:scale-110 ${entry.type === 'income' ? (isDark ? 'bg-emerald-900/20 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100') : (isDark ? 'bg-red-900/20 text-red-400 border-red-800/50' : 'bg-red-50 text-red-600 border-red-100')}`}>
+                            {entry.type === 'income' ? <ArrowUpCircle size={24} /> : <ArrowDownCircle size={24} />}
+                          </div>
+                          <div>
+                            <h5 className={`font-black font-noto text-sm mb-0.5 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{displayName}</h5>
+                            <div className="flex items-center gap-2">
+                              {entry.category === 'Student Fee' ? (
+                                <>
+                                  <span className="text-[10px] text-slate-400 font-bold">{details}</span>
+                                  <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                                  <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter">{feeType}</span>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long' })}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-base font-black ${entry.type === 'income' ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
-                          {entry.type === 'income' ? '+' : '-'} ৳{entry.amount.toLocaleString()}
-                        </p>
-                        <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">{entry.category}</p>
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <div>
+                            <p className={`text-base font-black ${entry.type === 'income' ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                              {entry.type === 'income' ? '+' : '-'} ৳{entry.amount.toLocaleString()}
+                            </p>
+                            <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">{entry.category}</p>
+                          </div>
+                          <button 
+                            onClick={() => setDeleteConfirm({show: true, ids: [entry.id]})}
+                            className={`p-1.5 rounded-full transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/20' : 'text-red-400 hover:bg-red-50 hover:text-red-600'}`}
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -449,6 +514,41 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   {/* ADD LEDGER MODAL REMOVED */}
 
       {/* Floating Action Button for New Transaction removed as per request */}
+      
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className={`w-full max-w-sm rounded-[2rem] p-6 shadow-2xl ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-500'}`}>
+                <Trash2 size={32} />
+              </div>
+              <h3 className={`text-xl font-black mb-2 ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                {lang === 'bn' ? 'নিশ্চিত করুন' : 'Confirm Deletion'}
+              </h3>
+              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {lang === 'bn' 
+                  ? `আপনি কি নিশ্চিত যে আপনি ${deleteConfirm.ids.length} টি লেনদেন মুছে ফেলতে চান? এই কাজ বাতিল করা যাবে না।` 
+                  : `Are you sure you want to delete ${deleteConfirm.ids.length} record(s)? This action cannot be undone.`}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setDeleteConfirm({show: false, ids: []})}
+                className={`flex-1 py-3 rounded-xl font-bold transition-all ${isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+              <button 
+                onClick={handleDeleteLedger}
+                disabled={isSaving}
+                className="flex-1 py-3 rounded-xl font-bold bg-red-500 text-white hover:bg-red-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : (lang === 'bn' ? 'মুছে ফেলুন' : 'Delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
