@@ -354,6 +354,18 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                        </div>
                        {copiedId ? <Check size={22} className="text-emerald-500 shrink-0" /> : <Copy size={20} className="text-slate-200 shrink-0" />}
                     </div>
+
+                    {(madrasah.config_json as any)?.institute_code && (
+                      <div className={`p-5 rounded-[2.5rem] border flex items-center gap-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
+                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-white border-slate-100 text-amber-600'}`}>
+                          <Box size={24} />
+                         </div>
+                         <div className="flex-1 text-left min-w-0">
+                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{lang === 'bn' ? 'ইনস্টিটিউট কোড' : 'Institute Code'}</p>
+                            <p className={`text-[12px] font-black truncate ${madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>{(madrasah.config_json as any).institute_code}</p>
+                         </div>
+                      </div>
+                    )}
                     
 
                  </div>

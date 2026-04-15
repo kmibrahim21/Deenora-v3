@@ -145,6 +145,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editReveApiKey, setEditReveApiKey] = useState('');
   const [editReveSecretKey, setEditReveSecretKey] = useState('');
   const [editReveClientId, setEditReveClientId] = useState('');
+  const [editInstituteCode, setEditInstituteCode] = useState('');
   const [editSmsRate, setEditSmsRate] = useState<number>(0.50);
   const [editVoiceRate, setEditVoiceRate] = useState<number>(0.50);
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
@@ -524,6 +525,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditReveApiKey(user.reve_api_key || '');
     setEditReveSecretKey(user.reve_secret_key || '');
     setEditReveClientId(user.reve_client_id || '');
+    setEditInstituteCode(userConfig?.institute_code || '');
     setEditSmsRate(user.sms_rate || 0.50);
     setEditVoiceRate(user.voice_rate || 0.50);
     setEditPaidMonths(userConfig?.paid_months || []);
@@ -610,6 +612,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           paid_months: editPaidMonths,
           package_rate: editPackageRate,
           package_name: editPackageName,
+          institute_code: editInstituteCode.trim(),
           user_pin: editPassword.trim()
         }
       }).eq('id', selectedUser.id).select();
@@ -1415,6 +1418,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     <input type="number" step="0.01" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editBalance} onChange={(e) => setEditBalance(Number(e.target.value))} />
                                     <Mic className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-400" size={20} />
                                  </div>
+                              </div>
+                              <div className="space-y-2">
+                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institute Code</label>
+                                 <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editInstituteCode} onChange={(e) => setEditInstituteCode(e.target.value)} placeholder="Enter Institute Code" />
                               </div>
                               <div className="md:col-span-2 space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Address</label>
