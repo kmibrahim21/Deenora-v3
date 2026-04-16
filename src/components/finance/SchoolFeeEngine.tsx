@@ -45,6 +45,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyStudent, setHistoryStudent] = useState<any>(null);
   const [studentFeeHistory, setStudentFeeHistory] = useState<any[]>([]);
+  const [historyStudentSettings, setHistoryStudentSettings] = useState<any[]>([]);
   const [historyYear, setHistoryYear] = useState(new Date().getFullYear().toString());
 
   // Structure State
@@ -53,6 +54,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [startDate, setStartDate] = useState('');
   const [activeYearEndDate, setActiveYearEndDate] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -152,6 +154,9 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           filteredData = data.filter((student: any) => profile.permissions?.allowed_classes?.includes(student.class_id));
         }
 
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
         const correctedData = filteredData.map((student: any) => {
             const studentSettings = allSettings?.filter(as => as.student_id === student.student_id) || [];
             const studentFeeStructures = feeStructures?.filter(fs => {
@@ -159,7 +164,15 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 if (!isClassMatch) return false;
                 
                 const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
-                return setting ? setting.is_enabled : true;
+                const isEnabled = setting ? setting.is_enabled : true;
+                const isExpired = fs.due_date && fs.due_date < today;
+                const isNotStarted = fs.start_date && fs.start_date > today;
+                
+                // Also check if the selected month is after the due date's month
+                const isMonthExpired = fs.due_date && selectedMonth > fs.due_date.slice(0, 7);
+                const isMonthNotStarted = fs.start_date && selectedMonth < fs.start_date.slice(0, 7);
+
+                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
             }) || [];
             
             const totalPayable = studentFeeStructures.reduce((sum, fs) => sum + Number(fs.amount), 0);
@@ -226,9 +239,26 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       .select('*')
       .eq('student_id', student.student_id);
     
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    
     const enabledStructures = structures.filter(s => {
         const setting = settings?.find(set => set.fee_structure_id === s.id);
-        return setting ? setting.is_enabled : true;
+        const isEnabled = setting ? setting.is_enabled : true;
+        
+        // If due_date exists and it's in the past, it's not available for collection
+        const isExpired = s.due_date && s.due_date < today;
+
+        // If start_date exists and it's in the future, it's not available for collection yet
+        const isNotStarted = s.start_date && s.start_date > today;
+
+        // Also check if the selected month is after the due date's month
+        const isMonthExpired = s.due_date && selectedMonth > s.due_date.slice(0, 7);
+        
+        // Check if the selected month is before the start date's month
+        const isMonthNotStarted = s.start_date && selectedMonth < s.start_date.slice(0, 7);
+        
+        return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
     });
     setAvailableFeeItems(enabledStructures);
 
@@ -256,8 +286,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     });
     setPaidFeeCategories(paidItems);
 
-    // 3. Select unpaid items
-    const unpaid = structures.filter(s => !paidItems.includes(s.fee_name));
+    // 3. Select unpaid items (only from available/non-expired items)
+    const unpaid = enabledStructures.filter(s => !paidItems.includes(s.fee_name));
     const unpaidNames = unpaid.map(s => s.fee_name);
     setSelectedFeeCategories(unpaidNames);
     
@@ -346,11 +376,15 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   };
 
   const fetchStudentHistory = async (studentId: string, year: string) => {
-    const { data } = await supabase.from('fees')
-      .select('*')
-      .eq('student_id', studentId)
-      .like('month', `${year}-%`);
+    const [{ data }, { data: settingsData }] = await Promise.all([
+      supabase.from('fees')
+        .select('*')
+        .eq('student_id', studentId)
+        .like('month', `${year}-%`),
+      supabase.from('student_fee_settings').select('*').eq('student_id', studentId)
+    ]);
     setStudentFeeHistory(data || []);
+    setHistoryStudentSettings(settingsData || []);
   };
 
   useEffect(() => {
@@ -771,7 +805,24 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                             let status = 'unpaid';
                             let totalPaid = 0;
                             
-                            const studentFeeStructures = availableFeeItems.filter(fs => fs.class_id === historyStudent.class_id || fs.class_id === null);
+                            const studentSettings = historyStudentSettings;
+                            const now = new Date();
+                            const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                            
+                            const studentFeeStructures = structures.filter(fs => {
+                                const isClassMatch = fs.class_id === historyStudent.class_id || fs.class_id === null;
+                                if (!isClassMatch) return false;
+                                
+                                const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
+                                const isEnabled = setting ? setting.is_enabled : true;
+                                const isExpired = fs.due_date && fs.due_date < today;
+                                const isNotStarted = fs.start_date && fs.start_date > today;
+                                
+                                const isMonthExpired = fs.due_date && monthStr > fs.due_date.slice(0, 7);
+                                const isMonthNotStarted = fs.start_date && monthStr < fs.start_date.slice(0, 7);
+
+                                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
+                            });
                             const totalPayable = studentFeeStructures.reduce((sum, fs) => sum + Number(fs.amount), 0);
 
                             if (recordsForMonth.length > 0) {
@@ -832,6 +883,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         setAmount('');
                         setSelectedClass('');
                         setDueDate(activeYearEndDate);
+                        setStartDate(madrasah.config_json?.academic_year_start || '');
                         setShowAddStructure(true);
                     }} 
                     className="w-12 h-12 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 active:scale-95 transition-all"
@@ -893,6 +945,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                                         setAmount(s.amount?.toString() || '');
                                                         setSelectedClass(s.class_id || '');
                                                         setDueDate(s.due_date || '');
+                                                        setStartDate(s.start_date || '');
                                                         setShowAddStructure(true);
                                                     }} className={`w-8 h-8 flex items-center justify-center transition-colors ${isDark ? 'text-blue-400 hover:bg-slate-700' : 'text-[#2563EB] hover:bg-blue-50 rounded-lg'}`}>
                                                         <Edit3 size={16}/>
@@ -966,6 +1019,13 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        <DollarSign className={`absolute left-4 top-[44px] ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
                     </div>
                     <div className="relative">
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শুরুর তারিখ</label>
+                       <div className="relative">
+                           <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                           <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`} size={20}/>
+                       </div>
+                    </div>
+                    <div className="relative">
                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শেষ তারিখ (Optional)</label>
                        <div className="relative">
                            <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
@@ -982,7 +1042,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                class_id: selectedClass || null,
                                fee_name: category,
                                amount: parseFloat(amount),
-                               due_date: dueDate || null
+                               due_date: dueDate || null,
+                               start_date: startDate || null
                            };
                            
                            let error;
@@ -994,9 +1055,14 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                error = insertError;
                            }
                            
-                           if (error) throw error;
+                           if (error) {
+                               if (error.message.includes('start_date does not exist')) {
+                                   throw new Error("Database schema error: Please run the SQL migration script 'src/services/migration_add_start_date_fee_structures.sql' in Supabase SQL Editor to add the 'start_date' column.");
+                               }
+                               throw error;
+                           }
                            setShowAddStructure(false);
-                           setCategory(''); setAmount(''); setSelectedClass(''); setDueDate(''); setEditingStructureId(null);
+                           setCategory(''); setAmount(''); setSelectedClass(''); setDueDate(''); setStartDate(''); setEditingStructureId(null);
                            fetchData();
                        } catch (e: any) { setActionError(e.message); } finally { setIsSaving(false); }
                     }} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all text-base">

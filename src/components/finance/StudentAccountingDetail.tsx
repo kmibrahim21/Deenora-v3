@@ -108,10 +108,13 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const isDark = madrasah.theme === 'dark';
   const className = classes.find(c => c.id === student.class_id)?.class_name || '';
 
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const totalPayablePerMonth = structures.reduce((sum, s) => {
     const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
     const isEnabled = setting ? setting.is_enabled : true;
-    return isEnabled ? sum + Number(s.amount) : sum;
+    const isExpired = s.due_date && s.due_date < today;
+    return (isEnabled && !isExpired) ? sum + Number(s.amount) : sum;
   }, 0);
   
   // Use fees table for total paid as it's more accurate (linked by student_id)
@@ -215,20 +218,31 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {Array.from({ length: 12 }, (_, i) => {
-                  const monthStr = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
-                  const monthName = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'][i];
-                  
-                  const monthFees = fees.filter(f => f.month === monthStr);
-                  const paidAmt = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
-                  
-                  let status = 'unpaid';
-                  if (totalPayablePerMonth > 0) {
-                    if (paidAmt >= totalPayablePerMonth) status = 'paid';
-                    else if (paidAmt > 0) status = 'partial';
-                  } else {
-                    status = paidAmt > 0 ? 'paid' : 'unpaid';
-                  }
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const monthStr = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
+                    const monthName = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'][i];
+                    
+                    const monthFees = fees.filter(f => f.month === monthStr);
+                    const paidAmt = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+                    
+                    // Calculate payable for this specific month
+                    const monthPayable = structures.reduce((sum, s) => {
+                      const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+                      const isEnabled = setting ? setting.is_enabled : true;
+                      const isExpired = s.due_date && s.due_date < today;
+                      const isNotStarted = s.start_date && s.start_date > today;
+                      const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
+                      const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
+                      return (isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted) ? sum + Number(s.amount) : sum;
+                    }, 0);
+
+                    let status = 'unpaid';
+                    if (monthPayable > 0) {
+                      if (paidAmt >= monthPayable) status = 'paid';
+                      else if (paidAmt > 0) status = 'partial';
+                    } else {
+                      status = paidAmt > 0 ? 'paid' : 'unpaid';
+                    }
 
                   return (
                     <div key={monthStr} className={`p-5 rounded-3xl border transition-all hover:scale-[1.02] ${status === 'paid' ? (isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100') : (isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
@@ -262,21 +276,27 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   {structures.length > 0 ? structures.map(fee => {
                     const setting = studentFeeSettings.find(s => s.fee_structure_id === fee.id);
                     const isEnabled = setting ? setting.is_enabled : true;
+                    const isExpired = fee.due_date && fee.due_date < today;
+                    
                     return (
-                      <label key={fee.id} className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all active:scale-[0.98] ${isEnabled ? (isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-100') : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200')}`}>
+                      <label key={fee.id} className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all active:scale-[0.98] ${isEnabled && !isExpired ? (isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-100') : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200')} ${isExpired ? 'opacity-60' : ''}`}>
                         <div className="flex flex-col">
-                          <span className={`text-xs font-black ${isEnabled ? (isDark ? 'text-blue-400' : 'text-blue-700') : 'text-slate-400'}`}>{fee.fee_name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-black ${isEnabled && !isExpired ? (isDark ? 'text-blue-400' : 'text-blue-700') : 'text-slate-400'}`}>{fee.fee_name}</span>
+                            {isExpired && <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded uppercase tracking-widest">Expired</span>}
+                          </div>
                           <span className="text-[10px] font-bold text-slate-400">৳{fee.amount}</span>
                         </div>
                         <div className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none">
                           <input 
                             type="checkbox" 
-                            checked={isEnabled} 
-                            onChange={() => toggleFee(fee.id)}
+                            checked={isEnabled && !isExpired} 
+                            disabled={isExpired}
+                            onChange={() => !isExpired && toggleFee(fee.id)}
                             className="sr-only"
                           />
-                          <span className={`${isEnabled ? 'bg-blue-500' : 'bg-slate-300'} inline-block h-6 w-11 rounded-full transition-colors`} />
-                          <span className={`${isEnabled ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+                          <span className={`${isEnabled && !isExpired ? 'bg-blue-500' : 'bg-slate-300'} inline-block h-6 w-11 rounded-full transition-colors`} />
+                          <span className={`${isEnabled && !isExpired ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
                         </div>
                       </label>
                     );
