@@ -224,48 +224,123 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     document.body.appendChild(container);
     const root = createRoot(container);
     
-    const ReceiptComponent = () => (
-      <div style={{ width: '794px', minHeight: '1123px', padding: '40px', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", color: '#333', backgroundColor: '#fff' }}>
-        <div style={{ textAlign: 'center', borderBottom: '2px solid #eee', paddingBottom: '20px', marginBottom: '30px' }}>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: '#2563eb', letterSpacing: '2px', textTransform: 'uppercase' }}>Deenora</div>
-          <div style={{ fontSize: '18px', color: '#666', marginTop: '5px', textTransform: 'uppercase', letterSpacing: '1px' }}>Payment Receipt</div>
-        </div>
-        <div style={{ marginBottom: '40px', background: '#f8fafc', padding: '20px', borderRadius: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
-            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Transaction ID</span>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{transaction.transaction_id}</span>
+    const ReceiptComponent = () => {
+      const metadata = transaction.metadata || {};
+      const months = metadata.months || [];
+      const isCustomPayment = !metadata.package_name && !transaction.description?.includes('Package');
+      
+      return (
+      <div style={{ width: '794px', minHeight: '1123px', padding: '50px', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", color: '#1e293b', backgroundColor: '#fff' }}>
+        
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #f1f5f9', paddingBottom: '30px', marginBottom: '40px' }}>
+          <div>
+            <div style={{ fontSize: '36px', fontWeight: 900, color: '#2563eb', letterSpacing: '-0.5px' }}>Deenora</div>
+            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>Management System</div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
-            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Date</span>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{new Date(transaction.created_at).toLocaleString('bn-BD')}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
-            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Institution</span>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{selectedUser?.name || 'N/A'}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
-            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Phone</span>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{selectedUser?.phone || 'N/A'}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
-            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Description</span>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', textAlign: 'right' }}>{transaction.description || 'Subscription Payment'}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#64748b', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Status</span>
-            <span style={{ fontWeight: 700, color: '#10b981', fontSize: '15px', textAlign: 'right', textTransform: 'uppercase' }}>{transaction.status}</span>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Receipt</div>
+            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px', fontWeight: 600 }}>#{transaction.transaction_id}</div>
+            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '2px' }}>{new Date(transaction.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
           </div>
         </div>
-        <div style={{ fontSize: '24px', fontWeight: 900, marginTop: '30px', borderTop: '3px solid #0f172a', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Total Paid</span>
-          <span style={{ color: '#2563eb' }}>{transaction.amount.toLocaleString('bn-BD')} ৳</span>
+
+        {/* Institution Info */}
+        <div style={{ marginBottom: '40px', padding: '25px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px' }}>
+          <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#64748b', fontWeight: 700, marginBottom: '15px' }}>Billed To</div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>{selectedUser?.name || 'Institution Name'}</div>
+          <div style={{ fontSize: '15px', color: '#475569', display: 'flex', alignItems: 'center', gap: '10px' }}>
+             <span>Phone: {selectedUser?.phone || 'N/A'}</span>
+          </div>
         </div>
-        <div style={{ textAlign: 'center', marginTop: '60px', fontSize: '13px', color: '#94a3b8', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-          <p>Thank you for your business!</p>
-          <p style={{ marginTop: '5px' }}>Generated by Deenora Management System</p>
+
+        {/* Subscription Details Table */}
+        <div style={{ marginBottom: '40px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', borderBottom: '2px solid #cbd5e1', paddingBottom: '12px', marginBottom: '16px', fontWeight: 700, color: '#475569', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            <div>Description</div>
+            <div style={{ textAlign: 'center' }}>Details</div>
+            <div style={{ textAlign: 'right' }}>Amount</div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', borderBottom: '1px solid #e2e8f0', paddingBottom: '16px', marginBottom: '16px', alignItems: 'start' }}>
+            <div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                Subscription Payment
+              </div>
+              {!isCustomPayment && metadata.package_name && (
+                <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>
+                  Package: <span style={{ color: '#0f172a', fontWeight: 600 }}>{metadata.package_name}</span>
+                </div>
+              )}
+              {!isCustomPayment && metadata.subscription_type && (
+                <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
+                  Type: <span style={{ color: '#0f172a', fontWeight: 600, textTransform: 'capitalize' }}>{metadata.subscription_type}</span>
+                </div>
+              )}
+              {isCustomPayment && (
+                 <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>
+                   {transaction.description}
+                 </div>
+              )}
+            </div>
+            <div style={{ textAlign: 'center', fontSize: '15px', fontWeight: 600, color: '#475569' }}>
+               {!isCustomPayment && months.length > 0 ? `${months.length} Month${months.length > 1 ? 's' : ''}` : '-'}
+            </div>
+            <div style={{ textAlign: 'right', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+               {metadata.base_amount ? `${metadata.base_amount.toLocaleString('bn-BD')} ৳` : `${transaction.amount.toLocaleString('bn-BD')} ৳`}
+            </div>
+          </div>
+
+          {months.length > 0 && !isCustomPayment && (
+            <div style={{ backgroundColor: '#f1f5f9', padding: '16px', borderRadius: '12px', marginTop: '10px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Covered Months</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {months.map((m: string) => {
+                  const [year, month] = m.split('-');
+                  const date = new Date(parseInt(year), parseInt(month) - 1);
+                  return (
+                    <span key={m} style={{ backgroundColor: '#fff', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                      {date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Totals */}
+        <div style={{ width: '350px', marginLeft: 'auto' }}>
+          {metadata.discount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '15px' }}>
+              <span>Subtotal</span>
+              <span style={{ fontWeight: 600 }}>{metadata.base_amount.toLocaleString('bn-BD')} ৳</span>
+            </div>
+          )}
+          {metadata.discount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid #e2e8f0', color: '#ef4444', fontSize: '15px' }}>
+              <span>Discount</span>
+              <span style={{ fontWeight: 600 }}>-{metadata.discount.toLocaleString('bn-BD')} ৳</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', marginTop: '10px' }}>
+            <span style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a' }}>Total Paid</span>
+            <span style={{ fontSize: '24px', fontWeight: 900, color: '#2563eb' }}>{transaction.amount.toLocaleString('bn-BD')} ৳</span>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
+            <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Payment Status</span>
+            <span style={{ fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '1px' }}>{transaction.status}</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ position: 'absolute', bottom: '50px', left: '50px', right: '50px', textAlign: 'center', borderTop: '2px solid #f1f5f9', paddingTop: '30px' }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>Thank you for your business!</div>
+          <div style={{ fontSize: '14px', color: '#94a3b8' }}>This is a computer-generated receipt and requires no physical signature.</div>
         </div>
       </div>
-    );
+    )};
 
     await new Promise<void>((resolve) => {
       root.render(<ReceiptComponent />);
@@ -1820,7 +1895,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       transaction_id: `SUB-${Date.now()}`,
                                       sender_phone: 'ADMIN',
                                       type: 'credit',
-                                      module: 'subscription'
+                                      module: 'subscription',
+                                      metadata: {
+                                        months: selectedMonthsForPayment,
+                                        package_name: editPackageName,
+                                        subscription_type: editSubscriptionType,
+                                        discount: editDiscount,
+                                        base_amount: baseAmount
+                                      }
                                     });
                                     if (trError) throw trError;
 

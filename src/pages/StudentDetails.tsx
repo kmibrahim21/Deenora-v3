@@ -16,17 +16,19 @@ interface StudentDetailsProps {
   triggerRefresh?: () => void;
 }
 
+import { openWhatsAppChooser } from '../utils/whatsapp';
+
 const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEdit, onBack, lang, readOnly, institutionId, triggerRefresh }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const isDark = madrasah?.theme === 'dark';
 
   const initiateWhatsAppCall = async (phone: string) => {
-    window.location.href = `https://wa.me/88${phone.replace(/\D/g, '')}`;
+    openWhatsAppChooser(phone);
   };
 
   const initiateWhatsAppMessage = async (phone: string) => {
-    window.location.href = `https://wa.me/88${phone.replace(/\D/g, '')}?text=${encodeURIComponent('আস-সালামু আলাইকুম')}`;
+    openWhatsAppChooser(phone, 'আস-সালামু আলাইকুম');
   };
 
   const handleDelete = async () => {

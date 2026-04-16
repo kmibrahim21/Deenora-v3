@@ -79,6 +79,14 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
       const amount = (selectedPackage.rate * stats.students) * duration;
 
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth();
+      const selectedMonthsForPayment = [];
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(currentYear, currentMonth + i, 1);
+        selectedMonthsForPayment.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
+      }
+
       const { error } = await supabase.from('transactions').insert({
         institution_id: madrasah.id,
         amount: amount,
@@ -87,7 +95,14 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         description: `Subscription Upgrade: ${selectedPackage.name} (${subscriptionType})`,
         type: 'credit',
         status: 'pending',
-        module: 'subscription'
+        module: 'subscription',
+        metadata: {
+          months: selectedMonthsForPayment,
+          package_name: selectedPackage.name,
+          subscription_type: subscriptionType,
+          discount: 0,
+          base_amount: amount
+        }
       });
 
       if (error) throw error;

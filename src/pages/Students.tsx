@@ -7,6 +7,7 @@ import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
+import { openWhatsAppChooser } from '../utils/whatsapp';
 
 
 interface StudentsProps {
@@ -286,7 +287,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                   <Phone size={18} fill="currentColor" />
                 </button>
                 <button 
-                  onClick={(e) => { e.stopPropagation(); window.location.href = `https://wa.me/88${student.guardian_phone.replace(/\D/g, '')}`; }} 
+                  onClick={(e) => { e.stopPropagation(); openWhatsAppChooser(student.guardian_phone); }} 
                   className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
                 >
                   <PhoneCall size={18} fill="currentColor" />
