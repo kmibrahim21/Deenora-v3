@@ -137,7 +137,24 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         .eq('institution_id', madrasah.id)
         .eq('event_date', date);
       
-      const events = getEventsForDate(new Date(date), customEvents || []);
+      let events = getEventsForDate(new Date(date), customEvents || []);
+      
+      // Check for weekly holiday
+      const weeklyHolidays = madrasah.config_json?.weekly_holidays || [5]; // Default Friday
+      const dayIndex = new Date(date).getDay();
+      const isWeeklyHoliday = weeklyHolidays.includes(dayIndex);
+      
+      if (isWeeklyHoliday) {
+        const dayNamesBn = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+        const dayNamesEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        events.push({
+          title: lang === 'bn' ? `সাপ্তাহিক ছুটি (${dayNamesBn[dayIndex]})` : `Weekly Holiday (${dayNamesEn[dayIndex]})`,
+          type: 'holiday',
+          id: 'weekly-holiday',
+        });
+      }
+      
       setDayEvents(events);
       
       const holiday = events.length > 0;

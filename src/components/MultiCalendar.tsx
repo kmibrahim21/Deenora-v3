@@ -124,6 +124,10 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({ lang, institutionId, isAd
     const startDate = startOfWeek(monthStart);
     const endDate = endOfWeek(monthEnd);
 
+    const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5]; // Default Friday
+    const dayNamesBn = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+    const dayNamesEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
     const rows = [];
     let days = [];
     let day = startDate;
@@ -135,7 +139,18 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({ lang, institutionId, isAd
           const isCurrentMonth = isSameMonth(cellDate, monthStart);
           const bn = getBengaliDate(cellDate);
           const hj = getHijriDate(cellDate);
-          const dayEvents = getEventsForDate(cellDate, events);
+          
+          let dayEvents = getEventsForDate(cellDate, events);
+          const isWeeklyHoliday = weeklyHolidays.includes(cellDate.getDay());
+          
+          if (isWeeklyHoliday) {
+            dayEvents = [{
+              title: lang === 'bn' ? `সাপ্তাহিক ছুটি` : `Weekly Holiday`,
+              type: 'holiday',
+              id: `weekly-holiday-${cellDate.getTime()}`,
+              event_date: cellDate.toISOString().split('T')[0]
+            }, ...dayEvents];
+          }
 
           days.push(
             <div
