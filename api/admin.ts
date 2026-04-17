@@ -34,15 +34,14 @@ export default async function handler(req, res) {
       if (!sheetUrl) return res.status(400).json({ error: 'Sheet URL not configured' });
 
       const formattedInsts = allInsts.map(inst => ({
-        sync_date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
-        reg_date: new Date(inst.created_at || Date.now()).toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
         id: inst.id,
+        code: inst.config_json?.institute_code || '',
         name: inst.name,
+        address: inst.address || '',
+        subscription_type: inst.config_json?.package_name || 'Free',
         phone: inst.phone,
         email: inst.email,
-        type: inst.institution_type || 'madrasah',
-        status: inst.is_active ? 'Active' : 'Inactive',
-        modules: inst.config_json?.modules ? Object.keys(inst.config_json.modules).filter(k => inst.config_json.modules[k]).join(', ') : ''
+        type: inst.institution_type || 'madrasah'
       }));
 
       await fetch(sheetUrl, {
@@ -179,15 +178,14 @@ async function setupInstitution(supabase, userId, body, res) {
         },
         body: JSON.stringify({
           action: 'add_institution',
-          sync_date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
-          reg_date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
           id: userId,
+          code: '',
           name: name.trim(),
+          address: '',
+          subscription_type: 'Free',
           phone: phone.trim(),
           email: email.trim(),
-          type: institution_type || 'madrasah',
-          status: 'Active',
-          modules: 'attendance, results, admit_card, seat_plan, accounting, academic_year_promotion, voice_broadcast, sms'
+          type: institution_type || 'madrasah'
         }),
       });
       console.log('Successfully sent institution data to Google Sheets');
