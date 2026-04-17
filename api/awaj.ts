@@ -7,9 +7,9 @@ import { Buffer } from 'node:buffer';
 const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
 
 const getAwajHeaders = () => {
-  const token = process.env.AWAJ_API_TOKEN;
+  const token = (process.env.AWAJ_API_TOKEN || '').trim();
   if (!token) {
-    throw new Error('AWAJ_API_TOKEN is not set. Please add it to your environment variables.');
+    throw new Error('AWAJ_API_TOKEN is not set. Please add it to your environment variables in settings.');
   }
   return {
     'Authorization': `Bearer ${token}`,
@@ -30,6 +30,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const subAction = parts[3] || (req.query.id as string);
 
+  // Ensure body is parsed if it's a string
+  if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch (e) {
+      console.warn('Failed to parse req.body as JSON in awaj API handler:', e);
+    }
+  }
+
   try {
     const headers = getAwajHeaders();
 
@@ -45,14 +54,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(data);
       }
       if (req.method === 'POST') {
-        // Ensure body is parsed if it's a string
-        if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
-          try {
-            req.body = JSON.parse(req.body);
-          } catch (e) {
-            console.warn('Failed to parse req.body as JSON in awaj API:', e);
-          }
-        }
         const body = req.body || {};
         const { name, file_url } = body;
         let bodyStr: any = JSON.stringify(body);

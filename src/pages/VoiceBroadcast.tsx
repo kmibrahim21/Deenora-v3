@@ -231,7 +231,11 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     fetchWalletBalance();
     if (activeTab === 'templates') fetchVoices();
     if (activeTab === 'broadcast') { fetchClasses(); fetchVoices(); fetchSenders(); }
-    if (activeTab === 'history') fetchHistory();
+    if (activeTab === 'history') {
+      fetchHistory();
+      fetchVoices();
+      fetchSenders();
+    }
     if (activeTab === 'recharge') {
       fetchSystemSettings();
       fetchUserTransactions();
@@ -324,8 +328,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         setVoices(syncedVoices);
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching voices:', error);
+      setApiError(error.message || 'Failed to fetch voices. Please check your internet connection or server status.');
     } finally {
       setLoading(false);
     }
@@ -408,8 +413,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (sendersList.length > 0 && !selectedSenderId) {
         setSelectedSenderId(sendersList[0].id || sendersList[0].callingNumber || sendersList[0].caller_id);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching senders:', error);
+      setApiError(error.message || 'Failed to fetch senders.');
     }
   };
 
@@ -509,8 +515,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       show: true,
       broadcast,
       failedLogs,
-      voiceId: broadcast.voice_id || '',
-      senderId: broadcast.sender_id || '',
+      voiceId: broadcast.voice_template_id || '',
+      senderId: '', // sender_id was removed from DB, user should select from the list in popup
       phoneNumbers
     });
   };
@@ -529,19 +535,49 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       setIsRetrying(true);
       
       // Find the actual voice name and sender number from the state
-      const voice = voices.find(v => v.id === voiceId);
-      const sender = senders.find(s => s.id === senderId);
+      const voice = voices.find(v => v.id?.toString() === voiceId?.toString());
+      const sender = senders.find(s => {
+        const sId = (s.id || s.callingNumber || s.caller_id || '').toString();
+        return sId === senderId?.toString();
+      });
 
       if (!voice || !sender) {
+        console.log('Retry Modal Info:', { voiceId, senderId, voicesCount: voices.length, sendersCount: senders.length });
         setStatusModal({ show: true, title: 'Error', type: 'error', message: 'Selected voice template or sender is no longer available.' });
         return;
       }
 
-      const voiceName = voice.name || voice.voice_name || voice.id;
-      const sNumber = sender.number || sender.sender_id || sender.id;
+      const voiceName = voice.provider_voice_name || voice.title || voice.name || voice.voice_name || voice.id;
+      let sNumber = (sender.callingNumber || sender.caller_id || sender.number || sender.sender_id || sender.id).toString();
 
-      // Calculate cost
-      const estimatedCost = phoneNumbers.length * (madrasah?.voice_rate || 0.5);
+      // Ensure sender is in 8801... format
+      const digits = sNumber.replace(/[^0-9]/g, '');
+      if (digits.length === 11 && digits.startsWith('01')) {
+        sNumber = '88' + digits;
+      } else if (digits.length === 13 && digits.startsWith('8801')) {
+        sNumber = digits;
+      } else if (digits.length === 10 && digits.startsWith('1')) {
+        sNumber = '880' + digits;
+      }
+
+      // Normalize phone numbers: 11 digits (01...) for Awaj API
+      const normalizedPhoneNumbers = phoneNumbers
+        .map(p => {
+          if (!p) return '';
+          const digits = p.replace(/[^0-9]/g, '');
+          if (digits.length === 11 && digits.startsWith('01')) return digits;
+          if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
+          if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+          return digits;
+        })
+        .filter(p => p && p.length === 11 && p.startsWith('01'));
+
+      if (normalizedPhoneNumbers.length === 0) {
+        throw new Error('No valid 11-digit phone numbers found to retry.');
+      }
+
+      // Calculate cost based on normalized subscribers
+      const estimatedCost = normalizedPhoneNumbers.length * (madrasah?.voice_rate || 0.5);
 
       if (walletBalance < estimatedCost) {
         setStatusModal({
@@ -553,16 +589,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         return;
       }
 
-      const requestId = 'retry_' + Math.random().toString(36).substr(2, 9);
+      const requestId = crypto.randomUUID();
       const payload = {
         request_id: requestId,
         voice: voiceName, 
         sender: sNumber,
-        phone_numbers: phoneNumbers,
+        phone_numbers: normalizedPhoneNumbers,
         retry: 1,
         retry_count: 1,
         retries: 1
       };
+
+      console.log('Sending retry payload:', payload);
 
       const response = await fetch('/api/awaj/broadcast', {
         method: 'POST',
@@ -573,7 +611,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send retry broadcast via Awaj API');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to send retry broadcast via Awaj API');
       }
 
       const result = await response.json();
@@ -582,11 +621,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // Save to Supabase
       const { error } = await supabase.from('voice_broadcasts').insert({
         institution_id: madrasah?.id,
-        voice_id: voiceId,
-        sender_id: senderId,
-        target_type: 'retry',
-        target_id: broadcast.id, // Link to original broadcast
-        total_numbers: phoneNumbers.length,
+        voice_template_id: voiceId,
+        target_type: 'students',
+        total_numbers: normalizedPhoneNumbers.length,
         estimated_cost: estimatedCost,
         status: 'sending',
         provider_campaign_id: campaignId
@@ -1647,7 +1684,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   >
                     <option value="">{lang === 'bn' ? 'সেন্ডার সিলেক্ট করুন' : 'Select Sender'}</option>
                     {senders.map(s => (
-                      <option key={s.id} value={s.id}>{s.sender_id || s.number}</option>
+                      <option 
+                        key={s.id || s.callingNumber || s.caller_id} 
+                        value={s.id || s.callingNumber || s.caller_id}
+                      >
+                        {s.callingNumber || s.caller_id || s.sender_id || s.name || s.id}
+                      </option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-slate-600 transition-colors" size={20} />

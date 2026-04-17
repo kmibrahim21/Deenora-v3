@@ -165,7 +165,7 @@ export default async function handler(req, res) {
     }
 
     // 7. Insert Transaction Record
-    const txData = {
+    const txData: any = {
       institution_id: institutionId,
       amount: refundAmount,
       transaction_id: refundTxId,
@@ -173,10 +173,12 @@ export default async function handler(req, res) {
       description: `Refund for ${failedLogs.length} unreceived calls (Voice Broadcast)`,
       type: 'credit',
       status: 'approved',
-      module: 'voice',
-      sms_count: 0 // Explicitly set to 0 for non-SMS transactions
+      module: 'voice'
     };
     
+    // Ensure sms_count is a solid integer to avoid type mismatch
+    txData.sms_count = 0;
+
     console.log('Attempting transaction insert with data:', JSON.stringify(txData));
 
     const { error: txError } = await supabase.from('transactions').insert(txData);

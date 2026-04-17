@@ -423,10 +423,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       await supabase.from('voice_broadcasts').insert({
         institution_id: institutionId,
         voice_template_id: selectedVoiceId,
-        voice_id: voice.id,
-        sender_id: sNumber,
-        total_recipients: phoneNumbers.length,
-        total_cost: estimatedCost,
+        total_numbers: phoneNumbers.length,
+        estimated_cost: estimatedCost,
         status: 'pending',
         provider_campaign_id: campaignId.toString()
       });
