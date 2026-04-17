@@ -25,7 +25,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   
   // Fee Collection State
   const [selectedClass, setSelectedClass] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 7) : new Date().toISOString().slice(0, 7));
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [anyStudentsInMadrasah, setAnyStudentsInMadrasah] = useState<boolean | null>(null);
