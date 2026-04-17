@@ -4,7 +4,8 @@ import {
   Mic, 
   Upload, 
   CreditCard, 
-  Play, 
+  Play,
+  Pause,
   Send, 
   History, 
   Loader2, 
@@ -104,6 +105,40 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [senders, setSenders] = useState<any[]>([]);
   const [selectedSenderId, setSelectedSenderId] = useState<string>('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  // Audio state
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const togglePlay = (id: string, url: string) => {
+    if (!audioRef.current) return;
+    
+    if (playingId === id) {
+      audioRef.current.pause();
+      setPlayingId(null);
+    } else {
+      audioRef.current.src = url;
+      audioRef.current.play().catch(err => {
+        console.error('Playback failed:', err);
+        setStatusModal({
+          show: true,
+          type: 'error',
+          title: lang === 'bn' ? 'এরর' : 'Error',
+          message: lang === 'bn' ? 'অডিও প্লে করতে সমস্যা হচ্ছে।' : 'Failed to play audio.'
+        });
+      });
+      setPlayingId(id);
+    }
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      const handleEnded = () => setPlayingId(null);
+      audio.addEventListener('ended', handleEnded);
+      return () => audio.removeEventListener('ended', handleEnded);
+    }
+  }, []);
 
   // History state
   const [broadcastHistory, setBroadcastHistory] = useState<any[]>([]);
@@ -1278,13 +1313,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                           </div>
                           <div className="flex items-center gap-2">
                             {v.file_url && (
-                              <audio controls src={v.file_url} className="h-8 w-32 sm:w-48" />
+                              <button 
+                                onClick={() => togglePlay(v.id, v.file_url)}
+                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingId === v.id ? 'bg-amber-100 text-amber-600' : 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'}`}
+                              >
+                                {playingId === v.id ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+                              </button>
                             )}
                             <button 
                               onClick={() => setShowDeleteConfirm({ id: v.id, providerId: v.provider_voice_id, fileUrl: v.file_url, title: v.title })}
-                              className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 transition-colors"
+                              className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={16} />
                             </button>
                           </div>
                        </div>
@@ -1765,6 +1805,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         </div>,
         document.body
       )}
+
+      {/* Hidden audio element for custom player */}
+      <audio ref={audioRef} className="hidden" />
     </>
   );
 };
