@@ -113,21 +113,65 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const togglePlay = (id: string, url: string) => {
     if (!audioRef.current) return;
     
+    // Stop current playback
+    audioRef.current.pause();
+    
     if (playingId === id) {
-      audioRef.current.pause();
       setPlayingId(null);
     } else {
-      audioRef.current.src = url;
-      audioRef.current.play().catch(err => {
-        console.error('Playback failed:', err);
+      // Small delay to ensure previous state is cleared
+      setPlayingId(null);
+      
+      try {
+        if (!url) {
+          throw new Error('Audio URL is empty');
+        }
+
+        audioRef.current.src = url;
+        audioRef.current.load();
+        
+        const playPromise = audioRef.current.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setPlayingId(id);
+            })
+            .catch(err => {
+              console.error('Playback Error details:', {
+                error: err,
+                url: url,
+                id: id
+              });
+              
+              setPlayingId(null);
+              
+              let errorMsg = err.message || 'Unknown playback error';
+              if (err.name === 'NotSupportedError') {
+                errorMsg = lang === 'bn' ? 'এই অডিও ফরম্যাটটি আপনার ব্রাউজারে সাপোর্ট করছে না।' : 'This audio format is not supported by your browser.';
+              } else if (err.name === 'NotAllowedError') {
+                errorMsg = lang === 'bn' ? 'ব্রাউজার অডিও প্লে করার অনুমতি দিচ্ছে না। দয়া করে পেজটি রিফ্রেশ করুন।' : 'Playback was blocked by the browser. Please refresh and try again.';
+              }
+              
+              setStatusModal({
+                show: true,
+                type: 'error',
+                title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
+                message: lang === 'bn' 
+                  ? `অডিও প্লে করতে সমস্যা হচ্ছে: ${errorMsg} (URL: ${url.substring(0, 30)}...)` 
+                  : `Failed to play audio: ${errorMsg} (URL: ${url.substring(0, 30)}...)`
+              });
+            });
+        }
+      } catch (err: any) {
+        console.error('Audio initialization error:', err);
         setStatusModal({
           show: true,
           type: 'error',
-          title: lang === 'bn' ? 'এরর' : 'Error',
-          message: lang === 'bn' ? 'অডিও প্লে করতে সমস্যা হচ্ছে।' : 'Failed to play audio.'
+          title: 'Error',
+          message: err.message
         });
-      });
-      setPlayingId(id);
+      }
     }
   };
 
@@ -135,8 +179,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     const audio = audioRef.current;
     if (audio) {
       const handleEnded = () => setPlayingId(null);
+      const handlePause = () => setPlayingId(null);
+      const handlePlay = () => {
+        // Find which ID is currently playing by matching src if needed, 
+        // but togglePlay handles this.
+      };
+
       audio.addEventListener('ended', handleEnded);
-      return () => audio.removeEventListener('ended', handleEnded);
+      audio.addEventListener('pause', handlePause);
+      return () => {
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('pause', handlePause);
+      };
     }
   }, []);
 
@@ -1021,6 +1075,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   const handleVoiceUpload = async () => {
     if (!madrasah || !uploadName || !uploadFile) return;
+
+    if (!uploadFile.type.startsWith('audio/') && !uploadFile.name.toLowerCase().endsWith('.mp3') && !uploadFile.name.toLowerCase().endsWith('.wav')) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ভুল ফাইল' : 'Invalid File',
+        message: lang === 'bn' ? 'দয়া করে একটি সঠিক অডিও ফাইল (MP3/WAV) সিলেক্ট করুন।' : 'Please select a valid audio file (MP3/WAV).'
+      });
+      return;
+    }
+
     setIsUploading(true);
     try {
       const fileExt = uploadFile.name.split('.').pop();
@@ -1807,7 +1872,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       )}
 
       {/* Hidden audio element for custom player */}
-      <audio ref={audioRef} className="hidden" />
+      <audio ref={audioRef} className="hidden" preload="auto" />
     </>
   );
 };
