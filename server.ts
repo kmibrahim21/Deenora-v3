@@ -101,47 +101,33 @@ async function startServer() {
     }
 
     try {
-      const fetchOptions: any = { 
+      const response = await fetch(audioUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5'
-        } 
-      };
-      if (req.headers.range) {
-        fetchOptions.headers.range = req.headers.range;
-      }
-
-      const response = await fetch(audioUrl, fetchOptions);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audio: ${response.statusText}`);
-      }
-
-      res.status(response.status);
-
-      const headersToForward = [
-        'content-type',
-        'content-length',
-        'content-range',
-        'accept-ranges'
-      ];
-      
-      headersToForward.forEach(header => {
-        const val = response.headers.get(header);
-        if (val) {
-          res.setHeader(header, val);
+          'Accept': '*/*'
         }
       });
-
-      // Add CORS headers for the proxy itself
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-
-      // Pipe the stream
-      if (response.body) {
-         response.body.pipe(res);
-      } else {
-         res.status(500).json({ error: 'No response body from remote server' });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
       }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Force proper Headers
+      let contentType = response.headers.get('content-type') || 'audio/mpeg';
+      // Many CDNs serve audio as application/octet-stream or text/plain
+      if (contentType.includes('octet-stream') || contentType.includes('text/') || contentType.includes('text/html')) {
+        contentType = audioUrl.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg';
+      }
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', buffer.length.toString());
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24h
+
+      res.status(200).send(buffer);
     } catch (error: any) {
       console.error('Audio Proxy Error:', error);
       res.status(500).json({ error: error.message });
