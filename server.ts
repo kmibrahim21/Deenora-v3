@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import fetch from 'node-fetch';
 
 // Load environment variables
 dotenv.config();
@@ -90,6 +91,46 @@ async function startServer() {
   // Specific Routes for Teachers
   app.all('/api/teachers*', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'teachers.ts'), req, res);
+  });
+
+  // Audio Proxy Route
+  app.get('/api/proxy-audio', async (req, res) => {
+    const audioUrl = req.query.url as string;
+    if (!audioUrl) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    try {
+      const response = await fetch(audioUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audio: ${response.statusText}`);
+      }
+
+      // Copy relevant headers
+      const contentType = response.headers.get('content-type');
+      if (contentType) {
+        res.setHeader('Content-Type', contentType);
+      }
+      
+      const contentLength = response.headers.get('content-length');
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+
+      // Add CORS headers for the proxy itself
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+
+      // Pipe the stream
+      if (response.body) {
+         response.body.pipe(res);
+      } else {
+         res.status(500).json({ error: 'No response body from remote server' });
+      }
+    } catch (error: any) {
+      console.error('Audio Proxy Error:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // API Wildcard
