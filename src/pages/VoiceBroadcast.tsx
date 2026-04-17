@@ -112,6 +112,21 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [studentNamesMap, setStudentNamesMap] = useState<Record<string, any>>({});
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
   const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [retryModal, setRetryModal] = useState<{
+    show: boolean,
+    broadcast: any,
+    failedLogs: any[],
+    voiceId: string,
+    senderId: string,
+    phoneNumbers: string[]
+  }>({
+    show: false,
+    broadcast: null,
+    failedLogs: [],
+    voiceId: '',
+    senderId: '',
+    phoneNumbers: []
+  });
 
   const handleClaimRefund = async (broadcastId: string) => {
     setRefundingId(broadcastId);
@@ -490,26 +505,35 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       return;
     }
 
-    if (!confirm(`Are you sure you want to retry ${phoneNumbers.length} failed calls? This will deduct from your balance.`)) {
+    setRetryModal({
+      show: true,
+      broadcast,
+      failedLogs,
+      voiceId: broadcast.voice_id || '',
+      senderId: broadcast.sender_id || '',
+      phoneNumbers
+    });
+  };
+
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const executeRetry = async () => {
+    const { broadcast, voiceId, senderId, phoneNumbers } = retryModal;
+    
+    if (!voiceId || !senderId) {
+      setStatusModal({ show: true, title: 'Error', type: 'error', message: 'Please select a voice and sender.' });
       return;
     }
 
     try {
-      // Get voice and sender IDs from the original broadcast
-      const voiceId = broadcast.voice_id;
-      const senderId = broadcast.sender_id;
+      setIsRetrying(true);
       
-      if (!voiceId || !senderId) {
-        setStatusModal({ show: true, title: 'Error', type: 'error', message: 'Original voice or sender information is missing.' });
-        return;
-      }
-
       // Find the actual voice name and sender number from the state
       const voice = voices.find(v => v.id === voiceId);
       const sender = senders.find(s => s.id === senderId);
 
       if (!voice || !sender) {
-        setStatusModal({ show: true, title: 'Error', type: 'error', message: 'Voice template or sender is no longer available.' });
+        setStatusModal({ show: true, title: 'Error', type: 'error', message: 'Selected voice template or sender is no longer available.' });
         return;
       }
 
@@ -517,7 +541,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const sNumber = sender.number || sender.sender_id || sender.id;
 
       // Calculate cost
-      const estimatedCost = phoneNumbers.length * 0.5; // Assuming 0.5 per call
+      const estimatedCost = phoneNumbers.length * (madrasah?.voice_rate || 0.5);
 
       if (walletBalance < estimatedCost) {
         setStatusModal({
@@ -583,11 +607,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       setStatusModal({ show: true, title: 'Success', type: 'success', message: `Successfully initiated retry for ${phoneNumbers.length} calls.` });
+      setRetryModal({ ...retryModal, show: false });
       fetchHistory();
       
     } catch (err: any) {
       console.error('Error retrying broadcast:', err);
       setStatusModal({ show: true, title: 'Error', type: 'error', message: err.message || 'Failed to retry broadcast' });
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -1566,6 +1593,97 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   </button>
                 )}
              </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {retryModal.show && createPortal(
+        <div className="modal-overlay bg-[#080A12]/60 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-[0_40px_100px_rgba(37,99,235,0.15)] animate-in zoom-in-95 duration-500">
+            <div className="flex flex-col items-center text-center space-y-4 mb-8">
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shadow-inner border border-blue-100">
+                <RefreshCw size={32} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-slate-800 font-noto">
+                  {lang === 'bn' ? 'পুনরায় কল করুন' : 'Retry Call'}
+                </h3>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-4">
+                  {lang === 'bn' ? `${retryModal.phoneNumbers.length} টি ব্যর্থ কল আবার করা হবে` : `Will retry ${retryModal.phoneNumbers.length} failed calls`}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">
+                  {lang === 'bn' ? 'ভয়েস টেম্পলেট' : 'Voice Template'}
+                </label>
+                <div className="relative group">
+                  <select 
+                    value={retryModal.voiceId} 
+                    onChange={(e) => setRetryModal({...retryModal, voiceId: e.target.value})}
+                    className="w-full h-14 pl-6 pr-12 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 appearance-none focus:outline-none focus:border-blue-200 transition-all cursor-pointer group-hover:border-slate-200"
+                  >
+                    <option value="">{lang === 'bn' ? 'ভয়েস সিলেক্ট করুন' : 'Select Voice'}</option>
+                    {voices.map(v => (
+                      <option key={v.id} value={v.id}>{v.title || v.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-slate-600 transition-colors" size={20} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">
+                  {lang === 'bn' ? 'সেন্ডার আইডি' : 'Sender ID'}
+                </label>
+                <div className="relative group">
+                  <select 
+                    value={retryModal.senderId} 
+                    onChange={(e) => setRetryModal({...retryModal, senderId: e.target.value})}
+                    className="w-full h-14 pl-6 pr-12 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 appearance-none focus:outline-none focus:border-blue-200 transition-all cursor-pointer group-hover:border-slate-200"
+                  >
+                    <option value="">{lang === 'bn' ? 'সেন্ডার সিলেক্ট করুন' : 'Select Sender'}</option>
+                    {senders.map(s => (
+                      <option key={s.id} value={s.id}>{s.sender_id || s.number}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-slate-600 transition-colors" size={20} />
+                </div>
+              </div>
+
+              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-50 text-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
+                  {lang === 'bn' ? 'মোট আনুমানিক খরচ' : 'Total Estimated Cost'}
+                </span>
+                <span className="text-xl font-black text-blue-600">
+                  {Number(retryModal.phoneNumbers.length * (madrasah?.voice_rate || 0.5)).toFixed(2)} ৳
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={executeRetry}
+                disabled={isRetrying}
+                className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-xl shadow-blue-100 active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isRetrying ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  <><Send size={18} /> {lang === 'bn' ? 'Retry কল শুরু করুন' : 'Start Retry'}</>
+                )}
+              </button>
+              <button 
+                onClick={() => setRetryModal({ ...retryModal, show: false })} 
+                disabled={isRetrying}
+                className="w-full py-4 bg-slate-50 text-slate-400 font-black rounded-full text-sm uppercase tracking-widest active:scale-95 transition-all"
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+            </div>
           </div>
         </div>,
         document.body
