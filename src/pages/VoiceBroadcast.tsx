@@ -111,6 +111,67 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [historyDetails, setHistoryDetails] = useState<any | null>(null);
   const [studentNamesMap, setStudentNamesMap] = useState<Record<string, any>>({});
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+
+  const handleClaimRefund = async (broadcastId: string) => {
+    setRefundingId(broadcastId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/voice-refund', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ broadcast_id: broadcastId })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (result.already_refunded) {
+           setStatusModal({ show: true, type: 'balance', title: lang === 'bn' ? 'অলরেডি রিফান্ডেড' : 'Already Refunded', message: lang === 'bn' ? 'এই ব্রডকাস্টের রিফান্ড আগেই নেওয়া হয়েছে।' : 'Refund for this broadcast has already been claimed.' });
+        } else {
+           throw new Error(result.error || 'Failed to claim refund');
+        }
+      } else {
+        setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'রিফান্ড সফল!' : 'Refund Successful!', message: lang === 'bn' ? `${result.refunded_calls} টি আনরিসিভ কলের জন্য ${result.refund_amount} ৳ আপনার ওয়ালেটে ফেরত দেওয়া হয়েছে।` : `${result.refund_amount} ৳ has been refunded to your wallet for ${result.refunded_calls} unreceived calls.` });
+        fetchWalletBalance();
+        fetchUserTransactions();
+      }
+    } catch (err: any) {
+      console.error('Refund claim error:', err);
+      setStatusModal({ show: true, type: 'error', title: 'Error', message: err.message || 'Error processing refund' });
+    } finally {
+      setRefundingId(null);
+    }
+  };
+
+  const handleClaimRefundAuto = async (broadcastId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/voice-refund', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ broadcast_id: broadcastId })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && !result.already_refunded && result.refund_amount > 0) {
+        // Automatically fetch wallet balance if a refund occurred in the background
+        fetchWalletBalance();
+        fetchUserTransactions();
+      }
+    } catch (err: any) {
+      console.error('Auto refund claim error:', err);
+    }
+  };
 
   // Upload state
   const [uploadName, setUploadName] = useState('');
@@ -378,6 +439,11 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
             if (newStatus !== broadcast.status) {
               await supabase.from('voice_broadcasts').update({ status: newStatus }).eq('id', broadcast.id);
+              
+              if (newStatus === 'completed' || newStatus === 'failed') {
+                 handleClaimRefundAuto(broadcast.id);
+              }
+              
               // Refresh history
               const { data: updatedData } = await supabase.from('voice_broadcasts').select('*, voice_templates(title)').eq('institution_id', madrasah.id).order('created_at', { ascending: false });
               if (updatedData) setBroadcastHistory(updatedData);
@@ -527,6 +593,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           const result = await response.json();
           console.log('Broadcast Details API Response:', result);
           setHistoryDetails(result);
+          
+          // Trigger auto-refund check silently
+          try {
+            const providerStatus = (result.broadcast?.status || result.status || result.state || '').toLowerCase();
+            if (['completed', 'done', 'success', 'failed', 'error', 'cancelled'].includes(providerStatus)) {
+              handleClaimRefundAuto(broadcast.id);
+            }
+          } catch(e) {}
           
           // Fetch student names to map phone numbers
           if (madrasah?.id) {
@@ -1233,7 +1307,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                   </div>
 
                                   {failedLogs.length > 0 && (
-                                    <div className="flex justify-end">
+                                    <div className="flex justify-end mt-4">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();

@@ -33,16 +33,19 @@ export default async function handler(req, res) {
       const sheetUrl = process.env.GOOGLE_SHEETS_WEBAPP_URL;
       if (!sheetUrl) return res.status(400).json({ error: 'Sheet URL not configured' });
 
-      const formattedInsts = allInsts.map(inst => ({
-        id: inst.id,
-        code: inst.config_json?.institute_code || '',
-        name: inst.name,
-        address: inst.address || '',
-        subscription_type: inst.config_json?.package_name || 'Free',
-        phone: inst.phone,
-        email: inst.email,
-        type: inst.institution_type || 'madrasah'
-      }));
+      const formattedInsts = allInsts.map(inst => {
+        const config = typeof inst.config_json === 'string' ? JSON.parse(inst.config_json) : (inst.config_json || {});
+        return {
+          id: inst.id || '',
+          code: config?.institute_code || 'N/A',
+          name: inst.name || '',
+          address: inst.address || 'N/A',
+          subscription_type: config?.package_name || 'Free',
+          phone: inst.phone || '',
+          email: inst.email || '',
+          type: inst.institution_type || 'madrasah'
+        };
+      });
 
       await fetch(sheetUrl, {
         method: 'POST',
