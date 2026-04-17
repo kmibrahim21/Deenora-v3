@@ -164,6 +164,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const result = await response.json();
 
       if (response.ok && !result.already_refunded && result.refund_amount > 0) {
+        // Show a small success toast for auto-refund
+        setStatusModal({ 
+          show: true, 
+          type: 'success', 
+          title: lang === 'bn' ? 'অটো রিফান্ড সফল' : 'Auto Refund Successful', 
+          message: lang === 'bn' ? `${result.refund_amount} ৳ রিফান্ড দেওয়া হয়েছে।` : `${result.refund_amount} ৳ has been refunded automatically.` 
+        });
         // Automatically fetch wallet balance if a refund occurred in the background
         fetchWalletBalance();
         fetchUserTransactions();
@@ -457,13 +464,28 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     setLoading(false);
   };
 
+  const extractPhoneFromLog = (log: any) => {
+    let p = log.phone || log.number || log.to || log.msisdn || log.recipient || log.mobile || log.destination || log.phone_number || log.to_number || log.receiver || log.phone_no || log.mobile_no || log.to_msisdn || log.to_mobile;
+    
+    if (!p) {
+      for (const key in log) {
+        if (typeof log[key] === 'string' && log[key].replace(/[^0-9]/g, '').length >= 10) {
+          p = log[key];
+          break;
+        }
+      }
+    }
+    return p;
+  };
+
   const handleRetryFailed = async (broadcast: any, failedLogs: any[]) => {
     if (!failedLogs.length) return;
     
-    // Extract phone numbers from failed logs
-    const phoneNumbers = failedLogs.map(log => log.phone || log.number || log.to || log.msisdn).filter(Boolean);
+    // Extract phone numbers from failed logs using a more robust method
+    const phoneNumbers = failedLogs.map(log => extractPhoneFromLog(log)).filter(Boolean);
     
     if (!phoneNumbers.length) {
+      console.log('Failed logs missing phone numbers:', failedLogs);
       setStatusModal({ show: true, title: 'Error', type: 'error', message: 'No valid phone numbers found to retry.' });
       return;
     }
@@ -1324,17 +1346,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                   <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                     {logs.length > 0 ? (
                                       logs.map((log: any, idx: number) => {
-                                        let phone = log.phone || log.number || log.to || log.msisdn || log.recipient || log.mobile || log.destination || log.phone_number || log.to_number || log.receiver || log.phone_no || log.mobile_no || log.to_msisdn || log.to_mobile;
-                                        
-                                        if (!phone) {
-                                          // Try to find any property that looks like a phone number
-                                          for (const key in log) {
-                                            if (typeof log[key] === 'string' && log[key].replace(/[^0-9]/g, '').length >= 10) {
-                                              phone = log[key];
-                                              break;
-                                            }
-                                          }
-                                        }
+                                        let phone = extractPhoneFromLog(log);
                                         
                                         if (!phone) phone = 'Unknown';
                                         

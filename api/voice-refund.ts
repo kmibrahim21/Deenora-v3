@@ -37,16 +37,42 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Broadcast ID is required' });
     }
 
-    // 1. Fetch broadcast details and institution details
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('institution_id')
+      .eq('id', user.id)
+      .single();
+
+    if (profileErr || !profile?.institution_id) {
+      console.error('Profile/Institution fetch error:', profileErr);
+      return res.status(401).json({ error: 'Unauthorized: Could not determine institution' });
+    }
+
+    const institutionId = profile.institution_id;
+
+    // 1. Fetch broadcast details
     const { data: broadcast, error: broadcastErr } = await supabase
       .from('voice_broadcasts')
-      .select('*, institutions(balance, voice_rate)')
+      .select('*')
       .eq('id', broadcast_id)
-      .eq('institution_id', user.id)
+      .eq('institution_id', institutionId)
       .single();
 
     if (broadcastErr || !broadcast) {
+      console.error('Broadcast fetch error:', broadcastErr);
       return res.status(404).json({ error: 'Broadcast not found or access denied' });
+    }
+
+    // Fetch institution details separately for better reliability
+    const { data: institution, error: instErr } = await supabase
+      .from('institutions')
+      .select('balance, voice_rate')
+      .eq('id', institutionId)
+      .single();
+    
+    if (instErr || !institution) {
+      console.error('Institution fetch error:', instErr);
+      return res.status(404).json({ error: 'Institution not found' });
     }
 
     if (!broadcast.provider_campaign_id) {
@@ -59,7 +85,7 @@ export default async function handler(req, res) {
       .from('transactions')
       .select('id')
       .eq('transaction_id', refundTxId)
-      .single();
+      .maybeSingle();
 
     if (existingRefund) {
       return res.status(200).json({ success: true, already_refunded: true, message: 'Refund already processed for this broadcast' });
@@ -73,55 +99,74 @@ export default async function handler(req, res) {
     }
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Awaj API Error: ${response.status} - ${errorText}`);
       throw new Error(`Failed to fetch from Awaj API: ${response.statusText}`);
     }
 
-    const resultData = await response.json();
+    const resultData = await response.json() as any;
+    console.log(`Awaj API Response for ${broadcast.provider_campaign_id}:`, JSON.stringify(resultData));
     
     // Extract call logs array
     const logs = Array.isArray(resultData) ? resultData : 
       (resultData.data && Array.isArray(resultData.data) ? resultData.data : 
-      (resultData.broadcast?.logs ? resultData.broadcast.logs : []));
+      (resultData.broadcast?.logs ? resultData.broadcast.logs : 
+      (resultData.broadcast?.calls ? resultData.broadcast.calls : 
+      (resultData.calls ? resultData.calls : 
+      (resultData.results ? resultData.results : [])))));
 
     if (!logs || logs.length === 0) {
-      // If it's still sending, maybe no logs yet
+      console.log('No logs found for broadcast resultData:', JSON.stringify(resultData));
       return res.status(400).json({ error: 'No call logs found yet. Please wait until broadcast is fully completed.' });
     }
 
     // 4. Calculate failures
     const failedLogs = logs.filter((log: any) => {
       const status = (log.status || log.state || log.call_status || '').toLowerCase();
-      return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined'].includes(status);
+      // Expanded status list based on Awaj possibilities
+      return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 'unanswered', 'timeout', 'no-answer', 'abandoned'].includes(status);
     });
 
+    console.log(`Broadcast ${broadcast.id}: Total Logs: ${logs.length}, Failed Logs: ${failedLogs.length}`);
+
     if (failedLogs.length === 0) {
-      return res.status(200).json({ message: 'No unreceived calls to refund.', refund_amount: 0 });
+      return res.status(200).json({ success: true, message: 'No unreceived calls to refund.', refund_amount: 0 });
     }
 
     // 5. Calculate refund amount
-    const voiceRate = broadcast.institutions?.voice_rate || 0.50;
-    const refundAmount = failedLogs.length * voiceRate;
+    const voiceRate = institution.voice_rate || 0.50;
+    const refundAmount = Number((failedLogs.length * voiceRate).toFixed(2));
 
-    // 6. Add balance using RPC if it exists, otherwise manual update (RPC handles atomic increment)
+    console.log(`Calculated refund: ${failedLogs.length} calls * ${voiceRate} = ${refundAmount} for institution ${institutionId}`);
+
+    // 6. Update balance
+    // Prefer RPC as it is atomic
     const { error: addBalanceErr } = await supabase.rpc('add_balance', {
-      p_institution_id: user.id,
+      p_institution_id: institutionId,
       p_amount: refundAmount
     });
 
     if (addBalanceErr) {
-       // Graceful fallback if RPC doesn't exist
-       const currentBalance = Number(broadcast.institutions?.balance || 0);
+       console.log('RPC add_balance failed:', JSON.stringify(addBalanceErr));
+       const currentBalance = Number(institution.balance || 0);
+       const newBalance = Number((currentBalance + refundAmount).toFixed(2));
+       
+       console.log(`Falling back to manual update: Current: ${currentBalance}, Refund: ${refundAmount}, New: ${newBalance}`);
+
        const { error: manualUpdateErr } = await supabase
          .from('institutions')
-         .update({ balance: currentBalance + refundAmount })
-         .eq('id', user.id);
+         .update({ balance: newBalance })
+         .eq('id', institutionId);
          
-       if (manualUpdateErr) throw manualUpdateErr;
+       if (manualUpdateErr) {
+         console.error('Manual balance update failed:', JSON.stringify(manualUpdateErr));
+         throw manualUpdateErr;
+       }
     }
 
     // 7. Insert Transaction Record
-    const { error: txError } = await supabase.from('transactions').insert({
-      institution_id: user.id,
+    const txData = {
+      institution_id: institutionId,
       amount: refundAmount,
       transaction_id: refundTxId,
       sender_phone: 'SYSTEM',
@@ -129,9 +174,18 @@ export default async function handler(req, res) {
       type: 'credit',
       status: 'approved',
       module: 'voice'
-    });
+    };
+    
+    console.log('Attempting transaction insert with data:', JSON.stringify(txData));
 
-    if (txError) throw txError;
+    const { error: txError } = await supabase.from('transactions').insert(txData);
+
+    if (txError) {
+      console.error('CRITICAL: Transaction insert error:', JSON.stringify(txError));
+      // Even if transaction logging fails, the balance was updated (if we didn't throw)
+      // But we should probably throw to be consistent
+      throw txError;
+    }
 
     return res.status(200).json({ 
       success: true, 
