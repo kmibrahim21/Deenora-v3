@@ -140,6 +140,30 @@ async function setupInstitution(supabase, userId, body, res) {
 
   if (profileError) throw profileError;
 
+  // 4. Send data to Google Sheets (Web App URL)
+  try {
+    const sheetUrl = process.env.GOOGLE_SHEETS_WEBAPP_URL;
+    if (sheetUrl) {
+      await fetch(sheetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'add_institution',
+          name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          institution_type: institution_type || 'madrasah',
+          date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }) // Bangladesh time
+        }),
+      });
+      console.log('Successfully sent institution data to Google Sheets');
+    }
+  } catch (sheetError) {
+    console.error('Failed to send data to Google Sheets:', sheetError);
+  }
+
   return res.status(200).json({ 
     success: true, 
     user_id: userId,
