@@ -899,10 +899,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setIsCreatingInst(true);
     try {
       // Use the Admin API for reliable user creation without affecting current session
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const response = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({
           action: 'create_institution',

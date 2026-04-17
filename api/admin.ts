@@ -12,6 +12,20 @@ export default async function handler(req, res) {
   try {
     const supabase = getSupabaseAdmin();
 
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Unauthorized: Missing token' });
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+
+    const { data: adminProfile } = await supabase.from('institutions').select('is_super_admin').eq('id', user.id).single();
+    if (!adminProfile?.is_super_admin) {
+      return res.status(403).json({ error: 'Forbidden: Requires Super Admin' });
+    }
+
     if (action === 'create_institution') {
       const { name, phone, email, password, institution_type } = body;
 
