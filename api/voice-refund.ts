@@ -170,10 +170,11 @@ export default async function handler(req, res) {
       amount: refundAmount,
       transaction_id: refundTxId,
       sender_phone: 'SYSTEM',
-      description: `Refund for ${failedLogs.length} unreceived calls (Broadcast)`,
+      description: `Refund for ${failedLogs.length} unreceived calls (Voice Broadcast)`,
       type: 'credit',
       status: 'approved',
-      module: 'voice'
+      module: 'voice',
+      sms_count: 0 // Explicitly set to 0 for non-SMS transactions
     };
     
     console.log('Attempting transaction insert with data:', JSON.stringify(txData));
@@ -182,8 +183,8 @@ export default async function handler(req, res) {
 
     if (txError) {
       console.error('CRITICAL: Transaction insert error:', JSON.stringify(txError));
-      // Even if transaction logging fails, the balance was updated (if we didn't throw)
-      // But we should probably throw to be consistent
+      // Log specific fields to check for issues
+      console.error(`Field types check: amount=${typeof txData.amount}, module=${typeof txData.module}, institution_id=${typeof txData.institution_id}`);
       throw txError;
     }
 
