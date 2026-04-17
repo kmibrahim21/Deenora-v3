@@ -91,7 +91,7 @@ export default async function handler(req, res) {
     // 4. Calculate failures
     const failedLogs = logs.filter((log: any) => {
       const status = (log.status || log.state || log.call_status || '').toLowerCase();
-      return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered'].includes(status);
+      return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined'].includes(status);
     });
 
     if (failedLogs.length === 0) {

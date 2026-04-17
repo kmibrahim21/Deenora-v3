@@ -1276,7 +1276,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                               const logs = extractCallLogs(historyDetails);
                               const failedLogs = logs.filter((log: any) => {
                                 const status = (log.status || log.state || log.call_status || '').toLowerCase();
-                                return ['failed', 'no answer', 'busy', 'cancelled', 'error'].includes(status);
+                                return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'rejected', 'declined'].includes(status);
                               });
                               const answeredLogs = logs.filter((log: any) => {
                                 const status = (log.status || log.state || log.call_status || '').toLowerCase();
@@ -1360,7 +1360,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                         
                                         let statusColor = 'text-slate-500 bg-slate-100';
                                         if (['answered', 'success', 'completed'].includes(status)) statusColor = 'text-emerald-700 bg-emerald-100';
-                                        else if (['failed', 'no answer', 'busy', 'cancelled'].includes(status)) statusColor = 'text-red-700 bg-red-100';
+                                        else if (['failed', 'no answer', 'busy', 'cancelled', 'rejected', 'declined'].includes(status)) statusColor = 'text-red-700 bg-red-100';
                                         
                                         return (
                                           <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
