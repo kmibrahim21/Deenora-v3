@@ -26,6 +26,34 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Forbidden: Requires Super Admin' });
     }
 
+    if (action === 'sync_all_to_sheet') {
+      const { data: allInsts, error: fetchErr } = await supabase.from('institutions').select('*').eq('is_super_admin', false);
+      if (fetchErr) throw fetchErr;
+
+      const sheetUrl = process.env.GOOGLE_SHEETS_WEBAPP_URL;
+      if (!sheetUrl) return res.status(400).json({ error: 'Sheet URL not configured' });
+
+      const formattedInsts = allInsts.map(inst => ({
+        sync_date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
+        reg_date: new Date(inst.created_at || Date.now()).toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
+        id: inst.id,
+        name: inst.name,
+        phone: inst.phone,
+        email: inst.email,
+        type: inst.institution_type || 'madrasah',
+        status: inst.is_active ? 'Active' : 'Inactive',
+        modules: inst.config_json?.modules ? Object.keys(inst.config_json.modules).filter(k => inst.config_json.modules[k]).join(', ') : ''
+      }));
+
+      await fetch(sheetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulk_add_institutions', institutions: formattedInsts })
+      });
+
+      return res.status(200).json({ success: true, count: formattedInsts.length });
+    }
+
     if (action === 'create_institution') {
       const { name, phone, email, password, institution_type } = body;
 
@@ -151,11 +179,15 @@ async function setupInstitution(supabase, userId, body, res) {
         },
         body: JSON.stringify({
           action: 'add_institution',
+          sync_date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
+          reg_date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
+          id: userId,
           name: name.trim(),
           phone: phone.trim(),
           email: email.trim(),
-          institution_type: institution_type || 'madrasah',
-          date: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }) // Bangladesh time
+          type: institution_type || 'madrasah',
+          status: 'Active',
+          modules: 'attendance, results, admit_card, seat_plan, accounting, academic_year_promotion, voice_broadcast, sms'
         }),
       });
       console.log('Successfully sent institution data to Google Sheets');

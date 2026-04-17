@@ -890,6 +890,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setSmsEnabledMap(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
+
+  const handleSyncToSheet = async () => {
+    setIsSyncingSheet(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'sync_all_to_sheet'
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to sync with Google Sheet');
+      }
+      
+      setStatusModal({ show: true, type: 'success', title: 'সফল', message: `মোট ${result.count || 0} টি প্রতিষ্ঠানের ডাটা গুগল শিটে পাঠানো হয়েছে।` });
+    } catch (err: any) {
+      console.error("Sync Error:", err);
+      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
+    } finally {
+      setIsSyncingSheet(false);
+    }
+  };
+
   const handleCreateInstitution = async () => {
     if (!newInstName.trim() || !newInstPhone.trim() || !newInstEmail.trim() || !newInstPassword.trim()) {
       setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'নাম, ফোন, ইমেইল এবং পাসওয়ার্ড আবশ্যক' });
@@ -1139,6 +1172,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Registered Institutions</p>
                 </div>
                 <div className="flex items-center gap-3">
+                  <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
+                    {isSyncingSheet ? <Loader2 size={20} className="animate-spin" /> : <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>}
+                  </button>
                   <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
                     <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
                   </button>
