@@ -52,7 +52,6 @@ const AcademicCalendarPage: React.FC<AcademicCalendarPageProps> = ({
         
       if (error) throw error;
       
-      alert(lang === 'bn' ? 'সাপ্তাহিক ছুটি সেভ হয়েছে' : 'Weekly holidays saved');
       setShowSettings(false);
       window.location.reload();
     } catch (error: any) {

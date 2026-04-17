@@ -101,21 +101,36 @@ async function startServer() {
     }
 
     try {
-      const response = await fetch(audioUrl);
+      const fetchOptions: any = { 
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5'
+        } 
+      };
+      if (req.headers.range) {
+        fetchOptions.headers.range = req.headers.range;
+      }
+
+      const response = await fetch(audioUrl, fetchOptions);
       if (!response.ok) {
         throw new Error(`Failed to fetch audio: ${response.statusText}`);
       }
 
-      // Copy relevant headers
-      const contentType = response.headers.get('content-type');
-      if (contentType) {
-        res.setHeader('Content-Type', contentType);
-      }
+      res.status(response.status);
+
+      const headersToForward = [
+        'content-type',
+        'content-length',
+        'content-range',
+        'accept-ranges'
+      ];
       
-      const contentLength = response.headers.get('content-length');
-      if (contentLength) {
-        res.setHeader('Content-Length', contentLength);
-      }
+      headersToForward.forEach(header => {
+        const val = response.headers.get(header);
+        if (val) {
+          res.setHeader(header, val);
+        }
+      });
 
       // Add CORS headers for the proxy itself
       res.setHeader('Access-Control-Allow-Origin', '*');

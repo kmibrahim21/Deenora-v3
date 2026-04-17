@@ -127,11 +127,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           throw new Error('Audio URL is empty');
         }
 
-        // Use a proxy for external URLs to avoid CORS and format detection issues
-        const isExternal = url.startsWith('http') && !url.includes(window.location.hostname) && !url.includes('supabase.co');
-        const finalUrl = isExternal ? `/api/proxy-audio?url=${encodeURIComponent(url)}` : url;
-
-        audioRef.current.src = finalUrl;
+        audioRef.current.src = url;
         audioRef.current.load();
         
         const playPromise = audioRef.current.play();
@@ -1876,7 +1872,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       )}
 
       {/* Hidden audio element for custom player */}
-      <audio ref={audioRef} className="hidden" preload="metadata" crossOrigin="anonymous" />
+      <audio ref={audioRef} className="hidden" preload="metadata" />
     </>
   );
 };
