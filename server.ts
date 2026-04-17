@@ -84,12 +84,12 @@ async function startServer() {
   };
 
   // Specific Routes for Awaj
-  app.all('/api/awaj*', async (req, res) => {
+  app.use('/api/awaj', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
   });
 
   // Specific Routes for Teachers
-  app.all('/api/teachers*', async (req, res) => {
+  app.use('/api/teachers', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'teachers.ts'), req, res);
   });
 
@@ -154,7 +154,7 @@ async function startServer() {
     const distPath = path.join(__dirname, 'dist');
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
-      app.get('*', (req, res) => {
+      app.get('*all', (req, res) => {
         res.sendFile(path.join(distPath, 'index.html'));
       });
     }
