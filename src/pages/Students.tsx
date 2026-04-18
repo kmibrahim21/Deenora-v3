@@ -332,7 +332,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             {showTemplateMenu && (
               <div className={`absolute bottom-[calc(100%-40px)] left-0 right-0 mb-3 rounded-xl shadow-2xl border max-h-60 overflow-y-auto p-1 z-[160] ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                 {templates.map(tmp => (
-                  <button key={tmp.id} onClick={() => { setSelectedTemplate(tmp); setShowTemplateMenu(false); }} className={`w-full text-left px-4 py-3 rounded-lg flex items-center justify-between mb-1 last:mb-0 transition-colors ${selectedTemplate?.id === tmp.id ? 'bg-[#2563EB] text-white shadow-xl' : (isDark ? 'hover:bg-slate-700 text-slate-100' : 'hover:bg-slate-50 text-slate-700')}`}>
+                  <button key={tmp.id} onClick={() => { setSelectedTemplate(tmp); setShowTemplateMenu(false); }} className={`w-full text-left px-4 py-3 rounded-lg flex items-center justify-between mb-1 last:mb-0 transition-colors ${selectedTemplate?.id === tmp.id ? 'bg-[#2563EB] text-white shadow-xl' : (isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-50 text-slate-700')}`}>
                     <span className="text-[11px] font-black truncate font-noto">{tmp.title}</span>
                     {selectedTemplate?.id === tmp.id && <Check size={16} strokeWidth={4} />}
                   </button>

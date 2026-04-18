@@ -114,7 +114,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
             {showTemplateDropdown && (
               <div className={`absolute top-full left-0 right-0 mt-2 rounded-2xl shadow-xl border z-[510] max-h-48 overflow-y-auto p-1 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                 {templates.map(tmp => (
-                  <button key={tmp.id} onClick={() => { setMessage(tmp.body); setShowTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 border-b last:border-0 rounded-lg transition-colors ${isDark ? 'border-slate-700/50 hover:bg-slate-700 text-slate-100' : 'border-slate-50 hover:bg-slate-50 text-slate-800'}`}>
+                  <button key={tmp.id} onClick={() => { setMessage(tmp.body); setShowTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 border-b last:border-0 rounded-lg transition-colors ${isDark ? 'border-slate-700/50 hover:bg-slate-700 text-slate-300' : 'border-slate-50 hover:bg-slate-50 text-slate-800'}`}>
                     <p className="text-[8px] font-black text-[#8D30F4] uppercase mb-0.5">{tmp.title}</p>
                     <p className={`text-xs font-bold truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{tmp.body}</p>
                   </button>

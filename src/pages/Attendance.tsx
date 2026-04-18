@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2 } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -23,6 +23,7 @@ interface AttendanceProps {
 const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId, profile, activeYear, triggerRefresh }) => {
   const isTeacher = profile?.role === 'teacher';
   const canManageAttendance = !isTeacher || profile?.permissions?.can_manage_attendance;
+  const isDark = madrasah?.theme === 'dark';
 
   if (!canManageAttendance) {
     return (
@@ -77,14 +78,66 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [successTitle, setSuccessTitle] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Enhanced Modal States
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmData, setConfirmData] = useState<{
+    title: string;
+    message: string;
+    icon: 'sms' | 'voice' | 'alert';
+    action: () => void;
+    color: string;
+  } | null>(null);
+
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorTitle, setErrorTitle] = useState('');
+  const [errorDetails, setErrorDetails] = useState('');
+
+  // New states for SMS and Voice Templates
+  const [smsTemplates, setSmsTemplates] = useState<any[]>([]);
+  const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState<string>('default');
+  const [voiceTemplates, setVoiceTemplates] = useState<any[]>([]);
+  const [selectedVoiceTemplateId, setSelectedVoiceTemplateId] = useState<string>('');
+  const [showSmsTemplateDropdown, setShowSmsTemplateDropdown] = useState(false);
+  const [showVoiceTemplateDropdown, setShowVoiceTemplateDropdown] = useState(false);
+  const [sendingVoiceAlerts, setSendingVoiceAlerts] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(madrasah?.balance || 0);
+  const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.50);
+
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'ছাত্রের নাম' : 'Student Name' },
     { code: '{institution_name}', label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name' },
   ];
 
   useEffect(() => {
-    if (madrasah) fetchClasses();
+    if (madrasah) {
+      fetchClasses();
+      fetchSmsTemplates();
+      fetchVoiceTemplates();
+      setWalletBalance(madrasah.balance || 0);
+      setVoiceRate(madrasah.voice_rate || 0.50);
+    }
   }, [madrasah?.id]);
+
+  const fetchSmsTemplates = async () => {
+    if (!madrasah) return;
+    const { data } = await supabase
+      .from('sms_templates')
+      .select('*')
+      .eq('institution_id', madrasah.id)
+      .order('created_at', { ascending: false });
+    if (data) setSmsTemplates(data);
+  };
+
+  const fetchVoiceTemplates = async () => {
+    if (!madrasah) return;
+    const { data } = await supabase
+      .from('voice_templates')
+      .select('*')
+      .eq('institution_id', madrasah.id)
+      .eq('provider_status', 'approved')
+      .order('created_at', { ascending: false });
+    if (data) setVoiceTemplates(data);
+  };
 
   useEffect(() => {
     if (selectedClass && madrasah) {
@@ -336,9 +389,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
       setSuccessMessage(lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.');
       setShowSuccessModal(true);
-      setTimeout(() => setShowSuccessModal(false), 3000);
     } catch (err: any) { 
-      alert(err.message); 
+      setErrorTitle(lang === 'bn' ? 'হাজিরা সংরক্ষণ ব্যর্থ' : 'Save Failed');
+      setErrorDetails(err.message);
+      setShowErrorModal(true);
     } finally { 
       setSaving(false); 
     }
@@ -346,23 +400,165 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
   const sendAbsentAlerts = async () => {
     if (!madrasah || !selectedClass) return;
+    
     const absents = students.filter(s => attendance[s.id] === 'absent');
     if (absents.length === 0) {
-        alert(lang === 'bn' ? 'কোনো অনুপস্থিত ছাত্র নেই!' : 'No absent students found!');
-        return;
+      setErrorTitle(lang === 'bn' ? 'ছাত্র নির্বাচন করুন' : 'No Selection');
+      setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত ছাত্র পাওয়া যায়নি!' : 'No absent students found to send alerts.');
+      setShowErrorModal(true);
+      return;
     }
 
-    if (!confirm(lang === 'bn' ? `${absents.length} জন অভিভাবককে অনুপস্থিতি SMS পাঠাতে চান?` : `Send absence alerts to ${absents.length} guardians?`)) return;
+    setConfirmData({
+      title: lang === 'bn' ? 'এসএমএস এলার্ট পাঠান' : 'Send SMS Alert',
+      message: lang === 'bn' 
+        ? `${absents.length} জন অনুপস্থিত ছাত্রের অভিভাবককে এসএমএস পাঠাতে চান?` 
+        : `Send SMS alerts to guardians of ${absents.length} absent students?`,
+      icon: 'sms',
+      color: 'blue',
+      action: async () => {
+        setSendingAlerts(true);
+        setShowConfirmModal(false);
+        try {
+          let message = '';
+          if (selectedSmsTemplateId === 'default') {
+            message = lang === 'bn' 
+              ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় অনুপস্থিত। অনুগ্রহ করে অনুপস্থিতির কারণ জানান।`
+              : `As-Salamu Alaikum, {student_name} is absent today. Please inform us of the reason.`;
+          } else {
+            const template = smsTemplates.find(t => t.id === selectedSmsTemplateId);
+            message = template?.body || '';
+          }
 
-    setSendingAlerts(true);
-    try {
-      const message = lang === 'bn' 
-        ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় অনুপস্থিত। অনুগ্রহ করে অনুপস্থিতির কারণ জানান।`
-        : `As-Salamu Alaikum, {student_name} is absent today. Please inform us of the reason.`;
+          if (!message.trim()) {
+            throw new Error(lang === 'bn' ? 'এসএমএস টেমপ্লেট নির্বাচন করুন অথবা একটি মেসেজ লিখুন' : 'Please select an SMS template or write a message');
+          }
 
-      await smsApi.sendBulk(madrasah.id, absents, message);
-      alert(t('sms_success', lang));
-    } catch (err: any) { alert(err.message); } finally { setSendingAlerts(false); }
+          await smsApi.sendBulk(madrasah.id, absents, message);
+          
+          setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
+          setSuccessMessage(lang === 'bn' ? `${absents.length} জন অভিভাবককে এসএমএস পাঠানো হয়েছে।` : `SMS alerts sent to ${absents.length} guardians.`);
+          setShowSuccessModal(true);
+        } catch (err: any) { 
+          setErrorTitle(lang === 'bn' ? 'এসএমএস পাঠানো ব্যর্থ' : 'SMS Failed');
+          setErrorDetails(err.message);
+          setShowErrorModal(true);
+        } finally { 
+          setSendingAlerts(false); 
+        }
+      }
+    });
+    setShowConfirmModal(true);
+  };
+
+  const sendAbsentVoiceAlerts = async () => {
+    if (!madrasah || !selectedClass) return;
+    
+    if (!selectedVoiceTemplateId) {
+      setErrorTitle(lang === 'bn' ? 'ভয়েস নির্বাচন করুন' : 'Select Voice');
+      setErrorDetails(lang === 'bn' ? 'অনুগ্রহ করে একটি ভয়েস টেমপ্লেট নির্বাচন করুন' : 'Please select a voice template to continue.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    const absents = students.filter(s => attendance[s.id] === 'absent');
+    if (absents.length === 0) {
+      setErrorTitle(lang === 'bn' ? 'ছাত্র নির্বাচন করুন' : 'No Selection');
+      setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত ছাত্র পাওয়া যায়নি!' : 'No absent students found!');
+      setShowErrorModal(true);
+      return;
+    }
+
+    const estimatedCost = absents.length * voiceRate;
+    if (walletBalance < estimatedCost) {
+      setErrorTitle(lang === 'bn' ? 'অপর্যাপ্ত ব্যালেন্স' : 'Insufficient Balance');
+      setErrorDetails(lang === 'bn' ? `আপনার ব্যালেন্স কম। প্রয়োজন: ${estimatedCost} ৳` : `Insufficient balance. Required: ${estimatedCost} ৳`);
+      setShowErrorModal(true);
+      return;
+    }
+
+    setConfirmData({
+      title: lang === 'bn' ? 'ভয়েস কল এলার্ট' : 'Voice Call Alert',
+      message: lang === 'bn' 
+        ? `${absents.length} জন অভিভাবককে অনুপস্থিতি ভয়েস কল দিতে চান? (খরচ: ${estimatedCost} ৳)` 
+        : `Send voice alerts to ${absents.length} guardians? (Approx cost: ${estimatedCost} ৳)`,
+      icon: 'voice',
+      color: 'emerald',
+      action: async () => {
+        setSendingVoiceAlerts(true);
+        setShowConfirmModal(false);
+        try {
+          const voice = voiceTemplates.find(v => v.id === selectedVoiceTemplateId);
+          if (!voice) throw new Error('Voice template not found');
+
+          const phoneNumbers = absents
+            .map(s => {
+              let p = s.guardian_phone || '';
+              const digits = p.replace(/[^0-9]/g, '');
+              if (digits.length === 11 && digits.startsWith('01')) return digits;
+              if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
+              if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+              return '';
+            })
+            .filter(p => p.length === 11);
+
+          if (phoneNumbers.length === 0) throw new Error('No valid phone numbers found');
+
+          const requestId = crypto.randomUUID();
+          const payload = {
+            request_id: requestId,
+            voice: voice.provider_voice_name || voice.title,
+            phone_numbers: phoneNumbers
+          };
+
+          const response = await fetch('/api/awaj/broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to initiate voice call');
+          }
+
+          const result = await response.json();
+          const campaignId = result.broadcast?.id || result.id || requestId;
+
+          // Log to database
+          await supabase.from('voice_broadcasts').insert({
+            institution_id: madrasah.id,
+            voice_template_id: voice.id,
+            target_type: 'students',
+            total_numbers: phoneNumbers.length,
+            estimated_cost: estimatedCost,
+            status: 'sending',
+            provider_campaign_id: campaignId
+          });
+
+          // Deduct balance
+          const { error: deductError } = await supabase.rpc('deduct_balance', {
+            p_institution_id: madrasah.id,
+            p_amount: estimatedCost
+          });
+
+          if (deductError) console.error('Error deducting balance:', deductError);
+          
+          setWalletBalance(prev => prev - estimatedCost);
+          
+          setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
+          setSuccessMessage(lang === 'bn' ? `${absents.length} জন অভিভাবককে ভয়েস কল রিকোয়েস্ট পাঠানো হয়েছে।` : `Voice call request sent to ${absents.length} guardians.`);
+          setShowSuccessModal(true);
+        } catch (err: any) {
+          setErrorTitle(lang === 'bn' ? 'ভয়েস কল ব্যর্থ' : 'Voice Call Failed');
+          setErrorDetails(err.message);
+          setShowErrorModal(true);
+        } finally {
+          setSendingVoiceAlerts(false);
+        }
+      }
+    });
+    setShowConfirmModal(true);
   };
 
   const saveSettings = async () => {
@@ -402,7 +598,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       setShowSuccessModal(true);
       setShowSettingsModal(false);
     } catch (err: any) {
-      alert(err.message);
+      setErrorTitle(lang === 'bn' ? 'সেটিংস সেভ ব্যর্থ' : 'Settings Failed');
+      setErrorDetails(err.message);
+      setShowErrorModal(true);
     } finally {
       setSavingSettings(false);
     }
@@ -421,8 +619,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const removeSession = (id: string) => {
     setSettingsSessions(prev => prev.filter(s => s.id !== id));
   };
-
-  const isDark = madrasah?.theme === 'dark';
 
   return (
     <div className={`space-y-6 animate-in fade-in duration-500 pb-20 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
@@ -621,7 +817,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                         <button 
                           onClick={() => {
                             if (!isOnline) {
-                              alert("Internet required to save attendance.");
+                              setErrorTitle(lang === 'bn' ? 'অফলাইন' : 'Offline');
+                              setErrorDetails(lang === 'bn' ? 'হাজিরা সেভ করতে ইন্টারনেট প্রয়োজন।' : 'Internet required to save attendance.');
+                              setShowErrorModal(true);
                               return;
                             }
                             handleSave();
@@ -632,26 +830,125 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                             {saving ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} strokeWidth={3} /> {t('save', lang)}</>}
                         </button>
                         
-                        <div className="flex items-center gap-3">
-                           <button 
-                             onClick={() => {
-                               if (!isOnline) {
-                                 alert("Internet required to send SMS.");
-                                 return;
-                               }
-                               sendAbsentAlerts();
-                             }} 
-                             disabled={sendingAlerts || !isOnline} 
-                             className={`flex-1 h-14 font-black rounded-full flex items-center justify-center gap-3 text-[13px] active:scale-95 transition-all border uppercase tracking-widest shadow-sm ${!isOnline ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' : isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}
-                           >
-                               {sendingAlerts ? <Loader2 className="animate-spin" size={20} /> : <><Send size={20} className={isDark ? 'text-blue-400/60' : 'text-[#2563EB]/60'} /> {t('absent_alert', lang)}</>}
-                           </button>
-                           <button 
-                             onClick={() => setShowShortcodes(!showShortcodes)}
-                             className={`w-14 h-14 rounded-2xl flex items-center justify-center border active:scale-95 transition-all ${isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
-                           >
-                             <Info size={24} />
-                           </button>
+                        <div className="flex flex-col gap-4">
+                            {/* SMS Section */}
+                            <div className="space-y-2">
+                                <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                    {lang === 'bn' ? 'এসএমএস এলার্ট' : 'SMS Alert'}
+                                </p>
+                                
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            if (!isOnline) {
+                                                setErrorTitle(lang === 'bn' ? 'অফলাইন' : 'Offline');
+                                                setErrorDetails(lang === 'bn' ? 'এসএমএস পাঠাতে ইন্টারনেট প্রয়োজন।' : 'Internet required to send SMS.');
+                                                setShowErrorModal(true);
+                                                return;
+                                            }
+                                            sendAbsentAlerts();
+                                        }} 
+                                        disabled={sendingAlerts || !isOnline} 
+                                        className={`flex-[2.5] h-14 font-black rounded-2xl flex items-center justify-center gap-3 text-[13px] active:scale-95 transition-all border uppercase tracking-widest shadow-sm ${!isOnline ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' : isDark ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'}`}
+                                    >
+                                        {sendingAlerts ? <Loader2 className="animate-spin" size={20} /> : <><Send size={20} /> {t('absent_alert', lang)}</>}
+                                    </button>
+
+                                    <div className="flex-1 relative">
+                                        <button 
+                                            onClick={() => setShowSmsTemplateDropdown(!showSmsTemplateDropdown)}
+                                            className={`w-full h-14 px-3 rounded-2xl border flex items-center justify-between active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-100 text-[#2563EB]'}`}
+                                        >
+                                            <span className="text-[10px] font-black uppercase tracking-widest truncate">
+                                                {selectedSmsTemplateId === 'default' ? (lang === 'bn' ? 'ডিফল্ট' : 'Default') : (smsTemplates.find(t => t.id === selectedSmsTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন' : 'Select'))}
+                                            </span>
+                                            <ChevronDown size={14} className={`shrink-0 transition-transform duration-300 ${showSmsTemplateDropdown ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {showSmsTemplateDropdown && (
+                                            <div className={`absolute bottom-full right-0 mb-3 w-64 p-2 rounded-[1.5rem] shadow-xl border z-[110] max-h-48 overflow-y-auto animate-in slide-in-from-bottom-2 duration-300 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                                <button 
+                                                    onClick={() => { setSelectedSmsTemplateId('default'); setShowSmsTemplateDropdown(false); }}
+                                                    className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === 'default' ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}
+                                                >
+                                                    {lang === 'bn' ? 'ডিফল্ট টেমপ্লেট' : 'Default Template'}
+                                                </button>
+                                                {smsTemplates.map(t => (
+                                                    <button 
+                                                        key={t.id}
+                                                        onClick={() => { setSelectedSmsTemplateId(t.id); setShowSmsTemplateDropdown(false); }}
+                                                        className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === t.id ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}
+                                                    >
+                                                        {t.title}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button 
+                                        onClick={() => setShowShortcodes(!showShortcodes)}
+                                        className={`w-14 h-14 rounded-2xl flex items-center justify-center border active:scale-95 transition-all shrink-0 ${isDark ? 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-slate-100'}`}
+                                    >
+                                        <Info size={24} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Voice Section */}
+                            <div className="space-y-2 mt-2">
+                                <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                    {lang === 'bn' ? 'ভয়েস এলার্ট' : 'Voice Alert'}
+                                </p>
+                                
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            if (!isOnline) {
+                                                setErrorTitle(lang === 'bn' ? 'অফলাইন' : 'Offline');
+                                                setErrorDetails(lang === 'bn' ? 'ভয়েস কল পাঠাতে ইন্টারনেট প্রয়োজন।' : 'Internet required to send Voice Calls.');
+                                                setShowErrorModal(true);
+                                                return;
+                                            }
+                                            sendAbsentVoiceAlerts();
+                                        }} 
+                                        disabled={sendingVoiceAlerts || !isOnline || voiceTemplates.length === 0} 
+                                        className={`flex-[2.5] h-14 font-black rounded-2xl flex items-center justify-center gap-3 text-[13px] active:scale-95 transition-all border uppercase tracking-widest shadow-sm ${!isOnline || voiceTemplates.length === 0 ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' : isDark ? 'bg-slate-800 text-emerald-400 border-slate-700 hover:bg-slate-700' : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'}`}
+                                    >
+                                        {sendingVoiceAlerts ? <Loader2 className="animate-spin" size={20} /> : <><MessageSquare size={20} /> {lang === 'bn' ? 'ভয়েস কল এলার্ট' : 'Voice Call Alert'}</>}
+                                    </button>
+
+                                    <div className="flex-1 relative">
+                                        <button 
+                                            onClick={() => setShowVoiceTemplateDropdown(!showVoiceTemplateDropdown)}
+                                            className={`w-full h-14 px-3 rounded-2xl border flex items-center justify-between active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-100 text-[#2563EB]'}`}
+                                        >
+                                            <span className="text-[10px] font-black uppercase tracking-widest truncate">
+                                                {selectedVoiceTemplateId ? (voiceTemplates.find(v => v.id === selectedVoiceTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন' : 'Select')) : (lang === 'bn' ? 'নির্বাচন' : 'Select')}
+                                            </span>
+                                            <ChevronDown size={14} className={`shrink-0 transition-transform duration-300 ${showVoiceTemplateDropdown ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {showVoiceTemplateDropdown && (
+                                            <div className={`absolute bottom-full right-0 mb-3 w-64 p-2 rounded-[1.5rem] shadow-xl border z-[110] max-h-48 overflow-y-auto animate-in slide-in-from-bottom-2 duration-300 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                                {voiceTemplates.length === 0 ? (
+                                                    <p className="p-4 text-xs text-slate-500 font-bold text-center italic">{lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস নেই' : 'No approved voices found.'}</p>
+                                                ) : (
+                                                    voiceTemplates.map(v => (
+                                                        <button 
+                                                            key={v.id}
+                                                            onClick={() => { setSelectedVoiceTemplateId(v.id); setShowVoiceTemplateDropdown(false); }}
+                                                            className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedVoiceTemplateId === v.id ? (isDark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}
+                                                        >
+                                                            {v.title}
+                                                        </button>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {showShortcodes && (
@@ -920,7 +1217,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       )}
 
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className={`rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden border-4 animate-in zoom-in-95 duration-500 p-10 text-center relative ${isDark ? 'bg-slate-900 border-slate-800 shadow-emerald-500/10' : 'bg-white border-white shadow-emerald-200/50'}`}>
             <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
             
@@ -940,9 +1237,85 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               
               <button 
                 onClick={() => setShowSuccessModal(false)}
-                className="mt-10 w-full h-16 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/30 active:scale-90 hover:scale-[1.02] transition-all text-sm uppercase tracking-[0.2em]"
+                className="mt-10 w-full h-16 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/30 active:scale-95 hover:scale-[1.02] transition-all text-sm uppercase tracking-[0.2em]"
               >
                 {lang === 'bn' ? 'ঠিক আছে' : 'Awesome'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && confirmData && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className={`rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden border-4 animate-in zoom-in-95 duration-500 p-10 text-center relative ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-white'}`}>
+            <div className={`absolute top-0 left-0 w-full h-2 bg-${confirmData.color === 'emerald' ? 'emerald' : confirmData.color === 'amber' ? 'amber' : 'blue'}-500`}></div>
+            
+            <div className="relative">
+              <div className={`w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-8 relative ${
+                confirmData.color === 'emerald' ? 'bg-emerald-500/10 text-emerald-600' : 
+                confirmData.color === 'amber' ? 'bg-amber-500/10 text-amber-600' : 
+                'bg-blue-500/10 text-blue-600'
+              }`}>
+                {confirmData.icon === 'sms' && <Send size={48} strokeWidth={3} />}
+                {confirmData.icon === 'voice' && <MessageSquare size={48} strokeWidth={3} />}
+                {confirmData.icon === 'alert' && <AlertTriangle size={48} strokeWidth={3} />}
+              </div>
+              
+              <h2 className={`text-2xl font-black mb-3 tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {confirmData.title}
+              </h2>
+              
+              <p className={`text-sm font-bold leading-relaxed px-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {confirmData.message}
+              </p>
+              
+              <div className="mt-10 flex flex-col gap-3">
+                <button 
+                  onClick={confirmData.action}
+                  className={`w-full h-16 text-white font-black rounded-2xl shadow-lg active:scale-95 hover:scale-[1.02] transition-all text-sm uppercase tracking-[0.2em] ${
+                    confirmData.color === 'emerald' ? 'bg-emerald-500 shadow-emerald-500/30' : 
+                    confirmData.color === 'amber' ? 'bg-amber-500 shadow-amber-500/30' : 
+                    'bg-[#2563EB] shadow-blue-500/30'
+                  }`}
+                >
+                  {lang === 'bn' ? 'হ্যাঁ, পাঠান' : 'Yes, Send'}
+                </button>
+                <button 
+                  onClick={() => setShowConfirmModal(false)}
+                  className={`w-full h-14 font-black rounded-2xl active:scale-95 transition-all text-sm uppercase tracking-widest ${isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}
+                >
+                  {lang === 'bn' ? 'না, বাতিল' : 'No, Cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showErrorModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className={`rounded-[3rem] shadow-2xl w-full max-w-sm overflow-hidden border-4 animate-in zoom-in-95 duration-500 p-10 text-center relative ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-white'}`}>
+            <div className="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+            
+            <div className="relative">
+              <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto mb-8 relative">
+                <AlertCircle size={48} strokeWidth={3} />
+              </div>
+              
+              <h2 className={`text-2xl font-black mb-3 tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {errorTitle}
+              </h2>
+              
+              <p className={`text-sm font-bold leading-relaxed px-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {errorDetails}
+              </p>
+              
+              <button 
+                onClick={() => setShowErrorModal(false)}
+                className="mt-10 w-full h-16 bg-red-500 text-white font-black rounded-2xl shadow-lg shadow-red-500/30 active:scale-95 hover:scale-[1.02] transition-all text-sm uppercase tracking-[0.2em]"
+              >
+                {lang === 'bn' ? 'ঠিক আছে' : 'Understood'}
               </button>
             </div>
           </div>

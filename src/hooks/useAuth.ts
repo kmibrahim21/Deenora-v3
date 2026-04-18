@@ -32,7 +32,7 @@ export const useAuth = () => {
     }
   };
 
-  const fetchUserProfile = async (userId: string, email?: string) => {
+  const fetchUserProfile = async (userId: string, email?: string, retryCount = 0) => {
     if (!isValidUUID(userId)) {
       setLoading(false);
       return;
@@ -47,11 +47,11 @@ export const useAuth = () => {
     ];
     const isSuperAdminEmail = superAdminEmails.includes(userEmail || '');
 
-    console.log("Auth Debug:", { userId, userEmail, isSuperAdminEmail });
+    console.log("Auth Debug:", { userId, userEmail, isSuperAdminEmail, retryCount });
 
     try {
       // First, get the profile
-      console.log("Fetching profile for user:", userId);
+      console.log(`Fetching profile for user: ${userId} (Attempt ${retryCount + 1}/5)`);
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -59,7 +59,6 @@ export const useAuth = () => {
         .maybeSingle();
       
       if (profileError) {
-        console.error("Profile fetch error:", profileError);
         throw profileError;
       }
 
@@ -151,19 +150,30 @@ export const useAuth = () => {
         setAuthError("Profile not found in database. Please check if SQL triggers are running.");
       }
     } catch (err: any) {
+      const isNetworkError = 
+        err?.message?.toLowerCase().includes('fetch') || 
+        err?.message?.toLowerCase().includes('network') ||
+        err?.message?.toLowerCase().includes('load') ||
+        err?.name === 'TypeError' ||
+        err?.code === 'PGRST301' || // Network/timeout
+        !navigator.onLine;
+
+      // Retry logic for network errors - increased to 4 retries (Total 5 attempts)
+      if (isNetworkError && retryCount < 4) {
+        const delay = (retryCount + 1) * 2000;
+        console.log(`Network error detected, retrying in ${delay/1000} seconds (Attempt ${retryCount + 1}/5)...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchUserProfile(userId, email, retryCount + 1);
+      }
+
       console.error("fetchUserProfile error details:", {
         message: err?.message,
         name: err?.name,
         stack: err?.stack,
-        fullError: err
+        fullError: err,
+        retryCount
       });
       
-      const isNetworkError = 
-        err?.message?.toLowerCase().includes('fetch') || 
-        err?.message?.toLowerCase().includes('network') ||
-        err?.name === 'TypeError' ||
-        !navigator.onLine;
-
       // Resilience: If it's a network error and we are super admin, we can still load
       if (isSuperAdminEmail && isNetworkError) {
         console.log("Network error but super admin detected, using local fallback...");
@@ -211,7 +221,7 @@ export const useAuth = () => {
       }
 
       if (isNetworkError) {
-        setAuthError("নেটওয়ার্ক সমস্যা! আপনার ইন্টারনেট কানেকশন চেক করুন এবং পুনরায় চেষ্টা করুন। (Network Error: Failed to fetch)");
+        setAuthError("সার্ভারের সাথে সংযোগ করা যাচ্ছে না! দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন এবং পুনরায় চেষ্টা করুন। (Connection failed - please check your internet and reload)");
       } else {
         setAuthError(err.message || "An unknown authentication error occurred.");
       }
@@ -234,14 +244,21 @@ export const useAuth = () => {
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
+    const initializeAuth = async (retryCount = 0) => {
       try {
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error("Auth session error:", error);
+          console.error(`Auth session error (Attempt ${retryCount + 1}):`, error);
           const errorMessage = error.message.toLowerCase();
           
+          // Retry for network issues
+          const isNetworkError = errorMessage.includes('fetch') || errorMessage.includes('network');
+          if (isNetworkError && retryCount < 2) {
+             await new Promise(resolve => setTimeout(resolve, 2000));
+             return initializeAuth(retryCount + 1);
+          }
+
           // Only force logout on definitive token errors
           const isTokenError = errorMessage.includes('refresh token') || 
                                errorMessage.includes('refresh_token_not_found') ||
