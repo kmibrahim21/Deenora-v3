@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
 
@@ -19,7 +19,7 @@ interface InstitutionWithStats extends Institution {
 
 interface AdminPanelProps {
   lang: Language;
-  currentView?: 'list' | 'dashboard' | 'approvals';
+  currentView?: 'list' | 'dashboard' | 'approvals' | 'institutions';
   dataVersion?: number;
   onProfileUpdate?: () => void;
   triggerRefresh?: () => void;
@@ -35,8 +35,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'madrasah' | 'school' | 'kindergarten' | 'nurani'>('all');
-  const [view, setView] = useState<'list' | 'approvals' | 'details' | 'dashboard'>(
-    currentView === 'approvals' ? 'approvals' : currentView === 'dashboard' ? 'dashboard' : 'list'
+  const [view, setView] = useState<'list' | 'approvals' | 'details' | 'dashboard' | 'institutions'>(
+    currentView === 'approvals' ? 'approvals' : currentView === 'dashboard' ? 'dashboard' : currentView === 'institutions' ? 'institutions' : 'list'
   );
   const [paymentTab, setPaymentTab] = useState<'sms' | 'voice'>('sms');
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
@@ -471,7 +471,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       // Always fetch packages to ensure latest rates
       fetchPackages();
 
-      if (view === 'list' || view === 'dashboard') {
+      if (view === 'list' || view === 'dashboard' || view === 'institutions') {
         const [mList, gStats, recent, history] = await Promise.all([
           fetchAllMadrasahs(),
           fetchGlobalCounts(),
@@ -542,8 +542,61 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   useEffect(() => {
     if (currentView === 'approvals') setView('approvals');
     else if (currentView === 'dashboard') setView('dashboard');
+    else if (currentView === 'institutions') setView('institutions');
     else if (currentView === 'list') setView('list');
   }, [currentView]);
+
+  const [expandedInstituteId, setExpandedInstituteId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Bulk Communication State
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [isSendingBulk, setIsSendingBulk] = useState(false);
+  const [bulkType, setBulkType] = useState<'sms' | 'voice'>('sms');
+
+  const handleSendBulk = async () => {
+    if (!bulkMessage.trim()) {
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'বার্তা লিখুন' });
+      return;
+    }
+
+    const targets = madrasahs.filter(m => m.phone).map(m => m.phone as string);
+    if (targets.length === 0) {
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'কোনো বৈধ ফোন নম্বর পাওয়া যায়নি' });
+      return;
+    }
+
+    setIsSendingBulk(true);
+    try {
+      if (bulkType === 'sms') {
+        const sendPromises = targets.map(phone => smsApi.sendDirect(phone, bulkMessage));
+        await Promise.all(sendPromises);
+        setStatusModal({ show: true, type: 'success', title: 'সফল', message: `${targets.length} টি প্রতিষ্ঠানে এসএমএস পাঠানো হয়েছে` });
+      } else {
+        setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'ভয়েস কল রিকোয়েস্ট পাঠানো হয়েছে (সিস্টেম প্রসেস করবে)' });
+      }
+      setBulkMessage('');
+    } catch (err: any) {
+      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
+    } finally {
+      setIsSendingBulk(false);
+    }
+  };
+
+  // Sorting for Institutes Tab
+  const sortedInstitutions = useMemo(() => {
+    return [...madrasahs].filter(m => {
+      const search = searchTerm.toLowerCase();
+      const code = (m.config_json as any)?.institute_code || '';
+      return (m.name?.toLowerCase().includes(search) || 
+              m.phone?.includes(search) || 
+              code.includes(search));
+    }).sort((a, b) => {
+      const codeA = (a.config_json as any)?.institute_code || '';
+      const codeB = (b.config_json as any)?.institute_code || '';
+      return codeA.localeCompare(codeB, 'en', { numeric: true });
+    });
+  }, [madrasahs, searchTerm]);
 
   // Fix: Add missing handleUserClick function to manage details view and stats
   const handleUserClick = async (user: InstitutionWithStats) => {
@@ -1209,7 +1262,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   </select>
                 </div>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filtered.length > 0 ? filtered.map(m => (
                   <div key={m.id} onClick={() => handleUserClick(m)} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-100 shadow-premium hover:border-blue-500/30'} p-6 rounded-[2.5rem] border active:scale-[0.98] transition-all cursor-pointer group relative overflow-hidden`}>
@@ -1255,6 +1307,176 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Try adjusting your search or filter</p>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {view === 'institutions' && (
+            <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>প্রতিষ্ঠানের তালিকা</h1>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Institute Management & Communication</p>
+                </div>
+                <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                  <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
+              </div>
+
+              {/* Bulk Communication UI */}
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-blue-50 text-blue-600">
+                    <MessageSquare size={24} />
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>বাল্ক যোগাযোগ</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Send SMS or Voice to all institutes</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
+                    <button 
+                      onClick={() => setBulkType('sms')}
+                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bulkType === 'sms' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                    >
+                      SMS
+                    </button>
+                    <button 
+                      onClick={() => setBulkType('voice')}
+                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bulkType === 'voice' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                    >
+                      Voice
+                    </button>
+                  </div>
+
+                  <textarea 
+                    value={bulkMessage}
+                    onChange={(e) => setBulkMessage(e.target.value)}
+                    placeholder={bulkType === 'sms' ? "সকল প্রতিষ্ঠানে পাঠানোর জন্য এসএমএস এখানে লিখুন..." : "ভয়েস মেসেজের টেক্সট এখানে লিখুন..."}
+                    className={`w-full p-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-[2rem] font-bold text-sm min-h-[120px] outline-none focus:border-blue-500/30 transition-all resize-none font-noto`}
+                  />
+
+                  <button 
+                    onClick={handleSendBulk}
+                    disabled={isSendingBulk || !bulkMessage.trim()}
+                    className="w-full h-14 bg-blue-600 text-white font-black rounded-2xl text-sm active:scale-95 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest"
+                  >
+                    {isSendingBulk ? <Loader2 size={20} className="animate-spin" /> : <><Play size={18} /> {bulkType === 'sms' ? 'Send SMS' : 'Call Everyone'}</>}
+                  </button>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative group">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                <input 
+                  type="text" 
+                  placeholder="Search by Institute Code, Name or Phone..." 
+                  className={`w-full h-14 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100 text-slate-800 focus:bg-slate-50'} border rounded-2xl outline-none font-bold shadow-premium transition-all focus:border-blue-500/50`} 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)} 
+                />
+              </div>
+
+              {/* Institute List */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {sortedInstitutions.map(inst => {
+                  const config = (inst.config_json || {}) as any;
+                  const isExpanded = expandedInstituteId === inst.id;
+                  const instCode = config.institute_code || 'N/A';
+                  
+                  return (
+                    <motion.div 
+                      key={inst.id}
+                      layout
+                      className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} rounded-[2.5rem] border overflow-hidden transition-all`}
+                    >
+                      <div className="p-6">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-blue-500'}`}>
+                              {inst.logo_url ? <img src={inst.logo_url} className="w-full h-full object-contain rounded-2xl" referrerPolicy="no-referrer" /> : <Building2 size={24} />}
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">Code: {instCode}</p>
+                              <h3 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto text-base leading-tight`}>{inst.name}</h3>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <a href={`tel:${inst.phone}`} className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition-colors">
+                               <PhoneCall size={18} />
+                             </a>
+                             <a href={`https://wa.me/${inst.phone?.replace('+', '')}`} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                               <MessageCircle size={18} />
+                             </a>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{inst.phone || 'No Phone'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{inst.institution_type}</p>
+                          </div>
+                          <button 
+                            onClick={() => setExpandedInstituteId(isExpanded ? null : inst.id)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isExpanded ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                          >
+                            {isExpanded ? 'Hide Details' : 'Subscription'}
+                          </button>
+                        </div>
+
+                        {isExpanded && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="mt-6 pt-6 border-t border-slate-100 space-y-4"
+                          >
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Package</p>
+                                <p className="text-xs font-black text-slate-700">{(config as any).subscription_type || 'N/A'}</p>
+                              </div>
+                              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                                <p className={`text-xs font-black ${inst.is_active ? 'text-emerald-500' : 'text-red-500'}`}>{inst.is_active ? 'Active' : 'Expired/Blocked'}</p>
+                              </div>
+                            </div>
+                            
+                            <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100/50">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Subscription Details</span>
+                                <CreditCard size={14} className="text-blue-400" />
+                              </div>
+                              <div className="space-y-1.5 text-[10px] font-bold text-slate-600">
+                                <div className="flex justify-between">
+                                  <span>Expires On:</span>
+                                  <span className="text-blue-600">{inst.subscription_end ? new Date(inst.subscription_end).toLocaleDateString('bn-BD') : 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Balance:</span>
+                                  <span className="text-blue-600">৳ {inst.balance || 0}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>SMS Balance:</span>
+                                  <span className="text-blue-600">{inst.sms_balance || 0}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <button 
+                              onClick={() => handleUserClick(inst as any)}
+                              className="w-full py-3 bg-slate-100 text-slate-600 font-bold rounded-xl text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                            >
+                              Manage Full Details
+                            </button>
+                          </motion.div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           )}

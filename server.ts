@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import fetch from 'node-fetch';
+// fetch is global in Node 18+
 
 // Load environment variables
 dotenv.config();

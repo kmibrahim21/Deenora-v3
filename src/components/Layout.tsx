@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck } from 'lucide-react';
+import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2 } from 'lucide-react';
 import { View, Language, Institution, Transaction, Profile } from 'types';
 import { t } from 'translations';
 import { supabase } from 'supabase';
@@ -106,6 +106,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     if (tab === 'home' && currentView === 'home') return true;
     if (tab === 'account' && (currentView === 'account' || currentView === 'super-account' || currentView === 'admin-voice-service' || currentView === 'admin-tutorials')) return true;
     if (tab === 'list' && currentView === 'admin-panel') return true;
+    if (tab === 'institutions' && currentView === 'admin-institutions') return true;
     if (tab === 'dashboard' && currentView === 'admin-dashboard') return true;
     if (tab === 'approvals' && currentView === 'admin-approvals') return true;
     if (tab === 'accounting' && currentView === 'accounting') return true;
@@ -151,6 +152,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 <button onClick={() => setView('admin-dashboard')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('dashboard') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <BarChart3 size={22} strokeWidth={isTabActive('dashboard') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">{t('dashboard', lang, madrasah?.institution_type)}</span>
+                </button>
+              )}
+              {canAccess('institutions') && (
+                <button onClick={() => setView('admin-institutions')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('institutions') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <Building2 size={22} strokeWidth={isTabActive('institutions') ? 2.5 : 2} />
+                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'ইনস্টিটিউট' : 'Institutes'}</span>
                 </button>
               )}
               {canAccess('institutions') && (
@@ -298,6 +305,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 <button onClick={() => setView('admin-dashboard')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('dashboard') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
                   <BarChart3 size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{t('dashboard', lang, madrasah?.institution_type)}</span>
+                </button>
+              )}
+              {canAccess('institutions') && (
+                <button onClick={() => setView('admin-institutions')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('institutions') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
+                  <Building2 size={20} />
+                  <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'ইনস্টিটিউট' : 'Institutes'}</span>
                 </button>
               )}
               {canAccess('institutions') && (

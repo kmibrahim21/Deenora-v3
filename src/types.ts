@@ -49,6 +49,7 @@ export interface Institution {
       paid_months?: string[];
     };
     institute_code?: string;
+    weekly_holidays?: number[];
   };
   theme: string;
   status: 'active' | 'suspended' | 'trial';
@@ -378,6 +379,7 @@ export type View =
   | 'teachers'
   | 'class-form' 
   | 'admin-panel' 
+  | 'admin-institutions'
   | 'transactions' 
   | 'wallet-sms' 
   | 'admin-dashboard' 

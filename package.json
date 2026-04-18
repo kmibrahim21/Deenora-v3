@@ -26,7 +26,6 @@
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.463.0",
     "motion": "^12.34.3",
-    "node-fetch": "^3.3.2",
     "pdfkit": "^0.17.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

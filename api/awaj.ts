@@ -1,6 +1,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import fetch from 'node-fetch';
+// native fetch used
 import FormData from 'form-data';
 import { Buffer } from 'node:buffer';
 

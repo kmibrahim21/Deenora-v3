@@ -325,14 +325,14 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       {isSelectionMode && selectedIds.size > 0 && (
         <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+95px)] left-1/2 -translate-x-1/2 w-[94%] max-w-md z-[150] animate-in slide-in-from-bottom-10">
           <div className={`backdrop-blur-xl rounded-[2rem] p-4 shadow-2xl border flex flex-col gap-3 ${isDark ? 'bg-slate-900/95 border-[#2563EB]/30' : 'bg-white/95 border-[#2563EB]/20'}`}>
-            <button onClick={() => setShowTemplateMenu(!showTemplateMenu)} className={`w-full h-[54px] flex items-center justify-between px-5 rounded-xl border-2 font-black text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
-              <div className="flex items-center gap-3 truncate"><BookOpen size={18} className="text-[#2563EB]" /><span className="truncate font-noto">{selectedTemplate ? selectedTemplate.title : t('template_title', lang)}</span></div>
-              <ChevronDown size={18} className={showTemplateMenu ? 'rotate-180' : ''} />
+            <button onClick={() => setShowTemplateMenu(!showTemplateMenu)} className={`w-full h-[54px] flex items-center justify-between px-5 rounded-xl border-2 font-black text-sm transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
+              <div className="flex items-center gap-3 truncate"><BookOpen size={18} className="text-[#2563EB]" /><span className={`truncate font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{selectedTemplate ? selectedTemplate.title : t('template_title', lang)}</span></div>
+              <ChevronDown size={18} className={`${isDark ? 'text-slate-400' : 'text-slate-500'} transition-transform ${showTemplateMenu ? 'rotate-180' : ''}`} />
             </button>
             {showTemplateMenu && (
-              <div className={`absolute bottom-[calc(100%-40px)] left-0 right-0 mb-3 rounded-xl shadow-2xl border max-h-60 overflow-y-auto p-1 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className={`absolute bottom-[calc(100%-40px)] left-0 right-0 mb-3 rounded-xl shadow-2xl border max-h-60 overflow-y-auto p-1 z-[160] ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                 {templates.map(tmp => (
-                  <button key={tmp.id} onClick={() => { setSelectedTemplate(tmp); setShowTemplateMenu(false); }} className={`w-full text-left px-4 py-3 rounded-lg flex items-center justify-between ${selectedTemplate?.id === tmp.id ? 'bg-[#2563EB] text-white shadow-xl' : (isDark ? 'hover:bg-slate-700' : 'hover:bg-slate-50')}`}>
+                  <button key={tmp.id} onClick={() => { setSelectedTemplate(tmp); setShowTemplateMenu(false); }} className={`w-full text-left px-4 py-3 rounded-lg flex items-center justify-between mb-1 last:mb-0 transition-colors ${selectedTemplate?.id === tmp.id ? 'bg-[#2563EB] text-white shadow-xl' : (isDark ? 'hover:bg-slate-700 text-slate-100' : 'hover:bg-slate-50 text-slate-700')}`}>
                     <span className="text-[11px] font-black truncate font-noto">{tmp.title}</span>
                     {selectedTemplate?.id === tmp.id && <Check size={16} strokeWidth={4} />}
                   </button>

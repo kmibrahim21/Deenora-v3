@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import fetch from 'node-fetch';
+// native fetch used
 import https from 'https';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -20,8 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const response = await fetch(apiUrl, {
-      method: 'GET',
-      agent
+      method: 'GET'
     });
 
     const text = await response.text();

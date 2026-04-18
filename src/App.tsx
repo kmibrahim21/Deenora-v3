@@ -446,6 +446,7 @@ const App: React.FC = () => {
           />
         );
       case "admin-panel":
+      case "admin-institutions":
       case "admin-approvals":
       case "admin-dashboard":
         if (role !== "super_admin") {
@@ -458,7 +459,7 @@ const App: React.FC = () => {
           setView("home");
           return null;
         }
-        if (view === "admin-panel" && permissions?.institutions === false) {
+        if ((view === "admin-panel" || view === "admin-institutions") && permissions?.institutions === false) {
           setView("home");
           return null;
         }
@@ -475,7 +476,9 @@ const App: React.FC = () => {
                 ? "approvals"
                 : view === "admin-dashboard"
                   ? "dashboard"
-                  : "list"
+                  : view === "admin-institutions"
+                    ? "institutions"
+                    : "list"
             }
             dataVersion={dataVersion}
             triggerRefresh={triggerRefresh}

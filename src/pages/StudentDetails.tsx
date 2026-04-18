@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
 import { t } from 'translations';
@@ -133,26 +133,26 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 <h3 className={`text-xs font-black uppercase tracking-[0.15em] ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ব্যক্তিগত তথ্য' : 'Personal Details'}</h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {student.date_of_birth && (
-                  <div className={`flex items-center gap-2.5 p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-                    <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-indigo-500 shrink-0 shadow-md border group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                      <AlertTriangle size={20} />
+                  <div className={`flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-3 sm:p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-[0.6rem] flex items-center justify-center text-indigo-500 shrink-0 shadow-md border group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <Calendar size={18} />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{t('dob', lang)}</p>
-                      <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.date_of_birth}</p>
+                    <div className="min-w-0 text-center sm:text-left">
+                      <p className="text-[7px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{t('dob', lang)}</p>
+                      <p className={`text-[10px] sm:text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.date_of_birth}</p>
                     </div>
                   </div>
                 )}
                 {student.blood_group && (
-                  <div className={`flex items-center gap-2.5 p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-red-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-red-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
-                    <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-red-500 shrink-0 shadow-md border group-hover:bg-red-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                      <AlertTriangle size={20} />
+                  <div className={`flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-3 sm:p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-red-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-red-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-[0.6rem] flex items-center justify-center text-red-500 shrink-0 shadow-md border group-hover:bg-red-500 group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                      <Zap size={18} fill="currentColor" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'রক্তের গ্রুপ' : 'Blood Group'}</p>
-                      <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.blood_group}</p>
+                    <div className="min-w-0 text-center sm:text-left">
+                      <p className="text-[7px] sm:text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'রক্তের গ্রুপ' : 'Blood Group'}</p>
+                      <p className={`text-[10px] sm:text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.blood_group}</p>
                     </div>
                   </div>
                 )}

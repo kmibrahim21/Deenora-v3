@@ -203,35 +203,35 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
           {/* Left Column: Summary & Monthly Status */}
           <div className="lg:col-span-2 space-y-6">
             {/* Stats Cards */}
-            <div className="flex flex-row gap-2 sm:gap-4 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 scrollbar-hide">
-              <div className={`flex-1 min-w-[100px] sm:min-w-0 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-[0.8rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                    <TrendingUp size={14} className="sm:w-[18px] sm:h-[18px]" />
+            <div className="flex flex-row gap-2 sm:gap-4 pb-2 sm:pb-0">
+              <div className={`flex-1 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center gap-1.5 sm:gap-3 mb-1 sm:mb-3">
+                  <div className={`w-6 h-6 sm:w-9 sm:h-9 rounded-[0.6rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                    <TrendingUp size={12} className="sm:w-[18px] sm:h-[18px]" />
                   </div>
-                  <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট প্রদেয়</span>
+                  <span className="text-[6.5px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট প্রদেয়</span>
                 </div>
-                <p className={`text-sm sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>৳{totalPayablePerMonth.toLocaleString()}</p>
+                <p className={`text-xs sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>৳{totalPayablePerMonth.toLocaleString()}</p>
               </div>
 
-              <div className={`flex-1 min-w-[100px] sm:min-w-0 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-[0.8rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
-                    <DollarSign size={14} className="sm:w-[18px] sm:h-[18px]" />
+              <div className={`flex-1 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center gap-1.5 sm:gap-3 mb-1 sm:mb-3">
+                  <div className={`w-6 h-6 sm:w-9 sm:h-9 rounded-[0.6rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                    <DollarSign size={12} className="sm:w-[18px] sm:h-[18px]" />
                   </div>
-                  <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট পরিশোধ</span>
+                  <span className="text-[6.5px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট পরিশোধ</span>
                 </div>
-                <p className={`text-sm sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-emerald-600'}`}>৳{totalPaid.toLocaleString()}</p>
+                <p className={`text-xs sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-emerald-600'}`}>৳{totalPaid.toLocaleString()}</p>
               </div>
 
-              <div className={`flex-1 min-w-[100px] sm:min-w-0 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-[0.8rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
-                    <TrendingDown size={14} className="sm:w-[18px] sm:h-[18px]" />
+              <div className={`flex-1 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center gap-1.5 sm:gap-3 mb-1 sm:mb-3">
+                  <div className={`w-6 h-6 sm:w-9 sm:h-9 rounded-[0.6rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                    <TrendingDown size={12} className="sm:w-[18px] sm:h-[18px]" />
                   </div>
-                  <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট বকেয়া</span>
+                  <span className="text-[6.5px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট বকেয়া</span>
                 </div>
-                <p className={`text-sm sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-red-600'}`}>৳{totalDue.toLocaleString()}</p>
+                <p className={`text-xs sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-red-600'}`}>৳{totalDue.toLocaleString()}</p>
               </div>
             </div>
 
@@ -340,7 +340,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                 onChange={() => !isExpired && toggleFee(fee.id)}
                                 className="sr-only"
                               />
-                              <span className={`${isEnabled && !isExpired ? (isDark ? 'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-[#2563EB] shadow-[0_0_15px_rgba(37,99,235,0.2)]') : (isDark ? 'bg-slate-700' : 'bg-slate-300')} inline-block h-7 w-12 rounded-full border-2 ${isDark ? 'border-slate-800' : 'border-white'} transition-colors`} />
+                              <span className={`${isEnabled && !isExpired ? (isDark ? 'bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'bg-[#2563EB] shadow-[0_0_20px_rgba(37,99,235,0.3)]') : (isDark ? 'bg-slate-700' : 'bg-slate-400')} inline-block h-7 w-12 rounded-full border-2 ${isDark ? 'border-slate-800' : 'border-white'} transition-colors`} />
                               <span className={`${isEnabled && !isExpired ? 'translate-x-[22px]' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-md`} />
                             </label>
                         </div>
