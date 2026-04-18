@@ -38,28 +38,38 @@ async function startServer() {
 
       if (typeof handler === 'function') {
         // Mock Vercel style response
+        const originalStatus = res.status.bind(res);
+        const originalJson = res.json.bind(res);
+        const originalSend = res.send.bind(res);
+        const originalSetHeader = res.setHeader.bind(res);
+
         const vercelRes: any = Object.assign(res, {
           status: (code: number) => {
-            res.status(code);
+            originalStatus(code);
             return vercelRes;
           },
           json: (data: any) => {
-            res.json(data);
+            originalJson(data);
             return vercelRes;
           },
           send: (data: any) => {
-            res.send(data);
+            originalSend(data);
             return vercelRes;
           },
           setHeader: (key: string, value: string) => {
-            res.setHeader(key, value);
+            originalSetHeader(key, value);
             return vercelRes;
           }
         });
 
         // Mock Vercel style request
-        const vercelReq: any = Object.assign(req, {
-          query: { ...req.query, ...req.params }
+        const vercelReq: any = req;
+        vercelReq.url = vercelReq.originalUrl || vercelReq.url;
+        Object.defineProperty(vercelReq, 'query', {
+          value: { ...req.query, ...req.params },
+          configurable: true,
+          enumerable: true,
+          writable: true
         });
 
         await handler(vercelReq, vercelRes);
