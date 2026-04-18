@@ -183,27 +183,34 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       console.log("Total Expense calculated:", totalExpense);
 
       structures.forEach(s => {
-        // Calculate correct count based on enabled settings
+        // Calculate correct count and expected amount based on enabled settings
         let count = 0;
+        let total = 0;
+        const multiplier = viewMode === 'yearly' ? 12 : 1;
+
         if (s.class_id === null) {
           // Global fee: count students who have this fee enabled
-          count = students?.filter(st => {
+          students?.forEach(st => {
             const setting = allSettings?.find(as => as.student_id === st.id && as.fee_structure_id === s.id);
-            return setting ? setting.is_enabled : true;
-          }).length || 0;
+            if (setting ? setting.is_enabled : true) {
+                count++;
+                const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+                total += amountToCharge * multiplier;
+            }
+          });
         } else {
           // Class fee: count students in this class who have this fee enabled
-          count = students?.filter(st => {
-            if (st.class_id !== s.class_id) return false;
+          students?.forEach(st => {
+            if (st.class_id !== s.class_id) return;
             const setting = allSettings?.find(as => as.student_id === st.id && as.fee_structure_id === s.id);
-            return setting ? setting.is_enabled : true;
-          }).length || 0;
+            if (setting ? setting.is_enabled : true) {
+                count++;
+                const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+                total += amountToCharge * multiplier;
+            }
+          });
         }
             
-        // If yearly, multiply monthly fee by 12 (approximate)
-        const multiplier = viewMode === 'yearly' ? 12 : 1;
-        const total = count * s.amount * multiplier;
-        
         const feeName = s.fee_name.trim();
         if (!breakdownMap[feeName]) {
           breakdownMap[feeName] = { expected: 0, collected: 0, students: 0, transactions: 0 };

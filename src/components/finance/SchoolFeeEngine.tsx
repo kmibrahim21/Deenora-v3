@@ -175,7 +175,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
             }) || [];
             
-            const totalPayable = studentFeeStructures.reduce((sum, fs) => sum + Number(fs.amount), 0);
+            const totalPayable = studentFeeStructures.reduce((sum, fs) => {
+                const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
+                const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(fs.amount);
+                return sum + amountToCharge;
+            }, 0);
             
             const studentFees = feesData?.filter(f => f.student_id === student.student_id) || [];
             const totalPaid = studentFees.reduce((sum, f) => sum + Number(f.amount_paid) + Number(f.discount || 0), 0);
@@ -259,6 +263,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         const isMonthNotStarted = s.start_date && selectedMonth < s.start_date.slice(0, 7);
         
         return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
+    }).map(s => {
+        const setting = settings?.find(set => set.fee_structure_id === s.id);
+        if (setting?.custom_amount !== undefined && setting?.custom_amount !== null) {
+            return { ...s, amount: Number(setting.custom_amount) };
+        }
+        return s;
     });
     setAvailableFeeItems(enabledStructures);
 

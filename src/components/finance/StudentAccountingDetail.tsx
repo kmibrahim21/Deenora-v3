@@ -105,6 +105,43 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
     }
   };
 
+  const updateCustomAmount = async (feeStructureId: string, customAmountStr: string) => {
+    try {
+      const setting = studentFeeSettings.find(s => s.fee_structure_id === feeStructureId);
+      const customAmount = customAmountStr ? parseFloat(customAmountStr) : null;
+
+      if (setting) {
+        const { error } = await supabase.from('student_fee_settings').update({ custom_amount: customAmount }).eq('id', setting.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('student_fee_settings').insert({
+          institution_id: madrasah.id,
+          student_id: student.student_id,
+          fee_structure_id: feeStructureId,
+          is_enabled: true,
+          custom_amount: customAmount
+        });
+        if (error) throw error;
+      }
+      
+      // Refresh settings state locally to avoid full refetch delay
+      setStudentFeeSettings(prev => {
+        const exists = prev.find(s => s.fee_structure_id === feeStructureId);
+        if (exists) {
+          return prev.map(s => s.fee_structure_id === feeStructureId ? { ...s, custom_amount: customAmount } : s);
+        } else {
+          return [...prev, { institution_id: madrasah.id, student_id: student.student_id, fee_structure_id: feeStructureId, is_enabled: true, custom_amount: customAmount }];
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('Error updating custom fee amount:', error);
+      if (error?.message?.includes('column') || error?.code === '42703') {
+         alert("Database Error: 'custom_amount' column missing. Please run the SQL migration script from 'src/services/migration_add_custom_amount_to_fees.sql' in your Supabase SQL Editor.");
+      }
+    }
+  };
+
   const isDark = madrasah.theme === 'dark';
   const className = classes.find(c => c.id === student.class_id)?.class_name || '';
 
@@ -114,7 +151,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
     const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
     const isEnabled = setting ? setting.is_enabled : true;
     const isExpired = s.due_date && s.due_date < today;
-    return (isEnabled && !isExpired) ? sum + Number(s.amount) : sum;
+    const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+    return (isEnabled && !isExpired) ? sum + amountToCharge : sum;
   }, 0);
   
   // Use fees table for total paid as it's more accurate (linked by student_id)
@@ -128,7 +166,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button 
             onClick={onBack}
@@ -136,16 +174,16 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
           >
             <ArrowLeft size={18} />
           </button>
-          <div>
-            <h2 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>{student.student_name}</h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{className} | রোল: {student.roll || '-'}</p>
+          <div className="min-w-0">
+            <h2 className={`text-xl font-black font-noto truncate ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>{student.student_name}</h2>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{className} | রোল: {student.roll || '-'}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
             <select 
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className={`h-10 px-4 rounded-xl border text-xs font-black outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
+                className={`h-10 px-4 rounded-xl border text-xs font-black outline-none transition-all shadow-sm ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600 focus:border-blue-300'}`}
             >
                 {[0, 1, 2].map(offset => {
                     const year = (new Date().getFullYear() - offset).toString();
@@ -165,35 +203,35 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
           {/* Left Column: Summary & Monthly Status */}
           <div className="lg:col-span-2 space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className={`p-4 rounded-3xl border shadow-sm ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                    <TrendingUp size={16} />
+            <div className="flex flex-row gap-2 sm:gap-4 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 scrollbar-hide">
+              <div className={`flex-1 min-w-[100px] sm:min-w-0 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-[0.8rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                    <TrendingUp size={14} className="sm:w-[18px] sm:h-[18px]" />
                   </div>
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">মোট প্রদেয়</span>
+                  <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট প্রদেয়</span>
                 </div>
-                <p className={`text-lg font-black ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>৳{totalPayablePerMonth}</p>
+                <p className={`text-sm sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>৳{totalPayablePerMonth.toLocaleString()}</p>
               </div>
 
-              <div className={`p-4 rounded-3xl border shadow-sm ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
-                    <DollarSign size={16} />
+              <div className={`flex-1 min-w-[100px] sm:min-w-0 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-[0.8rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                    <DollarSign size={14} className="sm:w-[18px] sm:h-[18px]" />
                   </div>
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">মোট পরিশোধিত</span>
+                  <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট পরিশোধ</span>
                 </div>
-                <p className={`text-lg font-black ${isDark ? 'text-slate-100' : 'text-emerald-600'}`}>৳{totalPaid}</p>
+                <p className={`text-sm sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-emerald-600'}`}>৳{totalPaid.toLocaleString()}</p>
               </div>
 
-              <div className={`p-4 rounded-3xl border shadow-sm ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
-                    <TrendingDown size={16} />
+              <div className={`flex-1 min-w-[100px] sm:min-w-0 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-[0.8rem] sm:rounded-[1.2rem] flex items-center justify-center ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                    <TrendingDown size={14} className="sm:w-[18px] sm:h-[18px]" />
                   </div>
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">মোট বকেয়া</span>
+                  <span className="text-[7px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট বকেয়া</span>
                 </div>
-                <p className={`text-lg font-black ${isDark ? 'text-slate-100' : 'text-red-600'}`}>৳{totalDue}</p>
+                <p className={`text-sm sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-red-600'}`}>৳{totalDue.toLocaleString()}</p>
               </div>
             </div>
 
@@ -233,7 +271,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                       const isNotStarted = s.start_date && s.start_date > today;
                       const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
                       const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
-                      return (isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted) ? sum + Number(s.amount) : sum;
+                      const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+                      return (isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted) ? sum + amountToCharge : sum;
                     }, 0);
 
                     let status = 'unpaid';
@@ -277,28 +316,53 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     const setting = studentFeeSettings.find(s => s.fee_structure_id === fee.id);
                     const isEnabled = setting ? setting.is_enabled : true;
                     const isExpired = fee.due_date && fee.due_date < today;
+                    const customAmount = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? setting.custom_amount : fee.amount;
                     
                     return (
-                      <label key={fee.id} className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all active:scale-[0.98] ${isEnabled && !isExpired ? (isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-100') : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200')} ${isExpired ? 'opacity-60' : ''}`}>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-black ${isEnabled && !isExpired ? (isDark ? 'text-blue-400' : 'text-blue-700') : 'text-slate-400'}`}>{fee.fee_name}</span>
-                            {isExpired && <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded uppercase tracking-widest">Expired</span>}
+                      <div key={fee.id} className={`flex flex-col gap-3 p-5 rounded-[2rem] border transition-all ${isEnabled && !isExpired ? (isDark ? 'bg-blue-500/5 border-blue-500/10 shadow-sm' : 'bg-blue-50/50 border-blue-100/50 shadow-sm') : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200')} ${isExpired ? 'opacity-60' : ''}`}>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex flex-col min-w-0">
+                              <div className="flex items-center flex-wrap gap-2 mb-1">
+                                <span className={`text-xs font-black tracking-tight ${isEnabled && !isExpired ? (isDark ? 'text-blue-400' : 'text-blue-700') : 'text-slate-400'}`}>{fee.fee_name}</span>
+                                {isExpired && <span className="text-[7px] font-black bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded-lg uppercase tracking-widest leading-none">Expired</span>}
+                              </div>
+                              <span className="text-[9px] font-bold text-slate-400/80 uppercase tracking-widest flex items-center gap-1.5">
+                                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                                ডিফল্ট ফি: ৳{fee.amount}
+                              </span>
+                            </div>
+                            
+                            <label className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-all focus:outline-none cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                checked={isEnabled && !isExpired} 
+                                disabled={isExpired}
+                                onChange={() => !isExpired && toggleFee(fee.id)}
+                                className="sr-only"
+                              />
+                              <span className={`${isEnabled && !isExpired ? (isDark ? 'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-[#2563EB] shadow-[0_0_15px_rgba(37,99,235,0.2)]') : (isDark ? 'bg-slate-700' : 'bg-slate-300')} inline-block h-7 w-12 rounded-full border-2 ${isDark ? 'border-slate-800' : 'border-white'} transition-colors`} />
+                              <span className={`${isEnabled && !isExpired ? 'translate-x-[22px]' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-md`} />
+                            </label>
+                        </div>
+
+                        {isEnabled && !isExpired && (
+                          <div className={`flex items-center gap-3 p-3 rounded-2xl ${isDark ? 'bg-slate-800/50 border border-slate-700/50' : 'bg-white border border-blue-100/30'} animate-in fade-in slide-in-from-top-2 duration-300`}>
+                            <div className={`p-1.5 rounded-lg ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                              <DollarSign size={12} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">ব্যক্তিগত ফি (৳)</p>
+                              <input
+                                type="number"
+                                className={`w-full bg-transparent outline-none font-black text-xs placeholder:text-slate-300 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}
+                                placeholder="এখানে নতুন পরিমান লিখুন"
+                                defaultValue={customAmount}
+                                onBlur={(e) => updateCustomAmount(fee.id, e.target.value)}
+                              />
+                            </div>
                           </div>
-                          <span className="text-[10px] font-bold text-slate-400">৳{fee.amount}</span>
-                        </div>
-                        <div className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none">
-                          <input 
-                            type="checkbox" 
-                            checked={isEnabled && !isExpired} 
-                            disabled={isExpired}
-                            onChange={() => !isExpired && toggleFee(fee.id)}
-                            className="sr-only"
-                          />
-                          <span className={`${isEnabled && !isExpired ? 'bg-blue-500' : 'bg-slate-300'} inline-block h-6 w-11 rounded-full transition-colors`} />
-                          <span className={`${isEnabled && !isExpired ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
-                        </div>
-                      </label>
+                        )}
+                      </div>
                     );
                   }) : (
                     <p className="text-[10px] font-bold text-slate-400 text-center py-4 uppercase tracking-widest">কোনো ফি পাওয়া যায়নি</p>
