@@ -325,15 +325,19 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       };
 
       // Try inserting with discount first
-      let { error: feeErr } = await supabase.from('fees').insert({
+      let feeIdToSave = '';
+      let { data: feeRes, error: feeErr } = await supabase.from('fees').insert({
         ...feeData,
         discount: totalDiscount
-      });
+      }).select('id');
       
       // If error is about missing column, retry without discount
       if (feeErr && (feeErr.message.includes('column') || feeErr.code === '42703')) {
-          const { error: retryErr } = await supabase.from('fees').insert(feeData);
+          const { data: retryRes, error: retryErr } = await supabase.from('fees').insert(feeData).select('id');
           feeErr = retryErr;
+          if (retryRes && retryRes.length > 0) feeIdToSave = retryRes[0].id;
+      } else if (feeRes && feeRes.length > 0) {
+          feeIdToSave = feeRes[0].id;
       }
       
       if (feeErr) throw feeErr;
@@ -343,12 +347,17 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       const className = classes.find(c => c.id === selectedStudent.class_id)?.class_name || '';
       const roll = selectedStudent.roll || '-';
       
+      let finalDescription = `${feeDescription} - ${selectedStudent.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})${totalDiscount > 0 ? ` (ছাড়: ৳${totalDiscount})` : ''}`;
+      if (feeIdToSave) {
+          finalDescription += ` || FEE_ID: ${feeIdToSave}`;
+      }
+
       await supabase.from('ledger').insert({
         institution_id: madrasah.id,
         type: 'income',
         amount: totalAmt,
         category: 'Student Fee',
-        description: `${feeDescription} - ${selectedStudent.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})${totalDiscount > 0 ? ` (ছাড়: ৳${totalDiscount})` : ''}`,
+        description: finalDescription,
         transaction_date: new Date().toISOString().split('T')[0],
         academic_year_id: activeYearId
       });

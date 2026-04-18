@@ -128,9 +128,42 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     
     setIsSaving(true);
     try {
+      // First find if there are any associated fees by grabbing the descriptions
+      const { data: recordsToDelete } = await supabase.from('ledger').select('description, category').in('id', deleteConfirm.ids);
+
       const { error } = await supabase.from('ledger').delete().in('id', deleteConfirm.ids);
       if (error) throw error;
       
+      // Attempt to clean up fees table based on descriptions
+      if (recordsToDelete) {
+         for (const record of recordsToDelete) {
+            if (record.description.includes(' || FEE_ID: ')) {
+               const feeId = record.description.split(' || FEE_ID: ')[1].trim();
+               await supabase.from('fees').delete().eq('id', feeId);
+            } else if (record.category === 'Student Fee' || record.category.includes('Fee') || record.category.includes('ফি')) {
+               // Fallback mechanism for older records before FEE_ID injection
+               const monthMatch = record.description.match(/(Month|মাস):\s*([\d]{4}-[\d]{2})/);
+               const month = monthMatch ? monthMatch[2] : null;
+               
+               let name = null;
+               if (record.description.includes(' - ')) {
+                  const parts = record.description.split(' - ');
+                  const namePart = parts.slice(1).join(' - ').split(' (')[0];
+                  if (namePart) name = namePart.trim();
+               }
+
+               if (month && name) {
+                  const { data: students } = await supabase.from('students').select('student_id').eq('institution_id', madrasah.id).eq('student_name', name);
+                  if (students && students.length > 0) {
+                     for (const stu of students) {
+                        await supabase.from('fees').delete().eq('student_id', stu.student_id).eq('month', month);
+                     }
+                  }
+               }
+            }
+         }
+      }
+
       setSelectedLedgerIds([]);
       setDeleteConfirm({show: false, ids: []});
       fetchData();
@@ -339,8 +372,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 let details = '';
                 let feeType = '';
 
+                // Remove hidden payload securely
+                const cleanDescription = entry.description.split(' || FEE_ID: ')[0];
+
                 if (entry.category === 'Student Fee') {
-                  const parts = entry.description.split(' - ');
+                  const parts = cleanDescription.split(' - ');
                   if (parts.length >= 2) {
                     feeType = parts[0];
                     const namePart = parts.slice(1).join(' - ');
