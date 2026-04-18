@@ -127,7 +127,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           throw new Error('Audio URL is empty');
         }
 
-        audioRef.current.src = url;
+        const isExternal = url.startsWith('http') && !url.includes(window.location.hostname) && !url.includes('supabase.co');
+        const finalUrl = isExternal ? `/api/proxy-audio?url=${encodeURIComponent(url)}` : url;
+
+        audioRef.current.src = finalUrl;
         audioRef.current.load();
         
         const playPromise = audioRef.current.play();

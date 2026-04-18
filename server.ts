@@ -104,44 +104,8 @@ async function startServer() {
   });
 
   // Audio Proxy Route
-  app.get('/api/proxy-audio', async (req, res) => {
-    const audioUrl = req.query.url as string;
-    if (!audioUrl) {
-      return res.status(400).json({ error: 'URL is required' });
-    }
-
-    try {
-      const response = await fetch(audioUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      // Force proper Headers
-      let contentType = response.headers.get('content-type') || 'audio/mpeg';
-      // Many CDNs serve audio as application/octet-stream or text/plain
-      if (contentType.includes('octet-stream') || contentType.includes('text/') || contentType.includes('text/html')) {
-        contentType = audioUrl.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg';
-      }
-
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Length', buffer.length.toString());
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24h
-
-      res.status(200).send(buffer);
-    } catch (error: any) {
-      console.error('Audio Proxy Error:', error);
-      res.status(500).json({ error: error.message });
-    }
+  app.all('/api/proxy-audio', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'proxy-audio.ts'), req, res);
   });
 
   // API Wildcard
