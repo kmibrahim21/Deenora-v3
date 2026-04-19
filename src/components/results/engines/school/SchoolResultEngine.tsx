@@ -165,13 +165,56 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setLoading(false);
   };
 
-  const fetchRanking = async (examId: string) => {
+  const fetchRanking = async (examId: string, classId: string) => {
     setLoading(true);
     try {
-      const { data } = await supabase.rpc('get_exam_ranking', { p_exam_id: examId });
-      setRankingData(data || []);
+      const activeYearId = madrasah?.config_json?.active_academic_year_id;
+      
+      // Fetch data for ranking computation
+      const [subsRes, studentsRes, marksRes] = await Promise.all([
+        supabase.from('exam_subjects').select('*').eq('exam_id', examId),
+        (() => {
+          let q = supabase.from('students').select('*').eq('class_id', classId);
+          if (activeYearId) q = q.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          return q;
+        })(),
+        supabase.from('exam_marks').select('*').eq('exam_id', examId)
+      ]);
+
+      const subs = subsRes.data || [];
+      const stds = studentsRes.data || [];
+      const mks = marksRes.data || [];
+
+      const ranked = stds.map(student => {
+        const studentMarks = mks.filter(m => m.student_id === student.id);
+        const totalMarks = studentMarks.reduce((sum, m) => sum + (parseFloat(m.marks_obtained) || 0), 0);
+        
+        // Calculate pass status
+        let passStatus = true;
+        if (subs.length > 0) {
+          subs.forEach(sub => {
+            const mark = studentMarks.find(m => m.subject_id === sub.id);
+            const score = parseFloat(mark?.marks_obtained || '0');
+            if (score < sub.pass_marks) passStatus = false;
+          });
+        } else {
+           passStatus = totalMarks > 0;
+        }
+
+        return {
+          student_id: student.id,
+          student_name: student.student_name,
+          roll: student.roll,
+          total_marks: totalMarks,
+          pass_status: passStatus
+        };
+      })
+      .sort((a, b) => b.total_marks - a.total_marks)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+      setRankingData(ranked);
     } catch (e) {
-      console.error(e);
+      console.error('Frontend Ranking Error:', e);
       setRankingData([]);
     }
     setLoading(false);
@@ -775,7 +818,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 <div className="grid grid-cols-3 gap-2">
                     <button onClick={() => { setSelectedExam(exam); setView('subjects'); fetchSubjects(exam.id); }} className="py-2.5 bg-slate-50 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest border border-slate-100 active:scale-95 transition-all">{t('subject', lang)}</button>
                     <button onClick={() => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-blue-50 text-[#2563EB] rounded-xl text-[9px] font-black uppercase tracking-widest border border-blue-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
-                    <button onClick={() => { setSelectedExam(exam); setView('report'); fetchSubjects(exam.id); fetchRanking(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-[#2563EB] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
+                    <button onClick={() => { setSelectedExam(exam); setView('report'); fetchSubjects(exam.id); fetchRanking(exam.id, exam.class_id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-[#2563EB] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
                 </div>
                 {modules.admit_card && (
                   <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">

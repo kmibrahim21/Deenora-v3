@@ -298,6 +298,25 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
+  const handleDeleteHistory = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(lang === 'bn' ? 'আপনি কি নিশ্চিতভাবে এই ব্রডকাস্ট ইতিহাস ডিলিট করতে চান?' : 'Are you sure you want to delete this broadcast history?')) return;
+    
+    try {
+      const { error } = await supabase.from('voice_broadcasts').delete().eq('id', id);
+      if (error) throw error;
+      
+      setBroadcastHistory(prev => prev.filter(h => h.id !== id));
+      if (expandedHistoryId === id) {
+        setExpandedHistoryId(null);
+        setHistoryDetails(null);
+      }
+    } catch (err: any) {
+      console.error('Delete history error:', err);
+      alert(err.message);
+    }
+  };
+
   // Upload state
   const [uploadName, setUploadName] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -1625,9 +1644,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
-                          <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${h.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {h.status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={(e) => handleDeleteHistory(h.id, e)}
+                              className="w-7 h-7 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 transition-all active:scale-90"
+                              title={lang === 'bn' ? 'ডিলিট করুন' : 'Delete'}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${h.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                              {h.status}
+                            </span>
+                          </div>
                           <ChevronDown size={16} className={`text-slate-300 transition-transform ${expandedHistoryId === h.id ? 'rotate-180' : ''}`} />
                         </div>
                       </div>

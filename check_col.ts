@@ -9,8 +9,8 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl!, supabaseKey!);
 
 async function check() {
-  const { data, error } = await supabase.from('voice_broadcasts').select('id, target_class_name, retries');
-  console.log(data?.length, error);
+  const { data, error } = await supabase.rpc('get_exam_ranking', { p_exam_id: 'any-uuid' });
+  console.log('RPC check:', error?.message);
 }
 
 check();
