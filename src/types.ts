@@ -324,6 +324,8 @@ export interface AcademicYear {
   year_name: string;
   start_date: string;
   end_date: string;
+  hijri_start_date?: string;
+  hijri_end_date?: string;
   status: 'active' | 'archived';
   created_at: string;
 }

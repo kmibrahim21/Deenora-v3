@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
 
@@ -151,8 +151,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
   const [editPackageRate, setEditPackageRate] = useState<number>(0);
   const [editPackageName, setEditPackageName] = useState<string>('');
+  const [selectedInstIds, setSelectedInstIds] = useState<string[]>([]);
+  const [commsModal, setCommsModal] = useState<{
+    show: boolean,
+    institutions: Institution[],
+    type: 'sms' | 'voice'
+  }>({ show: false, institutions: [], type: 'sms' });
+  const [commMessage, setCommMessage] = useState('');
+  const [selectedCommVoiceId, setSelectedCommVoiceId] = useState('');
+  const [isSendingComm, setIsSendingComm] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonthsForPayment, setSelectedMonthsForPayment] = useState<string[]>([]);
+  const [instSmsTemplates, setInstSmsTemplates] = useState<any[]>([]);
+  const [instVoiceTemplates, setInstVoiceTemplates] = useState<any[]>([]);
+  const [fetchingTemplates, setFetchingTemplates] = useState(false);
   const [packages, setPackages] = useState<any[]>([]);
 
   const fetchPackages = useCallback(async () => {
@@ -198,6 +210,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   useEffect(() => {
     fetchPackages();
   }, [fetchPackages, dataVersion]);
+
+  useEffect(() => {
+    if (commsModal.show && commsModal.institutions.length > 0) {
+      const fetchInstTemplates = async () => {
+        setFetchingTemplates(true);
+        try {
+          const instIds = commsModal.institutions.map(i => i.id);
+          
+          if (commsModal.type === 'sms') {
+             const { data } = await supabase.from('sms_templates').select('*').in('institution_id', instIds).order('created_at', { ascending: false });
+             setInstSmsTemplates(data || []);
+          } else {
+             const { data } = await supabase.from('voice_templates').select('*').in('institution_id', instIds).eq('provider_status', 'approved').order('created_at', { ascending: false });
+             setInstVoiceTemplates(data || []);
+          }
+        } catch (e) {
+          console.error("Error fetching templates:", e);
+        } finally {
+          setFetchingTemplates(false);
+        }
+      };
+      fetchInstTemplates();
+    }
+  }, [commsModal.show, commsModal.institutions, commsModal.type]);
 
   const fetchPaymentHistory = async (institutionId: string) => {
     setIsLoadingHistory(true);
@@ -580,6 +616,90 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
     } finally {
       setIsSendingBulk(false);
+    }
+  };
+
+  const handleSendSpecificComm = async () => {
+    if (commsModal.institutions.length === 0) return;
+    
+    if (commsModal.type === 'sms' && !commMessage.trim()) {
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'বার্তা লিখুন' });
+      return;
+    }
+    
+    if (commsModal.type === 'voice' && !selectedCommVoiceId) {
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'ভয়েস টেমপ্লেট নির্বাচন করুন' });
+      return;
+    }
+
+    setIsSendingComm(true);
+    try {
+      const targets = commsModal.institutions.filter(inst => !!inst.phone);
+      if (targets.length === 0) throw new Error('কোনো বৈধ ফোন নম্বর পাওয়া যায়নি');
+
+      if (commsModal.type === 'sms') {
+        const sendPromises = targets.map(inst => smsApi.sendDirect(inst.phone!, commMessage));
+        await Promise.all(sendPromises);
+        setStatusModal({ 
+          show: true, 
+          type: 'success', 
+          title: 'সফল', 
+          message: `${targets.length} টি প্রতিষ্ঠানে এসএমএস পাঠানো হয়েছে` 
+        });
+      } else {
+        // Voice Broadcast for multiple institutions
+        let voiceName = '';
+        if (selectedCommVoiceId.startsWith('inst_')) {
+          const instVoiceId = selectedCommVoiceId.replace('inst_', '');
+          const voice = instVoiceTemplates.find(v => v.id === instVoiceId);
+          if (!voice) throw new Error('Selected institution voice not found.');
+          voiceName = voice.provider_voice_name || voice.title;
+        } else {
+          const voice = awajVoices.find(v => v.id.toString() === selectedCommVoiceId);
+          if (!voice) throw new Error('Selected system voice not found.');
+          voiceName = voice.name || voice.title;
+        }
+
+        const targetPhones = targets.map(inst => {
+          const digits = inst.phone!.replace(/[^0-9]/g, '');
+          if (digits.length === 13 && digits.startsWith('880')) return digits.substring(2);
+          if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+          return digits;
+        });
+
+        const payload = {
+          request_id: crypto.randomUUID(),
+          voice: voiceName,
+          sender: '8804445629106', // Default sender for admin
+          phone_numbers: targetPhones
+        };
+
+        const response = await fetch('/api/awaj/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to initiate voice call');
+        }
+
+        setStatusModal({ 
+          show: true, 
+          type: 'success', 
+          title: 'সফল', 
+          message: `${targets.length} টি প্রতিষ্ঠানে ভয়েস কল পাঠানো হয়েছে` 
+        });
+      }
+      setCommsModal({ ...commsModal, show: false });
+      setCommMessage('');
+      setSelectedCommVoiceId('');
+      setSelectedInstIds([]);
+    } catch (err: any) {
+      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
+    } finally {
+      setIsSendingComm(false);
     }
   };
 
@@ -1323,52 +1443,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </button>
               </div>
 
-              {/* Bulk Communication UI */}
-              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-blue-50 text-blue-600">
-                    <MessageSquare size={24} />
-                  </div>
-                  <div>
-                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>বাল্ক যোগাযোগ</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Send SMS or Voice to all institutes</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
-                    <button 
-                      onClick={() => setBulkType('sms')}
-                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bulkType === 'sms' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
-                    >
-                      SMS
-                    </button>
-                    <button 
-                      onClick={() => setBulkType('voice')}
-                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bulkType === 'voice' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
-                    >
-                      Voice
-                    </button>
-                  </div>
-
-                  <textarea 
-                    value={bulkMessage}
-                    onChange={(e) => setBulkMessage(e.target.value)}
-                    placeholder={bulkType === 'sms' ? "সকল প্রতিষ্ঠানে পাঠানোর জন্য এসএমএস এখানে লিখুন..." : "ভয়েস মেসেজের টেক্সট এখানে লিখুন..."}
-                    className={`w-full p-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-[2rem] font-bold text-sm min-h-[120px] outline-none focus:border-blue-500/30 transition-all resize-none font-noto`}
-                  />
-
-                  <button 
-                    onClick={handleSendBulk}
-                    disabled={isSendingBulk || !bulkMessage.trim()}
-                    className="w-full h-14 bg-blue-600 text-white font-black rounded-2xl text-sm active:scale-95 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest"
-                  >
-                    {isSendingBulk ? <Loader2 size={20} className="animate-spin" /> : <><Play size={18} /> {bulkType === 'sms' ? 'Send SMS' : 'Call Everyone'}</>}
-                  </button>
-                </div>
-              </div>
-
-              {/* Search */}
               <div className="relative group">
                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
                 <input 
@@ -1396,8 +1470,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       <div className="p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-4">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-blue-500'}`}>
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-blue-500'} relative`}>
                               {inst.logo_url ? <img src={inst.logo_url} className="w-full h-full object-contain rounded-2xl" referrerPolicy="no-referrer" /> : <Building2 size={24} />}
+                              
+                              {/* Multi-select Checkbox Overlay */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const isSelected = selectedInstIds.includes(inst.id);
+                                  if (isSelected) {
+                                    setSelectedInstIds(prev => prev.filter(id => id !== inst.id));
+                                  } else {
+                                    setSelectedInstIds(prev => [...prev, inst.id]);
+                                  }
+                                }}
+                                className={`absolute -top-2 -left-2 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all bg-white shadow-sm ${selectedInstIds.includes(inst.id) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-200 text-transparent'}`}
+                              >
+                                <Check size={14} strokeWidth={4} />
+                              </button>
                             </div>
                             <div>
                               <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">Code: {instCode}</p>
@@ -1478,6 +1568,58 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   );
                 })}
               </div>
+
+              {/* Floating Multi-select Action Bar */}
+              <AnimatePresence>
+                {selectedInstIds.length > 0 && (
+                  <motion.div 
+                    initial={{ y: 100, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 100, opacity: 0 }}
+                    className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-2xl"
+                  >
+                    <div className="bg-[#1E3A8A] text-white p-4 sm:p-6 rounded-[2.5rem] shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-400/20 backdrop-blur-md">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center font-black text-lg">
+                          {selectedInstIds.length}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">নির্বাচিত প্রতিষ্ঠান</p>
+                          <h4 className="font-bold text-base leading-tight">গ্রুপ কমিউনিকেশন</h4>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button 
+                          onClick={() => {
+                            const selected = madrasahs.filter(m => selectedInstIds.includes(m.id));
+                            setCommsModal({ show: true, institutions: selected, type: 'sms' });
+                          }}
+                          className="flex-1 sm:flex-none h-12 px-6 bg-blue-500 hover:bg-blue-400 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                          <MessageSquare size={16} /> SMS পাঠান
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (awajVoices.length === 0) handleFetchAwajVoices();
+                            const selected = madrasahs.filter(m => selectedInstIds.includes(m.id));
+                            setCommsModal({ show: true, institutions: selected, type: 'voice' });
+                          }}
+                          className="flex-1 sm:flex-none h-12 px-6 bg-orange-500 hover:bg-orange-400 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                          <Mic size={16} /> ভয়েস কল
+                        </button>
+                        <button 
+                          onClick={() => setSelectedInstIds([])}
+                          className="w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center transition-all active:scale-95 text-xs font-black"
+                        >
+                          X
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
@@ -2422,6 +2564,149 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       )}
 
       <AnimatePresence>
+        {commsModal.show && createPortal(
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-6 pb-20 sm:pb-4">
+             <motion.div 
+               initial={{ opacity: 0 }} 
+               animate={{ opacity: 1 }} 
+               exit={{ opacity: 0 }}
+               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+               onClick={() => setCommsModal({ ...commsModal, show: false })}
+             />
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.9, y: 20 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.9, y: 20 }}
+               className="relative bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden"
+             >
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600" />
+                
+                <div className="flex items-center justify-between p-6 sm:p-8 pb-4 sm:pb-6 shrink-0">
+                  <div className="pr-4">
+                    <h3 className="text-lg sm:text-xl font-black text-[#1E3A8A] font-noto tracking-tight">
+                      {commsModal.type === 'sms' ? 'এসএমএস পাঠান (SMS)' : 'ভয়েস কল (Voice)'}
+                    </h3>
+                    <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                      {commsModal.institutions.length === 1 ? `প্রাপক: ${commsModal.institutions[0].name}` : `${commsModal.institutions.length}টি প্রতিষ্ঠান নির্বাচিত`}
+                    </p>
+                  </div>
+                  <button onClick={() => setCommsModal({ ...commsModal, show: false })} className="w-10 h-10 shrink-0 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto px-6 sm:px-8 pb-6 flex-grow custom-scrollbar">
+                  {commsModal.type === 'sms' ? (
+                    <div className="space-y-4">
+                      {fetchingTemplates ? (
+                        <div className="flex items-center justify-center p-4"><Loader2 className="animate-spin text-blue-500" /></div>
+                      ) : instSmsTemplates.length > 0 && (
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">টেমপ্লেট নির্বাচন করুন (SMS)</label>
+                           <select 
+                             className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-[#1E3A8A] outline-none focus:border-blue-200 transition-all text-sm"
+                             onChange={(e) => {
+                               const tmpl = instSmsTemplates.find(t => t.id === e.target.value);
+                               if (tmpl) setCommMessage(tmpl.body);
+                             }}
+                           >
+                             <option value="">-- টেমপ্লেট নির্বাচন করুন --</option>
+                             {instSmsTemplates.map(t => (
+                               <option key={t.id} value={t.id}>{t.title}</option>
+                             ))}
+                           </select>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">মেসেজ লিখুন</label>
+                         <textarea 
+                           className="w-full min-h-[120px] sm:min-h-[140px] bg-slate-50 border border-slate-100 rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-6 font-bold text-slate-700 outline-none focus:border-blue-200 transition-all resize-none text-sm sm:text-base"
+                           placeholder="এখানে আপনার মেসেজ লিখুন..."
+                           value={commMessage}
+                           onChange={(e) => setCommMessage(e.target.value)}
+                         />
+                         <div className="flex justify-end px-2">
+                           <span className="text-[10px] font-black text-blue-500">{commMessage.length} Characters</span>
+                         </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {fetchingTemplates ? (
+                        <div className="flex items-center justify-center p-4"><Loader2 className="animate-spin text-blue-500" /></div>
+                      ) : (
+                        <div className="space-y-4">
+                          {instVoiceTemplates.length > 0 && (
+                            <div>
+                              <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-2 mb-2 block">প্রতিষ্ঠানের ভয়েস টেমপ্লেট</label>
+                              <div className="grid grid-cols-1 gap-2 p-1 max-h-32 sm:max-h-40 overflow-y-auto custom-scrollbar">
+                                {instVoiceTemplates.map(v => (
+                                  <button 
+                                    key={v.id} 
+                                    onClick={() => setSelectedCommVoiceId('inst_' + v.id)}
+                                    className={`w-full p-3 rounded-2xl border-2 text-left transition-all ${selectedCommVoiceId === 'inst_' + v.id ? 'border-emerald-500 bg-emerald-50' : 'border-slate-50 bg-slate-50 hover:border-slate-100'}`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-[#1E3A8A] text-xs sm:text-sm">{v.title}</span>
+                                      {selectedCommVoiceId === 'inst_' + v.id && <CheckCircle2 size={18} className="text-emerald-500 shrink-0 ml-2" />}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-2 block">সিস্টেম ভয়েস টেমপ্লেট</label>
+                            <div className="grid grid-cols-1 gap-2 max-h-40 sm:max-h-60 overflow-y-auto p-1 custom-scrollbar">
+                              {awajVoices.length > 0 ? awajVoices.map(v => (
+                                <button 
+                                  key={v.id} 
+                                  onClick={() => setSelectedCommVoiceId(v.id.toString())}
+                                  className={`w-full p-3 sm:p-4 rounded-2xl border-2 text-left transition-all ${selectedCommVoiceId === v.id.toString() ? 'border-[#2563EB] bg-blue-50' : 'border-slate-50 bg-slate-50 hover:border-slate-100'}`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-[#1E3A8A] text-xs sm:text-sm">{v.name || v.title}</span>
+                                    {selectedCommVoiceId === v.id.toString() && <CheckCircle2 size={18} className="text-[#2563EB] shrink-0 ml-2" />}
+                                  </div>
+                                </button>
+                              )) : (
+                                <div className="text-center p-6 bg-slate-50 rounded-2xl">
+                                   <Mic className="w-8 h-8 sm:w-10 sm:h-10 text-slate-200 mx-auto mb-3" />
+                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">কোনো টেমপ্লেট পাওয়া যায়নি।<br/>অনুগ্রহ করে সিঙ্ক করুন।</p>
+                                   <button onClick={handleFetchAwajVoices} className="mt-4 text-blue-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 mx-auto hover:underline">
+                                     <RefreshCw size={12} className={isFetchingAwajVoices ? 'animate-spin' : ''} /> Sync Now
+                                   </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 sm:p-8 pt-4 sm:pt-6 bg-slate-50/50 border-t border-slate-100 flex gap-3 shrink-0">
+                  <button 
+                    onClick={() => setCommsModal({ ...commsModal, show: false })}
+                    className="flex-1 h-12 sm:h-14 bg-white border border-slate-200 text-slate-500 font-black rounded-full text-[10px] sm:text-xs uppercase tracking-widest hover:bg-slate-50 transition-colors"
+                  >
+                    বাতিল
+                  </button>
+                  <button 
+                    onClick={handleSendSpecificComm}
+                    disabled={isSendingComm || (commsModal.type === 'sms' ? !commMessage.trim() : !selectedCommVoiceId)}
+                    className="flex-[2] h-12 sm:h-14 bg-[#2563EB] text-white font-black rounded-full shadow-lg shadow-blue-100 disabled:opacity-50 active:scale-95 transition-all text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    {isSendingComm ? <Loader2 className="animate-spin" size={18} /> : <><Send size={16} /> পাঠাতে ক্লিক করুন</>}
+                  </button>
+                </div>
+             </motion.div>
+          </div>,
+          document.body
+        )}
+
         {showRefreshPopup && createPortal(
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
             <motion.div 

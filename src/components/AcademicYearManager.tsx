@@ -51,6 +51,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   const [newYearName, setNewYearName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [hijriStartDate, setHijriStartDate] = useState("");
+  const [hijriEndDate, setHijriEndDate] = useState("");
   const [classes, setClasses] = useState<Class[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
 
@@ -195,6 +197,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
           year_name: newYearName,
           start_date: startDate,
           end_date: endDate,
+          hijri_start_date: hijriStartDate || null,
+          hijri_end_date: hijriEndDate || null,
           status: isFirstYear ? "active" : "archived",
         })
         .select()
@@ -223,6 +227,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       setNewYearName("");
       setStartDate("");
       setEndDate("");
+      setHijriStartDate("");
+      setHijriEndDate("");
 
       if (onUpdate) onUpdate();
     } catch (error: any) {
@@ -532,6 +538,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
         p_new_year_name: newYearName,
         p_start_date: startDate,
         p_end_date: endDate,
+        p_hijri_start_date: hijriStartDate || null,
+        p_hijri_end_date: hijriEndDate || null,
         p_promotions: payload,
       });
 
@@ -692,10 +700,19 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                   >
                     {year.year_name}
                   </h4>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] font-bold text-slate-400">
-                    <span>{year.start_date}</span>
-                    <ArrowRight size={10} />
-                    <span>{year.end_date}</span>
+                  <div className="flex flex-col gap-1 mt-2">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                      <span>{year.start_date}</span>
+                      <ArrowRight size={10} />
+                      <span>{year.end_date}</span>
+                    </div>
+                    {(year.hijri_start_date || year.hijri_end_date) && (
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500/70">
+                        <span>{year.hijri_start_date || "—"}</span>
+                        <ArrowRight size={10} />
+                        <span>{year.hijri_end_date || "—"}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-6 flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -978,58 +995,99 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
         {step === "config" && (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label
-                  className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
-                >
-                  {lang === "bn" ? "নতুন শিক্ষাবর্ষের নাম" : "New Year Name"}
-                </label>
-                <input
-                  type="text"
-                  className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
-                    isDark
-                      ? "bg-slate-800 border-slate-700 text-slate-300"
-                      : "bg-slate-50 border-slate-100 text-slate-700"
-                  }`}
-                  placeholder="e.g. 2025"
-                  value={newYearName}
-                  onChange={(e) => setNewYearName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <label
-                  className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
-                >
-                  {lang === "bn" ? "শুরুর তারিখ" : "Start Date"}
-                </label>
-                <input
-                  type="date"
-                  className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
-                    isDark
-                      ? "bg-slate-800 border-slate-700 text-slate-300"
-                      : "bg-slate-50 border-slate-100 text-slate-700"
-                  }`}
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <label
-                  className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
-                >
-                  {lang === "bn" ? "শেষের তারিখ" : "End Date"}
-                </label>
-                <input
-                  type="date"
-                  className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
-                    isDark
-                      ? "bg-slate-800 border-slate-700 text-slate-300"
-                      : "bg-slate-50 border-slate-100 text-slate-700"
-                  }`}
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-4">
+                <div className="space-y-2 max-w-sm">
+                  <label
+                    className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
+                  >
+                    {lang === "bn" ? "নতুন শিক্ষাবর্ষের নাম" : "New Year Name"}
+                  </label>
+                  <input
+                    type="text"
+                    className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
+                      isDark
+                        ? "bg-slate-800 border-slate-700 text-slate-300"
+                        : "bg-slate-50 border-slate-100 text-slate-700"
+                    }`}
+                    placeholder="e.g. 2025"
+                    value={newYearName}
+                    onChange={(e) => setNewYearName(e.target.value)}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label
+                      className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
+                    >
+                      {lang === "bn" ? "ইংরেজি শুরুর তারিখ" : "English Start Date"}
+                    </label>
+                    <input
+                      type="date"
+                      className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
+                        isDark
+                          ? "bg-slate-800 border-slate-700 text-slate-300"
+                          : "bg-slate-50 border-slate-100 text-slate-700"
+                      }`}
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
+                    >
+                      {lang === "bn" ? "ইংরেজি শেষের তারিখ" : "English End Date"}
+                    </label>
+                    <input
+                      type="date"
+                      className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
+                        isDark
+                          ? "bg-slate-800 border-slate-700 text-slate-300"
+                          : "bg-slate-50 border-slate-100 text-slate-700"
+                      }`}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
+                    >
+                      {lang === "bn" ? "আরবি শুরুর তারিখ (ঐচ্ছিক)" : "Arabic Start Date (Optional)"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={lang === "bn" ? "যেমন: ০১ মুহাররম ১৪৪৬" : "e.g. 01 Muharram 1446"}
+                      className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
+                        isDark
+                          ? "bg-slate-800 border-slate-700 text-slate-300"
+                          : "bg-slate-50 border-slate-100 text-slate-700"
+                      }`}
+                      value={hijriStartDate}
+                      onChange={(e) => setHijriStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? "text-slate-500" : "text-slate-400"}`}
+                    >
+                      {lang === "bn" ? "আরবি শেষের তারিখ (ঐচ্ছিক)" : "Arabic End Date (Optional)"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={lang === "bn" ? "যেমন: ৩০ জিলহজ ১৪৪৬" : "e.g. 30 Dhul Hijjah 1446"}
+                      className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${
+                        isDark
+                          ? "bg-slate-800 border-slate-700 text-slate-300"
+                          : "bg-slate-50 border-slate-100 text-slate-700"
+                      }`}
+                      value={hijriEndDate}
+                      onChange={(e) => setHijriEndDate(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1372,7 +1430,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                    {lang === "bn" ? "শুরুর তারিখ" : "Start Date"}
+                    {lang === "bn" ? "ইংরেজি শুরুর তারিখ" : "English Start Date"}
                   </label>
                   <input
                     type="date"
@@ -1383,13 +1441,39 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                    {lang === "bn" ? "শেষের তারিখ" : "End Date"}
+                    {lang === "bn" ? "ইংরেজি শেষের তারিখ" : "English End Date"}
                   </label>
                   <input
                     type="date"
                     className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-slate-50 border-slate-100 text-[#1E3A8A]"}`}
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                    {lang === "bn" ? "আরবি শুরুর তারিখ (ঐচ্ছিক)" : "Arabic Start Date (Opt.)"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={lang === "bn" ? "০১ মুহাররম ১৪৪৬" : "e.g. 01 Muharram"}
+                    className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-slate-50 border-slate-100 text-[#1E3A8A]"}`}
+                    value={hijriStartDate}
+                    onChange={(e) => setHijriStartDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                    {lang === "bn" ? "আরবি শেষের তারিখ (ঐচ্ছিক)" : "Arabic End Date (Opt.)"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={lang === "bn" ? "৩০ জিলহজ ১৪৪৬" : "e.g. 30 Dhul Hijjah"}
+                    className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-slate-50 border-slate-100 text-[#1E3A8A]"}`}
+                    value={hijriEndDate}
+                    onChange={(e) => setHijriEndDate(e.target.value)}
                   />
                 </div>
               </div>

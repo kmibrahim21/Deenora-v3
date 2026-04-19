@@ -32,7 +32,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
 
-    const { broadcast_id } = req.body;
+    const { broadcast_id, campaign_id } = req.body;
     if (!broadcast_id) {
       return res.status(400).json({ error: 'Broadcast ID is required' });
     }
@@ -75,12 +75,14 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Institution not found' });
     }
 
-    if (!broadcast.provider_campaign_id) {
-      return res.status(400).json({ error: 'No provider campaign ID found for this broadcast' });
+    const targetCampaignId = campaign_id || broadcast.provider_campaign_id;
+
+    if (!targetCampaignId) {
+      return res.status(400).json({ error: 'No provider campaign ID found to process' });
     }
 
     // 2. Check if already refunded
-    const refundTxId = `REFUND_${broadcast.id}`;
+    const refundTxId = `REFUND_CAMP_${targetCampaignId}`;
     const { data: existingRefund } = await supabase
       .from('transactions')
       .select('id')
@@ -88,14 +90,14 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (existingRefund) {
-      return res.status(200).json({ success: true, already_refunded: true, message: 'Refund already processed for this broadcast' });
+      return res.status(200).json({ success: true, already_refunded: true, message: 'Refund already processed for this campaign' });
     }
 
     // 3. Fetch logs from Awaj API
     const headers = getAwajHeaders();
-    let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${broadcast.provider_campaign_id}/result`, { headers: headers as any });
+    let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${targetCampaignId}/result`, { headers: headers as any });
     if (response.status === 404) {
-      response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${broadcast.provider_campaign_id}`, { headers: headers as any });
+      response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${targetCampaignId}`, { headers: headers as any });
     }
 
     if (!response.ok) {
@@ -124,20 +126,22 @@ export default async function handler(req, res) {
     const failedLogs = logs.filter((log: any) => {
       const status = (log.status || log.state || log.call_status || '').toLowerCase();
       // Expanded status list based on Awaj possibilities
-      return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 'unanswered', 'timeout', 'no-answer', 'abandoned'].includes(status);
+      return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 'unanswered', 'timeout', 'no-answer', 'abandoned', 'not_answered', 'notanswered'].includes(status);
     });
 
-    console.log(`Broadcast ${broadcast.id}: Total Logs: ${logs.length}, Failed Logs: ${failedLogs.length}`);
+    const totalSent = broadcast.total_numbers || 1;
+    const droppedCalls = Math.max(0, totalSent - logs.length);
+    const totalFailuresToRefund = failedLogs.length + droppedCalls;
 
-    if (failedLogs.length === 0) {
+    if (totalFailuresToRefund === 0) {
       return res.status(200).json({ success: true, message: 'No unreceived calls to refund.', refund_amount: 0 });
     }
 
     // 5. Calculate refund amount
     const voiceRate = institution.voice_rate || 0.50;
-    const refundAmount = Number((failedLogs.length * voiceRate).toFixed(2));
+    const refundAmount = Number((totalFailuresToRefund * voiceRate).toFixed(2));
 
-    console.log(`Calculated refund: ${failedLogs.length} calls * ${voiceRate} = ${refundAmount} for institution ${institutionId}`);
+    console.log(`Calculated refund: ${totalFailuresToRefund} unreceived calls * ${voiceRate} = ${refundAmount} for institution ${institutionId}`);
 
     // 6. Update balance
     // Prefer RPC as it is atomic
@@ -170,7 +174,7 @@ export default async function handler(req, res) {
       amount: refundAmount,
       transaction_id: refundTxId,
       sender_phone: 'SYSTEM',
-      description: `Refund for ${failedLogs.length} unreceived calls (Voice Broadcast)`,
+      description: `Refund for ${totalFailuresToRefund} unreceived calls (Voice Broadcast)`,
       type: 'credit',
       status: 'approved',
       module: 'voice'
@@ -192,7 +196,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ 
       success: true, 
-      refunded_calls: failedLogs.length,
+      refunded_calls: totalFailuresToRefund,
       refund_amount: refundAmount,
       message: `Successfully refunded ${refundAmount} ৳` 
     });

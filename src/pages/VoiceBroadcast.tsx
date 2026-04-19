@@ -19,7 +19,10 @@ import {
   Zap,
   AlertTriangle,
   RefreshCw,
-  Users
+  Users,
+  Check,
+  Building2,
+  X
 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Student, Profile, UserRole, Transaction } from 'types';
@@ -45,6 +48,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const isTeacher = role === 'teacher';
   const canUseVoice = !isTeacher || profile?.permissions?.can_use_voice_call;
   const isPreSelected = preSelectedStudentIds.length > 0;
+  const isSuperAdmin = role === 'super_admin';
 
   if (!canUseVoice) {
     return (
@@ -100,6 +104,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   // Broadcast state
   const [classes, setClasses] = useState<Class[]>([]);
+  const [allInstitutions, setAllInstitutions] = useState<Institution[]>([]);
+  const [targetType, setTargetType] = useState<'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
+  const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<string[]>([]);
+  
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [senders, setSenders] = useState<any[]>([]);
@@ -255,17 +263,20 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  const handleClaimRefundAuto = async (broadcastId: string) => {
+  const handleClaimRefundAuto = async (broadcastId: string, campaignId?: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
+      const payload: any = { broadcast_id: broadcastId };
+      if (campaignId) payload.campaign_id = campaignId;
+
       const response = await fetch('/api/voice-refund', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ broadcast_id: broadcastId })
+        body: JSON.stringify(payload)
       });
 
       const result = await response.json();
@@ -519,6 +530,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   const fetchClasses = async () => {
     if (!madrasah) return;
+
+    if (isSuperAdmin) {
+      const { data: insts } = await supabase.from('institutions').select('*').eq('is_active', true);
+      if (insts) setAllInstitutions(insts);
+    }
+
     const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
     if (data) {
       let filteredClasses = data;
@@ -538,9 +555,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     // Track results for pending/sending broadcasts
     if (data) {
       data.filter(b => b.status === 'sending' || b.status === 'pending').forEach(async (broadcast) => {
-        if (!broadcast.provider_campaign_id) return;
+        // Track the latest campaign (either the original or the latest retry)
+        const activeCampaignId = (broadcast.retries && broadcast.retries.length > 0) 
+          ? broadcast.retries[broadcast.retries.length - 1] 
+          : broadcast.provider_campaign_id;
+          
+        if (!activeCampaignId) return;
         try {
-          const response = await fetch(`/api/awaj/broadcast/${broadcast.provider_campaign_id}`);
+          const response = await fetch(`/api/awaj/broadcast/${activeCampaignId}`);
           if (response.ok) {
             const result = await response.json();
             // Map Awaj status to our internal status
@@ -561,7 +583,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
               await supabase.from('voice_broadcasts').update({ status: newStatus }).eq('id', broadcast.id);
               
               if (newStatus === 'completed' || newStatus === 'failed') {
-                 handleClaimRefundAuto(broadcast.id);
+                 handleClaimRefundAuto(broadcast.id, activeCampaignId);
               }
               
               // Refresh history
@@ -578,7 +600,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const extractPhoneFromLog = (log: any) => {
-    let p = log.phone || log.number || log.to || log.msisdn || log.recipient || log.mobile || log.destination || log.phone_number || log.to_number || log.receiver || log.phone_no || log.mobile_no || log.to_msisdn || log.to_mobile;
+    if (!log) return null;
+    let p = log.phoneNumber || log.phone || log.number || log.to || log.msisdn || log.recipient || log.mobile || log.destination || log.phone_number || log.to_number || log.receiver || log.phone_no || log.mobile_no || log.to_msisdn || log.to_mobile;
     
     if (!p) {
       for (const key in log) {
@@ -710,16 +733,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const result = await response.json();
       const campaignId = result.broadcast?.id || result.campaign_id || result.id || result.data?.id || result.data?.campaign_id || result.request_id || requestId;
 
-      // Save to Supabase
-      const { error } = await supabase.from('voice_broadcasts').insert({
-        institution_id: madrasah?.id,
-        voice_template_id: voiceId,
-        target_type: 'students',
-        total_numbers: normalizedPhoneNumbers.length,
-        estimated_cost: estimatedCost,
-        status: 'sending',
-        provider_campaign_id: campaignId
-      });
+      // Save to Supabase (update existing record to include new retry campaign and add cost/numbers)
+      // We will append the new campaign ID to the retries array
+      const currentRetries = broadcast.retries || [];
+      const newRetries = [...currentRetries, campaignId];
+
+      const { error } = await supabase.from('voice_broadcasts')
+        .update({
+          status: 'sending',
+          estimated_cost: broadcast.estimated_cost + estimatedCost,
+          retries: newRetries
+        })
+        .eq('id', broadcast.id);
 
       if (error) throw error;
 
@@ -765,68 +790,94 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
 
     try {
-      const response = await fetch(`/api/awaj/broadcast/${broadcast.provider_campaign_id}`);
-      if (response.ok) {
-        try {
-          const result = await response.json();
-          console.log('Broadcast Details API Response:', result);
-          setHistoryDetails(result);
-          
-          // Trigger auto-refund check silently
-          try {
-            const providerStatus = (result.broadcast?.status || result.status || result.state || '').toLowerCase();
-            if (['completed', 'done', 'success', 'failed', 'error', 'cancelled'].includes(providerStatus)) {
-              handleClaimRefundAuto(broadcast.id);
-            }
-          } catch(e) {}
-          
-          // Fetch student names to map phone numbers
-          if (madrasah?.id) {
-            const { data: students } = await supabase
-              .from('students')
-              .select('student_name, roll, guardian_phone, guardian_phone_2')
-              .eq('institution_id', madrasah.id);
-              
-            if (students) {
-              console.log(`Fetched ${students.length} students for mapping`);
-              const newMap: Record<string, { name: string, roll: string }> = {};
-              
-              const normalizePhone = (p: string) => {
-                if (!p) return '';
-                const digits = p.replace(/[^0-9]/g, '');
-                if (digits.length === 11 && digits.startsWith('01')) return digits;
-                if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
-                if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
-                return digits;
-              };
-
-              students.forEach(s => {
-                const info = { name: s.student_name, roll: s.roll ? s.roll.toString() : '' };
-                if (s.guardian_phone) {
-                  const norm = normalizePhone(s.guardian_phone);
-                  if (norm) newMap[norm] = info;
-                }
-                if (s.guardian_phone_2) {
-                  const norm2 = normalizePhone(s.guardian_phone_2);
-                  if (norm2) newMap[norm2] = info;
-                }
-              });
-              setStudentNamesMap(newMap as any);
+      // Gather all campaign IDs related to this broadcast
+      const campaignIds = [broadcast.provider_campaign_id, ...(broadcast.retries || [])].filter(Boolean);
+      
+      const results = await Promise.all(
+        campaignIds.map(async (cid) => {
+          const resp = await fetch(`/api/awaj/broadcast/${cid}`);
+          if (resp.ok) {
+            try {
+              const data = await resp.json();
+              data._campaignId = cid;
+              return data;
+            } catch (e) {
+               return null;
             }
           }
-        } catch (parseErr) {
-          console.error('Error parsing broadcast details JSON:', parseErr);
-          setHistoryDetails({ error: 'Invalid response format from server' });
+          return null;
+        })
+      );
+      
+      const validResults = results.filter(Boolean);
+      
+      if (validResults.length > 0) {
+        // Use the first one as base object, but combined all calls together
+        let mergedResult = { ...validResults[0] };
+        let allCalls: any[] = [];
+        
+        validResults.forEach(res => {
+          const extracted = extractCallLogs(res);
+          allCalls = [...allCalls, ...extracted];
+          
+          // trigger auto-refund check
+          try {
+            const providerStatus = (res.broadcast?.status || res.status || res.state || '').toLowerCase();
+            if (['completed', 'done', 'success', 'failed', 'error', 'cancelled'].includes(providerStatus)) {
+              handleClaimRefundAuto(broadcast.id, res._campaignId);
+            }
+          } catch(e) {}
+        });
+        
+        // Deduplicate calls by phone, keeping the latest status
+        const deduplicatedCallsMap = new Map();
+        allCalls.forEach(call => {
+           let p = extractPhoneFromLog(call);
+           if (p) {
+             deduplicatedCallsMap.set(p, call);
+           }
+        });
+        
+        mergedResult.calls = Array.from(deduplicatedCallsMap.values());
+        console.log('Combined and Deduplicated Broadcast Details API Responses:', mergedResult);
+        setHistoryDetails(mergedResult);
+
+        // Fetch student names to map phone numbers
+        if (madrasah?.id) {
+          const { data: students } = await supabase
+            .from('students')
+            .select('student_name, roll, guardian_phone, guardian_phone_2')
+            .eq('institution_id', madrasah.id);
+              
+          if (students) {
+            console.log(`Fetched ${students.length} students for mapping`);
+            const newMap: Record<string, { name: string, roll: string }> = {};
+            
+            const normalizePhone = (p: string) => {
+              if (!p) return '';
+              const digits = p.replace(/[^0-9]/g, '');
+              if (digits.length === 11 && digits.startsWith('01')) return digits;
+              if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
+              if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+              return digits;
+            };
+
+            students.forEach(s => {
+              const info = { name: s.student_name, roll: s.roll ? s.roll.toString() : '' };
+              if (s.guardian_phone) {
+                const norm = normalizePhone(s.guardian_phone);
+                if (norm) newMap[norm] = info;
+              }
+              if (s.guardian_phone_2) {
+                const norm2 = normalizePhone(s.guardian_phone_2);
+                if (norm2) newMap[norm2] = info;
+              }
+            });
+            setStudentNamesMap(newMap as any);
+          }
         }
       } else {
-        let errorMsg = 'Failed to load details';
-        try {
-          const errData = await response.json();
-          errorMsg = errData.error || errData.message || errorMsg;
-        } catch (e) {
-          // Ignore
-        }
-        setHistoryDetails({ error: errorMsg });
+        setHistoryDetails({ error: 'Failed to load details' });
       }
     } catch (err: any) {
       console.error('Error fetching broadcast details:', err);
@@ -867,20 +918,28 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     return [];
   };
 
+  const isTargetingInstitutions = isSuperAdmin && (targetType === 'all_institutions' || targetType === 'specific_institution');
+
   const handleBroadcast = async () => {
-    if (!madrasah || !selectedVoiceId || (!selectedClassId && !isPreSelected) || !selectedSenderId) {
+    if (!madrasah || !selectedVoiceId || (!selectedClassId && !isPreSelected && !isTargetingInstitutions) || !selectedSenderId) {
       setStatusModal({
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'তথ্য অসম্পূর্ণ' : 'Incomplete Info',
-        message: lang === 'bn' ? 'অনুগ্রহ করে ভয়েস, সেন্ডার আইডি এবং ক্লাস নির্বাচন করুন।' : 'Please select a voice, sender ID, and class.'
+        message: lang === 'bn' ? 'অনুগ্রহ করে ভয়েস, সেন্ডার আইডি এবং লক্ষ্য নির্বাচন করুন।' : 'Please select a voice, sender ID, and target.'
       });
       return;
     }
     
-    // Get student count
+    // Get count
     let count = 0;
-    if (isPreSelected) {
+    if (isTargetingInstitutions) {
+      if (targetType === 'all_institutions') {
+        count = allInstitutions.length;
+      } else {
+        count = selectedInstitutionIds.length; // Specific institutions
+      }
+    } else if (isPreSelected) {
       count = preSelectedStudentIds.length;
     } else {
       const { count: c } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('class_id', selectedClassId);
@@ -891,15 +950,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       setStatusModal({
         show: true,
         type: 'error',
-        title: lang === 'bn' ? 'ছাত্রছাত্রী পাওয়া যায়নি' : 'No Students',
-        message: lang === 'bn' ? 'কোনো ছাত্রছাত্রী পাওয়া যায়নি।' : 'No students found.'
+        title: lang === 'bn' ? 'লক্ষ্য পাওয়া যায়নি' : 'No Targets',
+        message: lang === 'bn' ? 'কোনো লক্ষ্য পাওয়া যায়নি।' : 'No targets found.'
       });
       return;
     }
 
     const estimatedCost = count * voiceRate;
 
-    if (walletBalance < estimatedCost) {
+    if (!isSuperAdmin && walletBalance < estimatedCost) {
       setStatusModal({
         show: true,
         type: 'balance',
@@ -922,26 +981,43 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         return;
       }
 
-      // Get the actual students to get their phone numbers
-      let students: any[] = [];
-      if (isPreSelected) {
-        const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').in('id', preSelectedStudentIds);
-        if (error) throw error;
-        students = data || [];
-      } else {
-        const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').eq('class_id', selectedClassId);
-        if (error) throw error;
-        students = data || [];
-      }
-      
-      if (!students || students.length === 0) {
-        throw new Error('No students found.');
+      // Determine target class name
+      let targetClassName = null;
+      if (!isTargetingInstitutions && !isPreSelected) {
+        const cls = classes.find(c => c.id === selectedClassId);
+        if (cls) targetClassName = cls.class_name;
+      } else if (isPreSelected) {
+        targetClassName = 'Selected Students';
+      } else if (isTargetingInstitutions) {
+        targetClassName = targetType === 'all_institutions' ? 'All Institutions' : 'Selected Institutions';
       }
 
-      // Collect primary phone numbers - use 11 digits (01...) for Awaj API
-      const phoneNumbers = students
-        .map(s => {
-          const phone = s.guardian_phone || s.guardian_phone_2;
+      // Get phone numbers
+      let phoneNumbers: string[] = [];
+      if (isTargetingInstitutions) {
+        if (targetType === 'all_institutions') {
+          phoneNumbers = allInstitutions.map(inst => inst.phone);
+        } else {
+          phoneNumbers = allInstitutions.filter(inst => selectedInstitutionIds.includes(inst.id)).map(inst => inst.phone);
+        }
+      } else {
+        let students: any[] = [];
+        if (isPreSelected) {
+          const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').in('id', preSelectedStudentIds);
+          if (error) throw error;
+          students = data || [];
+        } else {
+          const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').eq('class_id', selectedClassId);
+          if (error) throw error;
+          students = data || [];
+        }
+        
+        phoneNumbers = students.map(s => s.guardian_phone || s.guardian_phone_2).filter(p => !!p);
+      }
+      
+      // Normalize phone numbers: 11 digits (01...) for Awaj API
+      const normalizedPhoneNumbers = phoneNumbers
+        .map(phone => {
           if (!phone) return '';
           const digits = phone.replace(/[^0-9]/g, '');
           if (digits.length === 11 && digits.startsWith('01')) return digits;
@@ -951,8 +1027,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         })
         .filter(p => p && p.length === 11 && p.startsWith('01'));
       
-      if (phoneNumbers.length === 0) {
-        throw new Error('No valid 11-digit phone numbers (01...) found for the selected class.');
+      if (normalizedPhoneNumbers.length === 0) {
+        throw new Error('No valid 11-digit phone numbers (01...) found.');
       }
 
       // Get the selected template to get the awaj_voice_id
@@ -1038,6 +1114,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         institution_id: madrasah.id,
         voice_template_id: selectedVoiceId,
         target_type: 'students',
+        target_class_name: targetClassName,
         total_numbers: phoneNumbers.length,
         estimated_cost: estimatedCost,
         provider_campaign_id: campaignId,
@@ -1211,6 +1288,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
   const [showSenderDropdown, setShowSenderDropdown] = useState(false);
 
+  const [showInstitutionDropdown, setShowInstitutionDropdown] = useState(false);
+
   return (
     <>
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -1261,20 +1340,129 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
                 <div className="space-y-7">
                   <div className="space-y-4">
-                    <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">{t('step_1_class', lang)}</h4>
+                    <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">
+                      {isSuperAdmin ? 'লক্ষ্য নির্বাচন করুন (Target)' : t('step_1_class', lang)}
+                    </h4>
+                    
+                    {isSuperAdmin && (
+                      <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-full mb-2">
+                        <button 
+                          onClick={() => setTargetType('all_institutions')}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'all_institutions' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
+                        >
+                          সব প্রতিষ্ঠান (All)
+                        </button>
+                        <button 
+                          onClick={() => setTargetType('specific_institution')}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'specific_institution' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
+                        >
+                          প্রতিষ্ঠানের তালিকা (Select)
+                        </button>
+                        <button 
+                          onClick={() => setTargetType('class')}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'class' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
+                        >
+                          ক্লাস নির্বাচন (Class)
+                        </button>
+                      </div>
+                    )}
+
                     {!isPreSelected ? (
                       <div className="relative">
-                        <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
-                          <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
-                          <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
-                        </button>
-                        {showClassDropdown && (
-                          <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                            {classes.map(cls => (
-                              <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
-                                <span className="font-black font-noto">{cls.class_name}</span>
-                              </button>
-                            ))}
+                        {targetType === 'class' ? (
+                          <>
+                            <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
+                              <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
+                              <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
+                            </button>
+                            {showClassDropdown && (
+                              <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
+                                {classes.map(cls => (
+                                  <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                    <span className="font-black font-noto">{cls.class_name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : targetType === 'specific_institution' ? (
+                          <>
+                            <button onClick={() => setShowInstitutionDropdown(!showInstitutionDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-all">
+                              <span className={`text-base font-black font-noto ${selectedInstitutionIds.length > 0 ? 'text-[#1E3A8A]' : 'text-slate-400'}`}>
+                                {selectedInstitutionIds.length > 0 ? `${selectedInstitutionIds.length} টি প্রতিষ্ঠান নির্বাচিত` : 'প্রতিষ্ঠান নির্বাচন করুন'}
+                              </span>
+                              <ChevronDown className={`text-slate-300 transition-all ${showInstitutionDropdown ? 'rotate-180' : ''}`} size={20} />
+                            </button>
+
+                            {selectedInstitutionIds.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1">
+                                {allInstitutions.filter(i => selectedInstitutionIds.includes(i.id)).slice(0, 5).map(inst => (
+                                  <div key={inst.id} className="bg-blue-50 text-[#2563EB] px-3 py-1 rounded-lg text-[10px] font-black border border-blue-100 flex items-center gap-1.5">
+                                    {inst.name}
+                                    <button onClick={(e) => { e.stopPropagation(); setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id)); }} className="hover:text-red-500 transition-colors">
+                                      <X size={10} />
+                                    </button>
+                                  </div>
+                                ))}
+                                {selectedInstitutionIds.length > 5 && (
+                                  <div className="bg-slate-50 text-slate-400 px-3 py-1 rounded-lg text-[10px] font-black border border-slate-100">
+                                    + {selectedInstitutionIds.length - 5} More
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {showInstitutionDropdown && (
+                              <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                                <div className="p-2 border-b border-slate-50 mb-2 flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">প্রতিষ্ঠানের তালিকা ({allInstitutions.length})</span>
+                                  <button 
+                                    onClick={() => {
+                                      if (selectedInstitutionIds.length === allInstitutions.length) {
+                                        setSelectedInstitutionIds([]);
+                                      } else {
+                                        setSelectedInstitutionIds(allInstitutions.map(i => i.id));
+                                      }
+                                    }}
+                                    className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline px-2"
+                                  >
+                                    {selectedInstitutionIds.length === allInstitutions.length ? 'Deselect All' : 'Select All'}
+                                  </button>
+                                </div>
+                                {allInstitutions.map(inst => (
+                                  <button 
+                                    key={inst.id} 
+                                    onClick={() => { 
+                                      const isSelected = selectedInstitutionIds.includes(inst.id);
+                                      if (isSelected) {
+                                        setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id));
+                                      } else {
+                                        setSelectedInstitutionIds(prev => [...prev, inst.id]);
+                                      }
+                                    }} 
+                                    className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between group transition-all ${selectedInstitutionIds.includes(inst.id) ? 'bg-[#2563EB] text-white shadow-md scale-[1.02] z-10 relative' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selectedInstitutionIds.includes(inst.id) ? 'bg-white/20' : 'bg-slate-100'}`}>
+                                        <Building2 size={16} />
+                                      </div>
+                                      <span className="font-black font-noto">{inst.name}</span>
+                                    </div>
+                                    {selectedInstitutionIds.includes(inst.id) && <Check size={16} strokeWidth={4} />}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="bg-emerald-50 p-6 rounded-[1.8rem] border border-emerald-100 flex flex-col items-center text-center gap-3">
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
+                              <Users size={24} />
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-1">Targeting All Institutes</p>
+                              <p className="text-lg font-black text-[#1E3A8A]">{allInstitutions.length} Active Institutions</p>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1341,10 +1529,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
                   <button 
                     onClick={handleBroadcast}
-                    disabled={!selectedVoiceId || (!selectedClassId && !isPreSelected) || !selectedSenderId || isBroadcasting}
+                    disabled={!selectedVoiceId || (!selectedClassId && !isPreSelected && !isTargetingInstitutions) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || !selectedSenderId || isBroadcasting}
                     className="w-full h-[64px] bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg disabled:opacity-40 active:scale-95 transition-all mt-auto"
                   >
-                    {isBroadcasting ? <Loader2 className="animate-spin" size={24} /> : <><Send size={20} /> {t('start_broadcast', lang)}</>}
+                    {isBroadcasting ? <Loader2 className="animate-spin" size={24} /> : (
+                      <>
+                        <Send size={20} /> 
+                        {targetType === 'all_institutions' ? 'Broadcasting to All Institutions' : 
+                         targetType === 'specific_institution' ? `Calling ${selectedInstitutionIds.length} Institutions` :
+                         t('start_broadcast', lang)}
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1439,7 +1634,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-50">
                         <div>
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('target', lang)}</p>
-                          <p className="text-xs font-black text-[#1E3A8A] capitalize">{h.target_type}</p>
+                          <p className="text-xs font-black text-[#1E3A8A] capitalize">
+                            {h.target_class_name ? h.target_class_name : (
+                              h.target_type === 'students' ? t('students', lang, madrasah?.institution_type) :
+                              h.target_type === 'staff' ? t('teachers', lang, madrasah?.institution_type) :
+                              h.target_type
+                            )}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('numbers', lang)}</p>
@@ -1470,7 +1671,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                               const logs = extractCallLogs(historyDetails);
                               const failedLogs = logs.filter((log: any) => {
                                 const status = (log.status || log.state || log.call_status || '').toLowerCase();
-                                return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'rejected', 'declined'].includes(status);
+                                return ['failed', 'no answer', 'notanswered', 'not_answered', 'busy', 'cancelled', 'error', 'rejected', 'declined'].includes(status);
                               });
                               const answeredLogs = logs.filter((log: any) => {
                                 const status = (log.status || log.state || log.call_status || '').toLowerCase();

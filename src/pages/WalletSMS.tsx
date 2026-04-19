@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { CreditCard, Loader2, Send, ChevronDown, BookOpen, Users, CheckCircle2, MessageSquare, Plus, Edit3, Trash2, Smartphone, X, Check, History, Zap, AlertTriangle, Clock, Save, AlertCircle, Mic, Info, XCircle } from 'lucide-react';
+import { CreditCard, Loader2, Send, ChevronDown, BookOpen, Users, CheckCircle2, MessageSquare, Plus, Edit3, Trash2, Smartphone, X, Check, History, Zap, AlertTriangle, Clock, Save, AlertCircle, Mic, Info, XCircle, Building2 } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { SMSTemplate, Language, Institution, Class, Student, Transaction, Profile, UserRole } from 'types';
 import { t } from 'translations';
@@ -25,6 +25,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canSendSms = !isTeacher || profile?.permissions?.can_send_sms;
+  const isSuperAdmin = role === 'super_admin';
 
   if (!canSendSms) {
     return (
@@ -57,7 +58,11 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [classStudents, setClassStudents] = useState<Student[]>([]);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [showTemplateDropdownBulk, setShowTemplateDropdownBulk] = useState(false);
+  const [showInstitutionDropdown, setShowInstitutionDropdown] = useState(false);
   const [userTransactions, setUserTransactions] = useState<Transaction[]>([]);
+  const [allInstitutions, setAllInstitutions] = useState<Institution[]>([]);
+  const [targetType, setTargetType] = useState<'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
+  const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<string[]>([]);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<SMSTemplate | null>(null);
@@ -123,6 +128,15 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     if (selectedClassId) fetchClassStudents(selectedClassId); else setClassStudents([]);
   }, [selectedClassId]);
 
+  useEffect(() => {
+    if (targetType === 'all_institutions' && isSuperAdmin) {
+      setSelectedClassId('all_institutions');
+      // Mock class students with institutions for UI consistency if needed
+    } else {
+      setSelectedClassId('');
+    }
+  }, [targetType]);
+
   const fetchSystemSettings = async () => {
     const settings = await smsApi.getGlobalSettings();
     if (settings.bkash_number) setAdminBkash(settings.bkash_number);
@@ -132,6 +146,12 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
   const fetchClasses = async () => {
     if (!madrasah) return;
+    
+    if (isSuperAdmin) {
+      const { data: insts } = await supabase.from('institutions').select('*').eq('is_active', true);
+      if (insts) setAllInstitutions(insts);
+    }
+
     const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
     if (data) {
       let filteredClasses = data;
@@ -257,8 +277,13 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   };
 
   const handleSendBulk = async () => {
-    if (!bulkMessage.trim() || !selectedClassId || classStudents.length === 0 || !madrasah) return;
+    if (!bulkMessage.trim() || !madrasah) return;
     
+    const isTargetingInstitutions = isSuperAdmin && (targetType === 'all_institutions' || targetType === 'specific_institution');
+    if (!isTargetingInstitutions && (!selectedClassId || classStudents.length === 0)) return;
+    if (isTargetingInstitutions && allInstitutions.length === 0) return;
+    if (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) return;
+
     if (!isOnline) {
       setStatusModal({
         show: true,
@@ -271,7 +296,21 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
     setSendingBulk(true);
     try {
-      await smsApi.sendBulk(madrasah.id, classStudents, bulkMessage);
+      if (isTargetingInstitutions) {
+        // Super Admin Bulk Messaging to ALL INSTITUTIONS or SPECIFIC INSTITUTIONS
+        let targets = allInstitutions;
+        if (targetType === 'specific_institution') {
+          targets = allInstitutions.filter(inst => selectedInstitutionIds.includes(inst.id));
+        }
+
+        const phones = targets.map(inst => inst.phone).filter(p => !!p);
+        if (phones.length === 0) throw new Error('No institutions with valid phone numbers found.');
+        
+        await smsApi.sendBulk(madrasah.id, targets.map(inst => ({ phone_number: inst.phone, student_name: inst.name })) as any[], bulkMessage);
+      } else {
+        await smsApi.sendBulk(madrasah.id, classStudents, bulkMessage);
+      }
+      
       setBulkSuccess(true); 
       setShowSuccessPopup(true);
       setBulkMessage(''); 
@@ -420,29 +459,138 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
                 <div className="space-y-7">
                   <div className="space-y-4">
-                    <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">{t('step_1_class', lang)}</h4>
-                    <div className="relative space-y-3">
-                      <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
-                        <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
-                        <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
-                      </button>
-                      
-                      {selectedClassId && (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-top-2">
-                          <Users size={16} className="text-[#2563EB]" />
-                          <p className="text-[11px] font-black text-[#2563EB] uppercase tracking-wider">
-                            {t('total_students', lang)}: {classStudents.length} {t('students_count', lang)}
-                          </p>
-                        </div>
-                      )}
+                    <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest px-1">
+                      {isSuperAdmin ? 'লক্ষ্য নির্বাচন করুন (Target)' : t('step_1_class', lang)}
+                    </h4>
+                    
+                    {isSuperAdmin && (
+                      <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-full mb-2">
+                        <button 
+                          onClick={() => setTargetType('all_institutions')}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'all_institutions' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
+                        >
+                          সব প্রতিষ্ঠান (All)
+                        </button>
+                        <button 
+                          onClick={() => setTargetType('specific_institution')}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'specific_institution' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
+                        >
+                          প্রতিষ্ঠানের তালিকা (Select)
+                        </button>
+                        <button 
+                          onClick={() => setTargetType('class')}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'class' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
+                        >
+                          ক্লাস নির্বাচন (Class)
+                        </button>
+                      </div>
+                    )}
 
-                      {showClassDropdown && (
-                        <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                          {classes.map(cls => (
-                            <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
-                              <span className="font-black font-noto">{cls.class_name}</span>
-                            </button>
-                          ))}
+                    <div className="relative space-y-3">
+                      {targetType === 'class' ? (
+                        <>
+                          <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
+                            <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
+                            <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
+                          </button>
+                          
+                          {selectedClassId && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-top-2">
+                              <Users size={16} className="text-[#2563EB]" />
+                              <p className="text-[11px] font-black text-[#2563EB] uppercase tracking-wider">
+                                {t('total_students', lang)}: {classStudents.length} {t('students_count', lang)}
+                              </p>
+                            </div>
+                          )}
+
+                          {showClassDropdown && (
+                            <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
+                              {classes.map(cls => (
+                                <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                  <span className="font-black font-noto">{cls.class_name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : targetType === 'specific_institution' ? (
+                        <>
+                          <button onClick={() => setShowInstitutionDropdown(!showInstitutionDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-all">
+                            <span className={`text-base font-black font-noto ${selectedInstitutionIds.length > 0 ? 'text-[#1E3A8A]' : 'text-slate-400'}`}>
+                              {selectedInstitutionIds.length > 0 ? `${selectedInstitutionIds.length} টি প্রতিষ্ঠান নির্বাচিত` : 'প্রতিষ্ঠান নির্বাচন করুন'}
+                            </span>
+                            <ChevronDown className={`text-slate-300 transition-all ${showInstitutionDropdown ? 'rotate-180' : ''}`} size={20} />
+                          </button>
+                          
+                          {selectedInstitutionIds.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1">
+                              {allInstitutions.filter(i => selectedInstitutionIds.includes(i.id)).slice(0, 5).map(inst => (
+                                <div key={inst.id} className="bg-blue-50 text-[#2563EB] px-3 py-1 rounded-lg text-[10px] font-black border border-blue-100 flex items-center gap-1.5">
+                                  {inst.name}
+                                  <button onClick={(e) => { e.stopPropagation(); setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id)); }} className="hover:text-red-500 transition-colors">
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              ))}
+                              {selectedInstitutionIds.length > 5 && (
+                                <div className="bg-slate-50 text-slate-400 px-3 py-1 rounded-lg text-[10px] font-black border border-slate-100">
+                                  + {selectedInstitutionIds.length - 5} More
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {showInstitutionDropdown && (
+                            <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                              <div className="p-2 border-b border-slate-50 mb-2 flex items-center justify-between">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">প্রতিষ্ঠানের তালিকা ({allInstitutions.length})</span>
+                                <button 
+                                  onClick={() => {
+                                    if (selectedInstitutionIds.length === allInstitutions.length) {
+                                      setSelectedInstitutionIds([]);
+                                    } else {
+                                      setSelectedInstitutionIds(allInstitutions.map(i => i.id));
+                                    }
+                                  }}
+                                  className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline px-2"
+                                >
+                                  {selectedInstitutionIds.length === allInstitutions.length ? 'Deselect All' : 'Select All'}
+                                </button>
+                              </div>
+                              {allInstitutions.map(inst => (
+                                <button 
+                                  key={inst.id} 
+                                  onClick={() => { 
+                                    const isSelected = selectedInstitutionIds.includes(inst.id);
+                                    if (isSelected) {
+                                      setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id));
+                                    } else {
+                                      setSelectedInstitutionIds(prev => [...prev, inst.id]);
+                                    }
+                                  }} 
+                                  className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between group transition-all ${selectedInstitutionIds.includes(inst.id) ? 'bg-[#2563EB] text-white shadow-md scale-[1.02] z-10 relative' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selectedInstitutionIds.includes(inst.id) ? 'bg-white/20' : 'bg-slate-100'}`}>
+                                      <Building2 size={16} />
+                                    </div>
+                                    <span className="font-black font-noto">{inst.name}</span>
+                                  </div>
+                                  {selectedInstitutionIds.includes(inst.id) && <Check size={16} strokeWidth={4} />}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="bg-blue-50 p-6 rounded-[1.8rem] border border-blue-100 flex flex-col items-center text-center gap-3">
+                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#2563EB] shadow-sm">
+                            <Users size={24} />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-black text-[#2563EB] uppercase tracking-widest mb-1">Targeting All Institutes</p>
+                            <p className="text-lg font-black text-[#1E3A8A]">{allInstitutions.length} Active Institutions</p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -521,8 +669,19 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 mt-auto">
-                    <button onClick={handleSendBulk} disabled={sendingBulk || !bulkMessage.trim() || !selectedClassId || classStudents.length === 0 || getSmsLengthInfo(bulkMessage).parts > 7} className="w-full h-[64px] bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg disabled:opacity-40 active:scale-95 transition-all">
-                      {sendingBulk ? <Loader2 className="animate-spin" size={24} /> : bulkSuccess ? (lang === 'bn' ? 'সফল!' : 'Success!') : <><Send size={20} /> {t('send_bulk_sms', lang)}</>}
+                    <button 
+                      onClick={handleSendBulk} 
+                      disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && (!selectedClassId || classStudents.length === 0)) || (targetType === 'all_institutions' && allInstitutions.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || getSmsLengthInfo(bulkMessage).parts > 7} 
+                      className="w-full h-[64px] bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg disabled:opacity-40 active:scale-95 transition-all"
+                    >
+                      {sendingBulk ? <Loader2 className="animate-spin" size={24} /> : bulkSuccess ? (lang === 'bn' ? 'সফল!' : 'Success!') : (
+                        <>
+                          <Send size={20} /> 
+                          {targetType === 'all_institutions' ? 'Send to All Institutions' : 
+                           targetType === 'specific_institution' ? `SMS to ${selectedInstitutionIds.length} Institutions` : 
+                           t('send_bulk_sms', lang)}
+                        </>
+                      )}
                     </button>
                     
                     <button onClick={handleSendFreeBulk} disabled={sendingBulk || !bulkMessage.trim() || classStudents.length === 0 || getSmsLengthInfo(bulkMessage).parts > 7} className="w-full h-[54px] bg-slate-800 text-white font-black rounded-full shadow-lg flex items-center justify-center gap-3 text-sm disabled:opacity-40 active:scale-95 transition-all">
