@@ -424,6 +424,62 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
   const [detailsTab, setDetailsTab] = useState<'institution' | 'api' | 'permissions' | 'subscription' | 'history'>('institution');
   const [showRefreshPopup, setShowRefreshPopup] = useState(false);
+  const [showRechargeModal, setShowRechargeModal] = useState<{show: boolean, institution: any}>({show: false, institution: null});
+  const [rechargeAmount, setRechargeAmount] = useState<string>('');
+  const [rechargeSmsCount, setRechargeSmsCount] = useState<string>('');
+  const [isProcessingRecharge, setIsProcessingRecharge] = useState(false);
+  
+  const handleQuickRecharge = async (type: 'sms' | 'voice') => {
+    if (!showRechargeModal.institution) return;
+    setIsProcessingRecharge(true);
+    try {
+      const amount = type === 'voice' ? (Number(rechargeAmount) || 0) : (Number(rechargeSmsCount) || 0);
+      if (amount <= 0) throw new Error('পরিমাণ সঠিক নয়');
+
+      const currentBalance = type === 'voice' 
+        ? (showRechargeModal.institution.balance || 0) 
+        : (showRechargeModal.institution.sms_balance || 0);
+      
+      const newBalance = currentBalance + amount;
+      
+      const updateData = type === 'voice' 
+        ? { balance: newBalance } 
+        : { sms_balance: newBalance };
+
+      const { error } = await supabase
+        .from('institutions')
+        .update(updateData)
+        .eq('id', showRechargeModal.institution.id);
+
+      if (error) throw error;
+
+      // Log transaction
+      await supabase.from('transactions').insert({
+        institution_id: showRechargeModal.institution.id,
+        amount: type === 'voice' ? amount : 0,
+        description: `Super Admin Quick ${type.toUpperCase()} Credit`,
+        module: type,
+        status: 'approved',
+        payment_method: 'Admin Transfer'
+      });
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল হয়েছে',
+        message: `${type === 'voice' ? amount + ' ৳' : amount + ' SMS'} সফলভাবে যোগ করা হয়েছে।`
+      });
+      
+      setShowRechargeModal({ show: false, institution: null });
+      setRechargeAmount('');
+      setRechargeSmsCount('');
+      handleRefresh();
+    } catch (err: any) {
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: err.message });
+    } finally {
+      setIsProcessingRecharge(false);
+    }
+  };
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Create Institution State
@@ -589,6 +645,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [bulkMessage, setBulkMessage] = useState('');
   const [isSendingBulk, setIsSendingBulk] = useState(false);
   const [bulkType, setBulkType] = useState<'sms' | 'voice'>('sms');
+  const [selectedMonthForReminder, setSelectedMonthForReminder] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
+
+  const unpaidInstitutions = useMemo(() => {
+    return madrasahs.filter(m => {
+      let config: any = m.config_json;
+      if (typeof config === 'string') {
+        try { config = JSON.parse(config); } catch (e) { config = {}; }
+      }
+      const paidMonths = config?.paid_months || [];
+      return !paidMonths.includes(selectedMonthForReminder);
+    });
+  }, [madrasahs, selectedMonthForReminder]);
 
   const handleSendBulk = async () => {
     if (!bulkMessage.trim()) {
@@ -638,7 +707,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (targets.length === 0) throw new Error('কোনো বৈধ ফোন নম্বর পাওয়া যায়নি');
 
       if (commsModal.type === 'sms') {
-        const sendPromises = targets.map(inst => smsApi.sendDirect(inst.phone!, commMessage));
+        const sendPromises = targets.map(inst => {
+          // Support placeholders: {{name}}
+          const personalizedMsg = commMessage.replace(/{{name}}/g, inst.name || '');
+          return smsApi.sendDirect(inst.phone!, personalizedMsg);
+        });
         await Promise.all(sendPromises);
         setStatusModal({ 
           show: true, 
@@ -1225,10 +1298,61 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
-                  <div className="flex items-center justify-between">
-                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>SMS Inventory</h3>
-                    <Zap size={24} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} fill="currentColor" />
-                  </div>
+                   <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>সাবস্ক্রিপশন রিমাইন্ডার</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Subscription Tracking</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="month" 
+                          value={selectedMonthForReminder}
+                          onChange={(e) => setSelectedMonthForReminder(e.target.value)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} outline-none border focus:border-blue-500/50 transition-all`}
+                        />
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-emerald-50 border-emerald-100'} p-5 rounded-3xl border text-center`}>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">পেইড হয়েছে</p>
+                        <h5 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{globalStats.totalInstitutions - unpaidInstitutions.length}</h5>
+                      </div>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-red-50 border-red-100'} p-5 rounded-3xl border text-center`}>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">বাকি আছে</p>
+                        <h5 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-red-400' : 'text-red-600'}`}>{unpaidInstitutions.length}</h5>
+                      </div>
+                   </div>
+
+                   {unpaidInstitutions.length > 0 && (
+                     <div className="flex gap-3">
+                       <button 
+                         onClick={() => {
+                           setCommsModal({ show: true, institutions: unpaidInstitutions, type: 'sms' });
+                           setCommMessage(`আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${new Date(selectedMonthForReminder).toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' })} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`);
+                         }}
+                         className="flex-1 py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                       >
+                         <MessageSquare size={16} /> SMS রিমাইন্ডার
+                       </button>
+                       <button 
+                         onClick={() => {
+                           if (awajVoices.length === 0) handleFetchAwajVoices();
+                           setCommsModal({ show: true, institutions: unpaidInstitutions, type: 'voice' });
+                         }}
+                         className="flex-1 py-4 bg-orange-500 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                       >
+                         <Mic size={16} /> ভয়েস রিমাইন্ডার
+                       </button>
+                     </div>
+                   )}
+                </div>
+
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
+                   <div className="flex items-center justify-between">
+                     <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>SMS Inventory</h3>
+                     <Zap size={24} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} fill="currentColor" />
+                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} p-5 rounded-3xl border`}>
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">বিতরণকৃত SMS</p>
@@ -1338,48 +1462,96 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           )}
 
           {view === 'list' && (
-            <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>মাদরাসা লিস্ট</h1>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Registered Institutions</p>
+            <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-500">
+              {/* Refined Header - Mobile Optimized */}
+              <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>মাদরাসা লিস্ট</h1>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage {madrasahs.length} Institutions</p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-3">
+                    <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                      <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                    </button>
+                    <button onClick={() => setShowCreateModal(true)} className="h-12 px-6 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-widest">
+                      <Plus size={20} /> New Portal
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
-                    {isSyncingSheet ? <Loader2 size={20} className="animate-spin" /> : <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>}
-                  </button>
-                  <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
-                    <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
-                  </button>
-                  <button onClick={() => setShowCreateModal(true)} className="flex-1 sm:flex-none h-12 px-6 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-widest">
-                    <Plus size={20} /> New Portal
-                  </button>
+
+                {/* Mobile & Tablet Tools Row */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                   {/* Month Filter Tool */}
+                   <div className={`flex flex-1 items-center gap-3 p-3 rounded-[2rem] ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} border`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-500'}`}>
+                        <Calendar size={20} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">বকেয়া মাস</p>
+                        <input 
+                          type="month" 
+                          value={selectedMonthForReminder}
+                          onChange={(e) => setSelectedMonthForReminder(e.target.value)}
+                          className={`w-full bg-transparent text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} outline-none`}
+                        />
+                      </div>
+                      <button 
+                        onClick={() => {
+                          const unpaidIds = unpaidInstitutions.map(u => u.id);
+                          setSelectedInstIds(unpaidIds);
+                        }}
+                        className="px-4 py-2 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl active:scale-95 transition-all shadow-lg shadow-red-500/20"
+                      >
+                         বকেয়া সিলেক্ট ({unpaidInstitutions.length})
+                      </button>
+                   </div>
+
+                   {/* Quick Action Icons */}
+                   <div className="flex items-center gap-2">
+                     <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`flex-1 sm:w-14 sm:h-14 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-[1.5rem] active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
+                        {isSyncingSheet ? <Loader2 size={24} className="animate-spin" /> : <Database size={24} />}
+                     </button>
+                     <button onClick={handleRefresh} className="sm:hidden w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-blue-500 rounded-[1.5rem] active:scale-95 transition-all">
+                        <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                     </button>
+                     <button onClick={() => setShowCreateModal(true)} className="sm:hidden flex-1 h-12 bg-blue-600 text-white font-black rounded-[1.5rem] flex items-center justify-center gap-2 text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20">
+                        <Plus size={18} /> New
+                     </button>
+                   </div>
                 </div>
               </div>
 
               <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative group flex-1">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                <div className="relative group flex-1 shadow-premium rounded-3xl overflow-hidden">
+                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">
+                    <Search size={20} />
+                  </div>
                   <input 
                     type="text" 
-                    placeholder="Search by name, phone or ID..." 
-                    className={`w-full h-14 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100 text-slate-800 focus:bg-slate-50'} border rounded-2xl outline-none font-bold shadow-premium transition-all focus:border-blue-500/50`} 
+                    placeholder="মাদরাসার নাম, ফোন বা কোড দিয়ে খুঁজুন..." 
+                    className={`w-full h-16 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100/50 text-slate-800 focus:bg-slate-50'} border-0 outline-none font-bold transition-all text-sm sm:text-base`} 
                     value={searchQuery} 
                     onChange={(e) => setSearchQuery(e.target.value)} 
                   />
                 </div>
-                <div className="flex gap-3">
-                  <select 
-                    className={`h-14 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'} border rounded-2xl outline-none font-bold shadow-premium text-xs uppercase tracking-widest flex-1 md:flex-none`}
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value as any)}
-                  >
-                    <option value="all">All Types</option>
-                    <option value="madrasah">Madrasah</option>
-                    <option value="school">School</option>
-                    <option value="kindergarten">Kindergarten</option>
-                    <option value="nurani">Nurani</option>
-                  </select>
+                
+                <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar items-center">
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'madrasah', label: 'Madrasah' },
+                    { id: 'school', label: 'School' },
+                    { id: 'kindergarten', label: 'KG' },
+                    { id: 'nurani', label: 'Nurani' }
+                  ].map(type => (
+                    <button 
+                      key={type.id}
+                      onClick={() => setFilterType(type.id as any)}
+                      className={`h-14 px-6 rounded-[1.5rem] whitespace-nowrap text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center border-2 ${filterType === type.id ? 'bg-[#2563EB] text-white border-[#2563EB] shadow-lg shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-100 text-slate-500 shadow-sm')}`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1535,22 +1707,40 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                             </div>
                             
                             <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100/50">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Subscription Details</span>
+                              <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Subscription & Balance</span>
                                 <CreditCard size={14} className="text-blue-400" />
                               </div>
-                              <div className="space-y-1.5 text-[10px] font-bold text-slate-600">
-                                <div className="flex justify-between">
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Balance</p>
+                                    <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-100">
+                                      <span className="text-sm font-black text-emerald-600">৳ {inst.balance || 0}</span>
+                                      <button 
+                                        onClick={() => setShowRechargeModal({ show: true, institution: inst })}
+                                        className="w-6 h-6 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all"
+                                      >
+                                        <Plus size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">SMS Balance</p>
+                                    <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-100">
+                                      <span className="text-sm font-black text-blue-600">{inst.sms_balance || 0}</span>
+                                      <button 
+                                        onClick={() => setShowRechargeModal({ show: true, institution: inst })}
+                                        className="w-6 h-6 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-500 hover:text-white transition-all"
+                                      >
+                                        <Plus size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex justify-between text-[10px] font-bold text-slate-500 bg-slate-100/50 p-2 rounded-xl">
                                   <span>Expires On:</span>
                                   <span className="text-blue-600">{inst.subscription_end ? new Date(inst.subscription_end).toLocaleDateString('bn-BD') : 'N/A'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Balance:</span>
-                                  <span className="text-blue-600">৳ {inst.balance || 0}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>SMS Balance:</span>
-                                  <span className="text-blue-600">{inst.sms_balance || 0}</span>
                                 </div>
                               </div>
                             </div>
@@ -2738,6 +2928,88 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 className="absolute bottom-0 left-0 h-1 bg-blue-500/20"
               />
             </motion.div>
+          </div>,
+          document.body
+        )}
+
+        {/* Quick Recharge Modal */}
+        {showRechargeModal.show && createPortal(
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+             <motion.div 
+               initial={{ opacity: 0 }} 
+               animate={{ opacity: 1 }} 
+               className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+               onClick={() => !isProcessingRecharge && setShowRechargeModal({ show: false, institution: null })}
+             />
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.9, y: 20 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               className="relative bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl overflow-hidden"
+             >
+                <div className="text-center mb-6">
+                   <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Zap size={32} />
+                   </div>
+                   <h3 className="text-xl font-black text-[#1E3A8A] font-noto">Quick Assign Balance</h3>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{showRechargeModal.institution?.name}</p>
+                </div>
+
+                <div className="space-y-5">
+                   <div>
+                      <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest px-2 mb-2 block">ভয়েস রিচার্জ (৳)</label>
+                      <div className="relative">
+                         <input 
+                           type="number" 
+                           placeholder="0.00"
+                           className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl px-6 font-black text-slate-700 outline-none focus:border-emerald-200 transition-all"
+                           value={rechargeAmount}
+                           onChange={(e) => setRechargeAmount(e.target.value)}
+                         />
+                         <button 
+                           onClick={() => handleQuickRecharge('voice')}
+                           disabled={isProcessingRecharge || !rechargeAmount}
+                           className="absolute right-2 top-2 h-10 px-4 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase active:scale-95 transition-all disabled:opacity-50"
+                         >
+                           Add ৳
+                         </button>
+                      </div>
+                   </div>
+
+                   <div className="relative flex items-center py-2">
+                      <div className="flex-grow border-t border-slate-100"></div>
+                      <span className="flex-shrink mx-4 text-[10px] font-black text-slate-300">OR</span>
+                      <div className="flex-grow border-t border-slate-100"></div>
+                   </div>
+
+                   <div>
+                      <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest px-2 mb-2 block">SMS রিচার্জ (Count)</label>
+                      <div className="relative">
+                         <input 
+                           type="number" 
+                           placeholder="0"
+                           className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl px-6 font-black text-slate-700 outline-none focus:border-blue-200 transition-all"
+                           value={rechargeSmsCount}
+                           onChange={(e) => setRechargeSmsCount(e.target.value)}
+                         />
+                         <button 
+                           onClick={() => handleQuickRecharge('sms')}
+                           disabled={isProcessingRecharge || !rechargeSmsCount}
+                           className="absolute right-2 top-2 h-10 px-4 bg-blue-500 text-white font-black rounded-xl text-[10px] uppercase active:scale-95 transition-all disabled:opacity-50"
+                         >
+                           Add SMS
+                         </button>
+                      </div>
+                   </div>
+
+                   <button 
+                     onClick={() => setShowRechargeModal({ show: false, institution: null })}
+                     disabled={isProcessingRecharge}
+                     className="w-full py-4 text-slate-400 font-bold text-[10px] uppercase tracking-widest hover:text-slate-600 transition-colors"
+                   >
+                     Cancel
+                   </button>
+                </div>
+             </motion.div>
           </div>,
           document.body
         )}

@@ -298,22 +298,45 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  const handleDeleteHistory = async (id: string, e: React.MouseEvent) => {
+  const [historyDeleteConfirm, setHistoryDeleteConfirm] = useState<string | null>(null);
+
+  const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(lang === 'bn' ? 'আপনি কি নিশ্চিতভাবে এই ব্রডকাস্ট ইতিহাস ডিলিট করতে চান?' : 'Are you sure you want to delete this broadcast history?')) return;
+    setHistoryDeleteConfirm(id);
+  };
+
+  const confirmDeleteHistory = async () => {
+    if (!historyDeleteConfirm) return;
+    setIsDeleting(true);
     
     try {
-      const { error } = await supabase.from('voice_broadcasts').delete().eq('id', id);
+      const { error } = await supabase.from('voice_broadcasts').delete().eq('id', historyDeleteConfirm);
       if (error) throw error;
       
-      setBroadcastHistory(prev => prev.filter(h => h.id !== id));
-      if (expandedHistoryId === id) {
+      setBroadcastHistory(prev => prev.filter(h => h.id !== historyDeleteConfirm));
+      if (expandedHistoryId === historyDeleteConfirm) {
         setExpandedHistoryId(null);
         setHistoryDetails(null);
       }
+      
+      setHistoryDeleteConfirm(null);
+      
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'সফলভাবে মুছে ফেলা হয়েছে' : 'Deleted Successfully',
+        message: lang === 'bn' ? 'ব্রডকাস্ট ইতিহাস তালিকা থেকে মুছে দেওয়া হয়েছে।' : 'The broadcast history has been removed from the list.'
+      });
     } catch (err: any) {
       console.error('Delete history error:', err);
-      alert(err.message);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'মুছে ফেলা ব্যর্থ' : 'Delete Failed',
+        message: err.message
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -2092,6 +2115,41 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                 </button>
                 <button 
                   onClick={() => setShowDeleteConfirm(null)} 
+                  disabled={isDeleting}
+                  className="w-full py-4 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest"
+                >
+                  {t('cancel', lang)}
+                </button>
+             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {historyDeleteConfirm && createPortal(
+        <div className="modal-overlay bg-[#080A12]/40 backdrop-blur-2xl animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-[0_40px_100px_rgba(239,68,68,0.2)] border border-red-50 text-center space-y-6 animate-in zoom-in-95 duration-500">
+             <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-inner border border-red-100">
+                <AlertTriangle size={40} />
+             </div>
+             <div>
+                <h3 className="text-xl font-black text-slate-800 font-noto">{t('confirm_delete', lang)}</h3>
+                <p className="text-[11px] font-bold text-slate-400 mt-2 uppercase tracking-wider px-4 leading-relaxed">
+                  {lang === 'bn' ? 'আপনি কি নিশ্চিতভাবে এই ব্রডকাস্ট ইতিহাস ডিলিট করতে চান?' : 'Are you sure you want to delete this broadcast history?'}
+                </p>
+             </div>
+             <div className="flex flex-col gap-3 pt-2">
+                <button 
+                  onClick={confirmDeleteHistory} 
+                  disabled={isDeleting} 
+                  className="w-full py-5 bg-red-500 text-white font-black rounded-full shadow-xl shadow-red-100 active:scale-95 transition-all flex items-center justify-center text-md gap-3"
+                >
+                  {isDeleting ? <Loader2 className="animate-spin" size={22} /> : (
+                    <><Trash2 size={20} /> {t('delete', lang)}</>
+                  )}
+                </button>
+                <button 
+                  onClick={() => setHistoryDeleteConfirm(null)} 
                   disabled={isDeleting}
                   className="w-full py-4 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-sm uppercase tracking-widest"
                 >
