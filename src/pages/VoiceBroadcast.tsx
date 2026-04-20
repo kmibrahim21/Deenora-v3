@@ -1069,8 +1069,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         })
         .filter(p => p && p.length === 11 && p.startsWith('01'));
       
-      if (normalizedPhoneNumbers.length === 0) {
+      // De-duplicate phone numbers
+      const uniqueNormalizedPhoneNumbers = [...new Set(normalizedPhoneNumbers)];
+      const finalCount = uniqueNormalizedPhoneNumbers.length;
+      const finalEstimatedCost = finalCount * voiceRate;
+      
+      if (finalCount === 0) {
         throw new Error('No valid 11-digit phone numbers (01...) found.');
+      }
+
+      if (!isSuperAdmin && walletBalance < finalEstimatedCost) {
+        throw new Error(lang === 'bn' ? `ব্যালেন্স পর্যাপ্ত নয়। খরচ: ${finalEstimatedCost} টাকা।` : `Insufficient balance. Estimated cost: ${finalEstimatedCost} BDT.`);
       }
 
       // Get the selected template to get the awaj_voice_id
@@ -1122,14 +1131,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         retries: 1
       };
 
-      console.log('Sending broadcast payload (strictly following docs):', payload);
+      console.log('Sending broadcast payload (strictly following docs):', { ...payload, phone_numbers: `[${uniqueNormalizedPhoneNumbers.length} numbers]` });
 
       const response = await fetch('/api/awaj/broadcast', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          ...payload,
+          phone_numbers: uniqueNormalizedPhoneNumbers
+        })
       });
 
       if (!response.ok) {
@@ -1157,8 +1169,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         voice_template_id: selectedVoiceId,
         target_type: 'students',
         target_class_name: targetClassName,
-        total_numbers: phoneNumbers.length,
-        estimated_cost: estimatedCost,
+        total_numbers: finalCount,
+        estimated_cost: finalEstimatedCost,
         provider_campaign_id: campaignId,
         status: 'sending'
       });
@@ -1168,7 +1180,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // 3. Deduct balance from institution
       const { error: deductError } = await supabase.rpc('deduct_balance', {
         p_institution_id: madrasah.id,
-        p_amount: estimatedCost
+        p_amount: finalEstimatedCost
       });
       
       if (deductError) throw deductError;

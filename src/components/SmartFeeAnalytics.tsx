@@ -391,11 +391,27 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       const voiceName = voice.provider_voice_name || voice.title;
       const requestId = 'fee_' + Math.random().toString(36).substr(2, 9);
 
+      // Normalize phone numbers: 11 digits (01...)
+      const normalizedPhoneNumbers = phoneNumbers
+        .map(phone => {
+          if (!phone) return '';
+          const digits = phone.replace(/[^0-9]/g, '');
+          if (digits.length === 11 && digits.startsWith('01')) return digits;
+          if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
+          if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+          return digits;
+        })
+        .filter(p => p && p.length === 11 && p.startsWith('01'));
+
+      if (normalizedPhoneNumbers.length === 0) {
+        throw new Error(lang === 'bn' ? 'কোনো সঠিক মোবাইল নম্বর (০১৭xxx...) পাওয়া যায়নি।' : 'No valid 11-digit phone numbers (01...) found.');
+      }
+
       const payload = {
         request_id: requestId,
         voice: voiceName, 
         sender: sNumber,
-        phone_numbers: phoneNumbers,
+        phone_numbers: normalizedPhoneNumbers,
         retry: 1,
         retry_count: 1,
         retries: 1

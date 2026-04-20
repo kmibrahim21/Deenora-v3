@@ -504,11 +504,39 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
           if (phoneNumbers.length === 0) throw new Error('No valid phone numbers found');
 
+          // Get sender number from institution
+          const { data: instData } = await supabase.from('institutions').select('voice_sender_id').eq('id', madrasah.id).single();
+          let sNumber = instData?.voice_sender_id || '';
+          
+          if (!sNumber) {
+            // Fallback: try to fetch first available sender from API
+            const sRes = await fetch('/api/awaj/senders');
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              const sList = Array.isArray(sData) ? sData : (sData.senders || sData.data || []);
+              if (sList.length > 0) {
+                sNumber = (sList[0].callingNumber || sList[0].caller_id || sList[0].id).toString();
+              }
+            }
+          }
+
+          if (!sNumber) throw new Error('No voice sender ID configured');
+
+          // Ensure sender is in 8801... format if it is a mobile number
+          const sDigits = sNumber.replace(/[^0-9]/g, '');
+          if (sDigits.length === 11 && sDigits.startsWith('01')) {
+            sNumber = '88' + sDigits;
+          }
+
           const requestId = crypto.randomUUID();
           const payload = {
             request_id: requestId,
             voice: voice.provider_voice_name || voice.title,
-            phone_numbers: phoneNumbers
+            sender: sNumber,
+            phone_numbers: phoneNumbers,
+            retry: 1,
+            retry_count: 1,
+            retries: 1
           };
 
           const response = await fetch('/api/awaj/broadcast', {
