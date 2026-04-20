@@ -47,7 +47,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteSubjectConfirm, setShowDeleteSubjectConfirm] = useState(false);
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
+  const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -475,6 +477,26 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setIsSaving(false);
   };
 
+  const handleDeleteSubject = (subjectId: string) => {
+    setSubjectToDelete(subjectId);
+    setShowDeleteSubjectConfirm(true);
+  };
+
+  const confirmDeleteSubject = async () => {
+    if (!subjectToDelete) return;
+    setIsSaving(true);
+    const { error } = await supabase.from('exam_subjects').delete().eq('id', subjectToDelete);
+    if (!error && selectedExam) {
+      fetchSubjects(selectedExam.id);
+    } else if (error) {
+       console.error("Error deleting subject", error);
+       alert(lang === 'bn' ? "বিষয়টি ডিলিট করা সম্ভব হয়নি।" : "Failed to delete subject.");
+    }
+    setIsSaving(false);
+    setShowDeleteSubjectConfirm(false);
+    setSubjectToDelete(null);
+  };
+
   const handleSaveMarks = async () => {
     if (!selectedExam) return;
     setIsSaving(true);
@@ -843,9 +865,20 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                       <div className="w-10 h-10 bg-blue-50 text-[#2563EB] rounded-xl flex items-center justify-center"><BookOpen size={20}/></div>
                       <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto text-lg`}>{s.subject_name}</h5>
                    </div>
-                   <div className="text-right">
-                      <p className="text-[9px] font-black text-slate-400 uppercase">পূর্ণমান: {s.full_marks}</p>
-                      <p className="text-[9px] font-black text-red-400 uppercase">পাস: {s.pass_marks}</p>
+                   <div className="text-right flex flex-col items-end gap-2">
+                      <div className="flex gap-2 items-center">
+                         <p className="text-[9px] font-black text-slate-400 uppercase">পূর্ণমান: {s.full_marks}</p>
+                         <p className="text-[9px] font-black text-red-400 uppercase">পাস: {s.pass_marks}</p>
+                      </div>
+                      {role === 'madrasah_admin' && (
+                         <button 
+                             onClick={() => handleDeleteSubject(s.id)}
+                             disabled={isSaving}
+                             className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+                         >
+                             <Trash2 size={14} />
+                         </button>
+                      )}
                    </div>
                 </div>
               ))}
@@ -881,7 +914,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     <td key={sub.id} className="py-4 px-2">
                                         <input 
                                             type="number" 
-                                            className="w-full h-10 bg-slate-50 border border-slate-100 rounded-lg text-center font-black text-xs outline-none focus:border-[#2563EB] transition-all"
+                                            className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-[#2563EB]'} rounded-lg text-center font-black text-xs outline-none transition-all`}
                                             value={marksData[std.id]?.[sub.id] || ''}
                                             onChange={(e) => {
                                                 const val = e.target.value;
@@ -1004,32 +1037,64 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       )}
 
       {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border animate-in zoom-in-95 duration-300`}>
-            <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-              <AlertCircle size={32} />
-            </div>
-            <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} text-center mb-2 font-noto`}>আপনি কি নিশ্চিত?</h3>
-            <p className="text-slate-500 dark:text-slate-400 text-center text-sm mb-8 leading-relaxed">এই পরীক্ষাটি ডিলিট করলে এর সাথে সম্পর্কিত সকল বিষয় ও নম্বর মুছে যাবে। এটি আর ফিরে পাওয়া যাবে না।</p>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => { setShowDeleteConfirm(false); setExamToDelete(null); }}
-                className={`flex-1 h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-500'} font-black rounded-xl active:scale-95 transition-all`}
-              >
-                বাতিল
-              </button>
-              <button 
-                onClick={() => examToDelete && handleDeleteExam(examToDelete)}
-                disabled={isSaving}
-                className="flex-1 h-12 bg-red-600 text-white font-black rounded-xl shadow-lg shadow-red-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-2"
-              >
-                {isSaving ? <Loader2 className="animate-spin" size={18} /> : 'ডিলিট করুন'}
-              </button>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border animate-in zoom-in-95 duration-300`}>
+              <div className="w-16 h-16 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                <AlertCircle size={32} />
+              </div>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} text-center mb-2 font-noto`}>আপনি কি নিশ্চিত?</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-center text-sm mb-8 leading-relaxed">এই পরীক্ষাটি ডিলিট করলে এর সাথে সম্পর্কিত সকল বিষয় ও নম্বর মুছে যাবে। এটি আর ফিরে পাওয়া যাবে না।</p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => { setShowDeleteConfirm(false); setExamToDelete(null); }}
+                  className={`flex-1 h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-500'} font-black rounded-xl active:scale-95 transition-all`}
+                >
+                  বাতিল
+                </button>
+                <button 
+                  onClick={() => examToDelete && handleDeleteExam(examToDelete)}
+                  disabled={isSaving}
+                  className="flex-1 h-12 bg-red-600 text-white font-black rounded-xl shadow-lg shadow-red-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="animate-spin" size={18} /> : 'ডিলিট করুন'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Delete Subject Confirmation Modal */}
+        {showDeleteSubjectConfirm && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border animate-in zoom-in-95 duration-300`}>
+              <div className="w-16 h-16 bg-orange-50 dark:bg-orange-500/10 text-orange-500 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                <Trash2 size={32} />
+              </div>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} text-center mb-2 font-noto`}>
+                {lang === 'bn' ? 'বিষয়টি ডিলিট করবেন?' : 'Delete Subject?'}
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400 text-center text-sm mb-8 leading-relaxed">
+                {lang === 'bn' ? 'এই বিষয়টি ডিলিট করলে এর সাথে যুক্ত সকল শিক্ষার্থীর নম্বর স্থায়ীভাবে মুছে যাবে।' : 'Deleting this subject will permanently remove all associated marks.'}
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => { setShowDeleteSubjectConfirm(false); setSubjectToDelete(null); }}
+                  className={`flex-1 h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-500'} font-black rounded-xl active:scale-95 transition-all`}
+                >
+                  {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button 
+                  onClick={confirmDeleteSubject}
+                  disabled={isSaving}
+                  className="flex-1 h-12 bg-red-600 text-white font-black rounded-xl shadow-lg shadow-red-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="animate-spin" size={18} /> : (lang === 'bn' ? 'ডিলিট করুন' : 'Delete')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Modals */}
       {showDownloadLangModal && (
