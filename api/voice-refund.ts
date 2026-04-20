@@ -111,30 +111,65 @@ export default async function handler(req, res) {
     
     // Extract call logs array
     const logs = Array.isArray(resultData) ? resultData : 
+      (resultData.results && Array.isArray(resultData.results) ? resultData.results :
       (resultData.data && Array.isArray(resultData.data) ? resultData.data : 
       (resultData.broadcast?.logs ? resultData.broadcast.logs : 
       (resultData.broadcast?.calls ? resultData.broadcast.calls : 
-      (resultData.calls ? resultData.calls : 
-      (resultData.results ? resultData.results : [])))));
+      (resultData.calls ? resultData.calls : [])))));
 
     if (!logs || logs.length === 0) {
-      console.log('No logs found for broadcast resultData:', JSON.stringify(resultData));
-      return res.status(400).json({ error: 'No call logs found yet. Please wait until broadcast is fully completed.' });
+      console.log(`No logs found for broadcast ${broadcast.id} (Provider ID: ${targetCampaignId}). Full response:`, JSON.stringify(resultData));
+      return res.status(200).json({ 
+        success: true, 
+        message: 'No call logs found yet. Please wait until broadcast is fully completed.',
+        refund_amount: 0,
+        debug_awaj_response: { has_results: !!resultData.results, results_count: resultData.results?.length }
+      });
     }
 
     // 4. Calculate failures
     const failedLogs = logs.filter((log: any) => {
-      const status = (log.status || log.state || log.call_status || '').toLowerCase();
-      // Expanded status list based on Awaj possibilities
-      return ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 'unanswered', 'timeout', 'no-answer', 'abandoned', 'not_answered', 'notanswered'].includes(status);
+      const status = (log.status || log.state || log.call_status || '').toLowerCase().trim();
+      
+      // Success statuses
+      const successStatuses = ['answered', 'completed', 'delivered', 'accepted', 'success', 'picked', 'pickedup', 'picked_up'];
+      if (successStatuses.includes(status)) return false;
+
+      // Failure statuses
+      const failureStatuses = [
+        'failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 
+        'rejected', 'declined', 'unanswered', 'timeout', 'no-answer', 
+        'abandoned', 'not_answered', 'notanswered', 'notpicked', 'not_picked',
+        'missed', 'blocked', 'unavailable'
+      ];
+      
+      if (failureStatuses.includes(status)) return true;
+
+      // If duration is 0 and it's not pending/sending, it's likely a failure
+      const duration = Number(log.duration || 0);
+      if (duration === 0 && !['pending', 'sending', 'processing', 'queued'].includes(status)) {
+        return true;
+      }
+
+      return false;
     });
 
-    const totalSent = broadcast.total_numbers || 1;
+    const totalSent = Number(broadcast.total_numbers || 1);
     const droppedCalls = Math.max(0, totalSent - logs.length);
     const totalFailuresToRefund = failedLogs.length + droppedCalls;
 
     if (totalFailuresToRefund === 0) {
-      return res.status(200).json({ success: true, message: 'No unreceived calls to refund.', refund_amount: 0 });
+      return res.status(200).json({ 
+        success: true, 
+        message: 'No unreceived calls detected. All calls were either answered or are still in progress.', 
+        refund_amount: 0,
+        stats: {
+          total_sent: totalSent,
+          logs_received: logs.length,
+          failed_logs: failedLogs.length,
+          dropped_calls: droppedCalls
+        }
+      });
     }
 
     // 5. Calculate refund amount
