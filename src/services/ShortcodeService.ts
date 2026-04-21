@@ -64,12 +64,58 @@ export const ShortcodeService = {
       return [];
     }
 
-    // 2. Fetch Fees (Current Month)
-    const { data: fees } = await supabase
-      .from('fees')
-      .select('student_id, amount_due, amount_paid')
-      .eq('month', currentMonth)
-      .in('student_id', studentIds);
+    // 2. Fetch Accounting Data (Total Balance Calculation)
+    const [allFeesRes, structuresRes, settingsRes] = await Promise.all([
+      supabase.from('fees').select('student_id, amount_paid, discount').in('student_id', studentIds),
+      supabase.from('fee_structures').select('*').eq('institution_id', institutionId),
+      supabase.from('student_fee_settings').select('*').in('student_id', studentIds)
+    ]);
+
+    const allFees = allFeesRes.data || [];
+    const structures = structuresRes.data || [];
+    const settings = settingsRes.data || [];
+
+    const feeTotals: Record<string, { paid: number }> = {};
+    allFees.forEach(f => {
+      if (!feeTotals[f.student_id]) feeTotals[f.student_id] = { paid: 0 };
+      feeTotals[f.student_id].paid += Number(f.amount_paid || 0) + Number(f.discount || 0);
+    });
+
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentMonthNum = now.getMonth() + 1; // Assuming English calendar 1-12
+
+    const studentBalances: Record<string, { due: number, paid: number }> = {};
+    
+    students.forEach(s => {
+      // Calculate monthly payable for this student
+      const studentSettings = settings.filter(set => set.student_id === s.id);
+      const studentStructures = structures.filter(fs => fs.class_id === s.class_id || fs.class_id === null);
+      
+      const monthlyPayable = studentStructures.reduce((sum, fs) => {
+        const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
+        const isEnabled = setting ? setting.is_enabled : true;
+        const isExpired = fs.due_date && fs.due_date < today;
+        const isNotStarted = fs.start_date && fs.start_date > today;
+        
+        if (!isEnabled || isExpired || isNotStarted) return sum;
+        
+        const amountToCharge = (setting?.custom_amount !== undefined && setting?.custom_amount !== null) 
+          ? Number(setting.custom_amount) 
+          : Number(fs.amount || 0);
+        
+        return sum + amountToCharge;
+      }, 0);
+
+      const totalPaid = feeTotals[s.id]?.paid || 0;
+      const totalPayableToDate = monthlyPayable * currentMonthNum;
+      const totalOutstanding = Math.max(0, totalPayableToDate - totalPaid);
+
+      studentBalances[s.id] = {
+        due: totalOutstanding,
+        paid: totalPaid
+      };
+    });
 
     // 3. Fetch Latest Exam Results specific to each class
     const { data: inst } = await supabase.from('institutions').select('config_json').eq('id', institutionId).single();
@@ -198,7 +244,7 @@ export const ShortcodeService = {
 
     // Combine all data
     const combinedData = students.map(s => {
-      const studentFees = fees?.find(f => f.student_id === s.id);
+      const balance = studentBalances[s.id] || { due: 0, paid: 0 };
       
       // Calculate Grade (Simple logic: marks / total * 100)
       const studentMarks = marks.filter(m => m.student_id === s.id);
@@ -233,8 +279,8 @@ export const ShortcodeService = {
         roll: s.roll,
         class_name: (s.classes as any)?.class_name,
         institution_name: (s.institutions as any)?.name,
-        due_amount: studentFees?.amount_due,
-        paid_amount: studentFees?.amount_paid,
+        due_amount: balance.due,
+        paid_amount: balance.paid,
         exam_name: examsMap[s.id] || '-',
         result_grade: grade || '-',
         merit_position: meritPositions[s.id] ? String(meritPositions[s.id]) : '-',
