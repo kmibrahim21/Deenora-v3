@@ -19,6 +19,7 @@ export const ShortcodeService = {
       '{due_amount}': data.due_amount !== undefined ? data.due_amount : '-',
       '{paid_amount}': data.paid_amount !== undefined ? data.paid_amount : '-',
       '{result_grade}': data.result_grade || '-',
+      '{merit_position}': data.merit_position || '-',
       '{exam_name}': data.exam_name || '-',
       '{attendance_percentage}': data.attendance_percentage !== undefined ? `${data.attendance_percentage}%` : '-',
       '{institution_name}': data.institution_name || '-',
@@ -49,6 +50,7 @@ export const ShortcodeService = {
       .from('students')
       .select(`
         id,
+        class_id,
         student_name,
         guardian_name,
         roll,
@@ -69,25 +71,122 @@ export const ShortcodeService = {
       .eq('month', currentMonth)
       .in('student_id', studentIds);
 
-    // 3. Fetch Latest Exam Results
-    // This is a bit complex to do in one query for all students.
-    // We'll fetch the latest exam for the institution first.
-    const { data: latestExam } = await supabase
-      .from('exams')
-      .select('id, exam_name')
-      .eq('institution_id', institutionId)
-      .order('exam_date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // 3. Fetch Latest Exam Results specific to each class
+    const { data: inst } = await supabase.from('institutions').select('config_json').eq('id', institutionId).single();
+    const resultEngine = inst?.config_json?.result_engine || 'school';
 
+    const classIds = [...new Set(students.map(s => s.class_id).filter(Boolean))];
     let marks: any[] = [];
-    if (latestExam) {
-      const { data: marksData } = await supabase
-        .from('exam_marks')
-        .select('student_id, marks_obtained, exam_subjects(full_marks)')
-        .eq('exam_id', latestExam.id)
-        .in('student_id', studentIds);
-      marks = marksData || [];
+    let examsMap: Record<string, string> = {}; // student_id -> latest exam name
+    let meritPositions: Record<string, number> = {}; // student_id -> rank
+
+    if (resultEngine === 'school') {
+      for (const cid of classIds) {
+        const { data: latestExam } = await supabase
+          .from('exams')
+          .select('id, exam_name')
+          .eq('class_id', cid)
+          .order('exam_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestExam) {
+           // To calculate merit position, we need marks for ALL students in this class for this exam
+           const { data: allMarksData } = await supabase
+             .from('exam_marks')
+             .select('student_id, marks_obtained, exam_subjects(full_marks)')
+             .eq('exam_id', latestExam.id);
+           
+           if (allMarksData) {
+             // Calculate totals for everyone in class to determine rank
+             const totals: Record<string, { obtained: number, full: number }> = {};
+             allMarksData.forEach(m => {
+               if (!totals[m.student_id]) totals[m.student_id] = { obtained: 0, full: 0 };
+               const fMarks = Array.isArray(m.exam_subjects) 
+                 ? (m.exam_subjects[0]?.full_marks || 100) 
+                 : ((m.exam_subjects as any)?.full_marks || 100);
+               totals[m.student_id].obtained += Number(m.marks_obtained || 0);
+               totals[m.student_id].full += Number(fMarks);
+             });
+
+             // Sort by obtained marks descending
+             const sortedStudents = Object.entries(totals)
+               .map(([id, t]) => ({ id, obtained: t.obtained }))
+               .sort((a, b) => b.obtained - a.obtained);
+
+             sortedStudents.forEach((st, index) => {
+               meritPositions[st.id] = index + 1;
+             });
+
+             // Filter marks for requested students only to add to 'marks' array (for grade calculation later)
+             const filteredMarks = allMarksData.filter(m => studentIds.includes(m.student_id));
+             const normalizedMarks = filteredMarks.map(m => ({
+               student_id: m.student_id,
+               marks_obtained: m.marks_obtained,
+               exam_subjects: { 
+                 full_marks: Array.isArray(m.exam_subjects) 
+                   ? (m.exam_subjects[0]?.full_marks || 100) 
+                   : ((m.exam_subjects as any)?.full_marks || 100) 
+               }
+             }));
+             marks.push(...normalizedMarks);
+
+             const classStudentsInReq = students.filter(s => s.class_id === cid);
+             classStudentsInReq.forEach(s => examsMap[s.id] = latestExam.exam_name);
+           }
+        }
+      }
+    } else if (resultEngine === 'befaq') {
+      for (const cid of classIds) {
+        const { data: latestExam } = await supabase
+          .from('befaq_exams')
+          .select('id, exam_name')
+          .eq('marhala_id', cid)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestExam) {
+           const { data: allMarksData } = await supabase
+             .from('befaq_results')
+             .select('student_id, marks_obtained, befaq_subjects(total_marks)')
+             .eq('exam_id', latestExam.id);
+           
+           if (allMarksData) {
+             const totals: Record<string, { obtained: number, full: number }> = {};
+             allMarksData.forEach(m => {
+               if (!totals[m.student_id]) totals[m.student_id] = { obtained: 0, full: 0 };
+               const fMarks = Array.isArray(m.befaq_subjects) 
+                 ? (m.befaq_subjects[0]?.total_marks || 100) 
+                 : ((m.befaq_subjects as any)?.total_marks || 100);
+               totals[m.student_id].obtained += Number(m.marks_obtained || 0);
+               totals[m.student_id].full += Number(fMarks);
+             });
+
+             const sortedStudents = Object.entries(totals)
+               .map(([id, t]) => ({ id, obtained: t.obtained }))
+               .sort((a, b) => b.obtained - a.obtained);
+
+             sortedStudents.forEach((st, index) => {
+               meritPositions[st.id] = index + 1;
+             });
+
+             const filteredMarks = allMarksData.filter(m => studentIds.includes(m.student_id));
+             const normalizedMarks = filteredMarks.map(m => ({
+               student_id: m.student_id,
+               marks_obtained: m.marks_obtained,
+               exam_subjects: { 
+                 full_marks: Array.isArray(m.befaq_subjects) 
+                   ? (m.befaq_subjects[0]?.total_marks || 100) 
+                   : ((m.befaq_subjects as any)?.total_marks || 100) 
+               }
+             }));
+             marks.push(...normalizedMarks);
+           }
+           const classStudentsInReq = students.filter(s => s.class_id === cid);
+           classStudentsInReq.forEach(s => examsMap[s.id] = latestExam.exam_name);
+        }
+      }
     }
 
     // 4. Fetch Attendance (Current Month)
@@ -136,10 +235,11 @@ export const ShortcodeService = {
         institution_name: (s.institutions as any)?.name,
         due_amount: studentFees?.amount_due,
         paid_amount: studentFees?.amount_paid,
-        exam_name: latestExam?.exam_name,
-        result_grade: grade,
-        attendance_percentage: attPercentage,
-        month: currentMonth
+        exam_name: examsMap[s.id] || '-',
+        result_grade: grade || '-',
+        merit_position: meritPositions[s.id] ? String(meritPositions[s.id]) : '-',
+        attendance_percentage: attPercentage || 0,
+        month: currentMonth || '-'
       };
     });
 

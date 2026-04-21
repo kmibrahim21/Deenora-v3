@@ -24,13 +24,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [admissionNumber, setAdmissionNumber] = useState(student?.admission_number || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
 
-  useEffect(() => {
-    if (!isEditing && !admissionNumber) {
-      const randomNum = Math.floor(10000 + Math.random() * 90000).toString();
-      setAdmissionNumber(randomNum);
-    }
-  }, [isEditing, admissionNumber]);
-
   const [roll, setRoll] = useState(student?.roll?.toString() || '');
   const [dob, setDob] = useState(student?.date_of_birth || '');
   const [bloodGroup, setBloodGroup] = useState(student?.blood_group || '');
