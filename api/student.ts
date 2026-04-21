@@ -84,7 +84,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ 
         success: false, 
         message: 'Student not found', 
-        debug: { searchedInstitute: cleanInstitute, searchedStudent: cleanStudent } 
+        debug: { 
+          searchedInstitute: cleanInstitute, 
+          searchedStudent: cleanStudent,
+          foundInstitutionId: institutionId,
+          attemptedQueryUrl: stdUrl
+        } 
       });
     }
 
