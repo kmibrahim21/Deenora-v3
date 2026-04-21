@@ -558,7 +558,7 @@ const App: React.FC = () => {
           <AcademicCalendarPage
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack("account")}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
             role={role}
           />
         );
