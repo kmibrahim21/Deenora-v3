@@ -26,9 +26,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cleanStudent = String(student).trim();
 
     const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    // VERY IMPORTANT: Use Service Role Key to bypass RLS policies when fetching data server-side
+    const SUPABASE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
       console.error('Missing Supabase configuration in environment variables.');
       return res.status(500).json({ success: false, message: 'Server configuration error' });
     }
@@ -37,8 +38,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&institute_code=ilike.${cleanInstitute}`;
     const instResponse = await fetch(instUrl, {
       headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json'
       }
     });
@@ -70,8 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const stdResponse = await fetch(stdUrl, {
       headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json'
       }
     });
