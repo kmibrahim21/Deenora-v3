@@ -282,9 +282,17 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
         
         improvementInsights.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
 
-        // --- Process Top & Weak Students (Based on latest exam) ---
-        const latestExamId = exams[exams.length - 1]?.id;
-        const latestMarks = marks.filter(m => m.exam_id === latestExamId);
+        // --- Process Top & Weak Students & Overall Stats ---
+        // We want the latest exam results for EVERY class in the current scope
+        const latestExamPerClass: Record<string, string> = {};
+        exams.forEach(e => {
+            const cid = e[classIdField];
+            // Since exams are sorted by date ascending, the last one seen for a class is its latest
+            latestExamPerClass[cid] = e.id; 
+        });
+
+        const latestExamIds = Object.values(latestExamPerClass);
+        const latestMarks = marks.filter(m => latestExamIds.includes(m.exam_id));
         const studentAverages: { id: string, name: string, roll: number, className: string, average: number, totalMarks: number }[] = [];
         
         let passedCount = 0;
@@ -293,7 +301,11 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
         let lowest = 100;
 
         students.forEach(std => {
-            const stdMarks = latestMarks.filter(m => m.student_id === std.id);
+            // Find marks for this student from their respective latest exam
+            const studentLatestExamId = latestExamPerClass[std.class_id];
+            if (!studentLatestExamId) return;
+
+            const stdMarks = latestMarks.filter(m => m.student_id === std.id && m.exam_id === studentLatestExamId);
             if (stdMarks.length > 0) {
                 let total = 0;
                 let count = 0;
@@ -337,6 +349,10 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
         const totalStudentsWithMarks = passedCount + failedCount;
         const passRate = totalStudentsWithMarks > 0 ? (passedCount / totalStudentsWithMarks) * 100 : 0;
         const failRate = totalStudentsWithMarks > 0 ? (failedCount / totalStudentsWithMarks) * 100 : 0;
+
+        // Ensure lowest is 0 if no students
+        const finalHighest = totalStudentsWithMarks > 0 ? highest : 0;
+        const finalLowest = totalStudentsWithMarks > 0 ? lowest : 0;
 
         // --- Process Subject Performance (For Graph) ---
         const subjectPerformance = Object.entries(subjectStats).map(([name, stats]) => {
@@ -388,8 +404,8 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
             weakStudents,
             passRate,
             failRate,
-            highestMarks: highest === 100 && totalStudentsWithMarks === 0 ? 0 : highest,
-            lowestMarks: lowest === 100 && totalStudentsWithMarks === 0 ? 0 : lowest,
+            highestMarks: finalHighest,
+            lowestMarks: finalLowest,
             subjectPerformance,
             examTrends,
             classRankings

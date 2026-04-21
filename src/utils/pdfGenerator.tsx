@@ -166,23 +166,44 @@ export const generateClassResultPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
     
-    await new Promise<void>((resolve) => {
-        root.render(<ClassResultTemplate exam={exam} subjects={subjects} students={students} marksData={marksData} madrasah={madrasah} lang={lang} />);
-        setTimeout(resolve, 500);
-    });
+    // Chunk students for multi-page support
+    const STUDENTS_PER_PAGE = 10; 
+    const chunks = [];
+    for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
+        chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
+    }
 
-    const imgData = await toPng(container.firstElementChild as HTMLElement, {
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-        width: 1123,
-        height: 794,
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                {chunks.map((chunk, idx) => (
+                    <div key={idx} className="pdf-page-break">
+                        <ClassResultTemplate exam={exam} subjects={subjects} students={chunk} marksData={marksData} madrasah={madrasah} lang={lang} />
+                    </div>
+                ))}
+            </div>
+        );
+        setTimeout(resolve, 800);
     });
 
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper && wrapper.children.length > 0) {
+        const pages = Array.from(wrapper.children);
+        for (let i = 0; i < pages.length; i++) {
+            const imgData = await toPng(pages[i] as HTMLElement, {
+                pixelRatio: 2,
+                backgroundColor: '#ffffff',
+                width: 1123,
+                height: 794,
+            });
+            if (i > 0) doc.addPage();
+            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        }
+    }
     
     root.unmount();
     document.body.removeChild(container);
@@ -204,23 +225,44 @@ export const generateClassFeeReportPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
     
-    await new Promise<void>((resolve) => {
-        root.render(<ClassFeeReportTemplate className={className} month={month} students={students} madrasah={madrasah} lang={lang} />);
-        setTimeout(resolve, 500);
-    });
+    // Chunk students for multi-page support
+    const STUDENTS_PER_PAGE = 18; // Portrait has more space vertically
+    const chunks = [];
+    for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
+        chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
+    }
 
-    const imgData = await toPng(container.firstElementChild as HTMLElement, {
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-        width: 794,
-        height: 1123,
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                {chunks.map((chunk, idx) => (
+                    <div key={idx}>
+                        <ClassFeeReportTemplate className={className} month={month} students={chunk} madrasah={madrasah} lang={lang} />
+                    </div>
+                ))}
+            </div>
+        );
+        setTimeout(resolve, 800);
     });
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper && wrapper.children.length > 0) {
+        const pages = Array.from(wrapper.children);
+        for (let i = 0; i < pages.length; i++) {
+            const imgData = await toPng(pages[i] as HTMLElement, {
+                pixelRatio: 2,
+                backgroundColor: '#ffffff',
+                width: 794,
+                height: 1123,
+            });
+            if (i > 0) doc.addPage();
+            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        }
+    }
     
     root.unmount();
     document.body.removeChild(container);
@@ -280,23 +322,44 @@ export const generateFinalResultPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
     
-    await new Promise<void>((resolve) => {
-        root.render(<FinalResultTemplate title={title} className={className} subjects={subjects} students={students} madrasah={madrasah} lang={lang} />);
-        setTimeout(resolve, 500);
-    });
+    // Chunk students for multi-page support
+    const STUDENTS_PER_PAGE = 10; 
+    const chunks = [];
+    for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
+        chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
+    }
 
-    const imgData = await toPng(container.firstElementChild as HTMLElement, {
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-        width: 1123,
-        height: 794,
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                {chunks.map((chunk, idx) => (
+                    <div key={idx}>
+                        <FinalResultTemplate title={title} className={className} subjects={subjects} students={chunk} madrasah={madrasah} lang={lang} />
+                    </div>
+                ))}
+            </div>
+        );
+        setTimeout(resolve, 800);
     });
 
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper && wrapper.children.length > 0) {
+        const pages = Array.from(wrapper.children);
+        for (let i = 0; i < pages.length; i++) {
+            const imgData = await toPng(pages[i] as HTMLElement, {
+                pixelRatio: 2,
+                backgroundColor: '#ffffff',
+                width: 1123,
+                height: 794,
+            });
+            if (i > 0) doc.addPage();
+            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        }
+    }
     
     root.unmount();
     document.body.removeChild(container);
