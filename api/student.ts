@@ -57,9 +57,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Build the query. We test both admission_number and roll.
     // If cleanStudent is a valid number, we can search both.
     // If cleanStudent has letters/symbols, we should NOT search roll to avoid PostgREST integer syntax error.
-    let orQuery = `admission_number.ilike.${encodeURIComponent(cleanStudent)}`;
+    // Allow partial match (like '%1122%') using '*' prefix and suffix in Postgrest for ilike
+    let orQuery = `admission_number.ilike.*${encodeURIComponent(cleanStudent)}*`;
     if (!isNaN(Number(cleanStudent))) {
-      orQuery = `admission_number.ilike.${encodeURIComponent(cleanStudent)},roll.eq.${cleanStudent}`;
+      orQuery = `admission_number.ilike.*${encodeURIComponent(cleanStudent)}*,roll.eq.${cleanStudent}`;
     }
 
     const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&or=(${orQuery})`;
