@@ -185,8 +185,8 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       // Calculate for each student
       const processed = students.map(student => {
         const studentMarks: any = {};
-        let totalWeightedMarks = 0;
-        let totalPossibleMarks = 0; // To calculate percentage if needed
+        let totalWeightedSum = 0;
+        let hasFailedAny = false;
 
         subjectList.forEach(sub => {
           let weightedSum = 0;
@@ -200,27 +200,39 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
             if (markEntry) {
               const obtained = parseFloat(markEntry.marks_obtained);
-              weightedSum += (obtained * exam.weight) / 100;
+              const fullMarks = markEntry.exam_subjects?.full_marks || 100;
+              const passMarks = markEntry.exam_subjects?.pass_marks || 33;
+              
+              // Normalize to the exam's weight. 
+              // Example: If weight is 30% and student got 25/50, contribution is (25/50) * 30 = 15
+              const contribution = (obtained / fullMarks) * exam.weight;
+              weightedSum += contribution;
               weightUsed += exam.weight;
+              
+              // Pass status: if the component score was less than pass pct
+              if ((obtained / fullMarks) * 100 < (passMarks / fullMarks) * 100) {
+                  hasFailedAny = true;
+              }
             }
           });
 
-          // Normalize if weightUsed < 100? For now, assume strict 100% config
-          studentMarks[sub] = weightedSum.toFixed(2);
-          totalWeightedMarks += weightedSum;
+          // If weights sum up to less than 100, we might need to normalize
+          // studentMarks[sub] = weightedSum;
+          studentMarks[sub] = weightedSum.toFixed(1);
+          totalWeightedSum += weightedSum;
         });
 
-        // Calculate Grade
-        // Assuming average of subjects or total? 
-        // Let's use average percentage logic
-        const averageMark = subjectList.length > 0 ? totalWeightedMarks / subjectList.length : 0;
-        const { gpa, grade } = getGradeInfo(averageMark); // Using average for grading
+        // Calculate Grade based on average percentage
+        // Since weightedSum per subject is already maxed at 100 (if weights sum to 100),
+        // we can use totalWeightedSum / subjectList.length as the final score pct.
+        const finalPercentage = subjectList.length > 0 ? (totalWeightedSum / subjectList.length) : 0;
+        const { gpa, grade } = getGradeInfo(finalPercentage, hasFailedAny);
 
         return {
           ...student,
           marks: studentMarks,
-          total: totalWeightedMarks.toFixed(2),
-          average: averageMark.toFixed(2),
+          total: totalWeightedSum.toFixed(1),
+          average: finalPercentage.toFixed(1),
           gpa,
           grade
         };
@@ -241,13 +253,14 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     setResultLoading(false);
   };
 
-  const getGradeInfo = (marks: number) => {
-    if (marks >= 80) return { gpa: '5.00', grade: 'A+' };
-    if (marks >= 70) return { gpa: '4.00', grade: 'A' };
-    if (marks >= 60) return { gpa: '3.50', grade: 'A-' };
-    if (marks >= 50) return { gpa: '3.00', grade: 'B' };
-    if (marks >= 40) return { gpa: '2.00', grade: 'C' };
-    if (marks >= 33) return { gpa: '1.00', grade: 'D' };
+  const getGradeInfo = (percentage: number, hasFailed: boolean) => {
+    if (hasFailed) return { gpa: '0.00', grade: 'F' };
+    if (percentage >= 80) return { gpa: '5.00', grade: 'A+' };
+    if (percentage >= 70) return { gpa: '4.00', grade: 'A' };
+    if (percentage >= 60) return { gpa: '3.50', grade: 'A-' };
+    if (percentage >= 50) return { gpa: '3.00', grade: 'B' };
+    if (percentage >= 40) return { gpa: '2.00', grade: 'C' };
+    if (percentage >= 33) return { gpa: '1.00', grade: 'D' };
     return { gpa: '0.00', grade: 'F' };
   };
 

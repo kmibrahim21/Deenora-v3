@@ -222,20 +222,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setLoading(false);
   };
 
-  const getGradeInfo = (totalMarks: number, passStatus: boolean) => {
+  const getGradeInfo = (scorePercentage: number, passStatus: boolean) => {
     if (!passStatus) return { gpa: '0.00', grade: 'F' };
     
-    const totalPossible = subjects.reduce((sum, s) => sum + s.full_marks, 0);
-    if (totalPossible === 0) return { gpa: '0.00', grade: 'N/A' };
-    
-    const percentage = (totalMarks / totalPossible) * 100;
-    
-    if (percentage >= 80) return { gpa: '5.00', grade: 'A+' };
-    if (percentage >= 70) return { gpa: '4.00', grade: 'A' };
-    if (percentage >= 60) return { gpa: '3.50', grade: 'A-' };
-    if (percentage >= 50) return { gpa: '3.00', grade: 'B' };
-    if (percentage >= 40) return { gpa: '2.00', grade: 'C' };
-    if (percentage >= 33) return { gpa: '1.00', grade: 'D' };
+    if (scorePercentage >= 80) return { gpa: '5.00', grade: 'A+' };
+    if (scorePercentage >= 70) return { gpa: '4.00', grade: 'A' };
+    if (scorePercentage >= 60) return { gpa: '3.50', grade: 'A-' };
+    if (scorePercentage >= 50) return { gpa: '3.00', grade: 'B' };
+    if (scorePercentage >= 40) return { gpa: '2.00', grade: 'C' };
+    if (scorePercentage >= 33) return { gpa: '1.00', grade: 'D' };
     return { gpa: '0.00', grade: 'F' };
   };
 
@@ -933,16 +928,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     {(Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0)}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
-                                    {subjects.length > 0 ? ((Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0) / subjects.length).toFixed(1) : '0'}
+                                    {(() => {
+                                        const total = (Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0);
+                                        const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
+                                        return totalPossible > 0 ? ((total / totalPossible) * 100).toFixed(1) + '%' : '0%';
+                                    })()}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
                                     {(() => {
                                         const total = (Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0);
+                                        const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
+                                        const pct = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
                                         const passStatus = subjects.length > 0 && subjects.every(sub => {
                                             const mark = parseFloat((marksData[std.id] || {})[sub.id] || '0');
-                                            return mark >= sub.pass_marks;
+                                            return mark >= (sub.pass_marks || 33);
                                         });
-                                        return getGradeInfo(total, passStatus).gpa;
+                                        return getGradeInfo(pct, passStatus).gpa;
                                     })()}
                                 </td>
                             </tr>
@@ -978,18 +979,72 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   <div className="min-w-0">
                                       <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto truncate leading-none mb-1`}>{item.student_name}</h5>
                                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                        Roll: {item.roll} | {t('total_marks', lang)}: {item.total_marks} | {t('average', lang)}: {subjects.length > 0 ? (item.total_marks / subjects.length).toFixed(2) : '0'}
+                                        Roll: {item.roll} | {t('total_marks', lang)}: {item.total_marks} | {t('average', lang)}: {(() => {
+                                            const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
+                                            return totalPossible > 0 ? ((item.total_marks / totalPossible) * 100).toFixed(1) + '%' : '0%';
+                                        })()}
                                       </p>
                                   </div>
                               </div>
-                              <div className="flex flex-col items-end gap-1.5">
-                                  <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border ${item.pass_status ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'}`}>
-                                     {item.pass_status ? (lang === 'bn' ? 'পাস' : 'Passed') : (lang === 'bn' ? 'ফেল' : 'Failed')}
+                              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                  <div className="flex gap-2 mb-1">
+                                      <button 
+                                          onClick={() => {
+                                              const studentMarks = marksData[item.student_id] || {};
+                                              const preparedMarks = subjects.map(s => {
+                                                  const obtained = parseFloat(studentMarks[s.id] || '0');
+                                                  const full = s.full_marks || 100;
+                                                  const pass = s.pass_marks || 33;
+                                                  const pct = (obtained / full) * 100;
+                                                  const hasFailedSub = obtained < pass;
+                                                  
+                                                  const subGradeInfo = (p: number, f: boolean) => {
+                                                      if (f) return { gpa: '0.00', grade: 'F' };
+                                                      if (p >= 80) return { gpa: '5.00', grade: 'A+' };
+                                                      if (p >= 70) return { gpa: '4.00', grade: 'A' };
+                                                      if (p >= 60) return { gpa: '3.50', grade: 'A-' };
+                                                      if (p >= 50) return { gpa: '3.00', grade: 'B' };
+                                                      if (p >= 40) return { gpa: '2.00', grade: 'C' };
+                                                      if (p >= 33) return { gpa: '1.00', grade: 'D' };
+                                                      return { gpa: '0.00', grade: 'F' };
+                                                  };
+                                                  return {
+                                                      subject_name: s.subject_name,
+                                                      marks_obtained: obtained,
+                                                      grade: subGradeInfo(pct, hasFailedSub).grade
+                                                  };
+                                              });
+                                              if (selectedExam && madrasah) {
+                                                generateResultPDF(
+                                                    { id: item.student_id, student_name: item.student_name, roll: item.roll, classes: { class_name: selectedExam.classes?.class_name } },
+                                                    selectedExam,
+                                                    preparedMarks,
+                                                    { name: madrasah.name },
+                                                    lang
+                                                );
+                                              }
+                                          }}
+                                          className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                                      >
+                                          <Printer size={12}/> {lang === 'bn' ? 'মার্কশিট' : 'Marksheet'}
+                                      </button>
+                                      <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border ${item.pass_status ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                                          {item.pass_status ? (lang === 'bn' ? 'পাস' : 'Passed') : (lang === 'bn' ? 'ফেল' : 'Failed')}
+                                      </div>
                                   </div>
                                   {item.pass_status && (
                                     <div className="flex gap-1.5">
-                                       <span className="px-2 py-0.5 bg-blue-50 text-[#2563EB] rounded-lg text-[8px] font-black border border-blue-100">{t('gpa', lang)}: {getGradeInfo(item.total_marks, item.pass_status).gpa}</span>
-                                       <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black border border-purple-100">{t('grade', lang)}: {getGradeInfo(item.total_marks, item.pass_status).grade}</span>
+                                       {(() => {
+                                           const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
+                                           const pct = totalPossible > 0 ? (item.total_marks / totalPossible) * 100 : 0;
+                                           const info = getGradeInfo(pct, item.pass_status);
+                                           return (
+                                               <>
+                                                  <span className="px-2 py-0.5 bg-blue-50 text-[#2563EB] rounded-lg text-[8px] font-black border border-blue-100">{t('gpa', lang)}: {info.gpa}</span>
+                                                  <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black border border-purple-100">{t('grade', lang)}: {info.grade}</span>
+                                               </>
+                                           );
+                                       })()}
                                     </div>
                                   )}
                               </div>

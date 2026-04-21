@@ -77,25 +77,39 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
               const studentMarks = marksData[student.id] || {};
               let total = 0;
               let count = 0;
+              let totalPossible = 0;
+              let hasFailed = false;
+
               subjects.forEach(s => {
                 const m = studentMarks[s.id];
+                const fullMarkValue = Number(s.full_marks || 100);
+                const passMarkValue = Number(s.pass_marks || 33);
+                totalPossible += fullMarkValue;
+
                 if (m !== undefined && m !== '') {
-                  total += Number(m);
+                  const markVal = Number(m);
+                  total += markVal;
                   count++;
+                  if (markVal < passMarkValue) hasFailed = true;
+                } else {
+                  // If marks are missing, typically it counts as failed or skipped
+                  hasFailed = true;
                 }
               });
               
-              const avg = count > 0 ? total / count : 0;
-              const getGradeInfo = (score: number) => {
-                if (score >= 80) return { gpa: '5.00', grade: 'A+' };
-                if (score >= 70) return { gpa: '4.00', grade: 'A' };
-                if (score >= 60) return { gpa: '3.50', grade: 'A-' };
-                if (score >= 50) return { gpa: '3.00', grade: 'B' };
-                if (score >= 40) return { gpa: '2.00', grade: 'C' };
-                if (score >= 33) return { gpa: '1.00', grade: 'D' };
+              const avgPercentage = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
+              
+              const getGradeInfo = (percentage: number, failed: boolean) => {
+                if (failed) return { gpa: '0.00', grade: 'F' };
+                if (percentage >= 80) return { gpa: '5.00', grade: 'A+' };
+                if (percentage >= 70) return { gpa: '4.00', grade: 'A' };
+                if (percentage >= 60) return { gpa: '3.50', grade: 'A-' };
+                if (percentage >= 50) return { gpa: '3.00', grade: 'B' };
+                if (percentage >= 40) return { gpa: '2.00', grade: 'C' };
+                if (percentage >= 33) return { gpa: '1.00', grade: 'D' };
                 return { gpa: '0.00', grade: 'F' };
               };
-              const { gpa, grade } = getGradeInfo(avg);
+              const { gpa, grade } = getGradeInfo(avgPercentage, hasFailed);
 
               return (
                 <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
