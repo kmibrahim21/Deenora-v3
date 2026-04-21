@@ -920,6 +920,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         reve_client_id: editReveClientId.trim() || null,
         sms_rate: Number(editSmsRate) || 0.50,
         voice_rate: Number(editVoiceRate) || 0.50,
+        institute_code: editInstituteCode.trim(),
         config_json: {
           ...latestConfig,
           modules: editModules,

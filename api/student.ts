@@ -33,8 +33,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, message: 'Server configuration error' });
     }
 
-    // First query institute (case-insensitive for safety)
-    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&config_json->>institute_code=ilike.${cleanInstitute}`;
+    // First query institute (case-insensitive for safety, using the new institute_code column)
+    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&institute_code=ilike.${cleanInstitute}`;
     const instResponse = await fetch(instUrl, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
