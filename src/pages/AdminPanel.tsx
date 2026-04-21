@@ -129,7 +129,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     accounting: true,
     academic_year_promotion: true,
     voice_broadcast: false,
-    sms: true
+    sms: true,
+    messages: true
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -825,6 +826,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       academic_year_promotion: true,
       voice_broadcast: true,
       sms: true,
+      messages: true,
       ...userModules
     });
 

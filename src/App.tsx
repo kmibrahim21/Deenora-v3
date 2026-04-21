@@ -38,6 +38,7 @@ const Exams = React.lazy(() => import("pages/Exams"));
 const FinalResults = React.lazy(() => import("pages/FinalResults"));
 const VoiceBroadcast = React.lazy(() => import("pages/VoiceBroadcast"));
 const SmsVoiceMenu = React.lazy(() => import("pages/SmsVoiceMenu"));
+const MessagesPattern = React.lazy(() => import("pages/Messages"));
 const AcademicCalendarPage = React.lazy(
   () => import("pages/AcademicCalendarPage"),
 );
@@ -235,6 +236,7 @@ const App: React.FC = () => {
       "tutorials",
       "admin-tutorials",
       "admin-voice-service",
+      "messages",
       "academic-year"
     ];
 
@@ -287,6 +289,7 @@ const App: React.FC = () => {
             onNavigateToVoiceBroadcast={() => {
               setView("voice-broadcast");
             }}
+            onNavigateToMessages={() => setView("messages")}
           />
         );
       case "classes":
@@ -624,6 +627,10 @@ const App: React.FC = () => {
             profile={profile}
           />
         );
+      case "messages":
+        return (
+          <MessagesPattern lang={lang} madrasah={madrasah} profile={profile} />
+        );
       default:
         return (
           <Home
@@ -656,6 +663,7 @@ const App: React.FC = () => {
             onNavigateToVoiceBroadcast={() => {
               setView("voice-broadcast");
             }}
+            onNavigateToMessages={() => setView("messages")}
           />
         );
     }
