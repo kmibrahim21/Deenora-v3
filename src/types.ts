@@ -12,6 +12,7 @@ export interface Institution {
   name: string;
   address?: string;
   phone?: string;
+  institute_code?: string;
   logo_url?: string;
   institution_type: 'madrasah' | 'school' | 'kindergarten' | 'nurani' | 'system';
   config_json: {
