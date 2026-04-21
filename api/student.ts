@@ -31,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // First query institute
-    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&config_json->>institute_code=eq.${institute}`;
+    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&config_json->>institute_code=eq.${encodeURIComponent(String(institute))}`;
     const instResponse = await fetch(instUrl, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
@@ -46,13 +46,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const institutions = await instResponse.json();
     if (!institutions || institutions.length === 0) {
-      return res.status(404).json({ success: false, message: 'Institution not found' });
+      return res.status(404).json({ success: false, message: 'Institution not found: Institute Code mismatch' });
     }
 
     const institutionId = institutions[0].id;
 
-    // Next query student table
-    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&roll=eq.${student}`;
+    // Next query student table by admission_number
+    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&admission_number=eq.${encodeURIComponent(String(student))}`;
     const stdResponse = await fetch(stdUrl, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
