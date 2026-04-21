@@ -22,6 +22,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, message: 'Missing institute or student query parameters' });
     }
 
+    const cleanInstitute = String(institute).trim();
+    const cleanStudent = String(student).trim();
+
     const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
@@ -30,8 +33,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, message: 'Server configuration error' });
     }
 
-    // First query institute
-    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&config_json->>institute_code=eq.${encodeURIComponent(String(institute))}`;
+    // First query institute (case-insensitive for safety)
+    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&config_json->>institute_code=ilike.${cleanInstitute}`;
     const instResponse = await fetch(instUrl, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
@@ -51,9 +54,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const institutionId = institutions[0].id;
 
-    // Next query student table by admission_number OR roll
-    const studentQueryValue = encodeURIComponent(String(student));
-    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&or=(admission_number.eq.${studentQueryValue},roll.eq.${studentQueryValue})`;
+    // Build the query. We test both admission_number and roll.
+    // If cleanStudent is a valid number, we can search both.
+    // If cleanStudent has letters/symbols, we should NOT search roll to avoid PostgREST integer syntax error.
+    let orQuery = `admission_number.ilike.${encodeURIComponent(cleanStudent)}`;
+    if (!isNaN(Number(cleanStudent))) {
+      orQuery = `admission_number.ilike.${encodeURIComponent(cleanStudent)},roll.eq.${cleanStudent}`;
+    }
+
+    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&or=(${orQuery})`;
+    
+    // Add debugging console log
+    console.log(`[Login Attempt] Institute: ${cleanInstitute}, Student: ${cleanStudent}, URL: ${stdUrl}`);
+
     const stdResponse = await fetch(stdUrl, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
@@ -68,7 +81,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const students = await stdResponse.json();
     if (!students || students.length === 0) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Student not found', 
+        debug: { searchedInstitute: cleanInstitute, searchedStudent: cleanStudent } 
+      });
     }
 
     const studentData = students[0];
