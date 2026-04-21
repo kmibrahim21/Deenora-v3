@@ -51,8 +51,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const institutionId = institutions[0].id;
 
-    // Next query student table by admission_number
-    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&admission_number=eq.${encodeURIComponent(String(student))}`;
+    // Next query student table by admission_number OR roll
+    const studentQueryValue = encodeURIComponent(String(student));
+    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&or=(admission_number.eq.${studentQueryValue},roll.eq.${studentQueryValue})`;
     const stdResponse = await fetch(stdUrl, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
