@@ -107,7 +107,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   // Broadcast state
   const [classes, setClasses] = useState<Class[]>([]);
   const [allInstitutions, setAllInstitutions] = useState<Institution[]>([]);
-  const [targetType, setTargetType] = useState<'all' | 'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'all');
+  const [targetType, setTargetType] = useState<'all' | 'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
   const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<string[]>([]);
   
   const [selectedClassId, setSelectedClassId] = useState<string>('');
@@ -1435,23 +1435,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       {isSuperAdmin ? 'লক্ষ্য নির্বাচন করুন (Target)' : t('step_1_class', lang)}
                     </h4>
                     
-                    {!isSuperAdmin && (
-                      <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-full mb-2">
-                        <button 
-                          onClick={() => setTargetType('all')}
-                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'all' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
-                        >
-                          {lang === 'bn' ? 'সব' : 'All'}
-                        </button>
-                        <button 
-                          onClick={() => setTargetType('class')}
-                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'class' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
-                        >
-                          {lang === 'bn' ? 'ক্লাস' : 'Class'}
-                        </button>
-                      </div>
-                    )}
-
                     {!isPreSelected && !isInstPreSelected ? (
                       <div className="relative">
                         {!isSuperAdmin ? (
