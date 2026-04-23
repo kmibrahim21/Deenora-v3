@@ -454,14 +454,19 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
       let templateQuery = supabase.from('voice_templates').select('*').eq('provider_status', 'approved');
       
-      if (systemId && madrasah?.id) {
-        templateQuery = templateQuery.or(`institution_id.eq.${systemId},institution_id.eq.${madrasah.id},institution_id.is.null`);
-      } else if (madrasah?.id) {
-        templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.is.null`);
-      } else if (systemId) {
-        templateQuery = templateQuery.or(`institution_id.eq.${systemId},institution_id.is.null`);
+      if (isSuperAdmin) {
+        // Super Admin can see system, their own, and unassigned templates
+        if (systemId && madrasah?.id && madrasah.id !== systemId) {
+          templateQuery = templateQuery.or(`institution_id.eq.${systemId},institution_id.eq.${madrasah.id},institution_id.is.null`);
+        } else if (madrasah?.id) {
+          templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.is.null`);
+        } else {
+          templateQuery = templateQuery.is('institution_id', null);
+        }
       } else {
-        templateQuery = templateQuery.is('institution_id', null);
+        // Regular institutions SHOULD only see their own approved templates
+        // to prevent Super Admin only voices from leaking into all user panels
+        templateQuery = templateQuery.eq('institution_id', madrasah.id);
       }
 
       const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
