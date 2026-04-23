@@ -26,9 +26,10 @@ interface AdminPanelProps {
   madrasah?: Institution | null;
   profile?: any;
   setStatusModal: (modal: {show: boolean, type: 'success' | 'error', title: string, message: string}) => void;
+  onNavigateToVoiceBroadcast?: (ids: string[]) => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal, onNavigateToVoiceBroadcast }) => {
   const [madrasahs, setMadrasahs] = useState<InstitutionWithStats[]>([]);
   const [pendingTrans, setPendingTrans] = useState<Transaction[]>([]);
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
@@ -49,45 +50,41 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [isFetchingAwajVoices, setIsFetchingAwajVoices] = useState(false);
   const [awajVoices, setAwajVoices] = useState<any[]>([]);
 
-  const handleFetchAwajVoices = async () => {
+  const handleFetchAwajVoices = useCallback(async () => {
     setIsFetchingAwajVoices(true);
     try {
-      const awajResponse = await fetch('/api/awaj/voices');
-      if (awajResponse.ok) {
-        const awajData = await awajResponse.json();
-        // Assuming the API returns an array of voices or an object with a voices array
-        const voicesList = Array.isArray(awajData) ? awajData : (awajData.voices || awajData.data || []);
-        setAwajVoices(voicesList);
-        if (voicesList.length === 0) {
-          setStatusModal({
-            show: true,
-            type: 'error',
-            title: 'No Voices Found',
-            message: 'No approved voices found in your Awaj Digital account.'
-          });
-        }
+      // 1. Get the system institution ID - ensure we find it correctly
+      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+      
+      let sysId = null;
+      if (sysInst && sysInst.length > 0) {
+        sysId = sysInst[0].id;
+      }
+
+      // 2. Fetch voices - either assigned to system ID or null (legacy)
+      let query = supabase.from('voice_templates').select('*');
+      
+      if (sysId) {
+         query = query.or(`institution_id.is.null,institution_id.eq.${sysId}`);
       } else {
-        let errorMsg = 'Unknown error occurred while fetching from Awaj Digital';
-        try {
-          const textData = await awajResponse.text();
-          try {
-            const errorData = JSON.parse(textData);
-            errorMsg = errorData.message || errorData.error || errorMsg;
-          } catch (e) {
-            if (textData) errorMsg = textData;
-          }
-        } catch (e) {
-          console.error("Failed to read error response", e);
-        }
-        throw new Error(`Awaj API Error: ${errorMsg}`);
+         query = query.is('institution_id', null);
+      }
+
+      const { data, error } = await query.eq('provider_status', 'approved').order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAwajVoices(data || []);
+      
+      if (!data || data.length === 0) {
+         console.warn("No system voices found even after fallback check");
       }
     } catch (err: any) {
-      console.error('Error fetching from Awaj:', err);
-      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: err.message });
+      console.error('Error fetching system voices:', err);
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'সিস্টেম ভয়েস লোড করা সম্ভব হয়নি।' });
     } finally {
       setIsFetchingAwajVoices(false);
     }
-  };
+  }, []);
 
   const [smsToCredit, setSmsToCredit] = useState<{ [key: string]: string }>({});
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
@@ -214,17 +211,44 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   useEffect(() => {
     if (commsModal.show && commsModal.institutions.length > 0) {
-      const fetchInstTemplates = async () => {
+      // Reset selection when modal opens
+      setSelectedCommVoiceId('');
+      
+      const fetchTemplates = async () => {
         setFetchingTemplates(true);
         try {
           const instIds = commsModal.institutions.map(i => i.id);
           
           if (commsModal.type === 'sms') {
-             const { data } = await supabase.from('sms_templates').select('*').in('institution_id', instIds).order('created_at', { ascending: false });
+             // 1. Get system institution ID
+             const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+             const sysId = sysInst?.[0]?.id;
+             
+             // 2. Build template query
+             let query = supabase.from('sms_templates').select('*');
+             
+             // Logic to fetch:
+             // - Institution specific templates (if instIds is not empty)
+             // - System global templates (institution_id is null)
+             // - Internal global templates (institution_id is sysId)
+             
+             const orConditions = ['institution_id.is.null'];
+             if (sysId) orConditions.push(`institution_id.eq.${sysId}`);
+             if (instIds.length > 0) orConditions.push(`institution_id.in.(${instIds.join(',')})`);
+             
+             query = query.or(orConditions.join(','));
+             
+             const { data, error } = await query.order('created_at', { ascending: false });
+             
+             if (error) throw error;
              setInstSmsTemplates(data || []);
           } else {
+             // 1. Fetch institution-specific voices
              const { data } = await supabase.from('voice_templates').select('*').in('institution_id', instIds).eq('provider_status', 'approved').order('created_at', { ascending: false });
              setInstVoiceTemplates(data || []);
+             
+             // 2. Fetch global system voices
+             handleFetchAwajVoices();
           }
         } catch (e) {
           console.error("Error fetching templates:", e);
@@ -232,9 +256,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           setFetchingTemplates(false);
         }
       };
-      fetchInstTemplates();
+      fetchTemplates();
     }
-  }, [commsModal.show, commsModal.institutions, commsModal.type]);
+  }, [commsModal.show, commsModal.institutions, commsModal.type, handleFetchAwajVoices]);
 
   const fetchPaymentHistory = async (institutionId: string) => {
     setIsLoadingHistory(true);
@@ -537,6 +561,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     const { data, error } = await supabase.from('institutions')
       .select('*')
       .eq('is_super_admin', false)
+      .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
       .order('created_at', { ascending: false });
     
     if (error) throw error;
@@ -568,7 +593,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const [mList, gStats, recent, history] = await Promise.all([
           fetchAllMadrasahs(),
           fetchGlobalCounts(),
-          supabase.from('institutions').select('*').eq('is_super_admin', false).order('created_at', { ascending: false }).limit(5),
+          supabase.from('institutions').select('*').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL').order('created_at', { ascending: false }).limit(5),
           fetchTransactionHistory()
         ]);
         if (isMounted) {
@@ -647,6 +672,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [isSendingBulk, setIsSendingBulk] = useState(false);
   const [bulkType, setBulkType] = useState<'sms' | 'voice'>('sms');
   const [selectedMonthForReminder, setSelectedMonthForReminder] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [smsTarget, setSmsTarget] = useState<'admin' | 'students'>('admin');
   const [isSendingReminder, setIsSendingReminder] = useState(false);
 
   const unpaidInstitutions = useMemo(() => {
@@ -708,17 +734,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (targets.length === 0) throw new Error('কোনো বৈধ ফোন নম্বর পাওয়া যায়নি');
 
       if (commsModal.type === 'sms') {
-        const sendPromises = targets.map(inst => {
-          // Support placeholders: {{name}}
-          const personalizedMsg = commMessage.replace(/{{name}}/g, inst.name || '');
-          return smsApi.sendDirect(inst.phone!, personalizedMsg);
-        });
+        let allStudents: any[] = [];
+        if (smsTarget === 'students') {
+          // Fetch all students for targeted institutions
+          const instIds = targets.map(t => t.id);
+          const { data, error: studentsError } = await supabase
+            .from('profiles')
+            .select('phone, full_name, father_name, class_id')
+            .in('institution_id', instIds)
+            .eq('role', 'student');
+          
+          if (studentsError) throw studentsError;
+          allStudents = data || [];
+          
+          if (allStudents.length === 0) {
+            throw new Error('নির্বাচিত প্রতিষ্ঠানে কোনো শিক্ষার্থী পাওয়া যায়নি');
+          }
+        }
+
+        const sendPromises = [];
+        
+        if (smsTarget === 'admin') {
+          for (const inst of targets) {
+            const personalizedMsg = commMessage.replace(/{{name}}/g, inst.name || '');
+            sendPromises.push(smsApi.sendDirect(inst.phone!, personalizedMsg));
+          }
+        } else {
+          // Chunked send to students
+          for (const student of allStudents) {
+            if (student.phone) {
+              const personalizedMsg = commMessage
+                .replace(/{{name}}/g, student.full_name || '')
+                .replace(/{{father}}/g, student.father_name || '');
+              sendPromises.push(smsApi.sendDirect(student.phone, personalizedMsg));
+            }
+          }
+        }
+
         await Promise.all(sendPromises);
         setStatusModal({ 
           show: true, 
           type: 'success', 
           title: 'সফল', 
-          message: `${targets.length} টি প্রতিষ্ঠানে এসএমএস পাঠানো হয়েছে` 
+          message: smsTarget === 'admin' 
+            ? `${targets.length} টি প্রতিষ্ঠানে এসএমএস পাঠানো হয়েছে` 
+            : `${sendPromises.length} জন শিক্ষার্থীর কাছে এসএমএস পাঠানো হয়েছে`
         });
       } else {
         // Voice Broadcast for multiple institutions
@@ -731,7 +791,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         } else {
           const voice = awajVoices.find(v => v.id.toString() === selectedCommVoiceId);
           if (!voice) throw new Error('Selected system voice not found.');
-          voiceName = voice.name || voice.title;
+          voiceName = voice.provider_voice_name || voice.title;
         }
 
         const targetPhones = targets.map(inst => {
@@ -1485,29 +1545,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
                 {/* Mobile & Tablet Tools Row */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                   {/* Month Filter Tool */}
+                   {/* Institutions Counts */}
                    <div className={`flex flex-1 items-center gap-3 p-3 rounded-[2rem] ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} border`}>
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-500'}`}>
-                        <Calendar size={20} />
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 text-blue-400' : 'bg-blue-50 text-blue-500'}`}>
+                        <Users2 size={20} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">বকেয়া মাস</p>
-                        <input 
-                          type="month" 
-                          value={selectedMonthForReminder}
-                          onChange={(e) => setSelectedMonthForReminder(e.target.value)}
-                          className={`w-full bg-transparent text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} outline-none`}
-                        />
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">মোট প্রতিষ্ঠান</p>
+                        <p className={`text-base font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{madrasahs.length} টি</p>
                       </div>
-                      <button 
-                        onClick={() => {
-                          const unpaidIds = unpaidInstitutions.map(u => u.id);
-                          setSelectedInstIds(unpaidIds);
-                        }}
-                        className="px-4 py-2 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl active:scale-95 transition-all shadow-lg shadow-red-500/20"
-                      >
-                         বকেয়া সিলেক্ট ({unpaidInstitutions.length})
-                      </button>
                    </div>
 
                    {/* Quick Action Icons */}
@@ -1769,7 +1815,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     initial={{ y: 100, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: 100, opacity: 0 }}
-                    className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-2xl"
+                    className="fixed bottom-28 sm:bottom-10 left-1/2 -translate-x-1/2 z-[500] w-[92%] max-w-2xl"
                   >
                     <div className="bg-[#1E3A8A] text-white p-4 sm:p-6 rounded-[2.5rem] shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-400/20 backdrop-blur-md">
                       <div className="flex items-center gap-4">
@@ -1794,9 +1840,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         </button>
                         <button 
                           onClick={() => {
-                            if (awajVoices.length === 0) handleFetchAwajVoices();
-                            const selected = madrasahs.filter(m => selectedInstIds.includes(m.id));
-                            setCommsModal({ show: true, institutions: selected, type: 'voice' });
+                            if (onNavigateToVoiceBroadcast) {
+                              onNavigateToVoiceBroadcast(selectedInstIds);
+                            } else {
+                              if (awajVoices.length === 0) handleFetchAwajVoices();
+                              const selected = madrasahs.filter(m => selectedInstIds.includes(m.id));
+                              setCommsModal({ show: true, institutions: selected, type: 'voice' });
+                            }
                           }}
                           className="flex-1 sm:flex-none h-12 px-6 bg-orange-500 hover:bg-orange-400 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95"
                         >
@@ -2758,7 +2808,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
       <AnimatePresence>
         {commsModal.show && createPortal(
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-6 pb-20 sm:pb-4">
+          <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 sm:p-6 pb-28 sm:pb-4">
              <motion.div 
                initial={{ opacity: 0 }} 
                animate={{ opacity: 1 }} 
@@ -2770,7 +2820,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                initial={{ opacity: 0, scale: 0.9, y: 20 }}
                animate={{ opacity: 1, scale: 1, y: 0 }}
                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-               className="relative bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden"
+               className="relative bg-white w-full max-w-md max-h-[85vh] sm:max-h-[90vh] flex flex-col rounded-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden"
              >
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600" />
                 
@@ -2791,9 +2841,36 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 <div className="overflow-y-auto px-6 sm:px-8 pb-6 flex-grow custom-scrollbar">
                   {commsModal.type === 'sms' ? (
                     <div className="space-y-4">
+                      {/* Target Selection for SMS */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">কাকে পাঠাবেন?</label>
+                        <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                          <button 
+                            onClick={() => setSmsTarget('admin')}
+                            className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${smsTarget === 'admin' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:bg-white'}`}
+                          >
+                            অ্যাডমিনদের (Admins)
+                          </button>
+                          <button 
+                            onClick={() => setSmsTarget('students')}
+                            className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${smsTarget === 'students' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:bg-white'}`}
+                          >
+                            শিক্ষার্থীদের (Students)
+                          </button>
+                        </div>
+                        {smsTarget === 'students' && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 rounded-lg border border-yellow-100 animate-in fade-in zoom-in-95">
+                            <AlertCircle size={14} className="text-yellow-600 shrink-0" />
+                            <p className="text-[10px] font-black text-yellow-700 leading-tight">
+                              সতর্কতা: এটি নির্বাচিত সকল প্রতিষ্ঠানের সকল শিক্ষার্থীর কাছে এসএমএস পাঠাবে। এটি অনেক এসএমএস খরচ করবে।
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
                       {fetchingTemplates ? (
                         <div className="flex items-center justify-center p-4"><Loader2 className="animate-spin text-blue-500" /></div>
-                      ) : instSmsTemplates.length > 0 && (
+                      ) : instSmsTemplates.length > 0 ? (
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">টেমপ্লেট নির্বাচন করুন (SMS)</label>
                            <select 
@@ -2808,6 +2885,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                <option key={t.id} value={t.id}>{t.title}</option>
                              ))}
                            </select>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pb-2">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">টেমপ্লেট</label>
+                           <div className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-center">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">এই প্রতিষ্ঠানের কোনো সেভ করা টেমপ্লেট নেই</p>
+                           </div>
                         </div>
                       )}
                       <div className="space-y-2">
@@ -2859,7 +2943,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   className={`w-full p-3 sm:p-4 rounded-2xl border-2 text-left transition-all ${selectedCommVoiceId === v.id.toString() ? 'border-[#2563EB] bg-blue-50' : 'border-slate-50 bg-slate-50 hover:border-slate-100'}`}
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="font-bold text-[#1E3A8A] text-xs sm:text-sm">{v.name || v.title}</span>
+                                    <span className="font-bold text-[#1E3A8A] text-xs sm:text-sm">{v.title || v.provider_voice_name}</span>
                                     {selectedCommVoiceId === v.id.toString() && <CheckCircle2 size={18} className="text-[#2563EB] shrink-0 ml-2" />}
                                   </div>
                                 </button>

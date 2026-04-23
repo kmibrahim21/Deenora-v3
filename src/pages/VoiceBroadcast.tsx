@@ -41,13 +41,15 @@ interface VoiceBroadcastProps {
   profile?: Profile | null;
   onBack: () => void;
   preSelectedStudentIds?: string[];
+  preSelectedInstitutionIds?: string[];
 }
 
-const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, triggerRefresh, dataVersion, isEmbedded = false, role, profile, onBack, preSelectedStudentIds = [] }) => {
+const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, triggerRefresh, dataVersion, isEmbedded = false, role, profile, onBack, preSelectedStudentIds = [], preSelectedInstitutionIds = [] }) => {
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canUseVoice = !isTeacher || profile?.permissions?.can_use_voice_call;
   const isPreSelected = preSelectedStudentIds.length > 0;
+  const isInstPreSelected = preSelectedInstitutionIds.length > 0;
   const isSuperAdmin = role === 'super_admin';
 
   if (!canUseVoice) {
@@ -113,6 +115,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [senders, setSenders] = useState<any[]>([]);
   const [selectedSenderId, setSelectedSenderId] = useState<string>('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  useEffect(() => {
+    if (isInstPreSelected) {
+      setTargetType('specific_institution');
+      setSelectedInstitutionIds(preSelectedInstitutionIds);
+    }
+  }, [isInstPreSelected, preSelectedInstitutionIds]);
 
   // Audio state
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -435,11 +444,27 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       // First, get local voices
-      const { data: localVoices } = await supabase
-        .from('voice_templates')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .order('created_at', { ascending: false });
+      let systemId = null;
+      try {
+        const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+        if (sysInst && sysInst.length > 0) systemId = sysInst[0].id;
+      } catch (e) {
+        console.warn("Could not fetch system institution ID:", e);
+      }
+
+      let templateQuery = supabase.from('voice_templates').select('*').eq('provider_status', 'approved');
+      
+      if (systemId && madrasah?.id) {
+        templateQuery = templateQuery.or(`institution_id.eq.${systemId},institution_id.eq.${madrasah.id},institution_id.is.null`);
+      } else if (madrasah?.id) {
+        templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.is.null`);
+      } else if (systemId) {
+        templateQuery = templateQuery.or(`institution_id.eq.${systemId},institution_id.is.null`);
+      } else {
+        templateQuery = templateQuery.is('institution_id', null);
+      }
+
+      const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
       
       if (localVoices) {
         // Sync statuses and IDs from Awaj API
@@ -1398,113 +1423,121 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       {isSuperAdmin ? 'লক্ষ্য নির্বাচন করুন (Target)' : t('step_1_class', lang)}
                     </h4>
                     
-                    {isSuperAdmin && (
+                    {!isSuperAdmin && (
                       <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-full mb-2">
                         <button 
                           onClick={() => setTargetType('all_institutions')}
                           className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'all_institutions' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
                         >
-                          সব প্রতিষ্ঠান (All)
-                        </button>
-                        <button 
-                          onClick={() => setTargetType('specific_institution')}
-                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'specific_institution' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
-                        >
-                          প্রতিষ্ঠানের তালিকা (Select)
+                          সব (All)
                         </button>
                         <button 
                           onClick={() => setTargetType('class')}
                           className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'class' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
                         >
-                          ক্লাস নির্বাচন (Class)
+                          ক্লাস (Class)
                         </button>
                       </div>
                     )}
 
-                    {!isPreSelected ? (
+                    {!isPreSelected && !isInstPreSelected ? (
                       <div className="relative">
-                        {targetType === 'class' ? (
+                        {!isSuperAdmin ? (
                           <>
-                            <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
-                              <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
-                              <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
-                            </button>
-                            {showClassDropdown && (
-                              <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                                {classes.map(cls => (
-                                  <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
-                                    <span className="font-black font-noto">{cls.class_name}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                        ) : targetType === 'specific_institution' ? (
-                          <>
-                            <button onClick={() => setShowInstitutionDropdown(!showInstitutionDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-all">
-                              <span className={`text-base font-black font-noto ${selectedInstitutionIds.length > 0 ? 'text-[#1E3A8A]' : 'text-slate-400'}`}>
-                                {selectedInstitutionIds.length > 0 ? `${selectedInstitutionIds.length} টি প্রতিষ্ঠান নির্বাচিত` : 'প্রতিষ্ঠান নির্বাচন করুন'}
-                              </span>
-                              <ChevronDown className={`text-slate-300 transition-all ${showInstitutionDropdown ? 'rotate-180' : ''}`} size={20} />
-                            </button>
-
-                            {selectedInstitutionIds.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1">
-                                {allInstitutions.filter(i => selectedInstitutionIds.includes(i.id)).slice(0, 5).map(inst => (
-                                  <div key={inst.id} className="bg-blue-50 text-[#2563EB] px-3 py-1 rounded-lg text-[10px] font-black border border-blue-100 flex items-center gap-1.5">
-                                    {inst.name}
-                                    <button onClick={(e) => { e.stopPropagation(); setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id)); }} className="hover:text-red-500 transition-colors">
-                                      <X size={10} />
-                                    </button>
-                                  </div>
-                                ))}
-                                {selectedInstitutionIds.length > 5 && (
-                                  <div className="bg-slate-50 text-slate-400 px-3 py-1 rounded-lg text-[10px] font-black border border-slate-100">
-                                    + {selectedInstitutionIds.length - 5} More
+                            {targetType === 'class' ? (
+                              <>
+                                <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
+                                  <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
+                                  <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
+                                </button>
+                                {showClassDropdown && (
+                                  <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
+                                    {classes.map(cls => (
+                                      <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                        <span className="font-black font-noto">{cls.class_name}</span>
+                                      </button>
+                                    ))}
                                   </div>
                                 )}
-                              </div>
-                            )}
-
-                            {showInstitutionDropdown && (
-                              <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-2">
-                                <div className="p-2 border-b border-slate-50 mb-2 flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">প্রতিষ্ঠানের তালিকা ({allInstitutions.length})</span>
-                                  <button 
-                                    onClick={() => {
-                                      if (selectedInstitutionIds.length === allInstitutions.length) {
-                                        setSelectedInstitutionIds([]);
-                                      } else {
-                                        setSelectedInstitutionIds(allInstitutions.map(i => i.id));
-                                      }
-                                    }}
-                                    className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline px-2"
-                                  >
-                                    {selectedInstitutionIds.length === allInstitutions.length ? 'Deselect All' : 'Select All'}
-                                  </button>
-                                </div>
-                                {allInstitutions.map(inst => (
-                                  <button 
-                                    key={inst.id} 
-                                    onClick={() => { 
-                                      const isSelected = selectedInstitutionIds.includes(inst.id);
-                                      if (isSelected) {
-                                        setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id));
-                                      } else {
-                                        setSelectedInstitutionIds(prev => [...prev, inst.id]);
-                                      }
-                                    }} 
-                                    className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between group transition-all ${selectedInstitutionIds.includes(inst.id) ? 'bg-[#2563EB] text-white shadow-md scale-[1.02] z-10 relative' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selectedInstitutionIds.includes(inst.id) ? 'bg-white/20' : 'bg-slate-100'}`}>
-                                        <Building2 size={16} />
+                              </>
+                            ) : targetType === 'specific_institution' ? (
+                              <>
+                                <button onClick={() => setShowInstitutionDropdown(!showInstitutionDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-all">
+                                  <span className={`text-base font-black font-noto ${selectedInstitutionIds.length > 0 ? 'text-[#1E3A8A]' : 'text-slate-400'}`}>
+                                    {selectedInstitutionIds.length > 0 ? `${selectedInstitutionIds.length} টি প্রতিষ্ঠান নির্বাচিত` : 'প্রতিষ্ঠান নির্বাচন করুন'}
+                                  </span>
+                                  <ChevronDown className={`text-slate-300 transition-all ${showInstitutionDropdown ? 'rotate-180' : ''}`} size={20} />
+                                </button>
+    
+                                {selectedInstitutionIds.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1">
+                                    {allInstitutions.filter(i => selectedInstitutionIds.includes(i.id)).slice(0, 5).map(inst => (
+                                      <div key={inst.id} className="bg-blue-50 text-[#2563EB] px-3 py-1 rounded-lg text-[10px] font-black border border-blue-100 flex items-center gap-1.5">
+                                        {inst.name}
+                                        <button onClick={(e) => { e.stopPropagation(); setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id)); }} className="hover:text-red-500 transition-colors">
+                                          <X size={10} />
+                                        </button>
                                       </div>
-                                      <span className="font-black font-noto">{inst.name}</span>
+                                    ))}
+                                    {selectedInstitutionIds.length > 5 && (
+                                      <div className="bg-slate-50 text-slate-400 px-3 py-1 rounded-lg text-[10px] font-black border border-slate-100">
+                                        + {selectedInstitutionIds.length - 5} More
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+    
+                                {showInstitutionDropdown && (
+                                  <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                                    <div className="p-2 border-b border-slate-50 mb-2 flex items-center justify-between">
+                                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">প্রতিষ্ঠানের তালিকা ({allInstitutions.length})</span>
+                                      <button 
+                                        onClick={() => {
+                                          if (selectedInstitutionIds.length === allInstitutions.length) {
+                                            setSelectedInstitutionIds([]);
+                                          } else {
+                                            setSelectedInstitutionIds(allInstitutions.map(i => i.id));
+                                          }
+                                        }}
+                                        className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline px-2"
+                                      >
+                                        {selectedInstitutionIds.length === allInstitutions.length ? 'Deselect All' : 'Select All'}
+                                      </button>
                                     </div>
-                                    {selectedInstitutionIds.includes(inst.id) && <Check size={16} strokeWidth={4} />}
-                                  </button>
-                                ))}
+                                    {allInstitutions.map(inst => (
+                                      <button 
+                                        key={inst.id} 
+                                        onClick={() => { 
+                                          const isSelected = selectedInstitutionIds.includes(inst.id);
+                                          if (isSelected) {
+                                            setSelectedInstitutionIds(prev => prev.filter(id => id !== inst.id));
+                                          } else {
+                                            setSelectedInstitutionIds(prev => [...prev, inst.id]);
+                                          }
+                                        }} 
+                                        className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between group transition-all ${selectedInstitutionIds.includes(inst.id) ? 'bg-[#2563EB] text-white shadow-md scale-[1.02] z-10 relative' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selectedInstitutionIds.includes(inst.id) ? 'bg-white/20' : 'bg-slate-100'}`}>
+                                            <Building2 size={16} />
+                                          </div>
+                                          <span className="font-black font-noto">{inst.name}</span>
+                                        </div>
+                                        {selectedInstitutionIds.includes(inst.id) && <Check size={16} strokeWidth={4} />}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="bg-blue-50 p-6 rounded-[1.8rem] border border-blue-100 flex flex-col items-center text-center gap-3">
+                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#2563EB] shadow-sm">
+                                  <Users size={24} />
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-black text-[#2563EB] uppercase tracking-widest mb-1">Targeting All (Default)</p>
+                                  <p className="text-sm font-black text-[#1E3A8A]">System-wide broadcast</p>
+                                </div>
                               </div>
                             )}
                           </>
@@ -1514,8 +1547,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                               <Users size={24} />
                             </div>
                             <div>
-                              <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-1">Targeting All Institutes</p>
-                              <p className="text-lg font-black text-[#1E3A8A]">{allInstitutions.length} Active Institutions</p>
+                              <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-1">Target: All Active Institutes</p>
+                              <p className="text-lg font-black text-[#1E3A8A]">{allInstitutions.length} Institutions Selected</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-1">Note: Individual school broadcast is handled via Admin Panel</p>
                             </div>
                           </div>
                         )}
@@ -1524,10 +1558,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       <div className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-blue-50 border-blue-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-[#2563EB] text-white flex items-center justify-center">
-                            <Users size={16} />
+                            {isInstPreSelected ? <Building2 size={16} /> : <Users size={16} />}
                           </div>
                           <span className="text-base font-black font-noto text-[#1E3A8A]">
-                            {preSelectedStudentIds.length} {lang === 'bn' ? 'জন শিক্ষার্থী নির্বাচিত' : 'Students Selected'}
+                            {isInstPreSelected 
+                              ? `${preSelectedInstitutionIds.length} ${lang === 'bn' ? 'টি প্রতিষ্ঠান নির্বাচিত' : 'Institutions Selected'}`
+                              : `${preSelectedStudentIds.length} ${lang === 'bn' ? 'জন শিক্ষার্থী নির্বাচিত' : 'Students Selected'}`
+                            }
                           </span>
                         </div>
                         <button onClick={() => onBack()} className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest hover:underline">

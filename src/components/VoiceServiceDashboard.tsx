@@ -26,6 +26,11 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   const [assignInstitutionId, setAssignInstitutionId] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [institutions, setInstitutions] = useState<any[]>([]);
+  const [instSearchInAssign, setInstSearchInAssign] = useState('');
+
+  const filteredInstitutionsInAssign = institutions.filter(inst => 
+    inst.name?.toLowerCase().includes(instSearchInAssign.toLowerCase())
+  );
 
   const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
   const [assignedVoiceSearchQuery, setAssignedVoiceSearchQuery] = useState('');
@@ -39,12 +44,35 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     fetchInstitutions();
   }, []);
 
+  const getSystemInstitutionId = async () => {
+    // 1. Try to fetch existing
+    let { data } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+    if (data && data.length > 0) {
+      return data[0].id;
+    }
+    // 2. Create if not exists
+    const { data: newInst, error } = await supabase.from('institutions').insert({
+      name: 'SYSTEM_GLOBAL_INTERNAL',
+      address: 'System',
+      phone: '00000000000'
+    }).select('id').single();
+    if (error) {
+      throw new Error("Failed to initialize system container: " + error.message);
+    }
+    return newInst.id;
+  };
+
   const handleAssignVoice = async () => {
     if (!assigningVoice || !assignInstitutionId) return;
     setIsAssigning(true);
     try {
+      let insertInstId = assignInstitutionId;
+      if (assignInstitutionId === 'system') {
+          insertInstId = await getSystemInstitutionId();
+      }
+
       const { error } = await supabase.from('voice_templates').insert({
-        institution_id: assignInstitutionId,
+        institution_id: insertInstId,
         title: assigningVoice.name,
         file_url: assigningVoice.previewUrl || '', 
         admin_status: 'approved',
@@ -59,11 +87,12 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         show: true,
         type: 'success',
         title: 'Assigned',
-        message: 'Voice assigned to user successfully!'
+        message: assignInstitutionId === 'system' ? 'Voice saved as System Template!' : 'Voice assigned to user successfully!'
       });
       setShowAssignModal(false);
       setAssigningVoice(null);
       setAssignInstitutionId('');
+      fetchData();
     } catch (error: any) {
       console.error("Assign error:", error);
       setStatusModal({ show: true, type: 'error', title: 'Error', message: error.message || "Failed to assign voice" });
@@ -168,7 +197,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         setBroadcasts(broadcastsData);
       }
 
-      // Fetch assigned voices from Supabase
+      // Fetch assigned/system voices from Supabase
       const { data: assignedData, error: assignedError } = await supabase
         .from('voice_templates')
         .select(`
@@ -178,7 +207,6 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
             name
           )
         `)
-        .not('institution_id', 'is', null)
         .order('created_at', { ascending: false });
 
       if (!assignedError && assignedData) {
@@ -376,7 +404,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                       <div>
                         <h4 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{voice.title}</h4>
                         <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                          User: <span className={madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>{voice.institutions?.name || 'Unknown'}</span>
+                          Target: <span className={madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>{voice.institutions?.name === 'SYSTEM_GLOBAL_INTERNAL' ? '🌐 Global System Voice' : voice.institutions?.name || 'Unknown'}</span>
                         </p>
                         <p className="text-[10px] font-bold text-slate-400 mt-0.5">
                           Assigned: {new Date(voice.created_at).toLocaleDateString()}
@@ -573,16 +601,26 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Select Institution</label>
-                <select
-                  value={assignInstitutionId}
-                  onChange={(e) => setAssignInstitutionId(e.target.value)}
-                  className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100'} border rounded-xl px-4 font-black text-sm mt-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none`}
-                >
-                  <option value="">Select an institution...</option>
-                  {institutions.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
+                <div className="space-y-2 mt-1">
+                  <input
+                    type="text"
+                    placeholder="Search institution..."
+                    value={instSearchInAssign}
+                    onChange={(e) => setInstSearchInAssign(e.target.value)}
+                    className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100'} border rounded-xl px-4 font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  <select
+                    value={assignInstitutionId}
+                    onChange={(e) => setAssignInstitutionId(e.target.value)}
+                    className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100'} border rounded-xl px-4 font-black text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none`}
+                  >
+                    <option value="">Select an institution...</option>
+                    <option value="system" className="font-extrabold text-blue-600 bg-blue-50">--- 🌐 Save as System Voice (Global) ---</option>
+                    {filteredInstitutionsInAssign.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <button
                 onClick={handleAssignVoice}

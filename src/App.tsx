@@ -74,6 +74,7 @@ const App: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [preSelectedStudentIds, setPreSelectedStudentIds] = useState<string[]>([]);
+  const [preSelectedInstitutionIds, setPreSelectedInstitutionIds] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const [lang, setLang] = useState<Language>(
@@ -489,6 +490,10 @@ const App: React.FC = () => {
             madrasah={madrasah}
             profile={profile}
             setStatusModal={setStatusModal}
+            onNavigateToVoiceBroadcast={(ids) => {
+              setPreSelectedInstitutionIds(ids);
+              setView("voice-broadcast");
+            }}
           />
         );
       case "admin-voice-service":
@@ -539,9 +544,11 @@ const App: React.FC = () => {
             profile={profile}
             onBack={() => {
               setPreSelectedStudentIds([]);
+              setPreSelectedInstitutionIds([]);
               handleBack("home");
             }}
             preSelectedStudentIds={preSelectedStudentIds}
+            preSelectedInstitutionIds={preSelectedInstitutionIds}
           />
         );
       case "sms-voice-menu":

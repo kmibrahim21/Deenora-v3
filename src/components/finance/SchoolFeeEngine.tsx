@@ -172,7 +172,10 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 const isMonthExpired = fs.due_date && selectedMonth > fs.due_date.slice(0, 7);
                 const isMonthNotStarted = fs.start_date && selectedMonth < fs.start_date.slice(0, 7);
 
-                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
+                // If yearStart exists, ensure selectedMonth >= yearStart
+                const isBeforeYearStart = yearStart && selectedMonth < yearStart.slice(0, 7);
+
+                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted && !isBeforeYearStart;
             }) || [];
             
             const totalPayable = studentFeeStructures.reduce((sum, fs) => {
@@ -840,7 +843,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 const isMonthExpired = fs.due_date && monthStr > fs.due_date.slice(0, 7);
                                 const isMonthNotStarted = fs.start_date && monthStr < fs.start_date.slice(0, 7);
 
-                                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
+                                // If yearStart (academic_year_start) exists, ensure the month is not before it
+                                const yearStart = madrasah.config_json?.academic_year_start;
+                                const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
+
+                                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted && !isBeforeYearStart;
                             });
                             const totalPayable = studentFeeStructures.reduce((sum, fs) => sum + Number(fs.amount), 0);
 
