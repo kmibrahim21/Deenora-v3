@@ -107,7 +107,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   // Broadcast state
   const [classes, setClasses] = useState<Class[]>([]);
   const [allInstitutions, setAllInstitutions] = useState<Institution[]>([]);
-  const [targetType, setTargetType] = useState<'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
+  const [targetType, setTargetType] = useState<'all' | 'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'all');
   const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<string[]>([]);
   
   const [selectedClassId, setSelectedClassId] = useState<string>('');
@@ -117,11 +117,11 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [isBroadcasting, setIsBroadcasting] = useState(false);
 
   useEffect(() => {
-    if (isInstPreSelected) {
+    if (isInstPreSelected && isSuperAdmin) {
       setTargetType('specific_institution');
       setSelectedInstitutionIds(preSelectedInstitutionIds);
     }
-  }, [isInstPreSelected, preSelectedInstitutionIds]);
+  }, [isInstPreSelected, preSelectedInstitutionIds, isSuperAdmin]);
 
   // Audio state
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -986,9 +986,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const isTargetingInstitutions = isSuperAdmin && (targetType === 'all_institutions' || targetType === 'specific_institution');
+  const isTargetingAllStudents = !isSuperAdmin && targetType === 'all';
 
   const handleBroadcast = async () => {
-    if (!madrasah || !selectedVoiceId || (!selectedClassId && !isPreSelected && !isTargetingInstitutions) || !selectedSenderId) {
+    if (!madrasah || !selectedVoiceId || (!selectedClassId && !isPreSelected && !isTargetingInstitutions && !isTargetingAllStudents) || !selectedSenderId) {
       setStatusModal({
         show: true,
         type: 'error',
@@ -1008,6 +1009,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
     } else if (isPreSelected) {
       count = preSelectedStudentIds.length;
+    } else if (isTargetingAllStudents) {
+      const { count: c } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
+      count = c || 0;
     } else {
       const { count: c } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('class_id', selectedClassId);
       count = c || 0;
@@ -1051,8 +1055,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // Determine target class name
       let targetClassName = null;
       if (!isTargetingInstitutions && !isPreSelected) {
-        const cls = classes.find(c => c.id === selectedClassId);
-        if (cls) targetClassName = cls.class_name;
+        if (isTargetingAllStudents) {
+          targetClassName = lang === 'bn' ? 'সকল শিক্ষার্থী' : 'All Students';
+        } else {
+          const cls = classes.find(c => c.id === selectedClassId);
+          if (cls) targetClassName = cls.class_name;
+        }
       } else if (isPreSelected) {
         targetClassName = 'Selected Students';
       } else if (isTargetingInstitutions) {
@@ -1071,6 +1079,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         let students: any[] = [];
         if (isPreSelected) {
           const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').in('id', preSelectedStudentIds);
+          if (error) throw error;
+          students = data || [];
+        } else if (isTargetingAllStudents) {
+          const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').eq('institution_id', madrasah.id);
           if (error) throw error;
           students = data || [];
         } else {
@@ -1426,16 +1438,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                     {!isSuperAdmin && (
                       <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-full mb-2">
                         <button 
-                          onClick={() => setTargetType('all_institutions')}
-                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'all_institutions' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
+                          onClick={() => setTargetType('all')}
+                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'all' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
                         >
-                          সব (All)
+                          {lang === 'bn' ? 'সব' : 'All'}
                         </button>
                         <button 
                           onClick={() => setTargetType('class')}
                           className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'class' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
                         >
-                          ক্লাস (Class)
+                          {lang === 'bn' ? 'ক্লাস' : 'Class'}
                         </button>
                       </div>
                     )}
@@ -1460,7 +1472,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                   </div>
                                 )}
                               </>
-                            ) : targetType === 'specific_institution' ? (
+                            ) : (targetType === 'specific_institution' && isSuperAdmin) ? (
                               <>
                                 <button onClick={() => setShowInstitutionDropdown(!showInstitutionDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-all">
                                   <span className={`text-base font-black font-noto ${selectedInstitutionIds.length > 0 ? 'text-[#1E3A8A]' : 'text-slate-400'}`}>
