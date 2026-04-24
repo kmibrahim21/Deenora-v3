@@ -50,23 +50,3 @@ root.render(
     <App />
   </React.StrictMode>
 );
-
-// PWA Service Worker Registration
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    // In development mode with vite-plugin-pwa, the SW name might be different,
-    // but the plugin handles injection if injectRegister is 'auto'.
-    // However, manual registration for sw.js is safe for production builds.
-    const swUrl = import.meta.env.DEV ? '/dev-sw.js?dev-sw' : '/sw.js';
-    
-    navigator.serviceWorker.register(swUrl, { scope: '/' })
-      .then(registration => {
-        console.log('SW registered:', registration.scope);
-      })
-      .catch(error => {
-        if (!import.meta.env.DEV) {
-          console.error('SW registration failed:', error);
-        }
-      });
-  });
-}

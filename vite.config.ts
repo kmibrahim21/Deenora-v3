@@ -114,17 +114,16 @@ export default defineConfig(({ mode }) => {
         vercelApiPlugin(env),
         VitePWA({
           registerType: 'autoUpdate',
-          injectRegister: 'auto',
-          manifestFilename: 'manifest.json',
+          injectRegister: 'script',
           devOptions: {
             enabled: true,
             type: 'module'
           },
           includeAssets: ['Deenora192.png', 'Deenora512.png'],
           manifest: {
-            name: 'Deenora V3 - Institute Management',
+            name: 'Deenora Management System',
             short_name: 'Deenora',
-            description: 'Professional Institute Management System (Deenora V3) with student tracking, attendance, and more.',
+            description: 'Professional Institute Management System (Deenora V3)',
             theme_color: '#0F172A',
             background_color: '#0F172A',
             display: 'standalone',
