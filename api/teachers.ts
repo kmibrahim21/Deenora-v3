@@ -161,6 +161,17 @@ export default async function handler(req, res) {
       return res.status(201).json({ success: true, teacher });
     }
 
+    if (action === 'update-pin' && req.method === 'POST') {
+      const { id, pin } = body;
+      if (!id || !pin) return res.status(400).json({ error: 'ID and pin are required' });
+      
+      const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
+      const { error: teacherError } = await supabase.from('teachers').update({ password_hash: passwordHash }).eq('id', id);
+      if (teacherError) throw teacherError;
+      
+      return res.status(200).json({ success: true });
+    }
+
     if (action === 'update' && req.method === 'PUT') {
       const { id, name, phone, pin, designation, photo_url, is_active, permissions } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });

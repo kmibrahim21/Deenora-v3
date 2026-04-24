@@ -147,20 +147,35 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
 
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const totalPayablePerMonth = structures.reduce((sum, s) => {
-    const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
-    const isEnabled = setting ? setting.is_enabled : true;
-    const isExpired = s.due_date && s.due_date < today;
-    const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
-    return (isEnabled && !isExpired) ? sum + amountToCharge : sum;
-  }, 0);
   
   // Use fees table for total paid as it's more accurate (linked by student_id)
   const totalPaid = fees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
   
-  // Calculate total due for the year up to current month
-  const currentMonth = new Date().getMonth() + 1;
-  const totalPayableYearToDate = totalPayablePerMonth * currentMonth;
+  // Calculate total due for the year up to current month mapping over months properly 
+  const currentMonthIdx = now.getMonth() + 1;
+  const yearStr = now.getFullYear().toString();
+  const academicYearStart = madrasah.config_json?.academic_year_start;
+  const acStart = academicYearStart ? new Date(academicYearStart) : new Date(now.getFullYear(), 0, 1);
+  const startMonthIdx = acStart.getFullYear() === now.getFullYear() ? acStart.getMonth() + 1 : 1;
+
+  let totalPayableYearToDate = 0;
+  for (let m = startMonthIdx; m <= currentMonthIdx; m++) {
+      const monthStr = `${yearStr}-${String(m).padStart(2, '0')}`;
+      structures.forEach(s => {
+          const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+          const isEnabled = setting ? setting.is_enabled : true;
+          if (!isEnabled) return;
+          
+          const isExpired = s.due_date && s.due_date.slice(0, 7) < monthStr;
+          const isNotStarted = s.start_date && s.start_date.slice(0, 7) > monthStr;
+          
+          if (!isExpired && !isNotStarted) {
+             const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+             totalPayableYearToDate += amountToCharge;
+          }
+      });
+  }
+
   const totalDue = Math.max(0, totalPayableYearToDate - totalPaid);
 
   return (
@@ -211,7 +226,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   </div>
                   <span className="text-[6.5px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">মোট প্রদেয়</span>
                 </div>
-                <p className={`text-xs sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>৳{totalPayablePerMonth.toLocaleString()}</p>
+                <p className={`text-xs sm:text-2xl font-black ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>৳{totalPayableYearToDate.toLocaleString()}</p>
               </div>
 
               <div className={`flex-1 p-3 sm:p-5 rounded-[1.5rem] sm:rounded-[2.5rem] border shadow-sm transition-all hover:shadow-md ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>

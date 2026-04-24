@@ -208,15 +208,40 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     }
     setChangingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
+      // Force session hydration to prevent "Auth session missing" errors
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        // Try to refresh if session is missing
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.session) {
+          throw new Error(lang === 'bn' ? 'আপনার লগইন সেশন শেষ হয়ে গেছে। দয়া করে আবার লগইন করুন।' : 'Auth session expired. Please log out and log in again.');
+        }
+      }
+
+      // Special handling for teachers changing their PIN
+      if (profile?.role === 'teacher') {
+         const response = await fetch('/api/teachers/update-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: profile.id, pin: newPassword })
+         });
+         
+         if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to update PIN');
+         }
+      } else {
+        // For Admin users, we update their Supabase auth password
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+      }
       
       setShowSuccessModal({ show: true, title: lang === 'bn' ? 'সফল' : 'Success', message: lang === 'bn' ? 'পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।' : 'Password changed successfully.' });
       setIsChangingPassword(false);
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Error changing password');
     } finally {
       setChangingPassword(false);
     }

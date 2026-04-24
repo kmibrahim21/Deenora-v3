@@ -51,4 +51,20 @@ root.render(
   </React.StrictMode>
 );
 
-;
+// Register PWA service worker explicitly
+if ('serviceWorker' in navigator) {
+  // Use Vite PWA virtual module if available, otherwise fallback to standard registration
+  // @ts-ignore
+  import('virtual:pwa-register')
+    .then(({ registerSW }) => {
+      registerSW({ immediate: true });
+    })
+    .catch((err) => {
+      // Fallback
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(error => {
+          console.error('ServiceWorker registration failed: ', error);
+        });
+      });
+    });
+}

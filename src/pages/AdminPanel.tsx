@@ -1716,10 +1716,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                             <a href={`tel:${inst.phone}`} className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition-colors">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (onNavigateToVoiceBroadcast) {
+                                   onNavigateToVoiceBroadcast([inst.id]);
+                                 }
+                               }} 
+                               className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center hover:bg-orange-100 transition-colors"
+                             >
+                               <Mic size={18} />
+                             </button>
+                             <a href={`tel:${inst.phone}`} onClick={e => e.stopPropagation()} className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition-colors">
                                <PhoneCall size={18} />
                              </a>
-                             <a href={`https://wa.me/${inst.phone?.replace('+', '')}`} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                             <a href={`https://wa.me/${inst.phone?.replace('+', '')}`} onClick={e => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors">
                                <MessageCircle size={18} />
                              </a>
                           </div>

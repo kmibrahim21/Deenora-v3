@@ -183,10 +183,30 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       console.log("Total Expense calculated:", totalExpense);
 
       structures.forEach(s => {
+        // Evaluate active months based on year Start and fee start/due dates
+        let activeMonthsCount = 0;
+        const acStart = activeYear?.start_date ? new Date(activeYear.start_date) : new Date(new Date().getFullYear(), 0, 1);
+        const startMonthIdx = acStart.getFullYear() === parseInt(selectedYear) ? acStart.getMonth() + 1 : 1;
+        
+        if (viewMode === 'yearly') {
+            for (let m = startMonthIdx; m <= 12; m++) {
+                const mStr = `${selectedYear}-${String(m).padStart(2, '0')}`;
+                const isExpired = s.due_date && s.due_date.slice(0, 7) < mStr;
+                const isNotStarted = s.start_date && s.start_date.slice(0, 7) > mStr;
+                if (!isExpired && !isNotStarted) activeMonthsCount++;
+            }
+        } else {
+            const isExpired = s.due_date && s.due_date.slice(0, 7) < dateFilter;
+            const isNotStarted = s.start_date && s.start_date.slice(0, 7) > dateFilter;
+            if (!isExpired && !isNotStarted) activeMonthsCount = 1;
+        }
+
+        if (activeMonthsCount === 0) return;
+
         // Calculate correct count and expected amount based on enabled settings
         let count = 0;
         let total = 0;
-        const multiplier = viewMode === 'yearly' ? 12 : 1;
+        const multiplier = activeMonthsCount;
 
         if (s.class_id === null) {
           // Global fee: count students who have this fee enabled
