@@ -114,16 +114,22 @@ export default defineConfig(({ mode }) => {
         vercelApiPlugin(env),
         VitePWA({
           registerType: 'autoUpdate',
-          injectRegister: 'inline',
-          includeAssets: [],
+          injectRegister: 'auto',
+          manifestFilename: 'manifest.json',
+          devOptions: {
+            enabled: true,
+            type: 'module'
+          },
+          includeAssets: ['Deenora192.png', 'Deenora512.png'],
           manifest: {
-            name: 'Deenora',
+            name: 'Deenora V3 - Institute Management',
             short_name: 'Deenora',
-            description: 'Professional Institute Management System',
+            description: 'Professional Institute Management System (Deenora V3) with student tracking, attendance, and more.',
             theme_color: '#0F172A',
-            background_color: '#01114C',
+            background_color: '#0F172A',
             display: 'standalone',
             orientation: 'portrait',
+            scope: '/',
             start_url: '/',
             icons: [
               {
@@ -147,8 +153,8 @@ export default defineConfig(({ mode }) => {
             ]
           },
           workbox: {
+            cleanupOutdatedCaches: true,
             maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-            globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
             runtimeCaching: [
               {
                 urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -157,7 +163,7 @@ export default defineConfig(({ mode }) => {
                   cacheName: 'google-fonts-cache',
                   expiration: {
                     maxEntries: 10,
-                    maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+                    maxAgeSeconds: 60 * 60 * 24 * 365
                   },
                   cacheableResponse: {
                     statuses: [0, 200]
@@ -171,21 +177,7 @@ export default defineConfig(({ mode }) => {
                   cacheName: 'gstatic-fonts-cache',
                   expiration: {
                     maxEntries: 10,
-                    maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
-                  },
-                  cacheableResponse: {
-                    statuses: [0, 200]
-                  }
-                }
-              },
-              {
-                urlPattern: /^https:\/\/img\.icons8\.com\/.*/i,
-                handler: 'CacheFirst',
-                options: {
-                  cacheName: 'icons-cache',
-                  expiration: {
-                    maxEntries: 50,
-                    maxAgeSeconds: 60 * 60 * 24 * 30 // <== 30 days
+                    maxAgeSeconds: 60 * 60 * 24 * 365
                   },
                   cacheableResponse: {
                     statuses: [0, 200]

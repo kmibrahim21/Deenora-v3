@@ -51,42 +51,22 @@ root.render(
   </React.StrictMode>
 );
 
-/**
- * SERVICE WORKER REGISTRATION WITH UPDATE DETECTION
- */
-// if ('serviceWorker' in navigator) {
-//   window.addEventListener('load', () => {
-//     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-//     const isSecureContext = window.isSecureContext;
-//     
-//     if (isSecureContext || isLocalhost) {
-//       navigator.serviceWorker.register('./sw.js')
-//         .then(registration => {
-//           console.log('SW registered:', registration.scope);
-//           
-//           // Listen for updates
-//           registration.onupdatefound = () => {
-//             const installingWorker = registration.installing;
-//             if (installingWorker == null) return;
-//             
-//             installingWorker.onstatechange = () => {
-//               if (installingWorker.state === 'installed') {
-//                 if (navigator.serviceWorker.controller) {
-//                   // New content is available; please refresh.
-//                   console.log('New content is available; please refresh.');
-//                   // Optionally show a "Refresh" toast here.
-//                   // For now, we'll force a reload after a short delay to apply updates.
-//                   setTimeout(() => {
-//                     window.location.reload();
-//                   }, 1000);
-//                 }
-//               }
-//             };
-//           };
-//         })
-//         .catch(err => {
-//           console.warn('Service Worker registration skipped (Environment limitation).', err.message);
-//         });
-//     }
-//   });
-// }
+// PWA Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    // In development mode with vite-plugin-pwa, the SW name might be different,
+    // but the plugin handles injection if injectRegister is 'auto'.
+    // However, manual registration for sw.js is safe for production builds.
+    const swUrl = import.meta.env.DEV ? '/dev-sw.js?dev-sw' : '/sw.js';
+    
+    navigator.serviceWorker.register(swUrl, { scope: '/' })
+      .then(registration => {
+        console.log('SW registered:', registration.scope);
+      })
+      .catch(error => {
+        if (!import.meta.env.DEV) {
+          console.error('SW registration failed:', error);
+        }
+      });
+  });
+}
