@@ -81,7 +81,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No provider campaign ID found to process' });
     }
 
-    // 2. Check if already refunded
+    // 2. Add Jitter to prevent exact ms race conditions
+    const jitterMs = Math.floor(Math.random() * 2000) + 500;
+    await new Promise(r => setTimeout(r, jitterMs));
+
+    // 2.1 Check if already refunded
     const refundTxId = `REFUND_CAMP_${targetCampaignId}`;
     const { data: existingRefund } = await supabase
       .from('transactions')

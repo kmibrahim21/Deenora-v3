@@ -27,6 +27,7 @@
     "lucide-react": "^0.463.0",
     "motion": "^12.34.3",
     "pdfkit": "^0.17.2",
+    "pg": "^8.20.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.13.1",
