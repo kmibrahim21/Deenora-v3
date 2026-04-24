@@ -114,43 +114,13 @@ export default defineConfig(({ mode }) => {
         vercelApiPlugin(env),
         VitePWA({
           registerType: 'autoUpdate',
-          injectRegister: 'script',
+          injectRegister: 'auto',
           devOptions: {
             enabled: true,
             type: 'module'
           },
-          includeAssets: ['Deenora192.png', 'Deenora512.png'],
-          manifest: {
-            name: 'Deenora Management System',
-            short_name: 'Deenora',
-            description: 'Professional Institute Management System (Deenora V3)',
-            theme_color: '#0F172A',
-            background_color: '#0F172A',
-            display: 'standalone',
-            orientation: 'portrait',
-            scope: '/',
-            start_url: '/',
-            icons: [
-              {
-                src: '/Deenora192.png',
-                sizes: '192x192',
-                type: 'image/png',
-                purpose: 'any'
-              },
-              {
-                src: '/Deenora512.png',
-                sizes: '512x512',
-                type: 'image/png',
-                purpose: 'any'
-              },
-              {
-                src: '/Deenora512.png',
-                sizes: '512x512',
-                type: 'image/png',
-                purpose: 'maskable'
-              }
-            ]
-          },
+          includeAssets: ['Deenora192.png', 'Deenora512.png', 'manifest.json'],
+          manifest: false,
           workbox: {
             cleanupOutdatedCaches: true,
             maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
