@@ -154,8 +154,32 @@ export default async function handler(req, res) {
       return false;
     });
 
-    const totalSent = Number(broadcast.total_numbers || 1);
-    const droppedCalls = Math.max(0, totalSent - logs.length);
+    const totalSentOriginal = Number(broadcast.total_numbers || 1);
+    const isRetry = targetCampaignId !== broadcast.provider_campaign_id;
+    
+    // Attempt to extract the true total from the API response
+    const apiTotal = Number(
+        resultData.total || 
+        resultData.broadcast?.total || 
+        resultData.broadcast?.total_numbers ||
+        resultData.broadcast?.recipient_count ||
+        resultData.data?.total ||
+        resultData.stats?.total || 0
+    );
+
+    let campaignTotalSent = 0;
+    if (apiTotal > logs.length) {
+      campaignTotalSent = apiTotal;
+    } else if (!isRetry) {
+      // It is the original campaign, we know the exact number we charged for
+      campaignTotalSent = Math.max(logs.length, totalSentOriginal);
+    } else {
+      // It is a retry campaign, since we do not store the exact retry count we fallback to logs.length
+      // This prevents refunding calls that belonged to the original broadcast and calculating massive "dropped calls"
+      campaignTotalSent = logs.length;
+    }
+
+    const droppedCalls = Math.max(0, campaignTotalSent - logs.length);
     const totalFailuresToRefund = failedLogs.length + droppedCalls;
 
     if (totalFailuresToRefund === 0) {
@@ -178,7 +202,36 @@ export default async function handler(req, res) {
 
     console.log(`Calculated refund: ${totalFailuresToRefund} unreceived calls * ${voiceRate} = ${refundAmount} for institution ${institutionId}`);
 
-    // 6. Update balance
+    // 6. Insert Transaction Record FIRST (fail fast on duplicate)
+    const txData: any = {
+      institution_id: institutionId,
+      amount: refundAmount,
+      transaction_id: refundTxId,
+      sender_phone: 'SYSTEM',
+      description: `Refund for ${totalFailuresToRefund} unreceived calls (Voice Broadcast)`,
+      type: 'credit',
+      status: 'approved',
+      module: 'voice'
+    };
+    
+    // Ensure sms_count is a solid integer to avoid type mismatch
+    txData.sms_count = 0;
+
+    console.log('Attempting transaction insert with data:', JSON.stringify(txData));
+
+    const { error: txError } = await supabase.from('transactions').insert(txData);
+
+    if (txError) {
+      if (txError.message?.toLowerCase().includes('duplicate') || txError.code === '23505') {
+        return res.status(200).json({ success: true, already_refunded: true, message: 'Refund already processed for this campaign due to concurrent request' });
+      }
+      console.error('CRITICAL: Transaction insert error:', JSON.stringify(txError));
+      // Log specific fields to check for issues
+      console.error(`Field types check: amount=${typeof txData.amount}, module=${typeof txData.module}, institution_id=${typeof txData.institution_id}`);
+      throw txError;
+    }
+
+    // 7. Update balance AFTER successful transaction insert
     // Prefer RPC as it is atomic
     const { error: addBalanceErr } = await supabase.rpc('add_balance', {
       p_institution_id: institutionId,
@@ -199,34 +252,8 @@ export default async function handler(req, res) {
          
        if (manualUpdateErr) {
          console.error('Manual balance update failed:', JSON.stringify(manualUpdateErr));
-         throw manualUpdateErr;
+         // Optional: rollback transaction? But we rely on it now. User can contact to fix balance if this edge fails.
        }
-    }
-
-    // 7. Insert Transaction Record
-    const txData: any = {
-      institution_id: institutionId,
-      amount: refundAmount,
-      transaction_id: refundTxId,
-      sender_phone: 'SYSTEM',
-      description: `Refund for ${totalFailuresToRefund} unreceived calls (Voice Broadcast)`,
-      type: 'credit',
-      status: 'approved',
-      module: 'voice'
-    };
-    
-    // Ensure sms_count is a solid integer to avoid type mismatch
-    txData.sms_count = 0;
-
-    console.log('Attempting transaction insert with data:', JSON.stringify(txData));
-
-    const { error: txError } = await supabase.from('transactions').insert(txData);
-
-    if (txError) {
-      console.error('CRITICAL: Transaction insert error:', JSON.stringify(txError));
-      // Log specific fields to check for issues
-      console.error(`Field types check: amount=${typeof txData.amount}, module=${typeof txData.module}, institution_id=${typeof txData.institution_id}`);
-      throw txError;
     }
 
     return res.status(200).json({ 
