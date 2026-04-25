@@ -119,8 +119,33 @@ export default defineConfig(({ mode }) => {
             enabled: true,
             type: 'module'
           },
-          includeAssets: ['Deenora192.png', 'Deenora512.png', 'manifest.json'],
-          manifest: false,
+          includeAssets: ['Deenora192.png', 'Deenora512.png'],
+          manifest: {
+            name: "Deenora Management System",
+            short_name: "DeenoraV3",
+            description: "Professional Institute Management System",
+            id: "/",
+            start_url: "/",
+            scope: "/",
+            display: "standalone",
+            background_color: "#0F172A",
+            theme_color: "#0F172A",
+            orientation: "portrait",
+            icons: [
+              {
+                src: "/Deenora192.png",
+                sizes: "192x192",
+                type: "image/png",
+                purpose: "any maskable"
+              },
+              {
+                src: "/Deenora512.png",
+                sizes: "512x512",
+                type: "image/png",
+                purpose: "any maskable"
+              }
+            ]
+          },
           workbox: {
             cleanupOutdatedCaches: true,
             maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,

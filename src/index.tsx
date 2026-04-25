@@ -57,7 +57,15 @@ if ('serviceWorker' in navigator) {
   // @ts-ignore
   import('virtual:pwa-register')
     .then(({ registerSW }) => {
-      registerSW({ immediate: true });
+      registerSW({ 
+        immediate: true,
+        onRegisteredSW(swUrl, r) {
+          console.log('PWA ServiceWorker registered:', swUrl);
+        },
+        onRegisterError(error) {
+          console.error('PWA ServiceWorker registration error:', error);
+        }
+      });
     })
     .catch((err) => {
       // Fallback
