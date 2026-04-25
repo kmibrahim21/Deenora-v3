@@ -7,7 +7,7 @@ import { Exam, Student } from '../types';
 interface AdmitCardProps {
   exam: any;
   student: Student;
-  madrasah: { name: string; logo_url?: string };
+  madrasah: { name: string; logo_url?: string; institution_type?: string };
   templateId: string;
   lang: 'en' | 'bn';
 }
@@ -42,10 +42,22 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
         <div className="flex-1 p-8 flex gap-8">
           <div className="flex-1 space-y-6">
             <div className="grid grid-cols-2 gap-6">
-              <div>
+              <div className={madrasah.institution_type === 'school' ? 'col-span-2' : ''}>
                 <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name'}</p>
                 <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.student_name}</p>
               </div>
+              {madrasah.institution_type === 'school' && (
+                <>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'পিতার নাম' : "Father's Name"}</p>
+                    <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.guardian_name || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'মাতার নাম' : "Mother's Name"}</p>
+                    <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.mother_name || '-'}</p>
+                  </div>
+                </>
+              )}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'শ্রেণী' : 'Class'}</p>
                 <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.classes?.class_name || '-'}</p>
@@ -115,6 +127,18 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
               <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'নাম' : 'Name'}</span>
               <span className="font-black" style={{ color: '#1e293b' }}>{student.student_name}</span>
             </div>
+            {madrasah.institution_type === 'school' && (
+              <>
+                <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
+                  <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'পিতার নাম' : "Father's Name"}</span>
+                  <span className="font-black" style={{ color: '#1e293b' }}>{student.guardian_name || '-'}</span>
+                </div>
+                <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
+                  <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'মাতার নাম' : "Mother's Name"}</span>
+                  <span className="font-black" style={{ color: '#1e293b' }}>{student.mother_name || '-'}</span>
+                </div>
+              </>
+            )}
             <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
               <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'শ্রেণী' : 'Class'}</span>
               <span className="font-black" style={{ color: '#1e293b' }}>{student.classes?.class_name || '-'}</span>
@@ -178,10 +202,22 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
         {/* Body */}
         <div className="flex-1 p-10 flex gap-12 relative z-10">
           <div className="flex-1 grid grid-cols-2 gap-x-12 gap-y-8">
-            <div className="relative group">
+            <div className={`relative group ${madrasah.institution_type === 'school' ? 'col-span-2' : ''}`}>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name'}</p>
               <p className="text-2xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.student_name}</p>
             </div>
+            {madrasah.institution_type === 'school' && (
+              <>
+                <div className="relative group">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'পিতার নাম' : "Father's Name"}</p>
+                  <p className="text-xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.guardian_name || '-'}</p>
+                </div>
+                <div className="relative group">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'মাতার নাম' : "Mother's Name"}</p>
+                  <p className="text-xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.mother_name || '-'}</p>
+                </div>
+              </>
+            )}
             <div className="relative group">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'শ্রেণী' : 'Class'}</p>
               <p className="text-2xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.classes?.class_name || '-'}</p>
@@ -252,6 +288,18 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
             <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'শিক্ষার্থীর নাম :' : 'Student Name :'}</span>
             <span className="flex-1 border-b-4 border-dotted text-2xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.student_name}</span>
           </div>
+          {madrasah.institution_type === 'school' && (
+            <div className="flex gap-12">
+              <div className="flex items-end gap-4 flex-1">
+                <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'পিতার নাম :' : "Father's Name :"}</span>
+                <span className="flex-1 border-b-4 border-dotted text-xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.guardian_name || '-'}</span>
+              </div>
+              <div className="flex items-end gap-4 flex-1">
+                <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'মাতার নাম :' : "Mother's Name :"}</span>
+                <span className="flex-1 border-b-4 border-dotted text-xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.mother_name || '-'}</span>
+              </div>
+            </div>
+          )}
           <div className="flex gap-12">
             <div className="flex items-end gap-4 flex-1">
               <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'শ্রেণী :' : 'Class :'}</span>

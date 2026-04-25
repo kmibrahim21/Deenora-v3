@@ -581,7 +581,7 @@ export const t = (key: keyof typeof translations.bn, lang: Language, type?: stri
   
   // Map types to override keys
   let overrideType = type;
-  if (type === 'nurani') overrideType = 'madrasah';
+  if (type === 'choching') overrideType = 'madrasah';
   if (type === 'kindergarten') overrideType = 'school';
   
   if (overrides[overrideType] && overrides[overrideType][lang] && overrides[overrideType][lang][key]) {

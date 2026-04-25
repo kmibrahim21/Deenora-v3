@@ -14,7 +14,7 @@ export interface Institution {
   phone?: string;
   institute_code?: string;
   logo_url?: string;
-  institution_type: 'madrasah' | 'school' | 'kindergarten' | 'nurani' | 'system';
+  institution_type: 'madrasah' | 'school' | 'kindergarten' | 'choching' | 'system';
   config_json: {
     modules: {
       attendance: boolean;
@@ -176,6 +176,7 @@ export interface Student {
   date_of_birth?: string;
   blood_group?: string;
   guardian_name?: string;
+  mother_name?: string;
   guardian_phone: string;
   guardian_phone_2?: string;
   address?: string;

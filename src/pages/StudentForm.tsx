@@ -23,6 +23,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [name, setName] = useState(student?.student_name || '');
   const [admissionNumber, setAdmissionNumber] = useState(student?.admission_number || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
+  const [motherName, setMotherName] = useState(student?.mother_name || '');
 
   const [roll, setRoll] = useState(student?.roll?.toString() || '');
   const [dob, setDob] = useState(student?.date_of_birth || '');
@@ -89,6 +90,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         student_name: name.trim(),
         admission_number: admissionNumber.trim() || null,
         guardian_name: guardianName.trim(),
+        mother_name: madrasah.institution_type === 'school' ? motherName.trim() : null,
         roll: roll ? parseInt(roll) : null,
         date_of_birth: dob || null,
         blood_group: bloodGroup || null,
@@ -126,6 +128,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
       let msg = err.message;
       if (err.code === '23505') {
         msg = t('duplicate_roll', lang, madrasah?.institution_type);
+      } else if (err.code === 'PGRST204' || err.message?.includes('mother_name does not exist')) {
+        msg = 'Database needs update! Please run the SQL migration in Supabase to add mother_name column.';
       }
       setErrorModal({ show: true, message: msg });
     } finally { setLoading(false); }
@@ -215,6 +219,22 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   onChange={(e) => setGuardianName(e.target.value)} 
                 />
               </div>
+
+              {madrasah?.institution_type === 'school' && (
+                <div className="space-y-2">
+                  <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                    <UserCheck size={11} className="text-[#2563EB]" /> 
+                    {lang === 'bn' ? 'মাতার নাম' : "Mother's Name"}
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder={lang === 'bn' ? 'মাতার নাম' : "Mother's Name"}
+                    className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
+                    value={motherName} 
+                    onChange={(e) => setMotherName(e.target.value)} 
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>

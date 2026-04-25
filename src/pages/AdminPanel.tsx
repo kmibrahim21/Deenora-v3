@@ -35,7 +35,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'madrasah' | 'school' | 'kindergarten' | 'nurani'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'madrasah' | 'school' | 'kindergarten' | 'choching'>('all');
   const [view, setView] = useState<'list' | 'approvals' | 'details' | 'dashboard' | 'institutions'>(
     currentView === 'approvals' ? 'approvals' : currentView === 'dashboard' ? 'dashboard' : currentView === 'institutions' ? 'institutions' : 'list'
   );
@@ -106,7 +106,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     activeInstitutions: 0,
     totalVoiceBalance: 0,
     adminSMSStock: 0,
-    typeBreakdown: { madrasah: 0, school: 0, kindergarten: 0, nurani: 0, system: 0 }
+    typeBreakdown: { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 }
   });
   const [recentInstitutions, setRecentInstitutions] = useState<Institution[]>([]);
   const [selectedUser, setSelectedUser] = useState<InstitutionWithStats | null>(null);
@@ -135,7 +135,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editResultEngine, setEditResultEngine] = useState<'school' | 'befaq' | 'qawmi_custom'>('school');
   const [editResultSystem, setEditResultSystem] = useState<'grading' | 'marks'>('grading');
   const [editFeeStructure, setEditFeeStructure] = useState<'monthly' | 'session'>('monthly');
-  const [editInstitutionType, setEditInstitutionType] = useState<'madrasah' | 'school' | 'kindergarten' | 'nurani' | 'system'>('madrasah');
+  const [editInstitutionType, setEditInstitutionType] = useState<'madrasah' | 'school' | 'kindergarten' | 'choching' | 'system'>('madrasah');
   const [editFeeEngine, setEditFeeEngine] = useState<'school' | 'qawmi' | 'kindergarten' | 'simple'>('school');
   const [editAccountingMode, setEditAccountingMode] = useState<'qawmi_flexible' | 'school_system'>('school_system');
   const [editSmsBalance, setEditSmsBalance] = useState<number>(0);
@@ -513,7 +513,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [newInstPhone, setNewInstPhone] = useState('');
   const [newInstEmail, setNewInstEmail] = useState('');
   const [newInstPassword, setNewInstPassword] = useState('');
-  const [newInstType, setNewInstType] = useState<'madrasah' | 'school' | 'kindergarten' | 'nurani'>('madrasah');
+  const [newInstType, setNewInstType] = useState<'madrasah' | 'school' | 'kindergarten' | 'choching'>('madrasah');
   const [isCreatingInst, setIsCreatingInst] = useState(false);
 
   const fetchGlobalCounts = async () => {
@@ -539,7 +539,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       const type = m.institution_type || 'madrasah';
       acc[type] = (acc[type] || 0) + 1;
       return acc;
-    }, { madrasah: 0, school: 0, kindergarten: 0, nurani: 0, system: 0 });
+    }, { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 });
 
     return {
       totalStudents: studentsRes.count || 0,
@@ -1478,7 +1478,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                           </div>
                           <div>
                             <p className={`text-xs font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>{inst.name}</p>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{inst.institution_type}</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{inst.institution_type === 'choching' ? 'Choching' : inst.institution_type}</p>
                           </div>
                         </div>
                         <div className="text-right">
@@ -1591,7 +1591,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     { id: 'madrasah', label: 'Madrasah' },
                     { id: 'school', label: 'School' },
                     { id: 'kindergarten', label: 'KG' },
-                    { id: 'nurani', label: 'Nurani' }
+                    { id: 'choching', label: 'Choching' }
                   ].map(type => (
                     <button 
                       key={type.id}
@@ -1623,7 +1623,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-                        {m.institution_type || 'madrasah'}
+                        {m.institution_type === 'choching' ? 'Choching' : (m.institution_type || 'madrasah')}
                       </span>
                       {m.config_json?.modules?.voice_broadcast !== false && (
                         <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-500">
@@ -1739,7 +1739,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <div className="mt-6 flex items-center justify-between">
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{inst.phone || 'No Phone'}</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{inst.institution_type}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{inst.institution_type === 'choching' ? 'Choching' : inst.institution_type}</p>
                           </div>
                           <button 
                             onClick={() => setExpandedInstituteId(isExpanded ? null : inst.id)}
@@ -2193,7 +2193,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       <option value="madrasah">Madrasah</option>
                                       <option value="school">School</option>
                                       <option value="kindergarten">Kindergarten</option>
-                                      <option value="nurani">Nurani</option>
+                                      <option value="choching">Choching</option>
                                     </select>
                                  </div>
                               </div>
@@ -2750,7 +2750,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   <option value="madrasah">Madrasah</option>
                   <option value="school">School</option>
                   <option value="kindergarten">Kindergarten</option>
-                  <option value="nurani">Nurani</option>
+                  <option value="choching">Choching</option>
                 </select>
               </div>
 

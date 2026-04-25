@@ -273,7 +273,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         await generateAdmitCardPDF(
             examForAdmitCard,
             stds,
-            { name: madrasah.name, logo_url: madrasah.logo_url },
+            { name: madrasah.name, logo_url: madrasah.logo_url, institution_type: madrasah.institution_type },
             selectedAdmitCardTemplate,
             downloadLang
         );
