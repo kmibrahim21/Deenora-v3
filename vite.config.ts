@@ -121,8 +121,8 @@ export default defineConfig(({ mode }) => {
           },
           includeAssets: ['Deenora192.png', 'Deenora512.png'],
           manifest: {
-            name: "Deenora Management System",
-            short_name: "DeenoraV3",
+            name: "Deenora",
+            short_name: "Deenora",
             description: "Professional Institute Management System",
             id: "/",
             start_url: "/",
