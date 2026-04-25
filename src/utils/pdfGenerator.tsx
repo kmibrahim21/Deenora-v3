@@ -10,6 +10,7 @@ import { ClassFeeReportTemplate } from '../components/pdf/ClassFeeReportTemplate
 import { FeeReceiptTemplate } from '../components/pdf/FeeReceiptTemplate';
 import { FinalResultTemplate } from '../components/pdf/FinalResultTemplate';
 import { SeatPlanTemplate } from '../components/pdf/SeatPlanTemplate';
+import { AttendanceReportTemplate } from '../components/pdf/AttendanceReportTemplate';
 
 let bengaliFontBase64: string | null = null;
 
@@ -57,7 +58,51 @@ const loadImage = (url: string): Promise<string> => {
     });
 };
 
-// --- ADMIT CARD GENERATOR ---
+// --- ATTENDANCE REPORT GENERATOR ---
+export const generateAttendanceReportPDF = async (
+    reportData: any[],
+    madrasah: any,
+    className: string,
+    month: string,
+    lang: 'en' | 'bn' = 'en'
+) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    await new Promise<void>((resolve) => {
+        root.render(<AttendanceReportTemplate reportData={reportData} madrasah={madrasah} className={className} month={month} lang={lang} />);
+        setTimeout(resolve, 800); 
+    });
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    if (container.children.length > 0) {
+        const pages = Array.from(container.children).filter(el => el.tagName !== 'STYLE');
+        
+        for (let i = 0; i < pages.length; i++) {
+            const pageElement = pages[i] as HTMLElement;
+            
+            const imgData = await toPng(pageElement, {
+                pixelRatio: 2,
+                backgroundColor: '#ffffff',
+                width: 794, 
+                height: 1123, 
+            });
+
+            if (i > 0) doc.addPage();
+            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        }
+    }
+    
+    doc.save(`Attendance_Report_${className}_${month}.pdf`);
+    root.unmount();
+    document.body.removeChild(container);
+};
 // --- SEAT PLAN GENERATOR ---
 export const generateSeatPlanPDF = async (
     assignments: any[],

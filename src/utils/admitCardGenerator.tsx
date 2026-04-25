@@ -7,89 +7,86 @@ import { Exam, Student } from '../types';
 interface AdmitCardProps {
   exam: any;
   student: Student;
-  madrasah: { name: string; logo_url?: string; institution_type?: string };
-  templateId: string;
+  madrasah: { name: string; logo_url?: string; institution_type?: string; phone?: string; address?: string };
+  templateId?: string;
   lang: 'en' | 'bn';
 }
 
-const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, templateId, lang }) => {
+const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, templateId = 'modern', lang }) => {
   const isBangla = lang === 'bn';
   const fontFamily = isBangla ? "'Noto Sans Bengali', sans-serif" : "sans-serif";
+  const isSchool = madrasah.institution_type === 'school';
 
-  if (templateId === 'modern') {
+  if (templateId === 'classic') {
     return (
-      <div className="w-[800px] h-[450px] border-2 rounded-2xl overflow-hidden flex flex-col relative font-sans" style={{ fontFamily, backgroundColor: '#ffffff', borderColor: '#1e3a8a' }}>
-        {/* Header */}
-        <div className="p-6 flex items-center justify-between" style={{ backgroundColor: '#1e3a8a', color: '#ffffff' }}>
-          <div className="flex items-center gap-4">
-            {madrasah.logo_url && (
-              <img src={madrasah.logo_url} alt="Logo" className="w-16 h-16 rounded-full p-1 object-contain" style={{ backgroundColor: '#ffffff' }} crossOrigin="anonymous" />
-            )}
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">{madrasah.name}</h1>
-              <p className="text-sm font-bold mt-1 uppercase tracking-widest" style={{ color: '#bfdbfe' }}>{exam.exam_name}</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="px-4 py-2 rounded-xl backdrop-blur-sm border" style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', borderColor: 'rgba(255, 255, 255, 0.3)' }}>
-              <h2 className="text-xl font-black tracking-widest uppercase">Admit Card</h2>
-              <p className="text-xs mt-1" style={{ color: '#dbeafe' }}>{isBangla ? 'প্রবেশপত্র' : 'Entry Pass'}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 p-8 flex gap-8">
-          <div className="flex-1 space-y-6">
-            <div className="grid grid-cols-2 gap-6">
-              <div className={madrasah.institution_type === 'school' ? 'col-span-2' : ''}>
-                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name'}</p>
-                <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.student_name}</p>
-              </div>
-              {madrasah.institution_type === 'school' && (
-                <>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'পিতার নাম' : "Father's Name"}</p>
-                    <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.guardian_name || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'মাতার নাম' : "Mother's Name"}</p>
-                    <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.mother_name || '-'}</p>
-                  </div>
-                </>
+      <div className="w-[850px] h-[550px] relative font-sans bg-white border-[3px] border-black p-4" style={{ fontFamily }}>
+        <div className="border border-black w-full h-full p-6 flex flex-col">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
+            <div className="flex items-center gap-5">
+              {madrasah.logo_url && (
+                <img src={madrasah.logo_url} className="w-[80px] h-[80px] object-contain" crossOrigin="anonymous" />
               )}
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'শ্রেণী' : 'Class'}</p>
-                <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.classes?.class_name || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'রোল নম্বর' : 'Roll Number'}</p>
-                <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{student.roll || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#94a3b8' }}>{isBangla ? 'পরীক্ষার তারিখ' : 'Exam Date'}</p>
-                <p className="text-xl font-black border-b-2 pb-2" style={{ color: '#1e293b', borderColor: '#f1f5f9' }}>{exam.exam_date ? new Date(exam.exam_date).toLocaleDateString() : exam.exam_year}</p>
+                <h1 className="text-4xl font-bold text-black uppercase tracking-wide">{madrasah.name}</h1>
+                <p className="text-lg text-black mt-1 font-medium">{madrasah.address || ''}</p>
               </div>
             </div>
           </div>
-
-          <div className="w-32 flex flex-col items-center gap-4">
-            <div className="w-32 h-40 border-2 border-dashed rounded-xl flex items-center justify-center" style={{ borderColor: '#cbd5e1', backgroundColor: '#f8fafc' }}>
-              <span className="font-bold text-sm uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'ছবি' : 'Photo'}</span>
+          
+          <div className="text-center mb-6">
+            <h2 className="inline-block border-2 border-black px-6 py-2 text-2xl font-bold uppercase tracking-widest bg-gray-100">
+              {isBangla ? 'প্রবেশ পত্র' : 'ADMIT CARD'}
+            </h2>
+            <div className="mt-4 text-xl font-bold">{exam.exam_name}</div>
+          </div>
+          
+          <div className="flex-1 px-8">
+            <table className="w-full text-left text-lg border-separate" style={{ borderSpacing: '0 8px' }}>
+              <tbody>
+                <tr>
+                  <td className="py-2 font-bold w-[25%] align-top">{isBangla ? 'নাম' : 'Name'}</td>
+                  <td className="py-2 font-semibold">:<span className="ml-3">{student.student_name}</span></td>
+                </tr>
+                <tr>
+                  <td className="py-2 font-bold align-top">{isBangla ? 'পিতা' : 'Father'}</td>
+                  <td className="py-2 font-semibold">:<span className="ml-3">{student.guardian_name || '-'}</span></td>
+                </tr>
+                <tr>
+                  <td className="py-2 font-bold align-top">{isSchool ? (isBangla ? 'মাতা' : 'Mother') : (isBangla ? 'বিভাগ' : 'Department')}</td>
+                  <td className="py-2 font-semibold">:<span className="ml-3">{isSchool ? student.mother_name || '-' : student.department || '-'}</span></td>
+                </tr>
+                <tr>
+                  <td className="py-2 font-bold align-top">{isBangla ? 'শ্রেণি' : 'Class'}</td>
+                  <td className="py-2 font-semibold">:<span className="ml-3">{student.classes?.class_name || '-'}</span></td>
+                </tr>
+                <tr>
+                  <td className="py-2" colSpan={2}>
+                    <div className="flex w-full mt-2">
+                        <div className="w-[45%] flex">
+                            <span className="font-bold w-[55%]">{isBangla ? 'রোল' : 'Roll'}</span>
+                            <span className="font-bold text-xl">:<span className="ml-3">{student.roll || '-'}</span></span>
+                        </div>
+                        <div className="w-[55%] flex">
+                            <span className="font-bold w-[40%] ml-4">{isBangla ? 'শিক্ষাবর্ষ' : 'Session'}</span>
+                            <span className="font-semibold">:<span className="ml-3">{exam.exam_year || new Date().getFullYear().toString()}</span></span>
+                        </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="mt-auto flex justify-between items-end pb-4 pt-10 px-8">
+            <div className="text-center">
+               <div className="w-48 border-b-2 border-black mb-2"></div>
+               <p className="font-bold text-lg">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
             </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t flex justify-between items-end px-8" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-          <div className="text-xs font-bold max-w-md" style={{ color: '#64748b' }}>
-            <p className="mb-1" style={{ color: '#ef4444' }}>{isBangla ? 'নির্দেশনা:' : 'Instructions:'}</p>
-            <p>{isBangla ? '১. পরীক্ষার হলে অবশ্যই প্রবেশপত্র সাথে আনতে হবে।' : '1. Must bring this admit card to the exam hall.'}</p>
-            <p>{isBangla ? '২. মোবাইল ফোন বা কোনো ইলেকট্রনিক ডিভাইস আনা সম্পূর্ণ নিষেধ।' : '2. Mobile phones or electronic devices are strictly prohibited.'}</p>
-          </div>
-          <div className="text-center">
-            <div className="w-32 border-b-2 mb-2" style={{ borderColor: '#1e293b' }}></div>
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#475569' }}>{isBangla ? 'কর্তৃপক্ষের স্বাক্ষর' : 'Authority Signature'}</p>
+            <div className="text-center">
+               <div className="w-48 border-b-2 border-black mb-2"></div>
+               <p className="font-bold text-lg">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -98,246 +95,182 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
   if (templateId === 'minimal') {
     return (
-      <div className="w-[800px] h-[450px] border p-8 flex flex-col relative font-sans" style={{ fontFamily, backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}>
-        <div className="text-center mb-8">
-          {madrasah.logo_url && (
-            <img src={madrasah.logo_url} alt="Logo" className="w-12 h-12 mx-auto mb-3 object-contain grayscale" crossOrigin="anonymous" />
-          )}
-          <h1 className="text-2xl font-black tracking-widest uppercase" style={{ color: '#0f172a' }}>{madrasah.name}</h1>
-          <div className="flex items-center justify-center gap-4 mt-2">
-            <div className="h-[1px] w-12" style={{ backgroundColor: '#cbd5e1' }}></div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#64748b' }}>{exam.exam_name}</p>
-            <div className="h-[1px] w-12" style={{ backgroundColor: '#cbd5e1' }}></div>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-start mb-8">
-          <div className="px-6 py-2" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>
-            <h2 className="text-lg font-black tracking-widest uppercase">Admit Card</h2>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'তারিখ' : 'Date'}</p>
-            <p className="text-sm font-black" style={{ color: '#1e293b' }}>{exam.exam_date ? new Date(exam.exam_date).toLocaleDateString() : exam.exam_year}</p>
-          </div>
-        </div>
-
-        <div className="flex-1 flex gap-12">
-          <div className="flex-1 space-y-4">
-            <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
-              <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'নাম' : 'Name'}</span>
-              <span className="font-black" style={{ color: '#1e293b' }}>{student.student_name}</span>
+      <div className="w-[850px] h-[550px] relative font-sans bg-slate-50 border border-slate-200 rounded-xl overflow-hidden p-8" style={{ fontFamily }}>
+        {madrasah.logo_url && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
+              <img src={madrasah.logo_url} className="w-[400px] h-[400px] object-contain grayscale" crossOrigin="anonymous" />
             </div>
-            {madrasah.institution_type === 'school' && (
-              <>
-                <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
-                  <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'পিতার নাম' : "Father's Name"}</span>
-                  <span className="font-black" style={{ color: '#1e293b' }}>{student.guardian_name || '-'}</span>
-                </div>
-                <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
-                  <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'মাতার নাম' : "Mother's Name"}</span>
-                  <span className="font-black" style={{ color: '#1e293b' }}>{student.mother_name || '-'}</span>
-                </div>
-              </>
-            )}
-            <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
-              <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'শ্রেণী' : 'Class'}</span>
-              <span className="font-black" style={{ color: '#1e293b' }}>{student.classes?.class_name || '-'}</span>
-            </div>
-            <div className="flex border-b pb-2" style={{ borderColor: '#e2e8f0' }}>
-              <span className="w-32 text-xs font-bold uppercase tracking-widest" style={{ color: '#94a3b8' }}>{isBangla ? 'রোল' : 'Roll'}</span>
-              <span className="font-black" style={{ color: '#1e293b' }}>{student.roll || '-'}</span>
-            </div>
-          </div>
-
-          <div className="w-28 h-32 border flex items-center justify-center" style={{ borderColor: '#cbd5e1', backgroundColor: '#f8fafc' }}>
-            <span className="font-bold text-xs uppercase tracking-widest" style={{ color: '#cbd5e1' }}>{isBangla ? 'ছবি' : 'Photo'}</span>
-          </div>
-        </div>
-
-        <div className="mt-auto flex justify-between items-end pt-8">
-          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#94a3b8' }}>
-            <p>• {isBangla ? 'প্রবেশপত্র ছাড়া পরীক্ষা দেওয়া নিষেধ।' : 'Entry without admit card is prohibited.'}</p>
-            <p>• {isBangla ? 'মোবাইল ফোন নিষিদ্ধ।' : 'Mobile phones prohibited.'}</p>
-          </div>
-          <div className="text-center">
-            <div className="w-32 border-b mb-2" style={{ borderColor: '#0f172a' }}></div>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#64748b' }}>{isBangla ? 'স্বাক্ষর' : 'Signature'}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (templateId === 'premium') {
-    return (
-      <div className="w-[800px] h-[450px] border-8 rounded-[2.5rem] overflow-hidden flex flex-col relative font-sans shadow-2xl" style={{ fontFamily, backgroundColor: '#ffffff', borderColor: '#1e3a8a' }}>
-        {/* Decorative background elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full -mr-32 -mt-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-600/5 rounded-full -ml-24 -mb-24"></div>
+        )}
         
-        {/* Header */}
-        <div className="p-8 flex items-center justify-between relative z-10" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)', color: '#ffffff' }}>
-          <div className="flex items-center gap-6">
-            {madrasah.logo_url && (
-              <div className="w-20 h-20 bg-white rounded-2xl p-2 shadow-lg flex items-center justify-center">
-                <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain" crossOrigin="anonymous" />
-              </div>
-            )}
-            <div>
-              <h1 className="text-3xl font-black tracking-tight leading-tight">{madrasah.name}</h1>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="h-[2px] w-8 bg-blue-300"></span>
-                <p className="text-sm font-bold uppercase tracking-[0.3em] text-blue-100">{exam.exam_name}</p>
+        <div className="flex flex-col h-full bg-white rounded-xl border border-slate-100 shadow-sm p-8 z-10 relative">
+          {/* Header */}
+          <div className="flex flex-col items-center justify-center text-center pb-6 border-b border-slate-100 mb-6">
+            <div className="flex items-center justify-center gap-5 mb-3 w-full">
+              {madrasah.logo_url && (
+                <img src={madrasah.logo_url} className="w-[70px] h-[70px] object-contain" crossOrigin="anonymous" />
+              )}
+              <div className="text-center">
+                <h1 className="text-[32px] font-black text-slate-800 tracking-tight leading-none">{madrasah.name}</h1>
+                {madrasah.address && <p className="text-[14px] text-slate-500 font-medium mt-1.5">{madrasah.address}</p>}
               </div>
             </div>
-          </div>
-          <div className="text-right">
-            <div className="px-6 py-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-inner">
-              <h2 className="text-2xl font-black tracking-widest uppercase leading-none">Admit Card</h2>
-              <p className="text-xs mt-1 font-bold text-blue-200 tracking-widest">{isBangla ? 'প্রবেশপত্র' : 'Entry Pass'}</p>
+            
+            <div className="mt-4 flex items-center justify-center gap-4">
+               <span className="h-[1.5px] w-12 bg-slate-200"></span>
+               <h2 className="text-xl font-black uppercase tracking-[0.25em] text-[#2563EB]">
+                 {isBangla ? 'প্রবেশ পত্র' : 'Admit Card'}
+               </h2>
+               <span className="h-[1.5px] w-12 bg-slate-200"></span>
             </div>
+            <div className="mt-3 text-[15px] font-bold text-slate-600 bg-slate-50 px-5 py-1.5 rounded-full ring-1 ring-slate-200/60">{exam.exam_name}</div>
           </div>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 p-10 flex gap-12 relative z-10">
-          <div className="flex-1 grid grid-cols-2 gap-x-12 gap-y-8">
-            <div className={`relative group ${madrasah.institution_type === 'school' ? 'col-span-2' : ''}`}>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name'}</p>
-              <p className="text-2xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.student_name}</p>
+          
+          <div className="flex-1 flex flex-col gap-y-3.5 px-8">
+             <div className="flex border-b border-slate-50 pb-2.5">
+                <div className="w-[120px] text-slate-400 font-bold text-xs uppercase tracking-widest">{isBangla ? 'নাম' : 'Name'}</div>
+                <div className="flex-1 text-slate-800 font-black text-lg">: <span className="ml-2">{student.student_name}</span></div>
+             </div>
+             <div className="flex border-b border-slate-50 pb-2.5">
+                <div className="w-[120px] text-slate-400 font-bold text-xs uppercase tracking-widest">{isBangla ? 'পিতা' : 'Father'}</div>
+                <div className="flex-1 text-slate-800 font-bold text-[17px] text-slate-600">: <span className="ml-2">{student.guardian_name || '-'}</span></div>
+             </div>
+             <div className="flex border-b border-slate-50 pb-2.5">
+                <div className="w-[120px] text-slate-400 font-bold text-xs uppercase tracking-widest">{isSchool ? (isBangla ? 'মাতা' : 'Mother') : (isBangla ? 'বিভাগ' : 'Department')}</div>
+                <div className="flex-1 text-slate-800 font-bold text-[17px] text-slate-600">: <span className="ml-2">{isSchool ? student.mother_name || '-' : student.department || '-'}</span></div>
+             </div>
+             <div className="flex border-b border-slate-50 pb-2.5">
+                <div className="w-[120px] text-slate-400 font-bold text-xs uppercase tracking-widest">{isBangla ? 'শ্রেণি' : 'Class'}</div>
+                <div className="flex-1 text-slate-800 font-black text-[19px] text-[#2563EB]">: <span className="ml-2">{student.classes?.class_name || '-'}</span></div>
+             </div>
+             <div className="flex pt-1 gap-10 border-b border-slate-50 pb-2">
+                <div className="flex-1 flex items-center bg-blue-50/50 py-2 px-4 rounded-lg">
+                    <div className="w-[60px] text-blue-400 font-bold text-xs uppercase tracking-widest">{isBangla ? 'রোল' : 'Roll'}</div>
+                    <div className="flex-1 text-slate-800 font-black text-[22px] text-[#2563EB]">: <span className="ml-2">{student.roll || '-'}</span></div>
+                </div>
+                <div className="flex-[1.5] flex items-center">
+                    <div className="w-[100px] text-slate-400 font-bold text-xs uppercase tracking-widest pt-0.5">{isBangla ? 'শিক্ষাবর্ষ' : 'Session'}</div>
+                    <div className="flex-1 text-slate-700 font-bold text-[17px]">: <span className="ml-2">{exam.exam_year || new Date().getFullYear().toString()}</span></div>
+                </div>
+             </div>
+          </div>
+          
+          <div className="mt-auto flex justify-between items-end pt-8 px-8">
+            <div className="text-left">
+               <div className="w-48 border-b-2 border-slate-200 mb-2.5 opacity-70"></div>
+               <p className="font-bold text-xs text-slate-400 uppercase tracking-widest">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
             </div>
-            {madrasah.institution_type === 'school' && (
-              <>
-                <div className="relative group">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'পিতার নাম' : "Father's Name"}</p>
-                  <p className="text-xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.guardian_name || '-'}</p>
+            {madrasah.phone && (
+                <div className="text-[11px] font-bold tracking-widest text-[#2563EB] bg-blue-50 px-4 py-1.5 rounded-full">
+                   CONTACT: {madrasah.phone}
                 </div>
-                <div className="relative group">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'মাতার নাম' : "Mother's Name"}</p>
-                  <p className="text-xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.mother_name || '-'}</p>
-                </div>
-              </>
             )}
-            <div className="relative group">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'শ্রেণী' : 'Class'}</p>
-              <p className="text-2xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.classes?.class_name || '-'}</p>
-            </div>
-            <div className="relative group">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'রোল নম্বর' : 'Roll Number'}</p>
-              <p className="text-2xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{student.roll || '-'}</p>
-            </div>
-            <div className="relative group">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">{isBangla ? 'পরীক্ষার তারিখ' : 'Exam Date'}</p>
-              <p className="text-2xl font-black text-slate-800 border-b-2 border-slate-100 pb-2 group-hover:border-blue-200 transition-colors">{exam.exam_date ? new Date(exam.exam_date).toLocaleDateString() : exam.exam_year}</p>
-            </div>
-          </div>
-
-          <div className="w-40 flex flex-col items-center gap-6">
-            <div className="w-36 h-44 border-4 border-slate-100 rounded-3xl flex items-center justify-center bg-slate-50 shadow-inner relative overflow-hidden group">
-              <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors"></div>
-              <span className="font-black text-xs uppercase tracking-[0.3em] text-slate-300">{isBangla ? 'ছবি' : 'Photo'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-end px-10 relative z-10">
-          <div className="text-[10px] font-bold text-slate-400 max-w-md">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-              <p className="uppercase tracking-widest text-red-500 font-black">{isBangla ? 'নির্দেশনা:' : 'Instructions:'}</p>
-            </div>
-            <div className="space-y-1 pl-4 border-l-2 border-slate-200">
-              <p>• {isBangla ? 'পরীক্ষার হলে অবশ্যই প্রবেশপত্র সাথে আনতে হবে।' : 'Must bring this admit card to the exam hall.'}</p>
-              <p>• {isBangla ? 'মোবাইল ফোন বা কোনো ইলেকট্রনিক ডিভাইস আনা সম্পূর্ণ নিষেধ।' : 'Mobile phones or electronic devices are strictly prohibited.'}</p>
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="w-48 h-1 bg-slate-800 mb-3 rounded-full"></div>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600">{isBangla ? 'কর্তৃপক্ষের স্বাক্ষর' : 'Authority Signature'}</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Classic Template
+  // Fallback to modern design
   return (
-    <div className="w-[800px] h-[450px] border-[12px] border-double p-8 flex flex-col relative font-sans" style={{ fontFamily, backgroundColor: '#ffffff', borderColor: '#1e293b' }}>
-      <div className="flex justify-between items-center border-b-4 pb-6 mb-8" style={{ borderColor: '#1e293b' }}>
+    <div className="w-[850px] h-[550px] relative font-sans overflow-hidden bg-[#eff8fc]" style={{ fontFamily }}>
+      {/* Top Curves */}
+      <svg viewBox="0 0 850 200" className="absolute top-0 left-0 w-full" preserveAspectRatio="none">
+        <path d="M0,0 L850,0 L850,140 Q425,250 0,140 Z" fill="#248ab3" />
+        <path d="M0,0 L850,0 L850,110 Q425,220 0,110 Z" fill="#054569" />
+      </svg>
+      
+      {/* Bottom Curve */}
+      <svg viewBox="0 0 850 120" className="absolute bottom-0 left-0 w-full" preserveAspectRatio="none">
+        <path d="M0,120 L850,120 L850,40 Q425,120 0,0 Z" fill="#054569" opacity="0.9" />
+      </svg>
+
+      {/* Decorative Watermark inside Body */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none z-0">
+         {madrasah.logo_url && <img src={madrasah.logo_url} className="w-96 h-96 object-contain" crossOrigin="anonymous" />}
+      </div>
+      
+      {/* Header */}
+      <div className="relative z-10 w-full pt-8 px-10 flex items-center justify-center text-white pb-6">
         <div className="flex items-center gap-6">
           {madrasah.logo_url && (
-            <div className="w-20 h-20 flex items-center justify-center border-2 rounded-xl p-1" style={{ borderColor: '#e2e8f0' }}>
-              <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain" crossOrigin="anonymous" />
+            <div className="bg-white p-1 rounded-full drop-shadow-md shrink-0">
+              <img src={madrasah.logo_url} alt="Logo" className="w-[84px] h-[84px] object-contain rounded-full" crossOrigin="anonymous" />
             </div>
           )}
-          <div>
-            <h1 className="text-4xl font-black uppercase tracking-tight" style={{ color: '#0f172a' }}>{madrasah.name}</h1>
-            <p className="font-black mt-1 text-xl uppercase tracking-widest" style={{ color: '#475569' }}>{exam.exam_name}</p>
+          <div className="text-left">
+            <h1 className="text-[44px] font-black drop-shadow-md tracking-wide leading-none" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+              {madrasah.name}
+            </h1>
+            <p className="text-[14px] mt-2.5 text-blue-50 drop-shadow flex items-center gap-2 font-medium">
+              <span>{madrasah.address || ''}</span>
+              {(madrasah.address && madrasah.phone) && <span className="w-1.5 h-1.5 rounded-full bg-blue-300"></span>}
+              {madrasah.phone && <span>Mobile: {madrasah.phone}</span>}
+            </p>
           </div>
-        </div>
-        <div className="text-center border-4 p-4 bg-slate-50" style={{ borderColor: '#1e293b' }}>
-          <h2 className="text-2xl font-black uppercase tracking-[0.2em]">Admit Card</h2>
-          <p className="text-sm font-bold mt-1 tracking-widest">{isBangla ? 'প্রবেশপত্র' : 'Entry Pass'}</p>
         </div>
       </div>
 
-      <div className="flex-1 flex gap-12">
-        <div className="flex-1 space-y-8">
-          <div className="flex items-end gap-4">
-            <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'শিক্ষার্থীর নাম :' : 'Student Name :'}</span>
-            <span className="flex-1 border-b-4 border-dotted text-2xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.student_name}</span>
-          </div>
-          {madrasah.institution_type === 'school' && (
-            <div className="flex gap-12">
-              <div className="flex items-end gap-4 flex-1">
-                <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'পিতার নাম :' : "Father's Name :"}</span>
-                <span className="flex-1 border-b-4 border-dotted text-xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.guardian_name || '-'}</span>
-              </div>
-              <div className="flex items-end gap-4 flex-1">
-                <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'মাতার নাম :' : "Mother's Name :"}</span>
-                <span className="flex-1 border-b-4 border-dotted text-xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.mother_name || '-'}</span>
-              </div>
-            </div>
-          )}
-          <div className="flex gap-12">
-            <div className="flex items-end gap-4 flex-1">
-              <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'শ্রেণী :' : 'Class :'}</span>
-              <span className="flex-1 border-b-4 border-dotted text-2xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.classes?.class_name || '-'}</span>
-            </div>
-            <div className="flex items-end gap-4 flex-1">
-              <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'রোল নম্বর :' : 'Roll No :'}</span>
-              <span className="flex-1 border-b-4 border-dotted text-2xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{student.roll || '-'}</span>
-            </div>
-          </div>
-          <div className="flex gap-12">
-            <div className="flex items-end gap-4 flex-1">
-              <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'পরীক্ষার তারিখ :' : 'Exam Date :'}</span>
-              <span className="flex-1 border-b-4 border-dotted text-2xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>{exam.exam_date ? new Date(exam.exam_date).toLocaleDateString() : exam.exam_year}</span>
-            </div>
-            <div className="flex items-end gap-4 flex-1">
-              <span className="text-sm font-black uppercase tracking-widest whitespace-nowrap text-slate-500">{isBangla ? 'শাখা :' : 'Section :'}</span>
-              <span className="flex-1 border-b-4 border-dotted text-2xl font-black px-4 pb-1 uppercase" style={{ borderColor: '#cbd5e1', color: '#1e293b' }}>-</span>
-            </div>
-          </div>
+      {/* Middle Banner */}
+      <div className="relative z-10 mt-1 flex flex-col items-center">
+        <div className="bg-white px-10 py-1.5 border-l-8 border-r-8 border-[#054569] font-black text-2xl text-[#054569] shadow-sm tracking-widest rounded-sm border-double">
+          {isBangla ? 'প্রবেশ পত্র' : 'Admit Card'}
         </div>
-
-        <div className="w-40 h-48 border-4 flex items-center justify-center bg-slate-50" style={{ borderColor: '#1e293b' }}>
-          <span className="font-black text-xs uppercase tracking-[0.3em] text-slate-300">{isBangla ? 'ছবি' : 'Photo'}</span>
+        
+        {/* Exam Type */}
+        <div className="mt-4 flex items-center justify-center">
+           <div className="bg-white/90 px-6 py-1.5 rounded-full border border-blue-200 shadow-sm flex items-center gap-2">
+             <div className="flex items-center justify-center w-4 h-4 border-2 border-[#054569] text-[#054569] bg-blue-50 rounded-sm">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+             </div>
+             <span className="text-[#054569] text-base font-black tracking-wide">{exam.exam_name}</span>
+           </div>
         </div>
       </div>
 
-      <div className="mt-auto flex justify-between items-end pt-8">
-        <div className="text-[10px] font-black uppercase tracking-widest leading-relaxed" style={{ color: '#475569' }}>
-          <p className="underline mb-2 text-red-600">{isBangla ? 'নিয়মাবলী:' : 'Rules:'}</p>
-          <p>১. {isBangla ? 'পরীক্ষার হলে প্রবেশপত্র আনা বাধ্যতামূলক।' : 'Admit card is mandatory in the exam hall.'}</p>
-          <p>২. {isBangla ? 'অসদুপায় অবলম্বন করলে পরীক্ষা বাতিল হবে।' : 'Adopting unfair means will cancel the exam.'}</p>
-        </div>
-        <div className="text-center">
-          <div className="w-56 border-b-4 mb-3" style={{ borderColor: '#1e293b' }}></div>
-          <p className="text-xs font-black uppercase tracking-[0.3em] text-slate-800">{isBangla ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Signature'}</p>
-        </div>
+      {/* Grid Inputs */}
+      <div className="relative z-10 mt-5 px-16 flex flex-col gap-[7px]">
+        {[
+          { label: isBangla ? 'নাম' : 'Name', value: student.student_name },
+          { label: isBangla ? 'পিতা' : 'Father', value: student.guardian_name || '-' },
+          isSchool 
+            ? { label: isBangla ? 'মাতা' : 'Mother', value: student.mother_name || '-' } 
+            : { label: isBangla ? 'বিভাগ' : 'Department', value: student.department || '-' },
+          { label: isBangla ? 'শ্রেণি' : 'Class', value: student.classes?.class_name || '-' },
+          { 
+            label: isBangla ? 'রোল' : 'Roll', 
+            value: student.roll || '-', 
+            half: true, 
+            label2: isBangla ? 'শিক্ষাবর্ষ' : 'Session', 
+            value2: exam.exam_year || new Date().getFullYear().toString()
+          }
+        ].map((row, i) => (
+          <div key={i} className="flex h-[38px] gap-2">
+            <div className="w-28 bg-white border border-[#248ab3]/20 flex items-center justify-center font-bold text-[#054569] text-sm shadow-sm ring-1 ring-black/5 rounded-sm">
+              {row.label}
+            </div>
+            <div className="flex-1 bg-white border border-[#248ab3]/20 flex items-center px-4 font-bold text-slate-800 text-[16px] shadow-sm ring-1 ring-black/5 rounded-sm tracking-wide">
+              {row.value}
+            </div>
+            {row.half && (
+              <>
+                <div className="w-32 bg-white border border-[#248ab3]/20 flex items-center justify-center font-bold text-[#054569] text-sm shadow-sm ring-1 ring-black/5 rounded-sm">
+                  {row.label2}
+                </div>
+                <div className="w-48 bg-white border border-[#248ab3]/20 flex items-center px-4 font-bold text-slate-800 text-[16px] shadow-sm ring-1 ring-black/5 rounded-sm">
+                  {row.value2}
+                </div>
+              </>
+            )}
+          </div>
+        ))}
       </div>
+
+      {/* Footer Signatures */}
+      <div className="absolute bottom-6 right-16 z-20 text-center">
+        <div className="w-36 border-b border-blue-200 mb-1.5 opacity-50"></div>
+        <p className="text-white text-[11px] font-bold tracking-widest">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
+      </div>
+      
     </div>
   );
 };
@@ -345,11 +278,10 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 export const generateAdmitCardPDF = async (
   exam: any,
   students: Student[],
-  madrasah: { name: string; logo_url?: string },
-  templateId: string = 'classic',
+  madrasah: { name: string; logo_url?: string; institution_type?: string; phone?: string; address?: string },
+  templateId: string = 'modern',
   lang: 'en' | 'bn' = 'en'
 ) => {
-  // Create a hidden container
   const container = document.createElement('div');
   container.style.position = 'absolute';
   container.style.top = '-9999px';
@@ -359,7 +291,7 @@ export const generateAdmitCardPDF = async (
   const root = createRoot(container);
 
   const pdf = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4'
   });
@@ -367,12 +299,14 @@ export const generateAdmitCardPDF = async (
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   
-  const cardWidthMm = 190; // Almost full width with 10mm margins
-  const cardHeightMm = (450 / 800) * cardWidthMm; // Maintain aspect ratio
+  const cardWidthMm = 142; 
+  const cardHeightMm = 95;
   
-  const marginX = (pageWidth - cardWidthMm) / 2;
-  const marginY = 15;
-  const gapY = 15;
+  const gapX = 6;
+  const gapY = 6;
+  
+  const marginX = (pageWidth - (cardWidthMm * 2 + gapX)) / 2;
+  const marginY = (pageHeight - (cardHeightMm * 2 + gapY)) / 2;
 
   await document.fonts.ready;
 
@@ -380,7 +314,6 @@ export const generateAdmitCardPDF = async (
     const student = students[i];
     console.log(`Generating admit card for: ${student.student_name} (${i + 1}/${students.length})`);
     
-    // Render the component for this student
     await new Promise<void>((resolve) => {
       root.render(<AdmitCardTemplate exam={exam} student={student} madrasah={madrasah} templateId={templateId} lang={lang} />);
       
@@ -390,7 +323,7 @@ export const generateAdmitCardPDF = async (
           isResolved = true;
           resolve();
         }
-      }, 5000); // Max wait 5 seconds
+      }, 5000);
 
       const checkImages = () => {
         if (isResolved) return;
@@ -401,9 +334,8 @@ export const generateAdmitCardPDF = async (
         if (allLoaded && imgs.length > 0) {
           isResolved = true;
           clearTimeout(timeout);
-          setTimeout(resolve, 500); // Small extra buffer
+          setTimeout(resolve, 500);
         } else if (imgs.length === 0 && document.body.contains(container)) {
-           // If no images, just wait a bit for render
            setTimeout(() => {
              if (!isResolved) {
                isResolved = true;
@@ -422,12 +354,12 @@ export const generateAdmitCardPDF = async (
     try {
       const element = container.querySelector('div');
       if (!element) {
-        console.error('Admit card element not found in container');
+        console.error('Admit card element not found');
         continue;
       }
 
-      const imgData = await toPng(element, {
-        pixelRatio: 1.5, // Balanced quality
+      const imgData = await toPng(element as HTMLElement, {
+        pixelRatio: 2, 
         backgroundColor: '#ffffff',
         cacheBust: true,
         style: {
@@ -436,25 +368,28 @@ export const generateAdmitCardPDF = async (
         }
       });
 
-      // Calculate position
-      const isSecondOnPage = i % 2 !== 0;
-      
-      if (i > 0 && !isSecondOnPage) {
+      if (i > 0 && i % 4 === 0) {
         pdf.addPage();
       }
+      
+      const posOnPage = i % 4;
+      const col = posOnPage % 2;
+      const row = Math.floor(posOnPage / 2);
 
-      const yPos = isSecondOnPage ? marginY + cardHeightMm + gapY : marginY;
+      const xPos = marginX + col * (cardWidthMm + gapX);
+      const yPos = marginY + row * (cardHeightMm + gapY);
 
-      pdf.addImage(imgData, 'PNG', marginX, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
+      pdf.addImage(imgData, 'PNG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
     } catch (err) {
       console.error('Error generating image for student:', student.student_name, err);
     }
   }
 
-  console.log('Finalizing PDF...');
-  root.unmount();
-  document.body.removeChild(container);
+  setTimeout(() => {
+    root.unmount();
+    document.body.removeChild(container);
+  }, 1000);
 
-  pdf.save(`Admit_Cards_${exam.exam_name.replace(/\s+/g, '_')}.pdf`);
-  console.log('PDF saved successfully');
+  const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  pdf.save(`Admit_Cards_${safeExamName}.pdf`);
 };

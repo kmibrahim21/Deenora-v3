@@ -2,13 +2,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface AttendanceProps {
   lang: Language;
@@ -58,6 +61,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingAlerts, setSendingAlerts] = useState(false);
+  const [downloadingReport, setDownloadingReport] = useState(false);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
@@ -649,6 +653,19 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setSettingsSessions(prev => prev.filter(s => s.id !== id));
   };
 
+  const handleDownloadReportPDF = async () => {
+    if (!reportData || reportData.length === 0 || !selectedClass) return;
+    setDownloadingReport(true);
+    try {
+        const monthLabel = reportType === 'monthly' ? new Date(selectedMonth).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' }) : '';
+        await generateAttendanceReportPDF(reportData, madrasah, selectedClass.class_name, monthLabel, lang);
+    } catch (err: any) {
+        console.error('Failed to generate PDF:', err);
+    } finally {
+        setDownloadingReport(false);
+    }
+  };
+
   return (
     <div className={`space-y-6 animate-in fade-in duration-500 pb-20 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
       <div className="flex items-center justify-between px-2">
@@ -1000,9 +1017,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   </div>
             ) : (
               <div>
-                <div className="flex gap-2 mb-6">
-                  <button onClick={() => setReportView('list')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>List View</button>
-                  <button onClick={() => setReportView('analytics')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Analytics</button>
+                <div className="flex flex-wrap items-center gap-2 mb-6">
+                  <div className="flex flex-1 gap-2 min-w-[200px]">
+                      <button onClick={() => setReportView('list')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>List View</button>
+                      <button onClick={() => setReportView('analytics')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Analytics</button>
+                  </div>
+                  {reportData.length > 0 && selectedClass && (
+                    <button 
+                      onClick={handleDownloadReportPDF} 
+                      disabled={downloadingReport}
+                      className={`h-12 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shrink-0 ${isDark ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'}`}
+                    >
+                      {downloadingReport ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                      {lang === 'bn' ? 'ডাউনলোড PDF' : 'Download PDF'}
+                    </button>
+                  )}
                 </div>
 
                 {reportView === 'analytics' ? (
