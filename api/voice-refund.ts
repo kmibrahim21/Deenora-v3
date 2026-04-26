@@ -192,7 +192,7 @@ export default async function handler(req, res) {
         message: 'No unreceived calls detected. All calls were either answered or are still in progress.', 
         refund_amount: 0,
         stats: {
-          total_sent: totalSent,
+          total_sent: campaignTotalSent,
           logs_received: logs.length,
           failed_logs: failedLogs.length,
           dropped_calls: droppedCalls

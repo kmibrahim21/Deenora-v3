@@ -36,6 +36,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'madrasah' | 'school' | 'kindergarten' | 'choching'>('all');
+  const [visibleCount, setVisibleCount] = useState(30);
+
   const [view, setView] = useState<'list' | 'approvals' | 'details' | 'dashboard' | 'institutions'>(
     currentView === 'approvals' ? 'approvals' : currentView === 'dashboard' ? 'dashboard' : currentView === 'institutions' ? 'institutions' : 'list'
   );
@@ -276,6 +278,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     } finally {
       setIsLoadingHistory(false);
     }
+  };
+
+  const handleDeleteHistory = async (transaction: any) => {
+    setShowConfirm({
+      show: true,
+      title: 'ইতিহাস মুছে ফেলুন',
+      message: `${transaction.amount} ৳ এর এই পেমেন্ট রেকর্ডটি কি মুছে ফেলতে চান? এটি প্রতিষ্ঠানের ব্যালেন্সে কোনো প্রভাব ফেলবে না।`,
+      onConfirm: async () => {
+        setIsLoadingHistory(true);
+        try {
+          const { error } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('id', transaction.id);
+          
+          if (error) throw error;
+          
+          if (selectedUser) fetchPaymentHistory(selectedUser.id);
+          setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'ইতিহাস মুছে ফেলা হয়েছে।' });
+        } catch (err: any) {
+          setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
+        } finally {
+          setIsLoadingHistory(false);
+        }
+      }
+    });
   };
 
   const handleDownloadReceipt = async (transaction: any) => {
@@ -666,6 +694,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const [expandedInstituteId, setExpandedInstituteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [instFilterMonth, setInstFilterMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [instPaymentFilter, setInstPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [searchQuery, filterType, instFilterMonth, instPaymentFilter]);
 
   // Bulk Communication State
   const [bulkMessage, setBulkMessage] = useState('');
@@ -842,15 +876,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     return [...madrasahs].filter(m => {
       const search = searchTerm.toLowerCase();
       const code = (m.config_json as any)?.institute_code || '';
-      return (m.name?.toLowerCase().includes(search) || 
-              m.phone?.includes(search) || 
-              code.includes(search));
+      
+      const matchesSearch = (m.name?.toLowerCase().includes(search) || 
+                             m.phone?.includes(search) || 
+                             code.includes(search));
+                             
+      if (!matchesSearch) return false;
+
+      // Payment Filter logic
+      if (instPaymentFilter !== 'all') {
+        let config: any = m.config_json;
+        if (typeof config === 'string') {
+          try { config = JSON.parse(config); } catch (e) { config = {}; }
+        }
+        const paidMonths = config?.paid_months || [];
+        const isPaid = paidMonths.includes(instFilterMonth);
+        
+        if (instPaymentFilter === 'paid' && !isPaid) return false;
+        if (instPaymentFilter === 'unpaid' && isPaid) return false;
+      }
+      
+      return true;
     }).sort((a, b) => {
       const codeA = (a.config_json as any)?.institute_code || '';
       const codeB = (b.config_json as any)?.institute_code || '';
       return codeA.localeCompare(codeB, 'en', { numeric: true });
     });
-  }, [madrasahs, searchTerm]);
+  }, [madrasahs, searchTerm, instFilterMonth, instPaymentFilter]);
 
   // Fix: Add missing handleUserClick function to manage details view and stats
   const handleUserClick = async (user: InstitutionWithStats) => {
@@ -1282,13 +1334,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const filtered = useMemo(() => madrasahs.filter(m => {
     const query = (searchQuery || '').toLowerCase();
+    const config = m.config_json as any || {};
     const matchesSearch = 
       (m.name || '').toLowerCase().includes(query) || 
       (m.phone || '').toLowerCase().includes(query) || 
-      ((m.config_json as any)?.institute_code || '').toLowerCase().includes(query);
+      (config?.institute_code || '').toLowerCase().includes(query);
     const matchesType = filterType === 'all' || (m.institution_type || 'madrasah') === filterType;
-    return matchesSearch && matchesType;
-  }), [madrasahs, searchQuery, filterType]);
+    
+    let matchesPayment = true;
+    if (instPaymentFilter !== 'all') {
+      const paidMonths = config.paid_months || [];
+      const isPaid = paidMonths.includes(instFilterMonth);
+      if (instPaymentFilter === 'paid' && !isPaid) matchesPayment = false;
+      if (instPaymentFilter === 'unpaid' && isPaid) matchesPayment = false;
+    }
+
+    return matchesSearch && matchesType && matchesPayment;
+  }), [madrasahs, searchQuery, filterType, instFilterMonth, instPaymentFilter]);
 
   return (
     <div className={`min-h-screen pb-24 animate-in fade-in relative ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
@@ -1571,20 +1633,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative group flex-1 shadow-premium rounded-3xl overflow-hidden">
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">
-                    <Search size={20} />
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                  <div className="relative group flex-1 w-full shadow-premium rounded-3xl overflow-hidden">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">
+                      <Search size={20} />
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="মাদরাসার নাম, ফোন বা কোড দিয়ে খুঁজুন..." 
+                      className={`w-full h-16 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100/50 text-slate-800 focus:bg-slate-50'} border-0 outline-none font-bold transition-all text-sm sm:text-base`} 
+                      value={searchQuery} 
+                      onChange={(e) => setSearchQuery(e.target.value)} 
+                    />
                   </div>
-                  <input 
-                    type="text" 
-                    placeholder="মাদরাসার নাম, ফোন বা কোড দিয়ে খুঁজুন..." 
-                    className={`w-full h-16 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100/50 text-slate-800 focus:bg-slate-50'} border-0 outline-none font-bold transition-all text-sm sm:text-base`} 
-                    value={searchQuery} 
-                    onChange={(e) => setSearchQuery(e.target.value)} 
-                  />
+                  
+                  <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
+                    <div className="relative shrink-0">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="month" 
+                        className={`h-14 pl-12 pr-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-700'} font-bold text-xs outline-none shadow-premium focus:border-blue-500/50 transition-all`}
+                        value={instFilterMonth}
+                        onChange={(e) => setInstFilterMonth(e.target.value)}
+                      />
+                    </div>
+
+                    <div className={`p-1.5 rounded-2xl ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} border flex gap-1 items-center shrink-0`}>
+                      {[
+                        { id: 'all', label: 'All', icon: <Layers size={14} /> },
+                        { id: 'paid', label: 'Paid', icon: <CheckCircle2 size={14} /> },
+                        { id: 'unpaid', label: 'Unpaid', icon: <AlertCircle size={14} /> }
+                      ].map(btn => (
+                        <button
+                          key={btn.id}
+                          onClick={() => setInstPaymentFilter(btn.id as any)}
+                          className={`px-4 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${instPaymentFilter === btn.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                        >
+                          {btn.icon}
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                
+
                 <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar items-center">
                   {[
                     { id: 'all', label: 'All' },
@@ -1604,14 +1697,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filtered.length > 0 ? filtered.map(m => (
+                {filtered.length > 0 ? filtered.slice(0, visibleCount).map(m => (
                   <div key={m.id} onClick={() => handleUserClick(m)} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-100 shadow-premium hover:border-blue-500/30'} p-6 rounded-[2.5rem] border active:scale-[0.98] transition-all cursor-pointer group relative overflow-hidden`}>
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-4 min-w-0">
-                        <div className={`w-16 h-16 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} rounded-[1.5rem] flex items-center justify-center text-slate-300 border shadow-inner shrink-0 overflow-hidden group-hover:scale-105 transition-transform`}>
+                        <div className={`w-16 h-16 relative ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} rounded-[1.5rem] flex items-center justify-center text-slate-300 border shadow-inner shrink-0 overflow-hidden group-hover:scale-105 transition-transform`}>
                           {m.logo_url ? <img src={m.logo_url} className="w-full h-full object-contain" /> : <UserIcon size={28} />}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const isSelected = selectedInstIds.includes(m.id);
+                              if (isSelected) {
+                                setSelectedInstIds(prev => prev.filter(id => id !== m.id));
+                              } else {
+                                setSelectedInstIds(prev => [...prev, m.id]);
+                              }
+                            }}
+                            className={`absolute top-0 left-0 w-6 h-6 rounded-tl-[1.5rem] rounded-br-[1.5rem] z-10 flex items-center justify-center transition-all shadow-sm ${selectedInstIds.includes(m.id) ? 'bg-blue-500 text-white' : 'bg-white/80 text-slate-300 backdrop-blur-sm opacity-0 group-hover:opacity-100'}`}
+                          >
+                            <Check size={12} strokeWidth={4} />
+                          </button>
                         </div>
                         <div className="min-w-0">
+                          <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">Code: {(m.config_json as any)?.institute_code || 'N/A'}</p>
                           <h3 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} truncate font-noto text-lg leading-tight`}>{m.name}</h3>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 truncate">{m.phone || 'No Phone'}</p>
                         </div>
@@ -1621,18 +1729,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-                        {m.institution_type === 'choching' ? 'Choching' : (m.institution_type || 'madrasah')}
-                      </span>
-                      {m.config_json?.modules?.voice_broadcast !== false && (
-                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-500">
-                          Voice
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                          {m.institution_type === 'choching' ? 'Choching' : (m.institution_type || 'madrasah')}
                         </span>
-                      )}
-                      <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500">
-                        {m.balance || 0} ৳
-                      </span>
+                        {m.config_json?.modules?.voice_broadcast !== false && (
+                          <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-500">
+                            Voice
+                          </span>
+                        )}
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500">
+                          {m.balance || 0} ৳
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 relative z-10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onNavigateToVoiceBroadcast) onNavigateToVoiceBroadcast([m.id]);
+                          }} 
+                          className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center hover:bg-orange-100 transition-colors"
+                        >
+                          <Mic size={14} />
+                        </button>
+                        <a href={`tel:${m.phone}`} onClick={e => e.stopPropagation()} className="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition-colors">
+                          <PhoneCall size={14} />
+                        </a>
+                        <a href={`https://wa.me/${m.phone?.replace('+', '')}`} onClick={e => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                          <MessageCircle size={14} />
+                        </a>
+                      </div>
                     </div>
 
                     <div className="absolute bottom-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1649,10 +1777,77 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   </div>
                 )}
               </div>
+              
+              {filtered.length > visibleCount && (
+                <div className="flex justify-center mt-8">
+                  <button
+                    onClick={() => setVisibleCount(prev => prev + 30)}
+                    className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-premium active:scale-95 flex items-center justify-center gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 hover:bg-slate-700' : 'bg-white text-blue-600 hover:bg-slate-50'}`}
+                  >
+                    <RefreshCw size={16} /> Load More ({filtered.length - visibleCount} left)
+                  </button>
+                </div>
+              )}
+
+              {/* Floating Multi-select Action Bar */}
+              <AnimatePresence>
+                {selectedInstIds.length > 0 && (
+                  <motion.div 
+                    initial={{ y: 100, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 100, opacity: 0 }}
+                    className="fixed bottom-28 sm:bottom-10 left-1/2 -translate-x-1/2 z-[500] w-[92%] max-w-2xl"
+                  >
+                    <div className="bg-[#1E3A8A] text-white p-4 sm:p-6 rounded-[2.5rem] shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-blue-400/20 backdrop-blur-md">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center font-black text-lg">
+                          {selectedInstIds.length}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">নির্বাচিত প্রতিষ্ঠান</p>
+                          <h4 className="font-bold text-base leading-tight">গ্রুপ কমিউনিকেশন</h4>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button 
+                          onClick={() => {
+                            const selected = madrasahs.filter(m => selectedInstIds.includes(m.id));
+                            setCommsModal({ show: true, institutions: selected, type: 'sms' });
+                          }}
+                          className="flex-1 sm:flex-none h-12 px-6 bg-blue-500 hover:bg-blue-400 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                          <MessageSquare size={16} /> SMS পাঠান
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (onNavigateToVoiceBroadcast) {
+                              onNavigateToVoiceBroadcast(selectedInstIds);
+                            } else {
+                              if (awajVoices.length === 0) handleFetchAwajVoices();
+                              const selected = madrasahs.filter(m => selectedInstIds.includes(m.id));
+                              setCommsModal({ show: true, institutions: selected, type: 'voice' });
+                            }
+                          }}
+                          className="flex-1 sm:flex-none h-12 px-6 bg-orange-500 hover:bg-orange-400 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                          <Mic size={16} /> ভয়েস কল
+                        </button>
+                        <button 
+                          onClick={() => setSelectedInstIds([])}
+                          className="w-12 h-12 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center transition-all active:scale-95 text-xs font-black"
+                        >
+                          X
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
-          {view === 'institutions' && (
+          {false && view === 'institutions' && (
             <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -1664,15 +1859,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </button>
               </div>
 
-              <div className="relative group">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
-                <input 
-                  type="text" 
-                  placeholder="Search by Institute Code, Name or Phone..." 
-                  className={`w-full h-14 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100 text-slate-800 focus:bg-slate-50'} border rounded-2xl outline-none font-bold shadow-premium transition-all focus:border-blue-500/50`} 
-                  value={searchTerm} 
-                  onChange={(e) => setSearchTerm(e.target.value)} 
-                />
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="relative group flex-1 w-full">
+                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                  <input 
+                    type="text" 
+                    placeholder="Search by Institute Code, Name or Phone..." 
+                    className={`w-full h-14 pl-14 pr-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white focus:bg-slate-800' : 'bg-white border-slate-100 text-slate-800 focus:bg-slate-50'} border rounded-2xl outline-none font-bold shadow-premium transition-all focus:border-blue-500/50`} 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
+                  <div className="relative shrink-0">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      type="month" 
+                      className={`h-14 pl-12 pr-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-700'} font-bold text-xs outline-none shadow-premium focus:border-blue-500/50 transition-all`}
+                      value={instFilterMonth}
+                      onChange={(e) => setInstFilterMonth(e.target.value)}
+                    />
+                  </div>
+
+                  <div className={`p-1.5 rounded-2xl ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} border flex gap-1 items-center shrink-0`}>
+                    {[
+                      { id: 'all', label: 'All', icon: <Layers size={14} /> },
+                      { id: 'paid', label: 'Paid', icon: <CheckCircle2 size={14} /> },
+                      { id: 'unpaid', label: 'Unpaid', icon: <AlertCircle size={14} /> }
+                    ].map(btn => (
+                      <button
+                        key={btn.id}
+                        onClick={() => setInstPaymentFilter(btn.id as any)}
+                        className={`px-4 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${instPaymentFilter === btn.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        {btn.icon}
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Institute List */}
@@ -2658,12 +2884,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                               <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
                                                  +{tr.amount.toLocaleString('bn-BD')} ৳
                                               </p>
-                                              <button 
-                                                onClick={() => handleDownloadReceipt(tr)}
-                                                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                                              >
-                                                <Download size={14} /> Receipt
-                                              </button>
+                                              <div className="flex items-center gap-2">
+                                                <button 
+                                                  onClick={() => handleDownloadReceipt(tr)}
+                                                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
+                                                >
+                                                  <Download size={14} /> Receipt
+                                                </button>
+                                                <button 
+                                                  onClick={() => handleDeleteHistory(tr)}
+                                                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
+                                                  title="Delete history"
+                                                >
+                                                  <Trash2 size={14} />
+                                                </button>
+                                              </div>
                                            </div>
                                         </div>
                                       ))}

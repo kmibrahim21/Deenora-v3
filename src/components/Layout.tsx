@@ -156,12 +156,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 </button>
               )}
               {canAccess('institutions') && (
-                <button onClick={() => setView('admin-institutions')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('institutions') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
-                  <Building2 size={22} strokeWidth={isTabActive('institutions') ? 2.5 : 2} />
-                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'ইনস্টিটিউট' : 'Institutes'}</span>
-                </button>
-              )}
-              {canAccess('institutions') && (
                 <button onClick={() => setView('admin-panel')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('list') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <Users size={22} strokeWidth={isTabActive('list') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'প্রতিষ্ঠান' : 'Institutions'}</span>
@@ -312,12 +306,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 <button onClick={() => setView('admin-dashboard')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('dashboard') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
                   <BarChart3 size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{t('dashboard', lang, madrasah?.institution_type)}</span>
-                </button>
-              )}
-              {canAccess('institutions') && (
-                <button onClick={() => setView('admin-institutions')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('institutions') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                  <Building2 size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'ইনস্টিটিউট' : 'Institutes'}</span>
                 </button>
               )}
               {canAccess('institutions') && (
