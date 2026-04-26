@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, BefaqExam, BefaqSubject, Language, UserRole, Profile } from 'types';
-import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Download, CreditCard, Trash2, RefreshCw, Edit2, TrendingUp, AlertCircle, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Download, CreditCard, Trash2, RefreshCw, Edit2, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash } from 'lucide-react';
 import { t } from 'translations';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
@@ -93,6 +93,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [subName, setSubName] = useState('');
   const [totalMarks, setTotalMarks] = useState('100');
   const [passingMarks, setPassingMarks] = useState('33');
+  const [sortOrder, setSortOrder] = useState('0');
 
   useEffect(() => {
     if (madrasah) {
@@ -147,7 +148,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
   const fetchSubjects = async (examId: string) => {
     setLoading(true);
-    const { data } = await supabase.from('befaq_subjects').select('*').eq('exam_id', examId);
+    const { data } = await supabase.from('befaq_subjects').select('*').eq('exam_id', examId).order('sort_order', { ascending: true });
     if (data) setSubjects(data);
     setLoading(false);
   };
@@ -386,7 +387,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           class_name: selectedExam.classes?.class_name || 'Unknown',
           subject_name: subName,
           total_marks: parseInt(totalMarks),
-          passing_marks: parseInt(passingMarks)
+          passing_marks: parseInt(passingMarks),
+          sort_order: parseInt(sortOrder) || 0
         });
         
         if (error) {
@@ -395,6 +397,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         } else {
           setShowAddSubject(false);
           setSubName('');
+          setSortOrder('0');
           fetchSubjects(selectedExam.id);
         }
     } catch (e) {
@@ -1053,6 +1056,17 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                 <div className="grid grid-cols-2 gap-4">
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="মোট নম্বর" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} /><CreditCard className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="পাস নম্বর" value={passingMarks} onChange={(e) => setPassingMarks(e.target.value)} /><CreditCard className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
+                </div>
+                <div className="relative">
+                    <input 
+                      type="number" 
+                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} 
+                      placeholder="সিরিয়াল নম্বর (Sort Order)" 
+                      value={sortOrder} 
+                      onChange={(e) => setSortOrder(e.target.value)} 
+                    />
+                    <Hash className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/>
+                    <p className="text-[10px] text-slate-400 font-bold ml-4 mt-1">বিষয়টি কোন সিরিয়ালে থাকবে তা এখানে লিখুন (যেমন: ১, ২, ৩...)</p>
                 </div>
                 <button onClick={handleAddSubject} disabled={isSaving} className="w-full py-5 bg-emerald-600 text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all">
                   {isSaving ? <Loader2 className="animate-spin" /> : 'কিতাব সেভ করুন'}

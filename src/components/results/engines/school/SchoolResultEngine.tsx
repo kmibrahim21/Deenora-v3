@@ -85,6 +85,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [subName, setSubName] = useState('');
   const [fullMarks, setFullMarks] = useState('100');
   const [passMarks, setPassMarks] = useState('33');
+  const [sortOrder, setSortOrder] = useState('0');
 
   useEffect(() => {
     if (madrasah) {
@@ -138,7 +139,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   const fetchSubjects = async (examId: string) => {
     setLoading(true);
-    const { data } = await supabase.from('exam_subjects').select('*').eq('exam_id', examId);
+    const { data } = await supabase.from('exam_subjects').select('*').eq('exam_id', examId).order('sort_order', { ascending: true });
     if (data) setSubjects(data);
     setLoading(false);
   };
@@ -462,11 +463,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       exam_id: selectedExam.id,
       subject_name: subName,
       full_marks: parseInt(fullMarks),
-      pass_marks: parseInt(passMarks)
+      pass_marks: parseInt(passMarks),
+      sort_order: parseInt(sortOrder) || 0
     });
     if (!error) {
       setShowAddSubject(false);
       setSubName('');
+      setSortOrder('0');
       fetchSubjects(selectedExam.id);
     }
     setIsSaving(false);
@@ -1254,6 +1257,17 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 <div className="grid grid-cols-2 gap-4">
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পূর্ণমান" value={fullMarks} onChange={(e) => setFullMarks(e.target.value)} /><Star className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পাস" value={passMarks} onChange={(e) => setPassMarks(e.target.value)} /><AlertCircle className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
+                </div>
+                <div className="relative">
+                    <input 
+                      type="number" 
+                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} 
+                      placeholder="সিরিয়াল নম্বর (Sort Order)" 
+                      value={sortOrder} 
+                      onChange={(e) => setSortOrder(e.target.value)} 
+                    />
+                    <Hash className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/>
+                    <p className="text-[10px] text-slate-400 font-bold ml-4 mt-1">বিষয়টি কোন সিরিয়ালে থাকবে তা এখানে লিখুন (যেমন: ১, ২, ৩...)</p>
                 </div>
                 <button onClick={handleAddSubject} disabled={isSaving} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all">
                   {isSaving ? <Loader2 className="animate-spin" /> : 'বিষয় সেভ করুন'}

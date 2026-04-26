@@ -100,6 +100,7 @@ export interface BefaqSubject {
   subject_name: string;
   total_marks: number;
   passing_marks: number;
+  sort_order?: number;
 }
 
 export interface BefaqResult {
@@ -227,6 +228,7 @@ export interface ExamSubject {
   subject_name: string;
   full_marks: number;
   pass_marks: number;
+  sort_order?: number;
 }
 
 export interface ExamMark {
