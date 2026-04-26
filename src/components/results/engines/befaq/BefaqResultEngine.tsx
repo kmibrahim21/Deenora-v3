@@ -35,6 +35,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [showAddExam, setShowAddExam] = useState(false);
   const [editingExam, setEditingExam] = useState<BefaqExam | null>(null);
   const [showAddSubject, setShowAddSubject] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<BefaqSubject | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDeleteSubjectConfirm, setShowDeleteSubjectConfirm] = useState(false);
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
@@ -382,20 +383,35 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     }
     setIsSaving(true);
     try {
-        const { error } = await supabase.from('befaq_subjects').insert({
+        const subjectData = {
           exam_id: selectedExam.id,
           class_name: selectedExam.classes?.class_name || 'Unknown',
           subject_name: subName,
           total_marks: parseInt(totalMarks),
           passing_marks: parseInt(passingMarks),
           sort_order: parseInt(sortOrder) || 0
-        });
+        };
+
+        let error;
+        if (editingSubject) {
+          const { error: updateError } = await supabase
+            .from('befaq_subjects')
+            .update(subjectData)
+            .eq('id', editingSubject.id);
+          error = updateError;
+        } else {
+          const { error: insertError } = await supabase
+            .from('befaq_subjects')
+            .insert(subjectData);
+          error = insertError;
+        }
         
         if (error) {
-            console.error('Error adding subject:', error);
-            alert('Failed to add subject: ' + error.message);
+            console.error('Error saving subject:', error);
+            alert('Failed to save subject: ' + error.message);
         } else {
           setShowAddSubject(false);
+          setEditingSubject(null);
           setSubName('');
           setSortOrder('0');
           fetchSubjects(selectedExam.id);
@@ -406,6 +422,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     } finally {
         setIsSaving(false);
     }
+  };
+
+  const handleEditSubjectClick = (subject: BefaqSubject) => {
+    setEditingSubject(subject);
+    setSubName(subject.subject_name || '');
+    setTotalMarks(subject.total_marks?.toString() || '100');
+    setPassingMarks(subject.passing_marks?.toString() || '33');
+    setSortOrder(subject.sort_order?.toString() || '0');
+    setShowAddSubject(true);
   };
 
   const handleDeleteSubject = (subjectId: string) => {
@@ -744,13 +769,21 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                           <p className="text-[9px] font-black text-red-400 uppercase">পাস নম্বর: {s.passing_marks}</p>
                        </div>
                       {role === 'madrasah_admin' && (
-                         <button 
-                             onClick={() => handleDeleteSubject(s.id)}
-                             disabled={isSaving}
-                             className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
-                         >
-                             <Trash2 size={14} />
-                         </button>
+                         <div className="flex gap-2">
+                            <button 
+                                onClick={() => handleEditSubjectClick(s)}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                            >
+                                <Edit2 size={14} />
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteSubject(s.id)}
+                                disabled={isSaving}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                         </div>
                       )}
                    </div>
                 </div>
@@ -1048,8 +1081,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95`}>
              <div className="flex items-center justify-between">
-               <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>কিতাব যোগ করুন</h3>
-               <button onClick={() => setShowAddSubject(false)} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
+               <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{editingSubject ? 'কিতাব এডিট করুন' : 'কিতাব যোগ করুন'}</h3>
+               <button onClick={() => { setShowAddSubject(false); setEditingSubject(null); setSubName(''); setSortOrder('0'); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
              </div>
              <div className="space-y-4">
                 <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="কিতাবের নাম" value={subName} onChange={(e) => setSubName(e.target.value)} /><BookOpen size={20} className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" /></div>
