@@ -177,6 +177,18 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
               </div>
             </div>
 
+            {student.mother_name && (
+              <div className={`flex items-center gap-2.5 p-4 rounded-[1rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
+                <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center text-[#2563EB] shrink-0 shadow-md border group-hover:bg-[#2563EB] group-hover:text-white transition-all duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                  <UserCheck size={20} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'মাতার নাম' : "Mother's Name"}</p>
+                  <p className={`text-base font-black truncate font-noto leading-tight ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>{student.mother_name}</p>
+                </div>
+              </div>
+            )}
+
             <div className={`flex flex-col p-4 rounded-[1.2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-[#2563EB]/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-2.5 min-w-0">

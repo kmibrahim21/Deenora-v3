@@ -67,8 +67,8 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
                       <td className="py-1 font-semibold">:<span className="ml-3">{student.guardian_name || '-'}</span></td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-bold align-top">{isSchool ? (isBangla ? 'মাতা' : 'Mother') : (isBangla ? 'বিভাগ' : 'Department')}</td>
-                      <td className="py-1 font-semibold">:<span className="ml-3">{isSchool ? student.mother_name || '-' : student.department || '-'}</span></td>
+                      <td className="py-1 font-bold align-top">{isBangla ? 'মাতা' : 'Mother'}</td>
+                      <td className="py-1 font-semibold">:<span className="ml-3">{student.mother_name || student.department || '-'}</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -153,8 +153,8 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
                 <div className="flex-1 text-slate-800 font-bold text-[17px] text-slate-600">: <span className="ml-2">{student.guardian_name || '-'}</span></div>
              </div>
              <div className="flex border-b border-slate-50 pb-2.5">
-                <div className="w-[120px] text-slate-400 font-bold text-xs uppercase tracking-widest">{isSchool ? (isBangla ? 'মাতা' : 'Mother') : (isBangla ? 'বিভাগ' : 'Department')}</div>
-                <div className="flex-1 text-slate-800 font-bold text-[17px] text-slate-600">: <span className="ml-2">{isSchool ? student.mother_name || '-' : student.department || '-'}</span></div>
+                <div className="w-[120px] text-slate-400 font-bold text-xs uppercase tracking-widest">{isBangla ? 'মাতা' : 'Mother'}</div>
+                <div className="flex-1 text-slate-800 font-bold text-[17px] text-slate-600">: <span className="ml-2">{student.mother_name || student.department || '-'}</span></div>
              </div>
              <div className="flex border-b border-slate-50 pb-2.5">
                 <div className="w-[120px] text-slate-400 font-bold text-xs uppercase tracking-widest">{isBangla ? 'শ্রেণি' : 'Class'}</div>
@@ -250,9 +250,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
         {[
           { label: isBangla ? 'নাম' : 'Name', value: student.student_name },
           { label: isBangla ? 'পিতা' : 'Father', value: student.guardian_name || '-' },
-          isSchool 
-            ? { label: isBangla ? 'মাতা' : 'Mother', value: student.mother_name || '-' } 
-            : { label: isBangla ? 'বিভাগ' : 'Department', value: student.department || '-' },
+          { label: isBangla ? 'মাতা' : 'Mother', value: student.mother_name || student.department || '-' },
           { label: isBangla ? 'শ্রেণি' : 'Class', value: student.classes?.class_name || '-' },
           { 
             label: isBangla ? 'রোল' : 'Roll', 

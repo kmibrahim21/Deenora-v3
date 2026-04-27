@@ -90,7 +90,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         student_name: name.trim(),
         admission_number: admissionNumber.trim() || null,
         guardian_name: guardianName.trim(),
-        mother_name: madrasah.institution_type === 'school' ? motherName.trim() : null,
+        mother_name: motherName.trim() || null,
         roll: roll ? parseInt(roll) : null,
         date_of_birth: dob || null,
         blood_group: bloodGroup || null,
@@ -220,7 +220,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                 />
               </div>
 
-              {madrasah?.institution_type === 'school' && (
+              {(madrasah?.institution_type === 'school' || madrasah?.institution_type === 'madrasah') && (
                 <div className="space-y-2">
                   <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
                     <UserCheck size={11} className="text-[#2563EB]" /> 
