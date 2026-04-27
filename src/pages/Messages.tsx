@@ -196,7 +196,6 @@ export default function Messages({
                     required
                   >
                     <option value="">ক্লাস নির্বাচন করুন...</option>
-                    <option value="All">সব ক্লাস (All)</option>
                     {classes.map(c => (
                       <option key={c.id} value={c.class_name}>{c.class_name}</option>
                     ))}

@@ -464,23 +464,6 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       {isSuperAdmin ? 'লক্ষ্য নির্বাচন করুন (Target)' : t('step_1_class', lang)}
                     </h4>
                     
-                    {!isSuperAdmin && (
-                      <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-full mb-2">
-                        <button 
-                          onClick={() => setTargetType('all_institutions')}
-                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'all_institutions' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
-                        >
-                          সব (All)
-                        </button>
-                        <button 
-                          onClick={() => setTargetType('class')}
-                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${targetType === 'class' ? 'bg-[#2563EB] text-white shadow-sm' : 'text-slate-400'}`}
-                        >
-                          ক্লাস (Class)
-                        </button>
-                      </div>
-                    )}
-
                     {/* Only show targeting options for non-super admins or if you want to keep 'all' for super admin but hide others */}
                     {!isSuperAdmin ? (
                       <div className="relative space-y-3">
