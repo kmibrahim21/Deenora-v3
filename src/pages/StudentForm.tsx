@@ -109,8 +109,26 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
           await OfflineService.safeInsert('students', payload);
         }
       } catch (innerErr: any) {
-        // If foreign key error, retry with null academic_year_id
-        if (innerErr.message?.includes('foreign key constraint') || innerErr.code === '23503') {
+        // If mother_name is missing, retry without it
+        if (innerErr.code === 'PGRST204' || innerErr.message?.includes('mother_name does not exist')) {
+          console.warn('mother_name column missing in students table, retrying without it...');
+          
+          // Remember it for the session
+          (window as any)._hasMotherName = false;
+          
+          const retryPayload = { ...payload };
+          delete retryPayload.mother_name;
+          
+          if (isEditing && student) {
+            await OfflineService.safeUpdate('students', student.id, retryPayload);
+          } else {
+            await OfflineService.safeInsert('students', retryPayload);
+          }
+          
+          // Alert user that mother_name was skipped (optional, but good for UX)
+          console.log('Successfully saved without mother_name');
+        } else if (innerErr.message?.includes('foreign key constraint') || innerErr.code === '23503') {
+          // If foreign key error, retry with null academic_year_id
           console.warn('Foreign key violation for academic_year_id in students, retrying with null...');
           const retryPayload = { ...payload, academic_year_id: null };
           if (isEditing && student) {

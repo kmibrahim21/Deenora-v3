@@ -80,10 +80,13 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         return;
       }
 
-      // Fix: Add institution_id to the select query to satisfy the Student type requirements.
+      // Try to include mother_name if we haven't confirmed it's missing
+      const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, classes(class_name)';
+      const selectFields = (window as any)._hasMotherName === false ? baseFields : `${baseFields}, mother_name`;
+
       let query = supabase
         .from('students')
-        .select('id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, classes(class_name)')
+        .select(selectFields)
         .eq('institution_id', institutionId)
         .eq('class_id', selectedClass.id)
         .order('roll', { ascending: true })
@@ -99,7 +102,20 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      
+      if (error) {
+        // If mother_name is missing, retry without it and remember for this session
+        if ((window as any)._hasMotherName === undefined && (error.code === 'PGRST204' || error.message?.includes('mother_name'))) {
+          (window as any)._hasMotherName = false;
+          console.warn('mother_name column missing, retrying query...');
+          return fetchStudents(reset);
+        }
+        throw error;
+      }
+
+      if ((window as any)._hasMotherName === undefined) {
+        (window as any)._hasMotherName = true;
+      }
 
       if (data) {
         const formattedData = (data as any[]).map(s => ({
@@ -140,9 +156,9 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   }, [institutionId, selectedClass.id, page, searchQuery]);
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchStudents(true), 400); // Optimized debounced search
+    const timer = setTimeout(() => fetchStudents(true), 400);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, dataVersion]);
 
   useEffect(() => {
     fetchTemplates();
