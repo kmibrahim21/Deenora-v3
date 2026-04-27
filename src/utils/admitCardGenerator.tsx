@@ -14,78 +14,96 @@ interface AdmitCardProps {
 
 const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, templateId = 'modern', lang }) => {
   const isBangla = lang === 'bn';
-  const fontFamily = isBangla ? "'Noto Sans Bengali', sans-serif" : "sans-serif";
+  const fontFamily = isBangla ? "'Noto Serif Bengali', serif" : "'Times New Roman', serif";
   const isSchool = madrasah.institution_type === 'school';
 
   if (templateId === 'classic') {
     return (
-      <div className="w-[850px] h-[550px] relative font-sans bg-white border-[3px] border-black p-4" style={{ fontFamily }}>
-        <div className="border border-black w-full h-full p-6 flex flex-col">
+      <div className="w-[900px] h-[600px] relative font-sans bg-white border-[3px] border-black p-4" style={{ fontFamily }}>
+        <div className="border border-black w-full h-full p-6 flex flex-col pt-4">
           {/* Header */}
-          <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">
-            <div className="flex items-center gap-5">
+          <div className="relative border-b-2 border-black pb-4 mb-4">
+            {/* Centered Logo & Name */}
+            <div className="flex flex-col items-center text-center px-16">
               {madrasah.logo_url && (
-                <img src={madrasah.logo_url} className="w-[80px] h-[80px] object-contain" crossOrigin="anonymous" />
+                <img src={madrasah.logo_url} className="w-[70px] h-[70px] object-contain mb-2" crossOrigin="anonymous" />
               )}
-              <div>
-                <h1 className="text-4xl font-bold text-black uppercase tracking-wide">{madrasah.name}</h1>
-                <p className="text-lg text-black mt-1 font-medium">{madrasah.address || ''}</p>
+              <h1 className="text-[40px] leading-[1.1] font-black text-black tracking-wide break-words w-full" style={{ fontFamily: isBangla ? "'Tiro Bangla', serif" : "'Times New Roman', serif" }}>
+                {madrasah.name}
+              </h1>
+              {madrasah.address && (
+                <p className="text-[17px] text-black mt-1 font-medium break-words w-full leading-tight">
+                  {madrasah.address}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <div className="text-center mb-4 relative">
+            <h2 className="inline-block border-2 border-black px-8 py-2 text-3xl font-bold uppercase tracking-widest bg-gray-100">
+               {isBangla ? 'প্রবেশ পত্র' : 'ADMIT CARD'}
+            </h2>
+            {/* Date positioned right of the title box */}
+            <div className="absolute top-2 right-4">
+               <p className="font-bold text-[20px] border-b-2 border-dotted border-black pb-0.5 min-w-[150px] text-left">
+                 {isBangla ? 'তারিখ:' : 'Date:'}
+               </p>
+            </div>
+            <div className="mt-3 text-3xl font-bold">{exam.exam_name}</div>
+          </div>
+          
+          <div className="flex-1 px-8 pt-4">
+            <div className="flex gap-10">
+              {/* Left Column */}
+              <div className="w-[55%]">
+                <table className="w-full text-left text-[22px] border-separate" style={{ borderSpacing: '0 12px' }}>
+                  <tbody>
+                    <tr>
+                      <td className="py-1 font-bold w-[30%] align-top">{isBangla ? 'নাম' : 'Name'}</td>
+                      <td className="py-1 font-semibold">:<span className="ml-3">{student.student_name}</span></td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 font-bold align-top">{isBangla ? 'পিতা' : 'Father'}</td>
+                      <td className="py-1 font-semibold">:<span className="ml-3">{student.guardian_name || '-'}</span></td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 font-bold align-top">{isSchool ? (isBangla ? 'মাতা' : 'Mother') : (isBangla ? 'বিভাগ' : 'Department')}</td>
+                      <td className="py-1 font-semibold">:<span className="ml-3">{isSchool ? student.mother_name || '-' : student.department || '-'}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Right Column */}
+              <div className="w-[45%] border-l-2 border-black/10 pl-8">
+                <table className="w-full text-left text-[22px] border-separate" style={{ borderSpacing: '0 12px' }}>
+                  <tbody>
+                    <tr>
+                      <td className="py-1 font-bold w-[35%] align-top">{isBangla ? 'শ্রেণি' : 'Class'}</td>
+                      <td className="py-1 font-semibold">:<span className="ml-3">{student.classes?.class_name || '-'}</span></td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 font-bold align-top">{isBangla ? 'রোল' : 'Roll'}</td>
+                      <td className="py-1 font-black text-[38px] text-black italic">:<span className="ml-3">{student.roll || '-'}</span></td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 font-bold align-top">{isBangla ? 'শিক্ষাবর্ষ' : 'Session'}</td>
+                      <td className="py-1 font-semibold">:<span className="ml-3">{exam.exam_year || new Date().getFullYear().toString()}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
           
-          <div className="text-center mb-6">
-            <h2 className="inline-block border-2 border-black px-6 py-2 text-2xl font-bold uppercase tracking-widest bg-gray-100">
-              {isBangla ? 'প্রবেশ পত্র' : 'ADMIT CARD'}
-            </h2>
-            <div className="mt-4 text-xl font-bold">{exam.exam_name}</div>
-          </div>
-          
-          <div className="flex-1 px-8">
-            <table className="w-full text-left text-lg border-separate" style={{ borderSpacing: '0 8px' }}>
-              <tbody>
-                <tr>
-                  <td className="py-2 font-bold w-[25%] align-top">{isBangla ? 'নাম' : 'Name'}</td>
-                  <td className="py-2 font-semibold">:<span className="ml-3">{student.student_name}</span></td>
-                </tr>
-                <tr>
-                  <td className="py-2 font-bold align-top">{isBangla ? 'পিতা' : 'Father'}</td>
-                  <td className="py-2 font-semibold">:<span className="ml-3">{student.guardian_name || '-'}</span></td>
-                </tr>
-                <tr>
-                  <td className="py-2 font-bold align-top">{isSchool ? (isBangla ? 'মাতা' : 'Mother') : (isBangla ? 'বিভাগ' : 'Department')}</td>
-                  <td className="py-2 font-semibold">:<span className="ml-3">{isSchool ? student.mother_name || '-' : student.department || '-'}</span></td>
-                </tr>
-                <tr>
-                  <td className="py-2 font-bold align-top">{isBangla ? 'শ্রেণি' : 'Class'}</td>
-                  <td className="py-2 font-semibold">:<span className="ml-3">{student.classes?.class_name || '-'}</span></td>
-                </tr>
-                <tr>
-                  <td className="py-2" colSpan={2}>
-                    <div className="flex w-full mt-2">
-                        <div className="w-[45%] flex">
-                            <span className="font-bold w-[55%]">{isBangla ? 'রোল' : 'Roll'}</span>
-                            <span className="font-bold text-xl">:<span className="ml-3">{student.roll || '-'}</span></span>
-                        </div>
-                        <div className="w-[55%] flex">
-                            <span className="font-bold w-[40%] ml-4">{isBangla ? 'শিক্ষাবর্ষ' : 'Session'}</span>
-                            <span className="font-semibold">:<span className="ml-3">{exam.exam_year || new Date().getFullYear().toString()}</span></span>
-                        </div>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          
-          <div className="mt-auto flex justify-between items-end pb-4 pt-10 px-8">
+          <div className="mt-auto flex justify-between items-end pb-4 pt-12 px-12">
             <div className="text-center">
-               <div className="w-48 border-b-2 border-black mb-2"></div>
-               <p className="font-bold text-lg">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
+               <div className="w-56 border-b-2 border-black mb-2"></div>
+               <p className="font-bold text-[20px]">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
             </div>
             <div className="text-center">
-               <div className="w-48 border-b-2 border-black mb-2"></div>
-               <p className="font-bold text-lg">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
+               <div className="w-56 border-b-2 border-black mb-2"></div>
+               <p className="font-bold text-[20px]">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
             </div>
           </div>
         </div>

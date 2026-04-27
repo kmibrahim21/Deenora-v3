@@ -480,9 +480,7 @@ const App: React.FC = () => {
                 ? "approvals"
                 : view === "admin-dashboard"
                   ? "dashboard"
-                  : view === "admin-institutions"
-                    ? "institutions"
-                    : "list"
+                  : "list"
             }
             dataVersion={dataVersion}
             triggerRefresh={triggerRefresh}
