@@ -246,6 +246,7 @@ export const useAuth = () => {
   useEffect(() => {
     const initializeAuth = async (retryCount = 0) => {
       try {
+        console.log("Initializing Auth... Attempt:", retryCount + 1);
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -254,8 +255,8 @@ export const useAuth = () => {
           
           // Retry for network issues
           const isNetworkError = errorMessage.includes('fetch') || errorMessage.includes('network');
-          if (isNetworkError && retryCount < 2) {
-             await new Promise(resolve => setTimeout(resolve, 2000));
+          if (isNetworkError && retryCount < 3) {
+             await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
              return initializeAuth(retryCount + 1);
           }
 
@@ -266,23 +267,14 @@ export const useAuth = () => {
 
           if (isTokenError) {
             console.warn("Definitive token error detected, signing out...");
-            await supabase.auth.signOut();
-            localStorage.removeItem('madrasah_auth_token');
-            localStorage.removeItem('teacher_session');
-            OfflineService.removeCache('profile');
-            setSession(null);
-            setProfile(null);
-            setMadrasah(null);
-            // Don't reload immediately to avoid loops, let the UI handle the state change
+            await handleLogout();
             return;
           }
-          
-          // For other errors (like network), we might still have a session in memory or cache
-          // We'll try to proceed with what we have
         }
 
         if (currentSession && currentSession.user) {
           setSession(currentSession);
+          console.log("Supabase Session active:", currentSession.user.id);
           
           // Check if it's a teacher session
           const teacherSessionStr = localStorage.getItem('teacher_session');
@@ -290,7 +282,7 @@ export const useAuth = () => {
             try {
               const teacherData = JSON.parse(teacherSessionStr);
               if (teacherData && teacherData.id) {
-                // Fetch latest teacher data to get updated permissions and check active status
+                // Fetch latest teacher data 
                 try {
                   const { data: latestTeacher } = await supabase
                     .from('teachers')
@@ -307,19 +299,19 @@ export const useAuth = () => {
                       return;
                     }
 
-                    setProfile({
+                    const profileObj = {
                       id: latestTeacher.id,
                       institution_id: latestTeacher.institution_id,
                       full_name: latestTeacher.name,
-                      role: 'teacher',
+                      role: 'teacher' as const,
                       is_active: latestTeacher.is_active,
                       created_at: latestTeacher.created_at,
                       permissions: latestTeacher.permissions
-                    });
-                    // Update local storage too
+                    };
+                    setProfile(profileObj);
+                    OfflineService.setCache('user_profile', profileObj);
                     localStorage.setItem('teacher_session', JSON.stringify(latestTeacher));
                     
-                    // Fetch madrasah data
                     if (isValidUUID(latestTeacher.institution_id)) {
                       const { data: institutionData } = await supabase
                         .from('institutions')
@@ -329,33 +321,31 @@ export const useAuth = () => {
                         
                       if (institutionData) {
                         setMadrasah(institutionData);
+                        OfflineService.setCache('profile', institutionData);
                       }
                     }
                   } else {
-                    throw new Error('Teacher not found');
+                    // Teacher was deleted or something
+                    localStorage.removeItem('teacher_session');
                   }
                 } catch (fetchErr) {
                   console.log("Teacher fetch failed (likely offline), using cached session...");
-                  // Fallback to stored data if fetch fails (e.g. offline)
-                  setProfile({
+                  const profileObj = {
                     id: teacherData.id,
                     institution_id: teacherData.institution_id,
-                    full_name: teacherData.name,
-                    role: 'teacher',
+                    full_name: teacherData.name || teacherData.full_name,
+                    role: 'teacher' as const,
                     is_active: teacherData.is_active,
                     created_at: teacherData.created_at,
                     permissions: teacherData.permissions
-                  });
-                  
-                  // Try to get cached madrasah
+                  };
+                  setProfile(profileObj);
                   const cachedMadrasah = OfflineService.getCache('profile');
-                  if (cachedMadrasah) {
-                    setMadrasah(cachedMadrasah);
-                  }
+                  if (cachedMadrasah) setMadrasah(cachedMadrasah);
                 }
                 
                 setLoading(false);
-                return; // Skip fetching regular profile
+                return; 
               }
             } catch (e) {
               console.error("Error parsing teacher session:", e);
@@ -364,28 +354,18 @@ export const useAuth = () => {
           
           await fetchUserProfile(currentSession.user.id, currentSession.user.email);
         } else {
-          // If there's no Supabase session, we shouldn't trust teacher_session
-          // because all RLS queries will fail anyway.
+          // If there's no Supabase session, verify if we have cached data before clearing
+          console.log("No Supabase session found.");
+          const hasAuthToken = !!localStorage.getItem('madrasah_auth_token');
           const teacherSessionStr = localStorage.getItem('teacher_session');
-          if (teacherSessionStr) {
-            localStorage.removeItem('teacher_session');
+          
+          if (!hasAuthToken && teacherSessionStr) {
+             console.log("Clearing teacher session as no Supabase auth token exists.");
+             localStorage.removeItem('teacher_session');
           }
         }
       } catch (err: any) {
         console.error("Auth initialization error:", err);
-        const errorMessage = (err?.message || '').toLowerCase();
-        const isTokenError = errorMessage.includes('refresh token') || 
-                             errorMessage.includes('refresh_token_not_found') ||
-                             errorMessage.includes('invalid_grant');
-
-        if (isTokenError) {
-          localStorage.removeItem('madrasah_auth_token');
-          localStorage.removeItem('teacher_session');
-          OfflineService.removeCache('profile');
-          setSession(null);
-          setProfile(null);
-          setMadrasah(null);
-        }
       } finally {
         setLoading(false);
       }
@@ -394,12 +374,16 @@ export const useAuth = () => {
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth Event:", event);
+      console.log("Auth Event Triggered:", event);
       if (event === 'SIGNED_OUT') {
-        setSession(null); 
-        setMadrasah(null); 
-        setProfile(null);
-        localStorage.removeItem('teacher_session');
+        const hasSession = !!session;
+        if (!hasSession) {
+          console.log("Legitimate signed out event.");
+          setSession(null); 
+          setMadrasah(null); 
+          setProfile(null);
+          localStorage.removeItem('teacher_session');
+        }
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session) {
           setSession(session);

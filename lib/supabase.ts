@@ -27,9 +27,6 @@ export const supabase = createClient(finalUrl, finalKey, {
     detectSessionInUrl: true,
     storage: window.localStorage,
     storageKey: 'madrasah_auth_token',
-    flowType: 'pkce',
-    lock: async (_name: string, _acquireTimeout: number, acquire: () => Promise<any>) => {
-      return await acquire();
-    }
+    flowType: 'pkce'
   }
 });
