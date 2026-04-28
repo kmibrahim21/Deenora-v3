@@ -11,6 +11,7 @@ import { FeeReceiptTemplate } from '../components/pdf/FeeReceiptTemplate';
 import { FinalResultTemplate } from '../components/pdf/FinalResultTemplate';
 import { SeatPlanTemplate } from '../components/pdf/SeatPlanTemplate';
 import { AttendanceReportTemplate } from '../components/pdf/AttendanceReportTemplate';
+import { AccountingReportTemplate } from '../components/pdf/AccountingReportTemplate';
 
 let bengaliFontBase64: string | null = null;
 
@@ -410,4 +411,43 @@ export const generateFinalResultPDF = async (
     document.body.removeChild(container);
     
     doc.save(`Final_Result_${className}.pdf`);
+};
+
+// --- ACCOUNTING REPORT GENERATOR ---
+export const generateAccountingReportPDF = async (
+    madrasah: { name: string },
+    period: string,
+    stats: any,
+    breakdown: any[],
+    ledger: any[],
+    lang: 'en' | 'bn' = 'en'
+) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    await new Promise<void>((resolve) => {
+        root.render(<AccountingReportTemplate madrasah={madrasah} lang={lang} period={period} stats={stats} breakdown={breakdown} ledger={ledger} />);
+        setTimeout(resolve, 800);
+    });
+
+    const imgData = await toPng(container.firstElementChild as HTMLElement, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        width: 794,
+        height: 1123,
+    });
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    
+    root.unmount();
+    document.body.removeChild(container);
+    
+    doc.save(`Accounting_Report_${period}.pdf`);
 };

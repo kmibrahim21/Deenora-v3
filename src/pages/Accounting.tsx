@@ -60,6 +60,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [desc, setDesc] = useState('');
+  const [transactionDate, setTransactionDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   const feeEngine = madrasah?.config_json?.fee_engine || 'school';
 
@@ -190,10 +194,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         amount: parseFloat(amount),
         category: category.trim(),
         description: desc.trim(),
-        transaction_date: new Date().toISOString().split('T')[0]
+        transaction_date: transactionDate || new Date().toISOString().split('T')[0]
       });
       if (error) throw error;
       setAmount(''); setCategory(''); setDesc('');
+      setTransactionDate(new Date().toISOString().split('T')[0]);
       setActiveTab('ledger');
       fetchData();
     } catch (err: any) { 
@@ -412,15 +417,20 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                           </div>
                           <div>
                             <h5 className={`font-black font-noto text-sm mb-0.5 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{displayName}</h5>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-col gap-0.5">
                               {entry.category === 'Student Fee' ? (
-                                <>
+                                <div className="flex items-center gap-2">
                                   <span className="text-[10px] text-slate-400 font-bold">{details}</span>
                                   <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
                                   <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter">{feeType}</span>
-                                </>
+                                </div>
                               ) : (
-                                <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long' })}</span>
+                                <>
+                                  {cleanDescription && cleanDescription !== entry.category && (
+                                    <p className="text-[11px] text-slate-500 font-bold font-noto leading-tight mb-1">{cleanDescription}</p>
+                                  )}
+                                  <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                </>
                               )}
                             </div>
                           </div>
@@ -494,19 +504,35 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   />
                 </div>
 
-                <div className="space-y-3">
-                  <div className="relative group">
-                    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#2563EB] transition-colors">
-                      <Tag size={20} />
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="relative group">
+                      <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#2563EB] transition-colors">
+                        <Tag size={20} />
+                      </div>
+                      <input 
+                        type="text" 
+                        className={`w-full h-16 rounded-[1.8rem] pl-14 pr-6 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all placeholder:text-slate-300 ${isDark ? 'bg-slate-800 text-slate-100 focus:bg-slate-900' : 'bg-slate-50 text-[#1E293B] focus:bg-white'}`} 
+                        placeholder="ক্যাটাগরি (যেমন: বেতন, বিদ্যুৎ)" 
+                        value={category} 
+                        onChange={(e) => setCategory(e.target.value)} 
+                      />
                     </div>
-                    <input 
-                      type="text" 
-                      className={`w-full h-16 rounded-[1.8rem] pl-14 pr-6 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all placeholder:text-slate-300 ${isDark ? 'bg-slate-800 text-slate-100 focus:bg-slate-900' : 'bg-slate-50 text-[#1E293B] focus:bg-white'}`} 
-                      placeholder="ক্যাটাগরি (যেমন: বেতন, বিদ্যুৎ)" 
-                      value={category} 
-                      onChange={(e) => setCategory(e.target.value)} 
-                    />
                   </div>
+
+                  <div className="flex-1">
+                    <div className="relative group">
+                      <input 
+                        type="date" 
+                        className={`w-full h-16 rounded-[1.8rem] px-6 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:bg-slate-900 [color-scheme:dark]' : 'bg-slate-50 text-[#1E293B] focus:bg-white'}`} 
+                        value={transactionDate} 
+                        onChange={(e) => setTransactionDate(e.target.value)} 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
                   <div className="flex flex-wrap gap-2 px-1">
                      {(type === 'income' ? ['সদকা সংগ্রহ', 'লিল্লাহ ফান্ড', 'যাকাত ফান্ড'] : ['রান্না খরচ', 'খাদ্য খরচ', 'শিক্ষক বেতন', 'মাদরাসা maintenance']).map(suggestion => (
                         <button 

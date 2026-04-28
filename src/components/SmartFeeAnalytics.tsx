@@ -4,8 +4,9 @@ import { supabase, smsApi } from 'supabase';
 import { Language, Class, SMSTemplate, Institution, UserRole, Profile } from 'types';
 import { t } from 'translations';
 import { ShortcodeService } from 'services/ShortcodeService';
-import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall, Download } from 'lucide-react';
 import { isValidUUID } from 'utils/validation';
+import { generateAccountingReportPDF } from 'utils/pdfGenerator';
 
 interface SmartFeeAnalyticsProps {
   institutionId: string;
@@ -51,6 +52,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [stats, setStats] = useState<any>(null);
   const [reminders, setReminders] = useState<any[]>([]);
   const [breakdown, setBreakdown] = useState<any[]>([]);
+  const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [templates, setTemplates] = useState<SMSTemplate[]>([]);
@@ -167,6 +169,12 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
       const { data: ledger, error: ledgerError } = await ledgerQuery;
       console.log("Ledger:", ledger, "Error:", ledgerError);
+
+      if (ledger) {
+        // Filter ledger by period and class (if applicable) for the report
+        const filteredLedger = ledger.filter(l => l.transaction_date.startsWith(dateFilter));
+        setLedgerHistory(filteredLedger);
+      }
 
       // 4. Process Data
       const breakdownMap: Record<string, { expected: number, collected: number, students: number, transactions: number }> = {};
@@ -540,6 +548,24 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     }
   };
 
+  const handleDownloadPDF = async () => {
+    if (!madrasah || !stats) return;
+    const period = viewMode === 'monthly' ? selectedMonth : selectedYear;
+    try {
+      await generateAccountingReportPDF(
+        { name: madrasah.name },
+        period,
+        stats,
+        breakdown,
+        ledgerHistory,
+        lang
+      );
+    } catch (err) {
+      console.error("PDF Generation Error:", err);
+      alert(lang === 'bn' ? 'পিডিএফ তৈরি করতে সমস্যা হয়েছে' : 'Failed to generate PDF');
+    }
+  };
+
   if (loading) return (
     <div className="flex justify-center py-10">
       <Loader2 className="animate-spin text-[#2563EB]" size={32} />
@@ -601,6 +627,14 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     <option key={c.id} value={c.id}>{c.class_name}</option>
                 ))}
             </select>
+            <button 
+              onClick={handleDownloadPDF}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'}`}
+              title={lang === 'bn' ? 'সারাংশ রিপোর্ট ডাউনলোড' : 'Download Summary Report'}
+            >
+              <Download size={16} />
+              <span className="hidden lg:inline">{lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report'}</span>
+            </button>
         </div>
       </div>
 
