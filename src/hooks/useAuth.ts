@@ -221,7 +221,7 @@ export const useAuth = () => {
       }
 
       if (isNetworkError) {
-        setAuthError("সার্ভারের সাথে সংযোগ করা যাচ্ছে না! আপনার ডাটাবেস (Supabase) পজ হয়ে থাকতে পারে, দয়া করে ড্যাশবোর্ড থেকে প্রজেক্ট রিস্টার্ট করুন। (Connection failed - please check if your Supabase project is paused)");
+        setAuthError("সার্ভারের সাথে সংযোগ করা যাচ্ছে না! দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন এবং পুনরায় চেষ্টা করুন। (Connection failed - please check your internet and reload)");
       } else {
         setAuthError(err.message || "An unknown authentication error occurred.");
       }
