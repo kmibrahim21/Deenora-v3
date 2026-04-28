@@ -47,10 +47,7 @@ export const useAuth = () => {
     ];
     const isSuperAdminEmail = superAdminEmails.includes(userEmail || '');
 
-    console.log("Auth Debug:", { userId, userEmail, isSuperAdminEmail, retryCount });
-
     try {
-      // First, get the profile
       console.log(`Fetching profile for user: ${userId} (Attempt ${retryCount + 1}/5)`);
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -62,11 +59,7 @@ export const useAuth = () => {
         throw profileError;
       }
 
-      console.log("Profile data response:", profileData);
-
       if (profileData) {
-        console.log("Profile loaded:", { id: profileData.id, role: profileData.role, institution_id: profileData.institution_id });
-        // Force super_admin role for the designated email
         const finalProfile = isSuperAdminEmail 
           ? { ...profileData, role: 'super_admin' as const } 
           : profileData;
@@ -74,33 +67,24 @@ export const useAuth = () => {
         setProfile(finalProfile);
         OfflineService.setCache('user_profile', finalProfile);
         
-        // Then get the institution if institution_id exists and is valid
         if (isValidUUID(finalProfile.institution_id)) {
-          console.log("Fetching institution for ID:", finalProfile.institution_id);
           const { data: institutionData, error: mError } = await supabase
             .from('institutions')
             .select('*')
             .eq('id', finalProfile.institution_id)
             .maybeSingle();
 
-          if (mError) {
-            console.error("Institution fetch error:", mError);
-            throw mError;
-          }
+          if (mError) throw mError;
           
           if (institutionData) {
-            console.log("Institution loaded:", { id: institutionData.id, name: institutionData.name });
             if (finalProfile.role === 'super_admin') {
               institutionData.theme = localStorage.getItem('super_admin_theme') || 'default';
             }
             setMadrasah(institutionData);
             OfflineService.setCache('profile', institutionData);
             await fetchActiveYear(institutionData.id);
-          } else {
-            setMadrasah(null);
           }
         } else if (finalProfile.role === 'super_admin') {
-          // Super admins might not have a institution_id
           const localTheme = localStorage.getItem('super_admin_theme') || 'default';
           setMadrasah({
             id: 'super_admin',
@@ -117,114 +101,35 @@ export const useAuth = () => {
           } as Institution);
         }
       } else {
-        // If profile doesn't exist yet, it might be the trigger lagging or 
-        // a manual auth user without SQL data.
         if (isSuperAdminEmail) {
-          console.log("Super admin profile missing, bootstrapping...");
-          await supabase.rpc('bootstrap_super_admin', { 
-            p_uid: userId, 
-            p_email: userEmail 
-          });
-          // Retry fetch once
-          const { data: retryProfile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-          if (retryProfile) {
-            setProfile({ ...retryProfile, role: 'super_admin' });
-            const localTheme = localStorage.getItem('super_admin_theme') || 'default';
-            setMadrasah({
-              id: 'super_admin',
-              name: 'Super Admin',
-              institution_type: 'system',
-              theme: localTheme,
-              config_json: { modules: {} },
-              is_active: true,
-              status: 'active',
-              balance: 0,
-              sms_balance: 0,
-              is_super_admin: true,
-              created_at: new Date().toISOString()
-            } as Institution);
-            return;
-          }
+          await supabase.rpc('bootstrap_super_admin', { p_uid: userId, p_email: userEmail });
+          return fetchUserProfile(userId, email, 0);
         }
-        
-        setAuthError("Profile not found in database. Please check if SQL triggers are running.");
+        setAuthError("প্রোফাইল খুঁজে পাওয়া যায়নি। (Profile not found)");
       }
     } catch (err: any) {
       const isNetworkError = 
         err?.message?.toLowerCase().includes('fetch') || 
         err?.message?.toLowerCase().includes('network') ||
         err?.message?.toLowerCase().includes('load') ||
-        err?.name === 'TypeError' ||
-        err?.code === 'PGRST301' || // Network/timeout
         !navigator.onLine;
 
-      // Retry logic for network errors - increased to 4 retries (Total 5 attempts)
       if (isNetworkError && retryCount < 4) {
-        const delay = (retryCount + 1) * 2000;
-        console.log(`Network error detected, retrying in ${delay/1000} seconds (Attempt ${retryCount + 1}/5)...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
         return fetchUserProfile(userId, email, retryCount + 1);
       }
 
-      console.error("fetchUserProfile error details:", {
-        message: err?.message,
-        name: err?.name,
-        stack: err?.stack,
-        fullError: err,
-        retryCount
-      });
-      
-      // Resilience: If it's a network error and we are super admin, we can still load
-      if (isSuperAdminEmail && isNetworkError) {
-        console.log("Network error but super admin detected, using local fallback...");
-        setProfile({
-          id: userId,
-          institution_id: 'super_admin',
-          full_name: 'Super Admin',
-          role: 'super_admin',
-          is_active: true,
-          created_at: new Date().toISOString()
-        } as Profile);
-        
-        const localTheme = localStorage.getItem('super_admin_theme') || 'default';
-        setMadrasah({
-          id: 'super_admin',
-          name: 'Super Admin',
-          institution_type: 'system',
-          theme: localTheme,
-          config_json: { modules: {} },
-          is_active: true,
-          status: 'active',
-          balance: 0,
-          sms_balance: 0,
-          is_super_admin: true,
-          created_at: new Date().toISOString()
-        } as Institution);
+      // Try cache fallback
+      const cachedMadrasah = OfflineService.getCache('profile');
+      const cachedProfile = OfflineService.getCache('user_profile');
+      if (cachedMadrasah || cachedProfile) {
+        if (cachedMadrasah) setMadrasah(cachedMadrasah);
+        if (cachedProfile) setProfile(cachedProfile);
         setLoading(false);
         return;
       }
 
-      // Try to load from cache if network fails
-      const cachedMadrasah = OfflineService.getCache('profile');
-      const cachedProfile = OfflineService.getCache('user_profile');
-      
-      if (cachedMadrasah || cachedProfile) {
-        console.log("Network error, using cached auth data...");
-        if (cachedMadrasah) setMadrasah(cachedMadrasah);
-        if (cachedProfile) setProfile(cachedProfile);
-        
-        // If we have cached data, don't show a fatal auth error for network issues
-        if (isNetworkError) {
-          setLoading(false);
-          return;
-        }
-      }
-
-      if (isNetworkError) {
-        setAuthError("সার্ভারের সাথে সংযোগ করা যাচ্ছে না! দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন এবং পুনরায় চেষ্টা করুন। (Connection failed - please check your internet and reload)");
-      } else {
-        setAuthError(err.message || "An unknown authentication error occurred.");
-      }
+      setAuthError(isNetworkError ? "ইন্টারনেট সংযোগ বিচ্ছিন্ন! (Connection failed)" : (err.message || "Unknown Error"));
     } finally {
       setLoading(false);
     }
@@ -240,33 +145,34 @@ export const useAuth = () => {
     await supabase.auth.signOut();
     localStorage.removeItem('teacher_session');
     OfflineService.removeCache('profile');
+    OfflineService.removeCache('user_profile');
     hardReload();
   };
 
   useEffect(() => {
     const initializeAuth = async (retryCount = 0) => {
+      // Emergency timeout
+      const safetyTimeout = setTimeout(() => {
+        const cachedProfile = OfflineService.getCache('user_profile');
+        const cachedMadrasah = OfflineService.getCache('profile');
+        if (cachedProfile || cachedMadrasah) {
+          if (cachedProfile) setProfile(cachedProfile);
+          if (cachedMadrasah) setMadrasah(cachedMadrasah);
+          setLoading(false);
+        }
+      }, 8000);
+
       try {
-        console.log("Initializing Auth... Attempt:", retryCount + 1);
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error(`Auth session error (Attempt ${retryCount + 1}):`, error);
-          const errorMessage = error.message.toLowerCase();
-          
-          // Retry for network issues
-          const isNetworkError = errorMessage.includes('fetch') || errorMessage.includes('network');
-          if (isNetworkError && retryCount < 3) {
-             await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
-             return initializeAuth(retryCount + 1);
+          if ((error.message.includes('fetch') || error.message.includes('network')) && retryCount < 2) {
+            clearTimeout(safetyTimeout);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return initializeAuth(retryCount + 1);
           }
-
-          // Only force logout on definitive token errors
-          const isTokenError = errorMessage.includes('refresh token') || 
-                               errorMessage.includes('refresh_token_not_found') ||
-                               errorMessage.includes('invalid_grant');
-
-          if (isTokenError) {
-            console.warn("Definitive token error detected, signing out...");
+          if (error.message.includes('refresh token') || error.message.includes('invalid_grant')) {
+            clearTimeout(safetyTimeout);
             await handleLogout();
             return;
           }
@@ -274,99 +180,50 @@ export const useAuth = () => {
 
         if (currentSession && currentSession.user) {
           setSession(currentSession);
-          console.log("Supabase Session active:", currentSession.user.id);
           
-          // Check if it's a teacher session
           const teacherSessionStr = localStorage.getItem('teacher_session');
           if (teacherSessionStr) {
             try {
               const teacherData = JSON.parse(teacherSessionStr);
-              if (teacherData && teacherData.id) {
-                // Fetch latest teacher data 
-                try {
-                  const { data: latestTeacher } = await supabase
-                    .from('teachers')
-                    .select('*')
-                    .eq('id', teacherData.id)
-                    .maybeSingle();
+              const { data: latestTeacher } = await supabase.from('teachers').select('*').eq('id', teacherData.id).maybeSingle();
 
-                  if (latestTeacher) {
-                    if (!latestTeacher.is_active) {
-                      localStorage.removeItem('teacher_session');
-                      setProfile(null);
-                      setMadrasah(null);
-                      setLoading(false);
-                      return;
-                    }
-
-                    const profileObj = {
-                      id: latestTeacher.id,
-                      institution_id: latestTeacher.institution_id,
-                      full_name: latestTeacher.name,
-                      role: 'teacher' as const,
-                      is_active: latestTeacher.is_active,
-                      created_at: latestTeacher.created_at,
-                      permissions: latestTeacher.permissions
-                    };
-                    setProfile(profileObj);
-                    OfflineService.setCache('user_profile', profileObj);
-                    localStorage.setItem('teacher_session', JSON.stringify(latestTeacher));
-                    
-                    if (isValidUUID(latestTeacher.institution_id)) {
-                      const { data: institutionData } = await supabase
-                        .from('institutions')
-                        .select('*')
-                        .eq('id', latestTeacher.institution_id)
-                        .maybeSingle();
-                        
-                      if (institutionData) {
-                        setMadrasah(institutionData);
-                        OfflineService.setCache('profile', institutionData);
-                      }
-                    }
-                  } else {
-                    // Teacher was deleted or something
-                    localStorage.removeItem('teacher_session');
-                  }
-                } catch (fetchErr) {
-                  console.log("Teacher fetch failed (likely offline), using cached session...");
-                  const profileObj = {
-                    id: teacherData.id,
-                    institution_id: teacherData.institution_id,
-                    full_name: teacherData.name || teacherData.full_name,
-                    role: 'teacher' as const,
-                    is_active: teacherData.is_active,
-                    created_at: teacherData.created_at,
-                    permissions: teacherData.permissions
-                  };
-                  setProfile(profileObj);
-                  const cachedMadrasah = OfflineService.getCache('profile');
-                  if (cachedMadrasah) setMadrasah(cachedMadrasah);
-                }
+              if (latestTeacher && latestTeacher.is_active) {
+                const profileObj = {
+                  id: latestTeacher.id,
+                  institution_id: latestTeacher.institution_id,
+                  full_name: latestTeacher.name,
+                  role: 'teacher' as const,
+                  is_active: latestTeacher.is_active,
+                  created_at: latestTeacher.created_at,
+                  permissions: latestTeacher.permissions
+                };
+                setProfile(profileObj);
+                OfflineService.setCache('user_profile', profileObj);
                 
+                if (isValidUUID(latestTeacher.institution_id)) {
+                  const { data: inst } = await supabase.from('institutions').select('*').eq('id', latestTeacher.institution_id).maybeSingle();
+                  if (inst) {
+                    setMadrasah(inst);
+                    OfflineService.setCache('profile', inst);
+                  }
+                }
+                clearTimeout(safetyTimeout);
                 setLoading(false);
-                return; 
+                return;
               }
             } catch (e) {
-              console.error("Error parsing teacher session:", e);
+              console.error("Teacher session error:", e);
             }
           }
-          
           await fetchUserProfile(currentSession.user.id, currentSession.user.email);
         } else {
-          // If there's no Supabase session, verify if we have cached data before clearing
-          console.log("No Supabase session found.");
           const hasAuthToken = !!localStorage.getItem('madrasah_auth_token');
-          const teacherSessionStr = localStorage.getItem('teacher_session');
-          
-          if (!hasAuthToken && teacherSessionStr) {
-             console.log("Clearing teacher session as no Supabase auth token exists.");
-             localStorage.removeItem('teacher_session');
-          }
+          if (!hasAuthToken) localStorage.removeItem('teacher_session');
         }
-      } catch (err: any) {
-        console.error("Auth initialization error:", err);
+      } catch (err) {
+        console.error("Init Auth error:", err);
       } finally {
+        clearTimeout(safetyTimeout);
         setLoading(false);
       }
     };
@@ -374,57 +231,29 @@ export const useAuth = () => {
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth Event Triggered:", event);
-      if (event === 'SIGNED_OUT') {
-        const hasSession = !!session;
-        if (!hasSession) {
-          console.log("Legitimate signed out event.");
-          setSession(null); 
-          setMadrasah(null); 
-          setProfile(null);
-          localStorage.removeItem('teacher_session');
-        }
+      if (event === 'SIGNED_OUT' && !session) {
+        setSession(null); setMadrasah(null); setProfile(null);
+        localStorage.removeItem('teacher_session');
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session) {
           setSession(session);
-          if (session.user) {
-            fetchUserProfile(session.user.id, session.user.email);
-          }
+          if (session.user) fetchUserProfile(session.user.id, session.user.email);
         }
-      } else if (session) {
-        setSession(session);
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     let channel: any;
     if (profile?.institution_id && profile.institution_id !== 'super_admin') {
-      channel = supabase
-        .channel('institution-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'institutions',
-            filter: `id=eq.${profile.institution_id}`,
-          },
-          (payload) => {
-            console.log('useAuth: Received real-time update for institution:', payload.new);
-            setMadrasah(payload.new as Institution);
-          }
-        )
-        .subscribe();
+      channel = supabase.channel('institution-changes')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'institutions', filter: `id=eq.${profile.institution_id}` },
+          (payload) => setMadrasah(payload.new as Institution)
+        ).subscribe();
     }
-
-    return () => {
-      if (channel) supabase.removeChannel(channel);
-    };
+    return () => { if (channel) supabase.removeChannel(channel); };
   }, [profile?.institution_id]);
 
   return { session, profile, madrasah, activeYear, loading, authError, handleLogout, refreshMadrasah };
