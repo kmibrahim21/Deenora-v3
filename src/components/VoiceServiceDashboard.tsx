@@ -28,9 +28,12 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [instSearchInAssign, setInstSearchInAssign] = useState('');
 
-  const filteredInstitutionsInAssign = institutions.filter(inst => 
-    inst.name?.toLowerCase().includes(instSearchInAssign.toLowerCase())
-  );
+  const filteredInstitutionsInAssign = institutions.filter(inst => {
+    const searchLower = instSearchInAssign.toLowerCase();
+    const nameMatch = inst.name?.toLowerCase().includes(searchLower);
+    const codeMatch = (inst.config_json?.institute_code || '').toLowerCase().includes(searchLower);
+    return nameMatch || codeMatch;
+  });
 
   const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
   const [assignedVoiceSearchQuery, setAssignedVoiceSearchQuery] = useState('');
@@ -38,7 +41,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
   useEffect(() => {
     const fetchInstitutions = async () => {
-      const { data } = await supabase.from('institutions').select('id, name').eq('is_super_admin', false).order('name');
+      const { data } = await supabase.from('institutions').select('id, name, config_json').eq('is_super_admin', false).order('name');
       if (data) setInstitutions(data);
     };
     fetchInstitutions();
@@ -617,7 +620,9 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                     <option value="">Select an institution...</option>
                     <option value="system" className="font-extrabold text-blue-600 bg-blue-50">--- 🌐 Save as System Voice (Global) ---</option>
                     {filteredInstitutionsInAssign.map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
+                      <option key={m.id} value={m.id}>
+                        {m.config_json?.institute_code ? `[${m.config_json.institute_code}] ` : ''}{m.name}
+                      </option>
                     ))}
                   </select>
                 </div>

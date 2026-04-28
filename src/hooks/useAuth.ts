@@ -150,10 +150,22 @@ export const useAuth = () => {
         setAuthError("Profile not found in database. Please check if SQL triggers are running.");
       }
     } catch (err: any) {
+      const errorMessage = (err?.message || '').toLowerCase();
+      const isLockError = errorMessage.includes('lockmanager') || errorMessage.includes('lock:') || errorMessage.includes('lock');
+      
+      if (isLockError) {
+        if (!sessionStorage.getItem('lock_reloaded')) {
+          console.warn("Storage lock error detected. Reloading to clear locks...");
+          sessionStorage.setItem('lock_reloaded', 'true');
+          window.location.reload();
+          return;
+        }
+      }
+
       const isNetworkError = 
-        err?.message?.toLowerCase().includes('fetch') || 
-        err?.message?.toLowerCase().includes('network') ||
-        err?.message?.toLowerCase().includes('load') ||
+        errorMessage.includes('fetch') || 
+        errorMessage.includes('network') ||
+        errorMessage.includes('load') ||
         err?.name === 'TypeError' ||
         err?.code === 'PGRST301' || // Network/timeout
         !navigator.onLine;
@@ -222,6 +234,8 @@ export const useAuth = () => {
 
       if (isNetworkError) {
         setAuthError("সার্ভারের সাথে সংযোগ করা যাচ্ছে না! দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন এবং পুনরায় চেষ্টা করুন। (Connection failed - please check your internet and reload)");
+      } else if (isLockError) {
+        setAuthError("নিরাপত্তা বা ক্যাশ মেমোরির সমস্যা হয়েছে। দয়া করে অ্যাপটি পুরোপুরি বন্ধ করে আবার চালু করুন (Clear recent apps and reopen) অথবা ক্যাশ ক্লিয়ার করুন।");
       } else {
         setAuthError(err.message || "An unknown authentication error occurred.");
       }
@@ -253,6 +267,20 @@ export const useAuth = () => {
           console.error(`Auth session error (Attempt ${retryCount + 1}):`, error);
           const errorMessage = error.message.toLowerCase();
           
+          const isLockError = errorMessage.includes('lockmanager') || errorMessage.includes('lock:') || errorMessage.includes('lock');
+          if (isLockError) {
+            if (!sessionStorage.getItem('lock_reloaded')) {
+              console.warn("Storage lock error detected during init. Reloading...");
+              sessionStorage.setItem('lock_reloaded', 'true');
+              window.location.reload();
+              return;
+            } else {
+               setAuthError("নিরাপত্তা বা ক্যাশ মেমোরির সমস্যা হয়েছে। দয়া করে অ্যাপটি পুরোপুরি বন্ধ করে আবার চালু করুন (Clear recent apps and reopen) অথবা ক্যাশ ক্লিয়ার করুন।");
+               setLoading(false);
+               return;
+            }
+          }
+
           // Retry for network issues
           const isNetworkError = errorMessage.includes('fetch') || errorMessage.includes('network');
           if (isNetworkError && retryCount < 3) {
