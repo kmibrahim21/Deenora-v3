@@ -46,9 +46,7 @@ if (typeof window !== 'undefined') {
 
 const root = createRoot(rootElement);
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <App />
 );
 
 // Register PWA service worker explicitly

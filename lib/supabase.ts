@@ -27,6 +27,11 @@ export const supabase = createClient(finalUrl, finalKey, {
     detectSessionInUrl: true,
     storage: window.localStorage,
     storageKey: 'madrasah_auth_token',
-    flowType: 'pkce'
+    flowType: 'pkce',
+    lock: (name, acquireTimeout, fn) => {
+      // By directly executing the function, we bypass the lock manager completely.
+      // This eliminates the 10000ms timeout error on devices where navigator.locks is buggy.
+      return fn();
+    }
   }
 });
