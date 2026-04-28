@@ -63,7 +63,16 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         }
       }
     } catch (err: any) { 
-      setError(t('login_error', lang)); 
+      console.error('Admin login error:', err);
+      let errorMsg = err.message || t('login_error', lang);
+      if (err.status === 504 || err.status === 503 || err.name === 'AuthRetryableFetchError' || (typeof errorMsg === 'string' && errorMsg.includes('fetch'))) {
+         errorMsg = lang === 'bn' ? 'সার্ভার রেসপন্স দিচ্ছে না। আপনার ডাটাবেস (Supabase) পজ হয়ে থাকতে পারে, দয়া করে ড্যাশবোর্ড থেকে রিস্টার্ট করুন।' : 'Server is not responding. Your database (Supabase) might be paused, please restart it from the dashboard.';
+      }
+      // If errorMsg is an object (due to stringify issues), use a default
+      if (typeof errorMsg !== 'string') {
+        errorMsg = lang === 'bn' ? 'লগইন করতে সমস্যা হচ্ছে' : 'Error logging in';
+      }
+      setError(errorMsg); 
     } finally { 
       setLoading(false); 
     }
@@ -108,9 +117,15 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
       }
     } catch (err: any) {
       console.error('Teacher login error:', err);
-      setError(err.message === 'Invalid mobile number or password' 
+      let errorMsg = err.message === 'Invalid mobile number or password' 
         ? (lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN')
-        : (lang === 'bn' ? 'লগইন করতে সমস্যা হচ্ছে' : 'Error logging in'));
+        : (lang === 'bn' ? 'লগইন করতে সমস্যা হচ্ছে' : 'Error logging in');
+        
+      if (err.message && err.message.includes('fetch')) {
+         errorMsg = lang === 'bn' ? 'সার্ভার রেসপন্স দিচ্ছে না। আপনার ডাটাবেস (Supabase) পজ হয়ে থাকতে পারে, দয়া করে ড্যাশবোর্ড থেকে রিস্টার্ট করুন।' : 'Server is not responding. Your database (Supabase) might be paused, please restart it from the dashboard.';
+      }
+
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
