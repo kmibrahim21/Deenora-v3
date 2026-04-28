@@ -545,6 +545,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [isCreatingInst, setIsCreatingInst] = useState(false);
 
   const fetchGlobalCounts = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
+      if (!error && data) {
+        return {
+          totalStudents: data.totalStudents,
+          totalClasses: data.totalClasses,
+          totalDistributedSMS: data.totalDistributedSMS,
+          totalSentSMS: data.totalSentSMS,
+          currentInUserWallets: data.currentInUserWallets,
+          totalRevenue: data.totalRevenue,
+          pendingApprovals: data.pendingApprovals,
+          totalInstitutions: data.totalInstitutions,
+          activeInstitutions: data.activeInstitutions,
+          totalVoiceBalance: data.totalVoiceBalance,
+          adminSMSStock: data.adminSMSStock,
+          typeBreakdown: data.typeBreakdown || { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 }
+        };
+      }
+    } catch (e) {
+      console.error("RPC get_admin_dashboard_stats failed, falling back to client-side aggegration", e);
+    }
+    
+    // Fallback if RPC doesn't exist
     const [studentsRes, classesRes, smsAllocRes, currentBalRes, pendingRes, instsRes, stockRes] = await Promise.all([
       supabase.from('students').select('*', { count: 'exact', head: true }),
       supabase.from('classes').select('*', { count: 'exact', head: true }),
