@@ -175,7 +175,7 @@ export const generateResultPDF = async (
     
     await new Promise<void>((resolve) => {
         root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
-        setTimeout(resolve, 500);
+        setTimeout(resolve, 800);
     });
 
     const imgData = await toPng(container.firstElementChild as HTMLElement, {

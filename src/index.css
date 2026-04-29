@@ -102,6 +102,9 @@ body {
 }
 
 .font-noto { font-family: 'Noto Sans Bengali', sans-serif; }
+.font-tiro { font-family: 'Tiro Bangla', serif; }
+.font-hind { font-family: 'Hind Siliguri', sans-serif; }
+.font-serif-bn { font-family: 'Noto Serif Bengali', serif; }
 
 .glass-card {
   background: rgba(255, 255, 255, 0.15);

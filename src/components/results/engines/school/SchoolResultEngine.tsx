@@ -1052,15 +1052,18 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                   return {
                                                       subject_name: s.subject_name,
                                                       marks_obtained: obtained,
-                                                      grade: subGradeInfo(pct, hasFailedSub).grade
+                                                      grade: subGradeInfo(pct, hasFailedSub).grade,
+                                                      grade_point: subGradeInfo(pct, hasFailedSub).gpa,
+                                                      full_marks: s.full_marks || 100
                                                   };
                                               });
                                               if (selectedExam && madrasah) {
+                                                const studentObj = students.find(st => st.id === item.student_id);
                                                 generateResultPDF(
-                                                    { id: item.student_id, student_name: item.student_name, roll: item.roll, classes: { class_name: selectedExam.classes?.class_name } },
+                                                    { id: item.student_id, student_name: item.student_name, roll: item.roll, classes: { class_name: selectedExam.classes?.class_name }, photo_url: studentObj?.photo_url, attendance: '95', section: madrasah?.theme === 'dark' ? 'None' : 'N/A' },
                                                     selectedExam,
                                                     preparedMarks,
-                                                    { name: madrasah.name },
+                                                    { name: madrasah.name, logo_url: madrasah.logo_url, address: madrasah.address },
                                                     lang
                                                 );
                                               }

@@ -4,148 +4,234 @@ interface ResultSheetProps {
   student: any;
   exam: any;
   marks: any[];
-  madrasah: { name: string };
+  madrasah: { name: string; logo_url?: string; address?: string };
   lang: 'en' | 'bn';
 }
 
 export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({ student, exam, marks, madrasah, lang }) => {
   const isBangla = lang === 'bn';
   const t = {
-    title: isBangla ? 'একাডেমিক ট্রান্সক্রিপ্ট' : 'Academic Transcript',
+    marksheet: isBangla ? 'মার্কশীট' : 'MARKSHEET',
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     roll: isBangla ? 'রোল নম্বর' : 'Roll No',
     class: isBangla ? 'শ্রেণি' : 'Class',
-    exam: isBangla ? 'পরীক্ষার নাম' : 'Examination',
-    subject: isBangla ? 'বিষয়' : 'Subject',
-    marks: isBangla ? 'প্রাপ্ত নম্বর' : 'Marks Obtained',
-    grade: isBangla ? 'গ্রেড' : 'Grade',
-    total: isBangla ? 'মোট' : 'Total',
-    date: isBangla ? 'তারিখ' : 'Date',
-    signature: isBangla ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal\'s Signature',
-    guardian: isBangla ? 'অভিভাবকের স্বাক্ষর' : 'Guardian\'s Signature',
+    section: isBangla ? 'শাখা' : 'Section',
+    sno: isBangla ? 'ক্রমিক' : 'S.NO',
+    subject: isBangla ? 'বিষয়' : 'SUBJECT',
+    creditHour: isBangla ? 'পূর্ণমান' : 'FULL MARKS',
+    gradeObtained: isBangla ? 'অর্জিত গ্রেড' : 'GRADE OBTAINED',
+    gradePoint: isBangla ? 'গ্রেড পয়েন্ট' : 'GRADE POINT',
+    remarks: isBangla ? 'মন্তব্য' : 'REMARKS',
+    attendance: isBangla ? 'উপস্থিতি' : 'ATTENDANCE',
+    gpa: isBangla ? 'জিপিএ' : 'GPA',
+    issueDate: isBangla ? 'ইস্যু তারিখ' : 'ISSUE ON',
+    teacherSign: isBangla ? 'শিক্ষকের স্বাক্ষর' : 'Teacher Sign',
+    parentSign: isBangla ? 'পিতা/মাতার স্বাক্ষর' : 'Parents Sign',
+    principalSign: isBangla ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Sign',
   };
 
   const totalMarks = marks.reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
+  const averageGpa = marks.length > 0 ? (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(2) : '0.00';
 
   return (
-    <div className="w-[794px] min-h-[1123px] p-12 bg-white font-noto text-slate-900 relative overflow-hidden">
-      {/* Decorative Border */}
-      <div className="absolute inset-4 border-[1px] border-slate-200 pointer-events-none"></div>
-      <div className="absolute inset-6 border-[3px] border-double border-slate-100 pointer-events-none"></div>
+    <div className={`w-[794px] min-h-[1123px] p-6 bg-white ${isBangla ? 'font-noto' : 'font-hind'} text-slate-900 relative overflow-hidden`} style={{ boxSizing: 'border-box' }}>
+      {/* Outer borders */}
+      <div className="absolute inset-4 border-[2px] border-[#1E3A8A] pointer-events-none"></div>
+      <div className="absolute inset-5 border-[1px] border-[#1E3A8A] pointer-events-none"></div>
 
-      {/* Watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] -rotate-45 select-none">
-        <h1 className="text-8xl font-black uppercase tracking-[0.5em]">{madrasah.name}</h1>
-      </div>
-
-      {/* Header Section */}
-      <div className="text-center mb-12 relative">
-        <div className="flex justify-center mb-6">
-            <div className="w-24 h-24 bg-blue-50 rounded-3xl flex items-center justify-center border border-blue-100 shadow-sm">
-                <span className="text-4xl font-black text-blue-600">{madrasah.name.charAt(0)}</span>
-            </div>
-        </div>
-        <h1 className="text-4xl font-black text-[#1E3A8A] mb-3 uppercase tracking-tight leading-tight">{madrasah.name}</h1>
-        <div className="inline-flex items-center gap-4 mb-6">
-            <div className="h-[1px] w-12 bg-slate-200"></div>
-            <div className="px-6 py-2 bg-[#1E3A8A] rounded-full text-[11px] font-black uppercase tracking-[0.3em] text-white shadow-lg shadow-blue-100">
-                {t.title}
-            </div>
-            <div className="h-[1px] w-12 bg-slate-200"></div>
-        </div>
-        <div className="flex justify-center gap-12 text-[10px] font-black uppercase tracking-widest text-slate-400">
-          <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
-              <span>{t.exam}: {exam.exam_name}</span>
-          </div>
-          <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
-              <span>{t.date}: {new Date().toLocaleDateString(isBangla ? 'bn-BD' : 'en-US')}</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Student Info Grid */}
-      <div className="grid grid-cols-2 gap-x-12 gap-y-6 mb-12 bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16"></div>
+      {/* Main Container */}
+      <div className="p-4 h-full flex flex-col relative z-10">
         
-        <div className="flex flex-col gap-1.5 relative z-10">
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{t.name}</span>
-          <span className="text-xl font-black text-slate-800 border-b-2 border-slate-200/50 pb-1">{student.student_name}</span>
-        </div>
-        <div className="flex flex-col gap-1.5 relative z-10">
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{t.roll}</span>
-          <span className="text-xl font-black text-slate-800 border-b-2 border-slate-200/50 pb-1">{student.roll}</span>
-        </div>
-        <div className="flex flex-col gap-1.5 relative z-10">
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{t.class}</span>
-          <span className="text-xl font-black text-slate-800 border-b-2 border-slate-200/50 pb-1">{student.classes?.class_name || ''}</span>
-        </div>
-        <div className="flex flex-col gap-1.5 relative z-10">
-          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{t.total}</span>
-          <span className="text-xl font-black text-[#2563EB] border-b-2 border-blue-100 pb-1">{totalMarks}</span>
-        </div>
-      </div>
+        {/* Header Section */}
+        <div className="flex justify-between items-start mb-8">
+          {/* Logo */}
+          <div className="w-28 h-28 flex items-center justify-center shrink-0">
+            {madrasah.logo_url ? (
+               <img src={madrasah.logo_url} alt="Logo" className="max-w-full max-h-full object-contain drop-shadow-sm" crossOrigin="anonymous" />
+            ) : (
+               <div className="w-24 h-24 border-2 border-[#1E3A8A] rounded-full flex items-center justify-center bg-blue-50/50 shadow-inner">
+                   <span className="text-4xl font-black text-[#1E3A8A]">{madrasah.name.charAt(0)}</span>
+               </div>
+            )}
+          </div>
 
-      {/* Marks Table */}
-      <div className="mb-12 overflow-hidden rounded-[2rem] border border-slate-200 shadow-sm bg-white">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-[#1E3A8A] text-white">
-              <th className="p-5 text-left text-[11px] font-black uppercase tracking-[0.2em]">{t.subject}</th>
-              <th className="p-5 text-center text-[11px] font-black uppercase tracking-[0.2em] w-32">{t.marks}</th>
-              <th className="p-5 text-center text-[11px] font-black uppercase tracking-[0.2em] w-32">{t.grade}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {marks.map((m, i) => (
-              <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                <td className="p-5 font-black text-slate-700 text-sm uppercase tracking-tight">{m.subject_name}</td>
-                <td className="p-5 text-center font-mono font-black text-slate-600 text-lg">{m.marks_obtained}</td>
-                <td className="p-5 text-center">
-                  <span className="inline-flex items-center justify-center w-12 h-10 bg-white border-2 border-slate-100 rounded-xl font-black text-sm text-[#2563EB] shadow-sm">
-                    {m.grade || '-'}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="bg-slate-50/80 font-black">
-              <td className="p-6 text-right uppercase tracking-[0.2em] text-[10px] text-slate-400">{t.total}</td>
-              <td className="p-6 text-center font-mono text-2xl text-[#2563EB]">{totalMarks}</td>
-              <td className="p-6"></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+          {/* School Info */}
+          <div className="flex-1 text-center flex flex-col items-center justify-center px-4">
+            <h1 className={`text-4xl font-black text-[#1E3A8A] uppercase tracking-tight leading-tight drop-shadow-sm ${isBangla ? 'font-serif-bn' : 'font-tiro'}`}>
+                {madrasah.name}
+            </h1>
+            
+            {madrasah.address ? (
+              <p className={`text-sm font-bold text-slate-700 uppercase mt-1.5 ${isBangla ? 'font-noto' : ''}`}>{madrasah.address}</p>
+            ) : (
+              <p className={`text-sm font-bold text-slate-700 uppercase mt-1.5 ${isBangla ? 'font-noto' : ''}`}>
+                  {isBangla ? 'ঠিকানা দেওয়া হয়নি' : 'Address Not Provided'}
+              </p>
+            )}
+            
+            <p className={`text-[17px] font-bold text-blue-800 uppercase mt-1.5 ${isBangla ? 'font-noto' : ''}`}>
+              {exam.exam_name} - {new Date(exam.exam_date).getFullYear()}
+            </p>
+            
+            <div className="mt-4 w-72 text-center py-2 bg-[#1E3A8A] rounded-lg shadow-sm border-[3px] border-[#1E3A8A] relative overflow-hidden group">
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <span className={`text-[21px] font-black text-white uppercase tracking-[0.2em] relative z-10 ${isBangla ? 'font-serif-bn' : ''}`}>
+                  {t.marksheet}
+              </span>
+            </div>
+          </div>
 
-      {/* Signatures Section */}
-      <div className="grid grid-cols-2 gap-24 mt-auto pt-20 relative z-10">
-        <div className="text-center">
-          <div className="w-full h-12 mb-2 flex items-end justify-center">
-              <div className="w-32 h-[1px] bg-slate-200"></div>
-          </div>
-          <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
-            {t.guardian}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="w-full h-12 mb-2 flex items-end justify-center">
-              <div className="w-32 h-[1px] bg-slate-200"></div>
-          </div>
-          <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
-            {t.signature}
+          {/* Photo Box */}
+          <div className="w-28 h-32 border-[2px] border-[#1E3A8A] shrink-0 relative bg-slate-50 flex flex-col items-center justify-center overflow-hidden">
+             {student.photo_url ? (
+                <img src={student.photo_url} alt="Student" className="w-full h-full object-cover" crossOrigin="anonymous" />
+             ) : (
+                <div className="text-center p-2 opacity-40">
+                    <div className="w-10 h-10 border-2 border-slate-400 rounded-full mx-auto mb-2"></div>
+                    <div className="w-14 h-4 bg-slate-400 rounded-t-lg mx-auto"></div>
+                </div>
+             )}
           </div>
         </div>
-      </div>
 
-      {/* Footer Decoration */}
-      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-        <div className="h-[1px] w-48 bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
-        <div className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em]">
-          Generated by Deenora Management System
+        {/* Student Info */}
+        <div className="mb-6 space-y-3 font-semibold text-base mt-2">
+          <div className="flex items-end">
+            <span className="mr-2 whitespace-nowrap">{t.name}:</span>
+            <span className="flex-1 border-b border-black font-bold text-lg font-tiro leading-none pb-0.5">{student.student_name}</span>
+          </div>
+          <div className="flex items-end gap-4">
+            <div className="flex flex-1 items-end">
+              <span className="mr-2 whitespace-nowrap">{t.class}:</span>
+              <span className="flex-1 border-b border-black font-bold leading-none pb-0.5">{student.classes?.class_name || ''}</span>
+            </div>
+            <div className="flex flex-1 items-end">
+              <span className="mr-2 whitespace-nowrap">{t.roll}:</span>
+              <span className="flex-1 border-b border-black text-center font-bold leading-none pb-0.5">{student.roll}</span>
+            </div>
+            <div className="flex flex-1 items-end">
+              <span className="mr-2 whitespace-nowrap">{t.section}:</span>
+              <span className="flex-1 border-b border-black text-center font-bold leading-none pb-0.5">{student.section || ''}</span>
+            </div>
+          </div>
         </div>
+
+        {/* Table Area Container with Watermark */}
+        <div className="relative flex-1 mb-6">
+           <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none z-0">
+              {madrasah.logo_url ? (
+                 <img src={madrasah.logo_url} alt="Watermark" className="max-w-[80%] max-h-[80%] object-contain" crossOrigin="anonymous" />
+              ) : (
+                 <h1 className="text-8xl font-black uppercase text-center transform -rotate-45 text-slate-800">{madrasah.name}</h1>
+              )}
+           </div>
+
+           {/* Marks Table */}
+           <table className="w-full border-collapse border border-black relative z-10 bg-white/90">
+             <thead>
+               <tr className="bg-slate-200">
+                 <th className="border border-black p-2 text-center text-xs font-bold uppercase w-12">{t.sno}</th>
+                 <th className="border border-black p-2 text-left text-xs font-bold uppercase">{t.subject}</th>
+                 <th className="border border-black p-2 text-center text-xs font-bold uppercase w-24">{t.creditHour}</th>
+                 <th className="border border-black p-2 text-center text-xs font-bold uppercase w-24">{t.gradeObtained}</th>
+                 <th className="border border-black p-2 text-center text-xs font-bold uppercase w-24">{t.gradePoint}</th>
+                 <th className="border border-black p-2 text-center text-xs font-bold uppercase w-32">{t.remarks}</th>
+               </tr>
+             </thead>
+             <tbody>
+               {marks.map((m, i) => {
+                 let remark = '';
+                 if (m.grade === 'A+') remark = isBangla ? 'চমৎকার' : 'Excellent';
+                 else if (m.grade === 'A' || m.grade === 'A-') remark = isBangla ? 'খুব ভালো' : 'Very Good';
+                 else if (m.grade === 'B' || m.grade === 'C') remark = isBangla ? 'ভালো' : 'Good';
+                 else if (m.grade === 'D') remark = isBangla ? 'উন্নতি প্রয়োজন' : 'Needs Work';
+                 else if (m.grade === 'F') remark = isBangla ? 'অকৃতকার্য' : 'Fail';
+                 
+                 return (
+                   <tr key={i}>
+                     <td className="border border-black p-2 text-center font-semibold">{i + 1}</td>
+                     <td className="border border-black p-2 font-bold font-tiro text-sm">{m.subject_name}</td>
+                     <td className="border border-black p-2 text-center font-semibold">{m.full_marks || '100'}</td>
+                     <td className="border border-black p-2 text-center font-bold">{m.grade || '-'}</td>
+                     <td className="border border-black p-2 text-center font-bold">{m.grade_point || '-'}</td>
+                     <td className="border border-black p-2 text-center text-xs">{m.remarks || remark}</td>
+                   </tr>
+                 );
+               })}
+               {/* Pad empty rows if marks are less than 7 for better visuals */}
+               {Array.from({ length: Math.max(0, 7 - marks.length) }).map((_, i) => (
+                 <tr key={`empty-${i}`}>
+                   <td className="border border-black p-3 text-center">&nbsp;</td>
+                   <td className="border border-black p-3">&nbsp;</td>
+                   <td className="border border-black p-3">&nbsp;</td>
+                   <td className="border border-black p-3">&nbsp;</td>
+                   <td className="border border-black p-3">&nbsp;</td>
+                   <td className="border border-black p-3">&nbsp;</td>
+                 </tr>
+               ))}
+             </tbody>
+           </table>
+
+           {/* Summary Info */}
+           <table className="w-full border-collapse border border-black relative z-10 mt-2 bg-white/90">
+              <thead>
+                <tr className="bg-slate-200">
+                   <th className="border border-black p-2 text-center text-sm font-bold w-1/2">{t.attendance}</th>
+                   <th className="border border-black p-2 text-center text-sm font-bold w-1/2">{t.gpa}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                   <td className="border border-black p-3 text-center font-bold text-lg">{student.attendance ? `${student.attendance} %` : 'N/A'}</td>
+                   <td className="border border-black p-3 text-center font-bold text-lg">{averageGpa}</td>
+                </tr>
+              </tbody>
+           </table>
+
+           {/* Remarks Area */}
+           <div className="flex mt-4 items-start relative z-10">
+              <span className="font-bold text-[#1E3A8A] text-lg mr-2 uppercase">{t.remarks}:</span>
+              <div className="flex-1 border border-black min-h-[60px] bg-white"></div>
+           </div>
+        </div>
+
+        {/* Footer / Signatures */}
+        <div className="mt-8 mb-6 container">
+           <div className="flex justify-between items-end">
+              <div className="font-bold text-sm">
+                 {t.issueDate} {new Date().toLocaleDateString('en-GB')}
+              </div>
+              <div className="text-center w-32">
+                 <div className="border-b border-black mb-1 h-6"></div>
+                 <div className="font-bold text-xs uppercase">{t.teacherSign}</div>
+              </div>
+              <div className="text-center w-32">
+                 <div className="border-b border-black mb-1 h-6"></div>
+                 <div className="font-bold text-xs uppercase">{t.parentSign}</div>
+              </div>
+              <div className="text-center w-32">
+                 <div className="border-b border-black mb-1 h-6"></div>
+                 <div className="font-bold text-xs uppercase">{t.principalSign}</div>
+              </div>
+           </div>
+        </div>
+
+        {/* Grading Scale Legend */}
+        <div className="border border-black p-2 mt-auto">
+           <div className="flex flex-wrap justify-between text-xs font-bold leading-tight uppercase font-hind">
+               <div className="w-[48%] py-1">80% {isBangla ? 'এবং উপরে' : 'and above'}: A+ Grade</div>
+               <div className="w-[48%] py-1">70% {isBangla ? 'এবং উপরে' : 'and above'}: A Grade</div>
+               
+               <div className="w-[48%] py-1">60% {isBangla ? 'এবং উপরে' : 'and above'}: A- Grade</div>
+               <div className="w-[48%] py-1">50% {isBangla ? 'এবং উপরে' : 'and above'}: B Grade</div>
+               
+               <div className="w-[48%] py-1">40% {isBangla ? 'এবং উপরে' : 'and above'}: C Grade</div>
+               <div className="w-[48%] py-1">33% {isBangla ? 'এবং উপরে' : 'and above'}: D Grade</div>
+               
+               <div className="w-[48%] py-1">0% {isBangla ? 'থেকে ৩২%' : 'to 32%'}: F Grade</div>
+           </div>
+        </div>
+
       </div>
     </div>
   );

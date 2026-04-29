@@ -8,7 +8,9 @@ DECLARE
   total_students bigint;
   total_classes bigint;
   total_alloc_sms numeric;
-  total_revenue numeric;
+  total_sms_rev numeric;
+  total_voice_rev numeric;
+  total_sub_rev numeric;
   total_wallet_sms numeric;
   total_voice_bal numeric;
   active_insts bigint;
@@ -41,12 +43,14 @@ BEGIN
 
   -- Transactions stats
   SELECT 
-    COALESCE(sum(sms_count), 0),
-    COALESCE(sum(amount), 0)
-  INTO total_alloc_sms, total_revenue
+    COALESCE(sum(CASE WHEN module = 'sms' THEN sms_count ELSE 0 END), 0),
+    COALESCE(sum(CASE WHEN module = 'sms' THEN amount ELSE 0 END), 0),
+    COALESCE(sum(CASE WHEN module = 'voice' THEN amount ELSE 0 END), 0),
+    COALESCE(sum(CASE WHEN module = 'subscription' THEN amount ELSE 0 END), 0)
+  INTO total_alloc_sms, total_sms_rev, total_voice_rev, total_sub_rev
   FROM transactions WHERE status = 'approved';
 
-  SELECT count(*) INTO pending_approvals FROM transactions WHERE status = 'pending';
+  SELECT count(*) INTO pending_approvals FROM transactions WHERE status = 'pending' AND module != 'subscription';
   
   -- Admin Stock
   SELECT remaining_sms INTO admin_stock FROM admin_sms_stock LIMIT 1;
@@ -58,7 +62,10 @@ BEGIN
     'totalDistributedSMS', coalesce(total_alloc_sms, 0),
     'totalSentSMS', greatest(0, coalesce(total_alloc_sms, 0) - coalesce(total_wallet_sms, 0)),
     'currentInUserWallets', coalesce(total_wallet_sms, 0),
-    'totalRevenue', coalesce(total_revenue, 0),
+    'smsRevenue', coalesce(total_sms_rev, 0),
+    'voiceRevenue', coalesce(total_voice_rev, 0),
+    'subscriptionRevenue', coalesce(total_sub_rev, 0),
+    'totalRevenue', coalesce(total_sms_rev + total_voice_rev + total_sub_rev, 0),
     'pendingApprovals', coalesce(pending_approvals, 0),
     'totalInstitutions', coalesce(total_insts, 0),
     'activeInstitutions', coalesce(active_insts, 0),
