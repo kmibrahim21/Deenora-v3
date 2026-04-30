@@ -28,13 +28,14 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({ student, exam,
     teacherSign: isBangla ? 'শিক্ষকের স্বাক্ষর' : 'Teacher Sign',
     parentSign: isBangla ? 'পিতা/মাতার স্বাক্ষর' : 'Parents Sign',
     principalSign: isBangla ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Sign',
+    meritPosition: isBangla ? 'মেধাস্থান' : 'MERIT POSITION',
   };
 
   const totalMarks = marks.reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
   const averageGpa = marks.length > 0 ? (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(2) : '0.00';
 
   return (
-    <div className={`w-[794px] min-h-[1123px] p-6 bg-white ${isBangla ? 'font-noto' : 'font-hind'} text-slate-900 relative overflow-hidden`} style={{ boxSizing: 'border-box' }}>
+    <div className={`w-[794px] h-[1123px] p-6 bg-white ${isBangla ? 'font-noto' : 'font-hind'} text-slate-900 relative overflow-hidden`} style={{ boxSizing: 'border-box' }}>
       {/* Outer borders */}
       <div className="absolute inset-4 border-[2px] border-[#1E3A8A] pointer-events-none"></div>
       <div className="absolute inset-5 border-[1px] border-[#1E3A8A] pointer-events-none"></div>
@@ -176,27 +177,29 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({ student, exam,
            <table className="w-full border-collapse border border-black relative z-10 mt-2 bg-white/90">
               <thead>
                 <tr className="bg-slate-200">
-                   <th className="border border-black p-2 text-center text-sm font-bold w-1/2">{t.attendance}</th>
-                   <th className="border border-black p-2 text-center text-sm font-bold w-1/2">{t.gpa}</th>
+                   <th className="border border-black p-2 text-center text-sm font-bold w-1/3">{t.attendance}</th>
+                   <th className="border border-black p-2 text-center text-sm font-bold w-1/3">{t.gpa}</th>
+                   <th className="border border-black p-2 text-center text-sm font-bold w-1/3">{t.meritPosition}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                    <td className="border border-black p-3 text-center font-bold text-lg">{student.attendance ? `${student.attendance} %` : 'N/A'}</td>
                    <td className="border border-black p-3 text-center font-bold text-lg">{averageGpa}</td>
+                   <td className="border border-black p-3 text-center font-bold text-lg">{student.merit_position ? student.merit_position : 'N/A'}</td>
                 </tr>
               </tbody>
            </table>
 
            {/* Remarks Area */}
-           <div className="flex mt-4 items-start relative z-10">
+           <div className="flex mt-3 items-start relative z-10">
               <span className="font-bold text-[#1E3A8A] text-lg mr-2 uppercase">{t.remarks}:</span>
-              <div className="flex-1 border border-black min-h-[60px] bg-white"></div>
+              <div className="flex-1 border border-black min-h-[50px] bg-white"></div>
            </div>
         </div>
 
         {/* Footer / Signatures */}
-        <div className="mt-8 mb-6 container">
+        <div className="mt-4 mb-4 container shrink-0">
            <div className="flex justify-between items-end">
               <div className="font-bold text-sm">
                  {t.issueDate} {new Date().toLocaleDateString('en-GB')}
@@ -213,22 +216,6 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({ student, exam,
                  <div className="border-b border-black mb-1 h-6"></div>
                  <div className="font-bold text-xs uppercase">{t.principalSign}</div>
               </div>
-           </div>
-        </div>
-
-        {/* Grading Scale Legend */}
-        <div className="border border-black p-2 mt-auto">
-           <div className="flex flex-wrap justify-between text-xs font-bold leading-tight uppercase font-hind">
-               <div className="w-[48%] py-1">80% {isBangla ? 'এবং উপরে' : 'and above'}: A+ Grade</div>
-               <div className="w-[48%] py-1">70% {isBangla ? 'এবং উপরে' : 'and above'}: A Grade</div>
-               
-               <div className="w-[48%] py-1">60% {isBangla ? 'এবং উপরে' : 'and above'}: A- Grade</div>
-               <div className="w-[48%] py-1">50% {isBangla ? 'এবং উপরে' : 'and above'}: B Grade</div>
-               
-               <div className="w-[48%] py-1">40% {isBangla ? 'এবং উপরে' : 'and above'}: C Grade</div>
-               <div className="w-[48%] py-1">33% {isBangla ? 'এবং উপরে' : 'and above'}: D Grade</div>
-               
-               <div className="w-[48%] py-1">0% {isBangla ? 'থেকে ৩২%' : 'to 32%'}: F Grade</div>
            </div>
         </div>
 

@@ -1060,7 +1060,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                               if (selectedExam && madrasah) {
                                                 const studentObj = students.find(st => st.id === item.student_id);
                                                 generateResultPDF(
-                                                    { id: item.student_id, student_name: item.student_name, roll: item.roll, classes: { class_name: selectedExam.classes?.class_name }, photo_url: studentObj?.photo_url, attendance: '95', section: madrasah?.theme === 'dark' ? 'None' : 'N/A' },
+                                                    { id: item.student_id, student_name: item.student_name, roll: item.roll, classes: { class_name: selectedExam.classes?.class_name }, photo_url: studentObj?.photo_url, attendance: '95', merit_position: item.rank, section: madrasah?.theme === 'dark' ? 'None' : 'N/A' },
                                                     selectedExam,
                                                     preparedMarks,
                                                     { name: madrasah.name, logo_url: madrasah.logo_url, address: madrasah.address },
