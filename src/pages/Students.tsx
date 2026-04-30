@@ -76,7 +76,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         const paginated = filtered.slice(from, to + 1);
         setStudents(prev => reset ? paginated : [...prev, ...paginated]);
         setHasMore(filtered.length > to + 1);
-        if (!reset) setPage(currentPage + 1);
+        setPage(currentPage + 1);
         return;
       }
 
@@ -125,7 +125,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         
         setStudents(prev => reset ? formattedData : [...prev, ...formattedData]);
         setHasMore(data.length === PAGE_SIZE);
-        if (!reset) setPage(currentPage + 1);
+        setPage(currentPage + 1);
 
         // Update cache if this is the first page and no search query
         if (reset && !searchQuery.trim()) {
@@ -147,7 +147,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         const paginated = filtered.slice(from, to + 1);
         setStudents(prev => reset ? paginated : [...prev, ...paginated]);
         setHasMore(filtered.length > to + 1);
-        if (!reset) setPage(currentPage + 1);
+        setPage(currentPage + 1);
       }
     } finally {
       setLoading(false);
