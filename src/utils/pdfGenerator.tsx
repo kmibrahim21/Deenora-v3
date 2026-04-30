@@ -164,7 +164,7 @@ export const generateResultPDF = async (
     student: any,
     exam: any,
     marks: any[],
-    madrasah: { name: string },
+    madrasah: { name: string; logo_url?: string; address?: string },
     lang: 'en' | 'bn' = 'en'
 ) => {
     const container = document.createElement('div');
@@ -320,7 +320,7 @@ export const generateClassFeeReportPDF = async (
 export const generateFeeReceiptPDF = async (
     student: any,
     month: string,
-    madrasah: { name: string; address?: string; phone?: string },
+    madrasah: { name: string; address?: string; phone?: string; logo_url?: string },
     lang: 'en' | 'bn' = 'en'
 ) => {
     const container = document.createElement('div');

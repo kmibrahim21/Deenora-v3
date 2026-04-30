@@ -455,9 +455,9 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     try {
       const className = classes.find(c => c.id === student.class_id)?.class_name || '';
       await generateFeeReceiptPDF(
-          { ...student, class_name: className },
+          { ...student, class_name: className, section: student.student_type ? student.student_type : '' },
           selectedMonth,
-          { name: madrasah.name, address: madrasah.address, phone: madrasah.phone },
+          { name: madrasah.name, address: madrasah.address, phone: madrasah.phone, logo_url: madrasah.logo_url },
           downloadLang
       );
     } catch (error) {

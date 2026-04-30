@@ -445,9 +445,9 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     setIsDownloading(true);
     try {
         await generateFeeReceiptPDF(
-            { ...student, class_name: className },
+            { ...student, class_name: className, section: student.student_type ? student.student_type : '' }, // Assuming student_type might represent section temporarily if none exists
             selectedMonth,
-            { name: madrasah.name, address: madrasah.address, phone: madrasah.phone },
+            { name: madrasah.name, address: madrasah.address, phone: madrasah.phone, logo_url: madrasah.logo_url },
             downloadLang
         );
     } catch (error) {
