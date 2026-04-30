@@ -61,16 +61,17 @@
   --safe-bottom: env(safe-area-inset-bottom);
 }
 
-html, body {
+html {
+  height: 100%;
+  width: 100%;
+}
+
+body {
   height: 100%;
   width: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden; 
   background-color: #0F172A; /* Dark blue islamic tone */
-  position: fixed; 
-  left: 0;
-  top: 0;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -146,6 +147,7 @@ input::placeholder, textarea::placeholder {
   position: fixed !important;
   inset: 0 !important;
   width: 100vw !important;
+  height: 100vh !important;
   height: 100dvh !important;
   z-index: 99999 !important;
   display: flex;

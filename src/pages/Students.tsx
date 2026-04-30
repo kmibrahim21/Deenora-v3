@@ -71,7 +71,10 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         if (searchQuery.trim()) {
           filtered = filtered.filter(s => s.student_name.toLowerCase().includes(searchQuery.toLowerCase()));
         }
-        filtered.sort((a, b) => (a.roll || 0) - (b.roll || 0));
+        filtered.sort((a, b) => {
+          if ((a.roll || 0) === (b.roll || 0)) return a.id.localeCompare(b.id);
+          return (a.roll || 0) - (b.roll || 0);
+        });
         
         const paginated = filtered.slice(from, to + 1);
         setStudents(prev => reset ? paginated : [...prev, ...paginated]);
@@ -89,7 +92,8 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         .select(selectFields)
         .eq('institution_id', institutionId)
         .eq('class_id', selectedClass.id)
-        .order('roll', { ascending: true })
+        .order('roll', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true })
         .range(from, to);
 
       const activeYearId = madrasah?.config_json?.active_academic_year_id;
@@ -142,7 +146,10 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         if (searchQuery.trim()) {
           filtered = filtered.filter(s => s.student_name.toLowerCase().includes(searchQuery.toLowerCase()));
         }
-        filtered.sort((a, b) => (a.roll || 0) - (b.roll || 0));
+        filtered.sort((a, b) => {
+          if ((a.roll || 0) === (b.roll || 0)) return a.id.localeCompare(b.id);
+          return (a.roll || 0) - (b.roll || 0);
+        });
         
         const paginated = filtered.slice(from, to + 1);
         setStudents(prev => reset ? paginated : [...prev, ...paginated]);
