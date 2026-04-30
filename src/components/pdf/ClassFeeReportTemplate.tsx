@@ -15,7 +15,7 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
     class: isBangla ? 'শ্রেণি' : 'Class',
     month: isBangla ? 'মাস' : 'Month',
     roll: isBangla ? 'রোল' : 'Roll',
-    studentName: isBangla ? 'ছাত্রের নাম' : 'Student Name',
+    studentName: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     totalPayable: isBangla ? 'মোট প্রদেয়' : 'Total Payable',
     totalPaid: isBangla ? 'মোট জমা' : 'Total Paid',
     balanceDue: isBangla ? 'বকেয়া' : 'Balance Due',

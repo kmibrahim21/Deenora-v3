@@ -13,7 +13,7 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     title: isBangla ? 'ফি পেমেন্ট মানি রিসিট' : 'FEE PAYMENT RECEIPT',
     receiptNo: isBangla ? 'রিসিট নং' : 'Receipt No',
     date: isBangla ? 'তারিখ' : 'Date',
-    studentDetails: isBangla ? 'ছাত্রের বিবরণ:' : 'Student Details:',
+    studentDetails: isBangla ? 'শিক্ষার্থীর বিবরণ:' : 'Student Details:',
     name: isBangla ? 'নাম' : 'Name',
     class: isBangla ? 'শ্রেণি' : 'Class',
     roll: isBangla ? 'রোল' : 'Roll',
@@ -25,12 +25,12 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     discount: isBangla ? 'ডিসকাউন্ট' : 'Discount Applied',
     totalPaid: isBangla ? 'মোট জমা (এই মাসে)' : 'Total Paid (This Month)',
     balanceDue: isBangla ? 'বকেয়া' : 'Balance Due',
-    studentSignature: isBangla ? 'ছাত্র/অভিভাবকের স্বাক্ষর' : 'Student/Guardian Signature',
+    studentSignature: isBangla ? 'শিক্ষার্থী/অভিভাবকের স্বাক্ষর' : 'Student/Guardian Signature',
     authSignature: isBangla ? 'কর্তৃপক্ষের স্বাক্ষর' : 'Authorized Signature',
     computerGenerated: isBangla ? 'এটি একটি কম্পিউটার জেনারেটেড রিসিট।' : 'This is a computer-generated receipt.',
     currency: isBangla ? '৳' : 'BDT',
     officeCopy: isBangla ? 'অফিস কপি' : 'Office Copy',
-    studentCopy: isBangla ? 'ছাত্র কপি' : 'Student Copy'
+    studentCopy: isBangla ? 'শিক্ষার্থী কপি' : 'Student Copy'
   };
 
   const ReceiptContent = ({ copyType }: { copyType: string }) => (

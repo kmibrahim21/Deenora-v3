@@ -425,7 +425,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                 <input type="text" className={`w-full h-12 rounded-2xl px-4 font-bold outline-none border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={editingPackage?.name || ''} onChange={(e) => setEditingPackage({...editingPackage, name: e.target.value})} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase px-1">রেট (প্রতি ছাত্র)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase px-1">রেট (প্রতি শিক্ষার্থী)</label>
                 <input type="number" step="0.01" className={`w-full h-12 rounded-2xl px-4 font-bold outline-none border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={editingPackage?.rate || 0} onChange={(e) => setEditingPackage({...editingPackage, rate: parseFloat(e.target.value)})} />
               </div>
               <div className="space-y-1.5">

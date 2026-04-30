@@ -629,7 +629,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     {anyStudentsInMadrasah ? <Info size={32} /> : <Users size={32} />}
                  </div>
                  <h3 className={`text-lg font-black font-noto leading-tight ${madrasah.theme === 'dark' ? 'text-slate-300' : 'text-[#1E293B]'}`}>
-                   {anyStudentsInMadrasah ? 'কোনো ডাটা পাওয়া যায়নি' : 'কোনো ছাত্র পাওয়া যায়নি'}
+                   {anyStudentsInMadrasah ? 'কোনো ডাটা পাওয়া যায়নি' : 'কোনো শিক্ষার্থী পাওয়া যায়নি'}
                  </h3>
               </div>
             )}
@@ -691,7 +691,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                         <button onClick={() => setShowFeeCollection(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
                     </div>
                     <div className={`p-6 rounded-3xl border text-center ${madrasah.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">ছাত্রের নাম</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">শিক্ষার্থীর নাম</p>
                         <h4 className={`text-xl font-black font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{selectedStudent.student_name}</h4>
                         <div className="grid grid-cols-3 gap-2 mt-4">
                             <div className={`p-2.5 rounded-2xl border shadow-sm ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
@@ -793,7 +793,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     
                     <div className={`flex items-center justify-between p-4 rounded-3xl border ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                         <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">ছাত্রের নাম</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">শিক্ষার্থীর নাম</p>
                             <h4 className={`text-lg font-black font-noto ${madrasah.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{historyStudent.student_name}</h4>
                         </div>
                         <div className="w-32">

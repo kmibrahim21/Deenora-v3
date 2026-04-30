@@ -76,7 +76,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [showShortcodes, setShowShortcodes] = useState(false);
 
   const availableShortcodes = [
-    { code: '{student_name}', label: lang === 'bn' ? 'ছাত্রের নাম' : 'Student Name' },
+    { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
     { code: '{father_name}', label: lang === 'bn' ? 'পিতার নাম' : 'Father Name' },
     { code: '{class}', label: lang === 'bn' ? 'শ্রেণী' : 'Class' },
     { code: '{roll}', label: lang === 'bn' ? 'রোল' : 'Roll' },

@@ -130,7 +130,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           // Check for foreign key constraint violation (PostgreSQL error code 23503)
           if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
              throw new Error(lang === 'bn' 
-               ? 'এই ক্লাসটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: ছাত্র, ফি, পরীক্ষা) সাথে যুক্ত। প্রথমে যুক্ত তথ্যগুলো ডিলিট করুন।' 
+               ? 'এই ক্লাসটি ডিলিট করা যাবে না কারণ এটি অন্যান্য তথ্যের (যেমন: শিক্ষার্থী, ফি, পরীক্ষা) সাথে যুক্ত। প্রথমে যুক্ত তথ্যগুলো ডিলিট করুন।' 
                : 'This class cannot be deleted because it is linked to other records (e.g. students, fees, exams). Please delete the linked records first.');
           }
           throw error;
@@ -257,7 +257,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
              </div>
              <div>
                 <h3 className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-800'} font-noto`}>{t('confirm_delete', lang)}</h3>
-                <p className="text-[11px] font-bold text-slate-400 mt-2 uppercase tracking-wider px-4">"{showDeleteConfirm.class_name}" শ্রেণির সকল ছাত্রের তথ্য মুছে যাবে।</p>
+                <p className="text-[11px] font-bold text-slate-400 mt-2 uppercase tracking-wider px-4">"{showDeleteConfirm.class_name}" শ্রেণির সকল শিক্ষার্থীর তথ্য মুছে যাবে।</p>
              </div>
              <div className="flex flex-col gap-3 pt-2">
                 <button onClick={handleDeleteClass} disabled={modalLoading} className="w-full py-5 bg-red-500 text-white font-black rounded-full shadow-xl shadow-red-100 active:scale-95 transition-all flex items-center justify-center text-md">

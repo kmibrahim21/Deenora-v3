@@ -99,7 +99,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
         <button onClick={onClose} className="absolute top-6 right-6 text-slate-300 hover:text-slate-800 transition-all"><X size={24} /></button>
         <div className="flex items-center gap-4 mb-6">
           <div className="w-11 h-11 bg-[#8D30F4]/5 rounded-xl flex items-center justify-center text-[#8D30F4]"><MessageSquare size={22} /></div>
-          <div><h2 className={`text-xl font-black font-noto leading-tight ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>এসএমএস পাঠান</h2><p className="text-[9px] font-black text-[#8D30F4]/60 uppercase tracking-widest mt-0.5">{students.length} জন ছাত্র নির্বাচিত</p></div>
+          <div><h2 className={`text-xl font-black font-noto leading-tight ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>এসএমএস পাঠান</h2><p className="text-[9px] font-black text-[#8D30F4]/60 uppercase tracking-widest mt-0.5">{students.length} জন শিক্ষার্থী নির্বাচিত</p></div>
         </div>
         <div className="space-y-5">
           <div className="relative">

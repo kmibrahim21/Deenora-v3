@@ -45,7 +45,7 @@ export const AcademicYearSetupRequired: React.FC<AcademicYearSetupRequiredProps>
 
       <p className={`text-lg max-w-lg mb-12 leading-relaxed font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
         {lang === 'bn' 
-          ? 'আপনার প্রতিষ্ঠানের কার্যক্রম শুরু করার জন্য প্রথমে একটি শিক্ষাবর্ষ তৈরি করুন। এটি ছাত্র ভর্তি, হাজিরা এবং ফি ম্যানেজমেন্টের জন্য অপরিহার্য।' 
+          ? 'আপনার প্রতিষ্ঠানের কার্যক্রম শুরু করার জন্য প্রথমে একটি শিক্ষাবর্ষ তৈরি করুন। এটি শিক্ষার্থী ভর্তি, হাজিরা এবং ফি ম্যানেজমেন্টের জন্য অপরিহার্য।' 
           : 'To start your institution\'s operations, please create an academic year first. This is essential for student enrollment, attendance, and fee management.'}
       </p>
 
@@ -72,7 +72,7 @@ export const AcademicYearSetupRequired: React.FC<AcademicYearSetupRequiredProps>
       <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl w-full">
         {[
           { icon: Plus, title: lang === 'bn' ? 'শিক্ষাবর্ষ তৈরি' : 'Create Year', desc: lang === 'bn' ? 'নতুন বছর শুরু করুন' : 'Start new year' },
-          { icon: Users, title: lang === 'bn' ? 'ছাত্র ভর্তি' : 'Add Students', desc: lang === 'bn' ? 'ছাত্রদের তথ্য এড করুন' : 'Add student data' },
+          { icon: Users, title: lang === 'bn' ? 'শিক্ষার্থী ভর্তি' : 'Add Students', desc: lang === 'bn' ? 'শিক্ষার্থীদের তথ্য এড করুন' : 'Add student data' },
           { icon: Banknote, title: lang === 'bn' ? 'ফি ও হিসাব' : 'Fees & Finance', desc: lang === 'bn' ? 'সব হিসাব ম্যানেজ' : 'Manage all finances' },
         ].map((item, i) => (
           <div key={i} className={`p-8 rounded-[2.5rem] border transition-all hover:translate-y-[-4px] ${isDark ? 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800' : 'bg-white border-slate-100 shadow-sm hover:shadow-xl'}`}>

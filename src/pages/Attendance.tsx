@@ -108,7 +108,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.50);
 
   const availableShortcodes = [
-    { code: '{student_name}', label: lang === 'bn' ? 'ছাত্রের নাম' : 'Student Name' },
+    { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
     { code: '{institution_name}', label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name' },
   ];
 
@@ -407,8 +407,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     
     const absents = students.filter(s => attendance[s.id] === 'absent');
     if (absents.length === 0) {
-      setErrorTitle(lang === 'bn' ? 'ছাত্র নির্বাচন করুন' : 'No Selection');
-      setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত ছাত্র পাওয়া যায়নি!' : 'No absent students found to send alerts.');
+      setErrorTitle(lang === 'bn' ? 'শিক্ষার্থী নির্বাচন করুন' : 'No Selection');
+      setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত শিক্ষার্থী পাওয়া যায়নি!' : 'No absent students found to send alerts.');
       setShowErrorModal(true);
       return;
     }
@@ -416,7 +416,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setConfirmData({
       title: lang === 'bn' ? 'এসএমএস এলার্ট পাঠান' : 'Send SMS Alert',
       message: lang === 'bn' 
-        ? `${absents.length} জন অনুপস্থিত ছাত্রের অভিভাবককে এসএমএস পাঠাতে চান?` 
+        ? `${absents.length} জন অনুপস্থিত শিক্ষার্থীর অভিভাবককে এসএমএস পাঠাতে চান?` 
         : `Send SMS alerts to guardians of ${absents.length} absent students?`,
       icon: 'sms',
       color: 'blue',
@@ -467,8 +467,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
     const absents = students.filter(s => attendance[s.id] === 'absent');
     if (absents.length === 0) {
-      setErrorTitle(lang === 'bn' ? 'ছাত্র নির্বাচন করুন' : 'No Selection');
-      setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত ছাত্র পাওয়া যায়নি!' : 'No absent students found!');
+      setErrorTitle(lang === 'bn' ? 'শিক্ষার্থী নির্বাচন করুন' : 'No Selection');
+      setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত শিক্ষার্থী পাওয়া যায়নি!' : 'No absent students found!');
       setShowErrorModal(true);
       return;
     }
@@ -838,7 +838,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               ) : students.length > 0 ? (
                 <div className="space-y-3 animate-in slide-in-from-bottom-5">
                    <div className="flex items-center justify-between px-6">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ছাত্র তালিকা</h4>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">শিক্ষার্থী তালিকা</h4>
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">উপস্থিতি</h4>
                    </div>
                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">

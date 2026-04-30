@@ -90,7 +90,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         
       if (fetchError) throw fetchError;
       if (!students || students.length === 0) {
-        throw new Error(lang === 'bn' ? "কোনো ছাত্রের তথ্য পাওয়া যায়নি" : "No student data found");
+        throw new Error(lang === 'bn' ? "কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি" : "No student data found");
       }
       
       const excelData = students.map(s => ({ 
@@ -249,7 +249,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           }
 
           const msg = lang === 'bn' 
-            ? `${successCount} জন ছাত্র আপলোড হয়েছে, ${skippedCount} জন ইতিমধ্যে ছিল বা ত্রুটির কারণে বাদ পড়েছে।` 
+            ? `${successCount} জন শিক্ষার্থী আপলোড হয়েছে, ${skippedCount} জন ইতিমধ্যে ছিল বা ত্রুটির কারণে বাদ পড়েছে।` 
             : `${successCount} students imported, ${skippedCount} skipped (already exists or error).`;
 
           setStatus({ 
