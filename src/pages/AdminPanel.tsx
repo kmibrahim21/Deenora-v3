@@ -605,13 +605,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   const fetchAllMadrasahs = async () => {
     const { data, error } = await supabase.from('institutions')
-      .select('*')
+      .select('*, student_count:students(count), class_count:classes(count)')
       .eq('is_super_admin', false)
       .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
       .order('created_at', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+    
+    return (data || []).map(m => ({
+      ...m,
+      student_count: (m as any).student_count?.[0]?.count || 0,
+      class_count: (m as any).class_count?.[0]?.count || 0
+    }));
   };
 
   const fetchPendingTransactions = async () => {
@@ -645,55 +650,72 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     
     const currentMonthStr = today.toISOString().slice(0, 7);
     
-    const { data: allActive } = await supabase.from('institutions').select('*').eq('is_active', true).eq('is_super_admin', false);
-    if (!allActive) return;
+    const { data: allActive, error: fetchError } = await supabase
+      .from('institutions')
+      .select('id, config_json, name')
+      .eq('is_active', true)
+      .eq('is_super_admin', false)
+      .neq('name', 'SYSTEM_GLOBAL_INTERNAL');
+      
+    if (fetchError || !allActive) return;
     
+    const idsToDeactivate: string[] = [];
     for (const inst of allActive) {
-      if (inst.name === 'SYSTEM_GLOBAL_INTERNAL') continue;
       const config = typeof inst.config_json === 'string' ? JSON.parse(inst.config_json) : (inst.config_json || {});
       const paidMonths = config.paid_months || [];
       if (!paidMonths.includes(currentMonthStr)) {
-         await supabase.from('institutions').update({ is_active: false }).eq('id', inst.id);
+         idsToDeactivate.push(inst.id);
       }
+    }
+
+    if (idsToDeactivate.length > 0) {
+      await supabase.from('institutions').update({ is_active: false }).in('id', idsToDeactivate);
     }
   };
 
   const toggleDeactivationMode = async () => {
+    const oldVal = globalDeactivationMode;
+    const newVal = !oldVal;
+
+    // Optimistic UI update
+    setGlobalDeactivationMode(newVal);
     setIsProcessingDeactivationToggle(true);
+
     try {
-      const newVal = !globalDeactivationMode;
-      const { data: sysInsts } = await supabase.from('institutions').select('*').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+      const { data: sysInsts, error: fetchErr } = await supabase.from('institutions').select('*').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+      if (fetchErr) throw fetchErr;
       
       let sysId = sysInsts?.[0]?.id;
       if (!sysId) {
          // Create if missing
-         const { data: newSys } = await supabase.from('institutions').insert([{
+         const { data: newSys, error: insErr } = await supabase.from('institutions').insert([{
            name: 'SYSTEM_GLOBAL_INTERNAL',
            institution_type: 'system',
-           is_active: false,
+           is_active: true,
            is_super_admin: false,
            config_json: { auto_deactivation_enabled: newVal },
            theme: 'default'
          }]).select('id').single();
+         if (insErr) throw insErr;
          sysId = newSys?.id;
       } else {
          const conf = typeof sysInsts![0].config_json === 'string' ? JSON.parse(sysInsts![0].config_json) : (sysInsts![0].config_json || {});
          conf.auto_deactivation_enabled = newVal;
-         await supabase.from('institutions').update({ config_json: conf }).eq('id', sysId);
+         const { error: updErr } = await supabase.from('institutions').update({ config_json: conf }).eq('id', sysId);
+         if (updErr) throw updErr;
       }
-      
-      setGlobalDeactivationMode(newVal);
       
       if (newVal) {
          await enforceAutoDeactivation();
          await handleRefresh();
       } else {
-         // Optionally activate all when turned off
+         // Activate all when turned off
          await supabase.from('institutions').update({ is_active: true }).eq('is_super_admin', false);
          await handleRefresh();
       }
     } catch(err: any) {
-      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: err.message });
+      setGlobalDeactivationMode(oldVal);
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: err.message || 'Error updating deactivation mode' });
     } finally {
       setIsProcessingDeactivationToggle(false);
     }
@@ -722,20 +744,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const [mList, gStats, recent, history] = await Promise.all([
           fetchAllMadrasahs(),
           fetchGlobalCounts(),
-          supabase.from('institutions').select('*').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL').order('created_at', { ascending: false }).limit(5),
+          supabase.from('institutions').select('*, student_count:students(count)').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL').order('created_at', { ascending: false }).limit(5),
           fetchTransactionHistory(['subscription']) // Dashboard only shows subscriptions
         ]);
         if (isMounted) {
-          setMadrasahs(mList.map(m => {
-            const existing = madrasahs.find(ex => ex.id === m.id);
-            return { 
-              ...m, 
-              student_count: existing?.student_count || 0, 
-              class_count: existing?.class_count || 0 
-            };
-          }));
+          setMadrasahs(mList);
           setGlobalStats(gStats);
-          setRecentInstitutions(recent.data || []);
+          setRecentInstitutions((recent.data || []).map(m => ({
+            ...m,
+            student_count: (m as any).student_count?.[0]?.count || 0
+          })));
           setTransactionHistory(history);
         }
       }
@@ -1766,9 +1784,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                      <button 
                          onClick={toggleDeactivationMode} 
                          disabled={isProcessingDeactivationToggle}
-                         className={`sm:hidden flex-1 h-12 flex items-center justify-center font-black rounded-[1.5rem] active:scale-95 transition-all text-xs border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
+                         className={`sm:hidden flex-1 h-12 px-4 flex items-center justify-center gap-2 font-black rounded-[1.5rem] active:scale-95 transition-all text-[10px] uppercase tracking-widest border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
                      >
-                        {isProcessingDeactivationToggle ? <Loader2 size={18} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={18} /> : <ToggleLeft size={18} />)}
+                        {isProcessingDeactivationToggle ? <Loader2 size={16} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={18} /> : <ToggleLeft size={18} />)}
+                        Mode
                      </button>
                      <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-[1.5rem] active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
                         {isSyncingSheet ? <Loader2 size={24} className="animate-spin" /> : <Database size={24} />}
@@ -1885,14 +1904,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
                           {m.institution_type === 'choching' ? 'Choching' : (m.institution_type || 'madrasah')}
                         </span>
+                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                          {m.student_count || 0} Students
+                        </span>
+                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600">
+                          {m.balance || 0} ৳
+                        </span>
                         {m.config_json?.modules?.voice_broadcast !== false && (
                           <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-500">
                             Voice
                           </span>
                         )}
-                        <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500">
-                          {m.balance || 0} ৳
-                        </span>
                       </div>
 
                       <div className="flex items-center gap-2 relative z-10">

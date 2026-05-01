@@ -117,15 +117,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    const isDark = madrasah?.theme === 'dark';
+    const bgColor = (loading || isDark) ? "#0F172A" : "#EBF5FF"; // Match Layout.tsx bg-[#EBF5FF]
+    
     if (themeColorMeta) {
-      if (loading) {
-        themeColorMeta.setAttribute("content", "#0F172A"); // Splash screen color
-      } else {
-        // Use a dark color for the status bar in both modes to ensure white icons are always visible
-        themeColorMeta.setAttribute("content", "#0F172A");
-      }
+      themeColorMeta.setAttribute("content", bgColor);
     }
-  }, [loading, session, madrasah, madrasah?.theme]);
+    document.body.style.backgroundColor = bgColor;
+  }, [loading, madrasah?.theme]);
 
   useEffect(() => {
     const handleStatusChange = () => {
