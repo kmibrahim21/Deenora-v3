@@ -30,8 +30,8 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
   const filteredInstitutionsInAssign = institutions.filter(inst => {
     const searchLower = instSearchInAssign.toLowerCase();
-    const nameMatch = inst.name?.toLowerCase().includes(searchLower);
-    const codeMatch = (inst.config_json?.institute_code || '').toLowerCase().includes(searchLower);
+    const nameMatch = String(inst.name || '').toLowerCase().includes(searchLower);
+    const codeMatch = String(inst.config_json?.institute_code || '').toLowerCase().includes(searchLower);
     return nameMatch || codeMatch;
   });
 

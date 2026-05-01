@@ -35,7 +35,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'madrasah' | 'school' | 'kindergarten' | 'choching'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'madrasah' | 'school' | 'kindergarten' | 'choching' | '200plus'>('all');
   const [visibleCount, setVisibleCount] = useState(30);
 
   const [view, setView] = useState<'list' | 'approvals' | 'details' | 'dashboard' | 'institutions'>(
@@ -170,6 +170,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [instVoiceTemplates, setInstVoiceTemplates] = useState<any[]>([]);
   const [fetchingTemplates, setFetchingTemplates] = useState(false);
   const [packages, setPackages] = useState<any[]>([]);
+  const [globalDeactivationMode, setGlobalDeactivationMode] = useState(false);
+  const [isProcessingDeactivationToggle, setIsProcessingDeactivationToggle] = useState(false);
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -632,12 +634,89 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     return data || [];
   };
 
+  const enforceAutoDeactivation = async () => {
+    const today = new Date();
+    // Start from May 2026 onwards
+    if (today.getFullYear() < 2026 || (today.getFullYear() === 2026 && today.getMonth() < 4)) {
+       return;
+    }
+    // Only deactivate after the 15th
+    if (today.getDate() <= 15) return;
+    
+    const currentMonthStr = today.toISOString().slice(0, 7);
+    
+    const { data: allActive } = await supabase.from('institutions').select('*').eq('is_active', true).eq('is_super_admin', false);
+    if (!allActive) return;
+    
+    for (const inst of allActive) {
+      if (inst.name === 'SYSTEM_GLOBAL_INTERNAL') continue;
+      const config = typeof inst.config_json === 'string' ? JSON.parse(inst.config_json) : (inst.config_json || {});
+      const paidMonths = config.paid_months || [];
+      if (!paidMonths.includes(currentMonthStr)) {
+         await supabase.from('institutions').update({ is_active: false }).eq('id', inst.id);
+      }
+    }
+  };
+
+  const toggleDeactivationMode = async () => {
+    setIsProcessingDeactivationToggle(true);
+    try {
+      const newVal = !globalDeactivationMode;
+      const { data: sysInsts } = await supabase.from('institutions').select('*').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+      
+      let sysId = sysInsts?.[0]?.id;
+      if (!sysId) {
+         // Create if missing
+         const { data: newSys } = await supabase.from('institutions').insert([{
+           name: 'SYSTEM_GLOBAL_INTERNAL',
+           institution_type: 'system',
+           is_active: false,
+           is_super_admin: false,
+           config_json: { auto_deactivation_enabled: newVal },
+           theme: 'default'
+         }]).select('id').single();
+         sysId = newSys?.id;
+      } else {
+         const conf = typeof sysInsts![0].config_json === 'string' ? JSON.parse(sysInsts![0].config_json) : (sysInsts![0].config_json || {});
+         conf.auto_deactivation_enabled = newVal;
+         await supabase.from('institutions').update({ config_json: conf }).eq('id', sysId);
+      }
+      
+      setGlobalDeactivationMode(newVal);
+      
+      if (newVal) {
+         await enforceAutoDeactivation();
+         await handleRefresh();
+      } else {
+         // Optionally activate all when turned off
+         await supabase.from('institutions').update({ is_active: true }).eq('is_super_admin', false);
+         await handleRefresh();
+      }
+    } catch(err: any) {
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: err.message });
+    } finally {
+      setIsProcessingDeactivationToggle(false);
+    }
+  };
+
   const initData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     let isMounted = true;
     try {
       // Always fetch packages to ensure latest rates
       fetchPackages();
+
+      const { data: sysInst } = await supabase.from('institutions').select('config_json').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+      let isAutoDeact = false;
+      if (sysInst && sysInst[0]) {
+         const conf = typeof sysInst[0].config_json === 'string' ? JSON.parse(sysInst[0].config_json) : (sysInst[0].config_json || {});
+         isAutoDeact = !!conf.auto_deactivation_enabled;
+         if (isMounted) setGlobalDeactivationMode(isAutoDeact);
+      }
+      
+      if (isAutoDeact) {
+         await enforceAutoDeactivation();
+      }
 
       if (view === 'list' || view === 'dashboard' || view === 'institutions') {
         const [mList, gStats, recent, history] = await Promise.all([
@@ -1361,7 +1440,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       (m.name || '').toLowerCase().includes(query) || 
       (m.phone || '').toLowerCase().includes(query) || 
       (config?.institute_code || '').toLowerCase().includes(query);
-    const matchesType = filterType === 'all' || (m.institution_type || 'madrasah') === filterType;
+    const matchesType = filterType === 'all' || 
+                        (filterType === '200plus' ? (m.student_count || 0) >= 200 : (m.institution_type || 'madrasah') === filterType);
     
     let matchesPayment = true;
     if (instPaymentFilter !== 'all') {
@@ -1650,6 +1730,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage {madrasahs.length} Institutions</p>
                   </div>
                   <div className="hidden sm:flex items-center gap-3">
+                    <button 
+                      onClick={toggleDeactivationMode} 
+                      disabled={isProcessingDeactivationToggle}
+                      title="Turn ON to auto deactivate unpaid institutions after 15th"
+                      className={`h-12 px-4 font-black rounded-2xl shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-widest border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
+                    >
+                      {isProcessingDeactivationToggle ? <Loader2 size={16} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={16} className="text-red-600" /> : <ToggleLeft size={16} />)}
+                      Deactivated Mode
+                    </button>
                     <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
                       <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
                     </button>
@@ -1673,8 +1762,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                    </div>
 
                    {/* Quick Action Icons */}
-                   <div className="flex items-center gap-2">
-                     <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`flex-1 sm:w-14 sm:h-14 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-[1.5rem] active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
+                   <div className="flex flex-wrap items-center gap-2">
+                     <button 
+                         onClick={toggleDeactivationMode} 
+                         disabled={isProcessingDeactivationToggle}
+                         className={`sm:hidden flex-1 h-12 flex items-center justify-center font-black rounded-[1.5rem] active:scale-95 transition-all text-xs border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
+                     >
+                        {isProcessingDeactivationToggle ? <Loader2 size={18} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={18} /> : <ToggleLeft size={18} />)}
+                     </button>
+                     <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-[1.5rem] active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
                         {isSyncingSheet ? <Loader2 size={24} className="animate-spin" /> : <Database size={24} />}
                      </button>
                      <button onClick={handleRefresh} className="sm:hidden w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-blue-500 rounded-[1.5rem] active:scale-95 transition-all">
@@ -1738,7 +1834,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     { id: 'madrasah', label: 'Madrasah' },
                     { id: 'school', label: 'School' },
                     { id: 'kindergarten', label: 'KG' },
-                    { id: 'choching', label: 'Choching' }
+                    { id: 'choching', label: 'Choching' },
+                    { id: '200plus', label: '২০০+ শিক্ষার্থী' }
                   ].map(type => (
                     <button 
                       key={type.id}
