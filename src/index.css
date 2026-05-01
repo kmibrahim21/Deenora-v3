@@ -62,12 +62,12 @@
 }
 
 html {
-  height: 100dvh;
+  height: 100%;
   width: 100%;
 }
 
 body {
-  height: 100dvh;
+  height: 100%;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -95,7 +95,7 @@ body {
 }
 
 #root {
-  height: 100dvh;
+  height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;

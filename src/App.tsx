@@ -117,14 +117,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    const isAuth = !session && !madrasah;
     const isDark = madrasah?.theme === 'dark';
-    const bgColor = (loading || isDark) ? "#0F172A" : "#EBF5FF"; // Match Layout.tsx bg-[#EBF5FF]
+    const bgColor = (loading || isAuth || isDark) ? "#0F172A" : "#EBF5FF"; // Match Layout.tsx bg-[#EBF5FF]
     
     if (themeColorMeta) {
       themeColorMeta.setAttribute("content", bgColor);
     }
     document.body.style.backgroundColor = bgColor;
-  }, [loading, madrasah?.theme]);
+  }, [loading, madrasah?.theme, session, madrasah]);
 
   useEffect(() => {
     const handleStatusChange = () => {
@@ -210,7 +211,11 @@ const App: React.FC = () => {
       </div>
     );
 
-  if (!session && !madrasah) return <Auth lang={lang} />;
+  if (!session && !madrasah) return (
+    <Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A]" />}>
+      <Auth lang={lang} />
+    </Suspense>
+  );
 
   const renderView = () => {
     const role = profile?.role || "accountant";
