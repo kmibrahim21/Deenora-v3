@@ -881,6 +881,17 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           </div>
                           <div>
                             <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
+                            {attendance[s.id] === 'late' && (
+                              <div className="flex items-center gap-2 mt-2 animate-in slide-in-from-top-1 fade-in duration-200">
+                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'আগমনের সময়:' : 'Arrival Time:'}</p>
+                                 <input 
+                                    type="time" 
+                                    value={arrivalTime[s.id] || ''} 
+                                    onChange={(e) => setArrivalTime(prev => ({...prev, [s.id]: e.target.value}))}
+                                    className={`text-xs px-2 py-1 rounded-lg border font-black outline-none ${isDark ? 'bg-slate-900 border-amber-500/30 text-amber-500' : 'bg-amber-50 border-amber-200 text-amber-600'}`}
+                                 />
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2 shrink-0 items-start">
@@ -1182,8 +1193,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
       {showSettingsModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
-            <div className={`p-8 border-b flex justify-between items-center relative overflow-hidden ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border-4 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
+            <div className={`p-8 border-b flex justify-between items-center relative overflow-hidden shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
               <div className="absolute top-0 left-0 w-1 h-full bg-[#2563EB]"></div>
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-slate-900 text-blue-400' : 'bg-white text-blue-600'}`}>
@@ -1204,7 +1215,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               </button>
             </div>
 
-            <div className="p-8 space-y-8">
+            <div className="p-8 space-y-8 overflow-y-auto">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Select Class for Sessions</label>
@@ -1321,7 +1332,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               </div>
             </div>
 
-            <div className={`p-8 border-t flex gap-4 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+            <div className={`p-8 border-t flex gap-4 shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
               <button 
                 onClick={() => setShowSettingsModal(false)}
                 className={`flex-1 h-14 font-black rounded-2xl border-2 active:scale-95 transition-all text-xs uppercase tracking-widest ${isDark ? 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
