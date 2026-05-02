@@ -52,7 +52,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late'>>({});
+  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | 'half_day'>>({});
+  const [arrivalTime, setArrivalTime] = useState<Record<string, string>>({});
   const [reportData, setReportData] = useState<any[]>([]);
   const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
   const [reportView, setReportView] = useState<'list' | 'analytics'>('list');
@@ -68,6 +69,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [settingsClassId, setSettingsClassId] = useState<string>('global');
   const [settingsSessions, setSettingsSessions] = useState<{ id: string; name: string }[]>([]);
   const [newSessionName, setNewSessionName] = useState('');
+  const [startTime, setStartTime] = useState(madrasah?.config_json?.attendance_settings?.start_time || '08:00');
+  const [endTime, setEndTime] = useState(madrasah?.config_json?.attendance_settings?.end_time || '14:00');
   const [halfDayTime, setHalfDayTime] = useState(madrasah?.config_json?.attendance_settings?.half_day_time || '12:00');
   const [fullDayTime, setFullDayTime] = useState(madrasah?.config_json?.attendance_settings?.full_day_time || '14:00');
   const [savingSettings, setSavingSettings] = useState(false);
@@ -299,12 +302,16 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
       if (finalStdData) {
         setStudents(finalStdData);
-        const initial: Record<string, 'present' | 'absent' | 'late'> = {};
+        const initial: Record<string, 'present' | 'absent' | 'late' | 'half_day'> = {};
+        const initialArrival: Record<string, string> = {};
+        
         finalStdData.forEach(s => {
           const existing = attData?.find(a => a.student_id === s.id);
           initial[s.id] = existing ? (existing.status as any) : 'present';
+          if (existing?.arrival_time) initialArrival[s.id] = existing.arrival_time;
         });
         setAttendance(initial);
+        setArrivalTime(initialArrival);
       }
     } catch (e: any) { 
       console.error('Attendance fetch error:', e);
@@ -354,8 +361,27 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     } finally { setLoading(false); }
   };
 
-  const setStatus = (sid: string, status: 'present' | 'absent' | 'late') => {
+  const computeLateMins = (arrTime: string | null | undefined) => {
+    const sTime = madrasah?.config_json?.attendance_settings?.start_time || '08:00';
+    if (!arrTime || !sTime) return 0;
+    const [sh, sm] = sTime.split(':').map(Number);
+    const [lh, lm] = arrTime.split(':').map(Number);
+    const mins = (lh * 60 + lm) - (sh * 60 + sm);
+    return mins > 0 ? mins : 0;
+  };
+
+  const setStatus = (sid: string, status: 'present' | 'absent' | 'late' | 'half_day') => {
     setAttendance(prev => ({ ...prev, [sid]: status }));
+    if (status === 'late' && !arrivalTime[sid]) {
+      const now = new Date();
+      const h = now.getHours().toString().padStart(2, '0');
+      const m = now.getMinutes().toString().padStart(2, '0');
+      setArrivalTime(prev => ({...prev, [sid]: `${h}:${m}`}));
+    } else if (status !== 'late') {
+      const newArrival = { ...arrivalTime };
+      delete newArrival[sid];
+      setArrivalTime(newArrival);
+    }
   };
 
   const handleSave = async () => {
@@ -379,6 +405,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         status: status,
         date: date,
         session: selectedSession,
+        arrival_time: status === 'late' ? arrivalTime[sid] : null,
+        late_minutes: status === 'late' ? computeLateMins(arrivalTime[sid]) : null,
         recorded_by: userId,
         academic_year_id: activeYearId || null
       }));
@@ -612,6 +640,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         ...madrasah.config_json,
         attendance_settings: {
           ...currentSettings,
+          start_time: startTime,
+          end_time: endTime,
           half_day_time: halfDayTime,
           full_day_time: fullDayTime,
         }
@@ -849,12 +879,25 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                             <span className="text-[8px] font-black opacity-40 leading-none">ROLL</span>
                             <span className="text-base font-black leading-none mt-1">{s.roll || '-'}</span>
                           </div>
-                          <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
+                          <div>
+                            <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
+                          </div>
                         </div>
-                        <div className="flex gap-2 shrink-0">
+                        <div className="flex gap-2 shrink-0 items-start">
                            <button onClick={() => setStatus(s.id, 'present')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={20}/></button>
                            <button onClick={() => setStatus(s.id, 'absent')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={20}/></button>
-                           <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={20}/></button>
+                           <div className="flex flex-col items-center">
+                             <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late">
+                                {attendance[s.id] === 'late' ? (
+                                 <span className="text-base font-black">{computeLateMins(arrivalTime[s.id])}</span>
+                                ) : <Clock size={20}/>}
+                             </button>
+                             {attendance[s.id] === 'late' && (
+                               <span className="text-[8px] font-black uppercase tracking-wider text-amber-500 mt-1 whitespace-nowrap animate-in fade-in slide-in-from-top-1">
+                                 {lang === 'bn' ? 'মিনিট' : 'MIN'}
+                               </span>
+                             )}
+                           </div>
                         </div>
                      </div>
                    ))}
@@ -1135,6 +1178,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           </>
       )}
       
+
+
       {showSettingsModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
@@ -1186,6 +1231,27 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                         <RefreshCw size={20} />
                       </button>
                     )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mt-6">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শুরুর সময়' : 'Start Time'}</label>
+                    <input 
+                      type="time" 
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className={`w-full h-14 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'ছুটির সময়' : 'End Time'}</label>
+                    <input 
+                      type="time" 
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className={`w-full h-14 px-4 border-2 rounded-2xl font-black outline-none transition-all text-sm ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500/30'}`}
+                    />
                   </div>
                 </div>
 

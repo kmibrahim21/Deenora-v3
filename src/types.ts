@@ -39,6 +39,8 @@ export interface Institution {
     academic_year_start?: string;
     active_academic_year_id?: string;
     attendance_settings?: {
+      start_time?: string;
+      end_time?: string;
       half_day_time?: string;
       full_day_time?: string;
       sessions?: { id: string; name: string }[];
@@ -244,9 +246,11 @@ export interface Attendance {
   institution_id: string;
   student_id: string;
   class_id?: string;
-  status: 'present' | 'absent' | 'late';
+  status: 'present' | 'absent' | 'late' | 'half_day';
   date: string;
   session?: string;
+  late_minutes?: number;
+  arrival_time?: string;
   recorded_by: string;
   academic_year_id?: string;
   students?: Student;
