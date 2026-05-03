@@ -13,9 +13,11 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
   const isBangla = lang === 'bn';
   const t = {
     title: isBangla ? 'শ্রেণি ভিত্তিক ফলাফল বিবরণী' : 'Class Result Summary',
+    rank: isBangla ? 'মেধাস্থান' : 'Rank',
     roll: isBangla ? 'রোল' : 'Roll',
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     total: isBangla ? 'মোট' : 'Total',
+    avg: isBangla ? 'গড়' : 'Avg',
     gpa: isBangla ? 'জিপিএ' : 'GPA',
     grade: isBangla ? 'গ্রেড' : 'Grade',
     exam: isBangla ? 'পরীক্ষা' : 'Exam',
@@ -23,7 +25,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
   };
 
   return (
-    <div className="w-[794px] min-h-[1123px] p-12 bg-white font-noto text-slate-800 relative overflow-hidden">
+    <div className="w-[1123px] min-h-[794px] p-12 bg-white font-noto text-slate-800 relative overflow-hidden">
       {/* Decorative Border */}
       <div className="absolute inset-4 border border-slate-200 pointer-events-none"></div>
       <div className="absolute inset-6 border-2 border-slate-100 pointer-events-none"></div>
@@ -57,76 +59,50 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
       
       {/* Table */}
       <div className="overflow-hidden rounded-[2rem] border border-slate-200 shadow-sm relative z-10 bg-white">
-        <table className="w-full border-collapse text-[11px]">
+        <table className="w-full border-collapse text-[10px]">
           <thead>
             <tr className="bg-[#1E3A8A] text-white">
-              <th className="p-4 text-left font-black uppercase tracking-widest border-r border-white/10 w-16">{t.roll}</th>
-              <th className="p-4 text-left font-black uppercase tracking-widest border-r border-white/10 min-w-[200px]">{t.name}</th>
+              <th className="px-2 py-3 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>
+              <th className="px-2 py-3 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
               {subjects.map(s => (
-                <th key={s.id} className="p-4 text-center font-black uppercase tracking-widest border-r border-white/10">
-                  {s.subject_name}
+                <th key={s.id} className="px-1 py-3 text-center font-black uppercase tracking-widest border-r border-white/10">
+                  {s.subject_name.substring(0, 10)}
                 </th>
               ))}
-              <th className="p-4 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900">{t.total}</th>
-              <th className="p-4 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900">{t.gpa}</th>
-              <th className="p-4 text-center font-black uppercase tracking-widest bg-blue-900">{t.grade}</th>
+              <th className="px-1 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.total}</th>
+              <th className="px-1 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.avg}</th>
+              <th className="px-2 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
+              <th className="px-2 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.grade}</th>
+              <th className="px-1 py-3 text-center font-black uppercase tracking-widest bg-blue-900 w-10">{t.rank}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {students.map((student, idx) => {
               const studentMarks = marksData[student.id] || {};
-              let total = 0;
-              let count = 0;
-              let totalPossible = 0;
-              let hasFailed = false;
-
-              subjects.forEach(s => {
-                const m = studentMarks[s.id];
-                const fullMarkValue = Number(s.full_marks || 100);
-                const passMarkValue = Number(s.pass_marks || 33);
-                totalPossible += fullMarkValue;
-
-                if (m !== undefined && m !== '') {
-                  const markVal = Number(m);
-                  total += markVal;
-                  count++;
-                  if (markVal < passMarkValue) hasFailed = true;
-                } else {
-                  // If marks are missing, typically it counts as failed or skipped
-                  hasFailed = true;
-                }
-              });
-              
-              const avgPercentage = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
-              
-              const getGradeInfo = (percentage: number, failed: boolean) => {
-                if (failed) return { gpa: '0.00', grade: 'F' };
-                if (percentage >= 80) return { gpa: '5.00', grade: 'A+' };
-                if (percentage >= 70) return { gpa: '4.00', grade: 'A' };
-                if (percentage >= 60) return { gpa: '3.50', grade: 'A-' };
-                if (percentage >= 50) return { gpa: '3.00', grade: 'B' };
-                if (percentage >= 40) return { gpa: '2.00', grade: 'C' };
-                if (percentage >= 33) return { gpa: '1.00', grade: 'D' };
-                return { gpa: '0.00', grade: 'F' };
-              };
-              const { gpa, grade } = getGradeInfo(avgPercentage, hasFailed);
+              const total = student._total || 0;
+              const avg = student._avg || '0.00';
+              const gpa = student._gpa || '0.00';
+              const grade = student._grade || 'F';
+              const rank = student._rank || '-';
 
               return (
                 <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                  <td className="p-4 font-mono font-black text-slate-400 border-r border-slate-100">{student.roll}</td>
-                  <td className="p-4 font-black text-slate-700 border-r border-slate-100 uppercase tracking-tight">{student.student_name}</td>
+                  <td className="px-2 py-3 font-mono font-black text-slate-400 border-r border-slate-100">{student.roll}</td>
+                  <td className="px-2 py-3 font-black text-slate-700 border-r border-slate-100 uppercase tracking-tight truncate max-w-[120px]">{student.student_name}</td>
                   {subjects.map(s => (
-                    <td key={s.id} className="p-4 text-center font-mono font-bold text-slate-600 border-r border-slate-100">
+                    <td key={s.id} className="px-1 py-3 text-center font-mono font-bold text-slate-600 border-r border-slate-100">
                       {studentMarks[s.id] || '0'}
                     </td>
                   ))}
-                  <td className="p-4 text-center font-mono font-black text-[#2563EB] border-r border-slate-100 bg-blue-50/30">{total}</td>
-                  <td className="p-4 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30">{gpa}</td>
-                  <td className={`p-4 text-center font-black bg-slate-50/30 ${grade === 'F' ? 'text-red-500' : 'text-emerald-600'}`}>
-                    <span className="inline-flex items-center justify-center w-10 h-8 rounded-lg bg-white border border-slate-100 shadow-sm">
+                  <td className="px-2 py-3 text-center font-mono font-black text-[#2563EB] border-r border-slate-100 bg-blue-50/30">{total}</td>
+                  <td className="px-1 py-3 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30">{avg}%</td>
+                  <td className="px-2 py-3 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30">{gpa}</td>
+                  <td className={`px-2 py-3 text-center font-black border-r border-white/10 bg-slate-50/30 ${grade === 'F' ? 'text-red-500' : 'text-emerald-600'}`}>
+                    <span className="inline-flex items-center justify-center w-8 h-6 rounded-lg bg-white border border-slate-100 shadow-sm">
                         {grade}
                     </span>
                   </td>
+                  <td className="px-1 py-3 text-center font-mono font-black text-[#2563EB] bg-blue-50/20">{rank}</td>
                 </tr>
               );
             })}

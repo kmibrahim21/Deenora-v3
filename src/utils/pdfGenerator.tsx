@@ -208,6 +208,80 @@ export const generateClassResultPDF = async (
     madrasah: { name: string },
     lang: 'en' | 'bn' = 'en'
 ) => {
+    // Pre-calculate totals, GPA, rank
+    const calculatedStudents = students.map(student => {
+        const studentMarks = marksData[student.id] || {};
+        let total = 0;
+        let totalPossible = 0;
+        let hasFailed = false;
+
+        subjects.forEach(s => {
+            const m = studentMarks[s.id];
+            const fullMarkValue = Number(s.full_marks || 100);
+            const passMarkValue = Number(s.pass_marks || 33);
+            totalPossible += fullMarkValue;
+
+            if (m !== undefined && m !== '') {
+                const markVal = Number(m);
+                total += markVal;
+                if (markVal < passMarkValue) hasFailed = true;
+            } else {
+                hasFailed = true;
+            }
+        });
+        
+        const avgPercentage = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
+        
+        let gpa = '0.00';
+        let grade = 'F';
+        if (!hasFailed) {
+            if (avgPercentage >= 80) { gpa = '5.00'; grade = 'A+'; }
+            else if (avgPercentage >= 70) { gpa = '4.00'; grade = 'A'; }
+            else if (avgPercentage >= 60) { gpa = '3.50'; grade = 'A-'; }
+            else if (avgPercentage >= 50) { gpa = '3.00'; grade = 'B'; }
+            else if (avgPercentage >= 40) { gpa = '2.00'; grade = 'C'; }
+            else if (avgPercentage >= 33) { gpa = '1.00'; grade = 'D'; }
+        }
+
+        return {
+            ...student,
+            _total: total,
+            _avg: avgPercentage.toFixed(2),
+            _gpa: gpa,
+            _grade: grade,
+            _hasFailed: hasFailed
+        };
+    });
+
+    // Sort by rank logic
+    calculatedStudents.sort((a, b) => {
+        if (a._hasFailed && !b._hasFailed) return 1;
+        if (!a._hasFailed && b._hasFailed) return -1;
+        return b._total - a._total; // Highest total first
+    });
+
+    let currentRank = 1;
+    calculatedStudents.forEach((std, index) => {
+        if (index > 0) {
+            const prev = calculatedStudents[index - 1];
+            if (prev._hasFailed === std._hasFailed && prev._total === std._total) {
+                std._rank = prev._rank;
+            } else {
+                std._rank = currentRank;
+            }
+        } else {
+            std._rank = currentRank;
+        }
+        currentRank++;
+    });
+
+    // Sort back by roll for the sheet
+    calculatedStudents.sort((a, b) => {
+        const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
+        const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || 0 : (b.roll || 0);
+        return rollA - rollB;
+    });
+
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -218,8 +292,8 @@ export const generateClassResultPDF = async (
     // Chunk students for multi-page support
     const STUDENTS_PER_PAGE = 20; 
     const chunks = [];
-    for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
-        chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
+    for (let i = 0; i < calculatedStudents.length; i += STUDENTS_PER_PAGE) {
+        chunks.push(calculatedStudents.slice(i, i + STUDENTS_PER_PAGE));
     }
 
     await new Promise<void>((resolve) => {
@@ -235,7 +309,7 @@ export const generateClassResultPDF = async (
         setTimeout(resolve, 800);
     });
 
-    const doc = new jsPDF('p', 'mm', 'a4');
+    const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
@@ -246,8 +320,8 @@ export const generateClassResultPDF = async (
             const imgData = await toPng(pages[i] as HTMLElement, {
                 pixelRatio: 2,
                 backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
+                width: 1123,
+                height: 794,
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -393,7 +467,7 @@ export const generateFinalResultPDF = async (
         setTimeout(resolve, 800);
     });
 
-    const doc = new jsPDF('p', 'mm', 'a4'); // Portrait
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
@@ -404,8 +478,8 @@ export const generateFinalResultPDF = async (
             const imgData = await toPng(pages[i] as HTMLElement, {
                 pixelRatio: 2,
                 backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
+                width: 1123,
+                height: 794,
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
