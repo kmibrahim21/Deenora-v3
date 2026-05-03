@@ -555,15 +555,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           if (!sNumber) throw new Error('No voice sender ID configured');
 
           // Ensure sender is in 8801... format if it is a mobile number
+          sNumber = sNumber.toString();
           const sDigits = sNumber.replace(/[^0-9]/g, '');
           if (sDigits.length === 11 && sDigits.startsWith('01')) {
             sNumber = '88' + sDigits;
           }
 
           const requestId = crypto.randomUUID();
+          const voiceName = voice.provider_voice_name || voice.title || voice.name || voice.voice_name || voice.id;
+          
           const payload = {
             request_id: requestId,
-            voice: voice.provider_voice_name || voice.title,
+            voice: voiceName,
             sender: sNumber,
             phone_numbers: phoneNumbers,
             retry: 1,
@@ -578,8 +581,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           });
 
           if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to initiate voice call');
+            const errorData = await response.json().catch(() => ({}));
+            let errMessage = errorData.error || errorData.message || 'Failed to initiate voice call';
+            if (errorData.details) {
+                errMessage += ' - ' + (typeof errorData.details === 'string' ? errorData.details : JSON.stringify(errorData.details));
+            }
+            throw new Error(errMessage);
           }
 
           const result = await response.json();

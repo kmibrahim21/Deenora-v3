@@ -969,7 +969,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to initiate voice call');
+          let errMessage = errData.error || errData.message || 'Failed to initiate voice call';
+          if (errData.details) {
+              errMessage += ' - ' + (typeof errData.details === 'string' ? errData.details : JSON.stringify(errData.details));
+          }
+          throw new Error(errMessage);
         }
 
         setStatusModal({ 
