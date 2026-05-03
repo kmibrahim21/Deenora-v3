@@ -748,7 +748,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       // Normalize phone numbers: 11 digits (01...) for Awaj API
-      const normalizedPhoneNumbers = phoneNumbers
+      const uniqueNormalizedPhoneNumbers = [...new Set(phoneNumbers
         .map(p => {
           if (!p) return '';
           const digits = p.replace(/[^0-9]/g, '');
@@ -757,14 +757,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
           return digits;
         })
-        .filter(p => p && p.length === 11 && p.startsWith('01'));
+        .filter(p => p && p.length === 11 && p.startsWith('01')))];
 
-      if (normalizedPhoneNumbers.length === 0) {
+      if (uniqueNormalizedPhoneNumbers.length === 0) {
         throw new Error('No valid 11-digit phone numbers found to retry.');
       }
 
       // Calculate cost based on normalized subscribers
-      const estimatedCost = normalizedPhoneNumbers.length * (madrasah?.voice_rate || 0.5);
+      const estimatedCost = uniqueNormalizedPhoneNumbers.length * (madrasah?.voice_rate || 0.5);
 
       if (walletBalance < estimatedCost) {
         setStatusModal({
@@ -781,7 +781,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         request_id: requestId,
         voice: voiceName, 
         sender: sNumber,
-        phone_numbers: normalizedPhoneNumbers,
+        phone_numbers: uniqueNormalizedPhoneNumbers,
         retry: 1,
         retry_count: 1,
         retries: 1

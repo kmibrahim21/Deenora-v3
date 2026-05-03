@@ -501,7 +501,26 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       return;
     }
 
-    const estimatedCost = absents.length * voiceRate;
+    const uniquePhoneNumbers = [...new Set(absents
+      .map(s => {
+        let p = s.guardian_phone || '';
+        const digits = p.replace(/[^0-9]/g, '');
+        if (digits.length === 11 && digits.startsWith('01')) return digits;
+        if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
+        if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+        return '';
+      })
+      .filter(p => p.length === 11)
+    )];
+
+    if (uniquePhoneNumbers.length === 0) {
+      setErrorTitle(lang === 'bn' ? 'অবৈধ ফোন নম্বর' : 'Invalid phone numbers');
+      setErrorDetails(lang === 'bn' ? 'কোনো অভিভাবকের সঠিক ফোন নম্বর পাওয়া যায়নি। (11 ডিজিট)' : 'No valid 11-digit guardian phone numbers found.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    const estimatedCost = uniquePhoneNumbers.length * voiceRate;
     if (walletBalance < estimatedCost) {
       setErrorTitle(lang === 'bn' ? 'অপর্যাপ্ত ব্যালেন্স' : 'Insufficient Balance');
       setErrorDetails(lang === 'bn' ? `আপনার ব্যালেন্স কম। প্রয়োজন: ${estimatedCost} ৳` : `Insufficient balance. Required: ${estimatedCost} ৳`);
@@ -512,8 +531,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setConfirmData({
       title: lang === 'bn' ? 'ভয়েস কল এলার্ট' : 'Voice Call Alert',
       message: lang === 'bn' 
-        ? `${absents.length} জন অভিভাবককে অনুপস্থিতি ভয়েস কল দিতে চান? (খরচ: ${estimatedCost} ৳)` 
-        : `Send voice alerts to ${absents.length} guardians? (Approx cost: ${estimatedCost} ৳)`,
+        ? `${uniquePhoneNumbers.length} জন অভিভাবক-কে অনুপস্থিতি ভয়েস কল দিতে চান? (খরচ: ${estimatedCost} ৳)` 
+        : `Send voice alerts to ${uniquePhoneNumbers.length} guardians? (Approx cost: ${estimatedCost} ৳)`,
       icon: 'voice',
       color: 'emerald',
       action: async () => {
@@ -523,16 +542,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           const voice = voiceTemplates.find(v => v.id === selectedVoiceTemplateId);
           if (!voice) throw new Error('Voice template not found');
 
-          const phoneNumbers = absents
-            .map(s => {
-              let p = s.guardian_phone || '';
-              const digits = p.replace(/[^0-9]/g, '');
-              if (digits.length === 11 && digits.startsWith('01')) return digits;
-              if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
-              if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
-              return '';
-            })
-            .filter(p => p.length === 11);
+          // phoneNumbers is already uniquePhoneNumbers from above
+          const phoneNumbers = uniquePhoneNumbers;
 
           if (phoneNumbers.length === 0) throw new Error('No valid phone numbers found');
 

@@ -420,7 +420,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       const requestId = 'fee_' + Math.random().toString(36).substr(2, 9);
 
       // Normalize phone numbers: 11 digits (01...)
-      const normalizedPhoneNumbers = phoneNumbers
+      const uniqueNormalizedPhoneNumbers = [...new Set(phoneNumbers
         .map(phone => {
           if (!phone) return '';
           const digits = phone.replace(/[^0-9]/g, '');
@@ -429,17 +429,23 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
           if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
           return digits;
         })
-        .filter(p => p && p.length === 11 && p.startsWith('01'));
+        .filter(p => p && p.length === 11 && p.startsWith('01')))];
 
-      if (normalizedPhoneNumbers.length === 0) {
+      if (uniqueNormalizedPhoneNumbers.length === 0) {
         throw new Error(lang === 'bn' ? 'কোনো সঠিক মোবাইল নম্বর (০১৭xxx...) পাওয়া যায়নি।' : 'No valid 11-digit phone numbers (01...) found.');
+      }
+
+      // Re-evaluate estimation by unique length
+      const actualEstimatedCost = uniqueNormalizedPhoneNumbers.length * voiceRate;
+      if (instData.balance < actualEstimatedCost) {
+        throw new Error(lang === 'bn' ? `পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজন: ${actualEstimatedCost} ৳, আছে: ${instData.balance || 0} ৳` : `Insufficient balance. Required: ${actualEstimatedCost} ৳, Available: ${instData.balance || 0} ৳`);
       }
 
       const payload = {
         request_id: requestId,
         voice: voiceName, 
         sender: sNumber,
-        phone_numbers: normalizedPhoneNumbers,
+        phone_numbers: uniqueNormalizedPhoneNumbers,
         retry: 1,
         retry_count: 1,
         retries: 1
@@ -466,7 +472,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       // Deduct balance
       const { error: deductError } = await supabase.rpc('deduct_balance', {
         p_institution_id: institutionId,
-        p_amount: estimatedCost
+        p_amount: actualEstimatedCost
       });
       if (deductError) throw deductError;
 
@@ -474,8 +480,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       await supabase.from('voice_broadcasts').insert({
         institution_id: institutionId,
         voice_template_id: selectedVoiceId,
-        total_numbers: phoneNumbers.length,
-        estimated_cost: estimatedCost,
+        total_numbers: uniqueNormalizedPhoneNumbers.length,
+        estimated_cost: actualEstimatedCost,
         status: 'pending',
         provider_campaign_id: campaignId.toString()
       });

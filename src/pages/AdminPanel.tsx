@@ -947,12 +947,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           voiceName = voice.provider_voice_name || voice.title;
         }
 
-        const targetPhones = targets.map(inst => {
+        const targetPhones = [...new Set(targets.map(inst => {
           const digits = inst.phone!.replace(/[^0-9]/g, '');
+          if (digits.length === 11 && digits.startsWith('01')) return digits;
           if (digits.length === 13 && digits.startsWith('880')) return digits.substring(2);
           if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
           return digits;
-        });
+        }).filter(p => p.length === 11))];
 
         const payload = {
           request_id: crypto.randomUUID(),
