@@ -97,6 +97,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, already_refunded: true, message: 'Refund already processed for this campaign' });
     }
 
+    // Generate deterministic UUID to prevent race conditions on insert
+    const crypto = await import('crypto');
+    const hash = crypto.createHash('md5').update(refundTxId).digest('hex');
+    const deterministicId = `${hash.substring(0,8)}-${hash.substring(8,12)}-4${hash.substring(13,16)}-a${hash.substring(17,20)}-${hash.substring(20,32)}`;
+
     // 3. Fetch logs from Awaj API
     const headers = getAwajHeaders();
     let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${targetCampaignId}/result`, { headers: headers as any });
@@ -183,8 +188,15 @@ export default async function handler(req, res) {
       campaignTotalSent = logs.length;
     }
 
-    const droppedCalls = Math.max(0, campaignTotalSent - logs.length);
-    const totalFailuresToRefund = failedLogs.length + droppedCalls;
+    if (!isRetry && campaignTotalSent > totalSentOriginal) {
+       campaignTotalSent = totalSentOriginal;
+    }
+
+    let droppedCalls = Math.max(0, campaignTotalSent - logs.length);
+    let totalFailuresToRefund = Math.min(failedLogs.length + droppedCalls, campaignTotalSent);
+    if (!isRetry && totalFailuresToRefund > totalSentOriginal) {
+       totalFailuresToRefund = totalSentOriginal;
+    }
 
     if (totalFailuresToRefund === 0) {
       return res.status(200).json({ 
@@ -208,6 +220,7 @@ export default async function handler(req, res) {
 
     // 6. Insert Transaction Record FIRST (fail fast on duplicate)
     const txData: any = {
+      id: deterministicId,
       institution_id: institutionId,
       amount: refundAmount,
       transaction_id: refundTxId,

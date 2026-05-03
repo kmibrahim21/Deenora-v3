@@ -10,13 +10,8 @@ const supabaseAdmin = createClient(
 
 async function run() {
   const sql = `
-    -- ১. transactions টেবিলের amount কলামকে numeric এ পরিবর্তন করা
-    ALTER TABLE transactions 
-    ALTER COLUMN amount TYPE numeric(12, 2);
-
-    -- ২. institutions টেবিলের balance কলামকে numeric এ পরিবর্তন করা (যদি এটিও integer হয়)
-    ALTER TABLE institutions 
-    ALTER COLUMN balance TYPE numeric(12, 2);
+    -- Make transaction_id unique
+    CREATE UNIQUE INDEX IF NOT EXISTS unique_transaction_id ON transactions(transaction_id);
   `;
   
   console.log('Running migration to fix column types...');
