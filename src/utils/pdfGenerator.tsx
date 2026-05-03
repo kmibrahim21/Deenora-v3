@@ -70,6 +70,7 @@ export const generateAttendanceReportPDF = async (
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
     document.body.appendChild(container);
     const root = createRoot(container);
     
@@ -114,6 +115,7 @@ export const generateSeatPlanPDF = async (
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
     document.body.appendChild(container);
     const root = createRoot(container);
     
@@ -209,11 +211,12 @@ export const generateClassResultPDF = async (
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
     document.body.appendChild(container);
     const root = createRoot(container);
     
     // Chunk students for multi-page support
-    const STUDENTS_PER_PAGE = 10; 
+    const STUDENTS_PER_PAGE = 20; 
     const chunks = [];
     for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
         chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
@@ -232,7 +235,7 @@ export const generateClassResultPDF = async (
         setTimeout(resolve, 800);
     });
 
-    const doc = new jsPDF('l', 'mm', 'a4');
+    const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
@@ -243,8 +246,8 @@ export const generateClassResultPDF = async (
             const imgData = await toPng(pages[i] as HTMLElement, {
                 pixelRatio: 2,
                 backgroundColor: '#ffffff',
-                width: 1123,
-                height: 794,
+                width: 794,
+                height: 1123,
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -268,6 +271,7 @@ export const generateClassFeeReportPDF = async (
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
     document.body.appendChild(container);
     const root = createRoot(container);
     
@@ -282,7 +286,7 @@ export const generateClassFeeReportPDF = async (
         root.render(
             <div id="pdf-wrapper">
                 {chunks.map((chunk, idx) => (
-                    <div key={idx}>
+                    <div key={idx} className="pdf-page-break">
                         <ClassFeeReportTemplate className={className} month={month} students={chunk} madrasah={madrasah} lang={lang} />
                     </div>
                 ))}
@@ -365,11 +369,12 @@ export const generateFinalResultPDF = async (
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
     document.body.appendChild(container);
     const root = createRoot(container);
     
     // Chunk students for multi-page support
-    const STUDENTS_PER_PAGE = 10; 
+    const STUDENTS_PER_PAGE = 20; 
     const chunks = [];
     for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
         chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
@@ -388,7 +393,7 @@ export const generateFinalResultPDF = async (
         setTimeout(resolve, 800);
     });
 
-    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
+    const doc = new jsPDF('p', 'mm', 'a4'); // Portrait
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
@@ -399,8 +404,8 @@ export const generateFinalResultPDF = async (
             const imgData = await toPng(pages[i] as HTMLElement, {
                 pixelRatio: 2,
                 backgroundColor: '#ffffff',
-                width: 1123,
-                height: 794,
+                width: 794,
+                height: 1123,
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -425,6 +430,7 @@ export const generateAccountingReportPDF = async (
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
     document.body.appendChild(container);
     const root = createRoot(container);
     

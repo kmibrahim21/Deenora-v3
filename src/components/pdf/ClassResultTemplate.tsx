@@ -23,7 +23,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
   };
 
   return (
-    <div className="w-[1123px] min-h-[794px] p-12 bg-white font-noto text-slate-800 relative overflow-hidden">
+    <div className="w-[794px] min-h-[1123px] p-12 bg-white font-noto text-slate-800 relative overflow-hidden">
       {/* Decorative Border */}
       <div className="absolute inset-4 border border-slate-200 pointer-events-none"></div>
       <div className="absolute inset-6 border-2 border-slate-100 pointer-events-none"></div>

@@ -23,7 +23,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
   };
 
   return (
-    <div className="w-[1123px] min-h-[794px] p-10 bg-white font-noto text-slate-800 border-[8px] border-slate-100">
+    <div className="w-[794px] min-h-[1123px] p-10 bg-white font-noto text-slate-800 border-[8px] border-slate-100">
       {/* Header */}
       <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
         <h1 className="text-4xl font-black text-slate-900 mb-1 uppercase tracking-tight">{madrasah.name}</h1>
