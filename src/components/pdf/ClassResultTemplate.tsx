@@ -36,9 +36,9 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
       </div>
 
       {/* Header */}
-      <div className="text-center mb-10 relative z-10">
+      <div className="text-center mb-4 relative z-10">
         <h1 className="text-4xl font-black text-slate-900 mb-2 uppercase tracking-tight leading-tight">{madrasah.name}</h1>
-        <div className="inline-flex items-center gap-4 mb-4">
+        <div className="inline-flex items-center gap-4 mb-2">
             <div className="h-[1px] w-12 bg-slate-200"></div>
             <div className="px-8 py-2 bg-blue-600 rounded-full text-sm font-black uppercase tracking-[0.3em] text-white shadow-lg shadow-blue-100">
                 {t.title}
@@ -62,18 +62,18 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
         <table className="w-full border-collapse text-[10px]">
           <thead>
             <tr className="bg-[#1E3A8A] text-white">
-              <th className="px-2 py-3 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>
-              <th className="px-2 py-3 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
+              <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>
+              <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
               {subjects.map(s => (
-                <th key={s.id} className="px-1 py-3 text-center font-black uppercase tracking-widest border-r border-white/10">
+                <th key={s.id} className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10">
                   {s.subject_name.substring(0, 10)}
                 </th>
               ))}
-              <th className="px-1 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.total}</th>
-              <th className="px-1 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.avg}</th>
-              <th className="px-2 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
-              <th className="px-2 py-3 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.grade}</th>
-              <th className="px-1 py-3 text-center font-black uppercase tracking-widest bg-blue-900 w-10">{t.rank}</th>
+              <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.total}</th>
+              <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.avg}</th>
+              <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
+              <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.grade}</th>
+              <th className="px-1 py-2 text-center font-black uppercase tracking-widest bg-blue-900 w-10">{t.rank}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -87,22 +87,22 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
 
               return (
                 <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                  <td className="px-2 py-3 font-mono font-black text-slate-400 border-r border-slate-100">{student.roll}</td>
-                  <td className="px-2 py-3 font-black text-slate-700 border-r border-slate-100 uppercase tracking-tight truncate max-w-[120px]">{student.student_name}</td>
+                  <td className="px-2 py-1 font-mono font-black text-slate-400 border-r border-slate-100">{student.roll}</td>
+                  <td className="px-2 py-1 font-black text-slate-700 border-r border-slate-100 uppercase tracking-tight truncate max-w-[120px]">{student.student_name}</td>
                   {subjects.map(s => (
-                    <td key={s.id} className="px-1 py-3 text-center font-mono font-bold text-slate-600 border-r border-slate-100">
+                    <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-600 border-r border-slate-100">
                       {studentMarks[s.id] || '0'}
                     </td>
                   ))}
-                  <td className="px-2 py-3 text-center font-mono font-black text-[#2563EB] border-r border-slate-100 bg-blue-50/30">{total}</td>
-                  <td className="px-1 py-3 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30">{avg}%</td>
-                  <td className="px-2 py-3 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30">{gpa}</td>
-                  <td className={`px-2 py-3 text-center font-black border-r border-white/10 bg-slate-50/30 ${grade === 'F' ? 'text-red-500' : 'text-emerald-600'}`}>
+                  <td className="px-2 py-1 text-center font-mono font-black text-[#2563EB] border-r border-slate-100 bg-blue-50/30">{total}</td>
+                  <td className="px-1 py-1 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30">{avg}%</td>
+                  <td className="px-2 py-1 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30">{gpa}</td>
+                  <td className={`px-2 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 ${grade === 'F' ? 'text-red-500' : 'text-emerald-600'}`}>
                     <span className="inline-flex items-center justify-center w-8 h-6 rounded-lg bg-white border border-slate-100 shadow-sm">
                         {grade}
                     </span>
                   </td>
-                  <td className="px-1 py-3 text-center font-mono font-black text-[#2563EB] bg-blue-50/20">{rank}</td>
+                  <td className="px-1 py-1 text-center font-mono font-black text-[#2563EB] bg-blue-50/20">{rank}</td>
                 </tr>
               );
             })}
