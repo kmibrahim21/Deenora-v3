@@ -58,15 +58,17 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
       </div>
       
       {/* Table */}
-      <div className="overflow-hidden rounded-[2rem] border border-slate-200 shadow-sm relative z-10 bg-white">
+      <div className="overflow-hidden rounded-sm border border-slate-200 shadow-sm relative z-10 bg-white">
         <table className="w-full border-collapse text-[10px]">
           <thead>
             <tr className="bg-[#1E3A8A] text-white">
               <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>
               <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
               {subjects.map(s => (
-                <th key={s.id} className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10">
-                  {s.subject_name.substring(0, 10)}
+                <th key={s.id} className="px-1 py-1 text-center border-r border-white/10">
+                  <div className="mx-auto font-black uppercase tracking-widest text-[8px] max-w-[75px] leading-tight break-words whitespace-normal text-center">
+                    {s.subject_name}
+                  </div>
                 </th>
               ))}
               <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.total}</th>

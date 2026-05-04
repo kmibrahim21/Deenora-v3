@@ -35,15 +35,17 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
       </div>
       
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 shadow-sm relative z-10 bg-white">
+      <div className="overflow-hidden rounded-sm border border-slate-200 shadow-sm relative z-10 bg-white">
         <table className="w-full border-collapse text-[10px]">
           <thead>
             <tr className="bg-slate-900 text-white">
               <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 w-12">{t.roll}</th>
               <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-slate-700 w-32">{t.name}</th>
               {subjects.map(s => (
-                <th key={s} className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700">
-                  {s.substring(0, 8)}
+                <th key={s} className="px-1 py-1 text-center border-r border-slate-700">
+                  <div className="mx-auto font-black uppercase tracking-widest text-[8px] max-w-[75px] leading-tight break-words whitespace-normal text-center">
+                    {s}
+                  </div>
                 </th>
               ))}
               <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.total}</th>
