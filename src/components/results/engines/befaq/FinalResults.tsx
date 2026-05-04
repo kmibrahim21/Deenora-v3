@@ -78,10 +78,24 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
     }
   };
 
-  const fetchResults = () => {
-    const saved = localStorage.getItem(`befaq_final_results_${madrasah?.id}`);
-    if (saved) {
-      setResults(JSON.parse(saved));
+  const fetchResults = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('institutions')
+        .select('config_json')
+        .eq('id', madrasah?.id)
+        .single();
+        
+      if (data && data.config_json && data.config_json.befaq_final_results) {
+         setResults(data.config_json.befaq_final_results);
+      } else {
+         const saved = localStorage.getItem(`befaq_final_results_${madrasah?.id}`);
+         if (saved) {
+           setResults(JSON.parse(saved));
+         }
+      }
+    } catch(err) {
+      console.error(err);
     }
     setLoading(false);
   };
@@ -98,12 +112,14 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
     if (data) setAvailableExams(data);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title || !selectedClassId || selectedExams.length === 0) return;
+    setIsSaving(true);
     
     const totalWeight = selectedExams.reduce((sum, e) => sum + e.weight, 0);
     if (totalWeight <= 0) {
       alert('Total weight must be greater than 0%');
+      setIsSaving(false);
       return;
     }
 
@@ -123,9 +139,24 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
 
     const updated = [newResult, ...results];
     setResults(updated);
+    
+    // Save to DB
+    try {
+      const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah?.id).single();
+      const currentConfig = instData?.config_json || madrasah?.config_json || {};
+      const newConfig = {
+        ...currentConfig,
+        befaq_final_results: updated,
+      };
+      await supabase.from('institutions').update({ config_json: newConfig }).eq('id', madrasah?.id);
+    } catch(err) {
+       console.error("Error saving befaq final results to db", err);
+    }
+
     localStorage.setItem(`befaq_final_results_${madrasah?.id}`, JSON.stringify(updated));
     setShowCreate(false);
     resetForm();
+    setIsSaving(false);
   };
 
   const resetForm = () => {
@@ -135,10 +166,23 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
     setAvailableExams([]);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure?')) {
       const updated = results.filter(r => r.id !== id);
       setResults(updated);
+      
+      try {
+        const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah?.id).single();
+        const currentConfig = instData?.config_json || madrasah?.config_json || {};
+        const newConfig = {
+          ...currentConfig,
+          befaq_final_results: updated,
+        };
+        await supabase.from('institutions').update({ config_json: newConfig }).eq('id', madrasah?.id);
+      } catch(err) {
+         console.error("Error deleting befaq final result", err);
+      }
+      
       localStorage.setItem(`befaq_final_results_${madrasah?.id}`, JSON.stringify(updated));
     }
   };

@@ -121,16 +121,141 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     phone: "",
     pin: "",
     designation: "",
+    basic_salary: "",
     is_active: true,
   });
 
   const [permissions, setPermissions] =
     useState<Partial<TeacherPermissions>>(initialPermissions);
+  const [activeTab, setActiveTab] = useState<'teachers' | 'salary' | 'attendance' | 'attendance_report'>('teachers');
+  const [salaryMonth, setSalaryMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [attendanceMonth, setAttendanceMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [reportData, setReportData] = useState<Record<string, Record<string, string>>>({});
+  const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [teacherAttendance, setTeacherAttendance] = useState<Record<string, string>>({});
+  const [savingAttendance, setSavingAttendance] = useState(false);
+  const [paidSalaries, setPaidSalaries] = useState<string[]>([]);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTeachers();
     fetchClasses();
   }, [madrasah?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'salary' && madrasah?.id) {
+       fetchPaidSalaries();
+    }
+    if (activeTab === 'attendance' && madrasah?.id) {
+       fetchTeacherAttendance();
+    }
+    if (activeTab === 'attendance_report' && madrasah?.id) {
+       fetchAttendanceReport();
+    }
+  }, [salaryMonth, attendanceDate, attendanceMonth, activeTab, madrasah?.id]);
+
+  const fetchAttendanceReport = async () => {
+    try {
+      const res = await fetch(`/api/teachers/attendance-report?institute_id=${madrasah!.id}&month=${attendanceMonth}`);
+      const data = await res.json();
+      if (data.report) {
+        setReportData(data.report);
+      } else {
+        setReportData({});
+      }
+    } catch(err) {
+      console.error("Error fetching attendance report:", err);
+    }
+  };
+
+  const fetchTeacherAttendance = async () => {
+    try {
+      const res = await fetch(`/api/teachers/attendance?institute_id=${madrasah!.id}&date=${attendanceDate}`);
+      const data = await res.json();
+      if (data.attendance) {
+        setTeacherAttendance(data.attendance);
+      } else {
+        setTeacherAttendance({});
+      }
+    } catch(err) {
+      console.error("Error fetching teacher attendance:", err);
+    }
+  };
+
+  const saveTeacherAttendance = async () => {
+    if (!madrasah?.id) return;
+    setSavingAttendance(true);
+    try {
+      const res = await fetch('/api/teachers/save-attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          institute_id: madrasah.id,
+          date: attendanceDate,
+          attendance: teacherAttendance
+        })
+      });
+      if (!res.ok) throw new Error("Failed to save attendance");
+      alert(lang === 'bn' ? 'হাজিরা সফলভাবে সংরক্ষণ করা হয়েছে' : 'Attendance saved successfully');
+    } catch(err) {
+      console.error(err);
+      setError("Failed to save attendance");
+    } finally {
+      setSavingAttendance(false);
+    }
+  };
+
+  const fetchPaidSalaries = async () => {
+    try {
+       // Search ledger for expense category "Teacher Salary" or "শিক্ষক বেতন"
+       const { data, error } = await supabase
+         .from('ledger')
+         .select('description')
+         .eq('institution_id', madrasah!.id)
+         .eq('type', 'expense')
+         .like('transaction_date', `${salaryMonth}%`)
+         .in('category', ['শিক্ষক বেতন', 'Teacher Salary']);
+       
+       if (data) {
+         // To know who was paid, we can extract teacher ID from description or we can assume it starts with "Salary for [Teacher Name] ([Teacher ID])"
+         // Actually, let's look for Teacher ID inside brackets in description if we format it like that.
+         const paidList: string[] = [];
+         data.forEach(item => {
+            const match = item.description.match(/\((.*?)\)/);
+            if (match && match[1]) {
+               paidList.push(`${match[1]}_${salaryMonth}`);
+            }
+         });
+         setPaidSalaries(paidList);
+       }
+    } catch(err) {
+       console.error("Error fetching paid salaries", err);
+    }
+  };
+
+  const handlePaySalary = async (teacher: Teacher) => {
+    if (!teacher.basic_salary || !madrasah?.id) return;
+    setPayingId(teacher.id);
+    try {
+      const description = `Salary paid for ${salaryMonth} to ${teacher.name} (${teacher.id})`;
+      const { error } = await supabase.from('ledger').insert({
+        institution_id: madrasah.id,
+        category: lang === 'bn' ? 'শিক্ষক বেতন' : 'Teacher Salary',
+        amount: teacher.basic_salary,
+        type: 'expense',
+        description: description,
+        transaction_date: new Date().toISOString()
+      });
+
+      if (error) throw error;
+      setPaidSalaries(prev => [...prev, `${teacher.id}_${salaryMonth}`]);
+    } catch(err) {
+      console.error("Error paying salary:", err);
+      setError("Failed to pay salary");
+    } finally {
+      setPayingId(null);
+    }
+  };
 
   const fetchClasses = async () => {
     if (!madrasah?.id) return;
@@ -303,6 +428,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       phone: "",
       pin: "",
       designation: "",
+      basic_salary: "",
       is_active: true,
     });
     setPermissions(initialPermissions);
@@ -316,6 +442,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       phone: teacher.phone || "",
       pin: "", // Don't show pin
       designation: teacher.designation || "",
+      basic_salary: teacher.basic_salary ? teacher.basic_salary.toString() : "",
       is_active: teacher.is_active,
     });
     setPermissions({ ...initialPermissions, ...(teacher.permissions || {}) });
@@ -379,35 +506,65 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       </div>
 
       <div className="max-w-5xl mx-auto p-4 space-y-6">
-        {/* Search Bar */}
-        <div className="relative group">
-          <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors"
-            size={20}
-          />
-          <input
-            type="text"
-            placeholder={
-              lang === "bn"
-                ? "শিক্ষকের নাম বা মোবাইল দিয়ে খুঁজুন..."
-                : "Search by teacher name or mobile..."
-            }
-            className={`w-full pl-12 pr-4 py-4 border rounded-2xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 ${isDark ? "bg-slate-900 border-slate-800 text-slate-200" : "bg-white border-slate-200 text-slate-700"}`}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        {/* Tabs */}
+        <div className={`p-1.5 flex gap-1 rounded-2xl w-fit mx-auto sm:mx-0 ${isDark ? "bg-slate-900 border border-slate-800" : "bg-slate-100 border border-slate-200/50"}`}>
+          <button
+            onClick={() => setActiveTab('teachers')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'teachers' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+          >
+            {lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teachers List'}
+          </button>
+          <button
+            onClick={() => setActiveTab('attendance')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'attendance' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+          >
+            {lang === 'bn' ? 'হাজিরা' : 'Attendance'}
+          </button>
+          <button
+            onClick={() => setActiveTab('attendance_report')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'attendance_report' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+          >
+            {lang === 'bn' ? 'হাজিরা রিপোর্ট' : 'Attendance Report'}
+          </button>
+          <button
+            onClick={() => setActiveTab('salary')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'salary' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+          >
+            {lang === 'bn' ? 'বেতন প্রদান' : 'Pay Salary'}
+          </button>
         </div>
 
-        {/* Teachers List */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Loader2 size={40} className="text-blue-500 animate-spin" />
-            <p className="text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
-              Loading Teachers...
-            </p>
-          </div>
-        ) : filteredTeachers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {activeTab === 'teachers' ? (
+          <>
+            {/* Search Bar */}
+            <div className="relative group">
+              <Search
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors"
+                size={20}
+              />
+              <input
+                type="text"
+                placeholder={
+                  lang === "bn"
+                    ? "শিক্ষকের নাম বা মোবাইল দিয়ে খুঁজুন..."
+                    : "Search by teacher name or mobile..."
+                }
+                className={`w-full pl-12 pr-4 py-4 border rounded-2xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 ${isDark ? "bg-slate-900 border-slate-800 text-slate-200" : "bg-white border-slate-200 text-slate-700"}`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Teachers List */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <Loader2 size={40} className="text-blue-500 animate-spin" />
+                <p className="text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
+                  Loading Teachers...
+                </p>
+              </div>
+            ) : filteredTeachers.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredTeachers.map((teacher) => (
               <motion.div
                 key={teacher.id}
@@ -459,6 +616,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     <Smartphone size={14} />
                     <span className="text-xs font-bold">{teacher.phone}</span>
                   </div>
+                  {teacher.basic_salary ? (
+                    <div className={`flex items-center gap-2 ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
+                      <span className="text-xs font-black">৳ {teacher.basic_salary}</span>
+                      <span className="text-[10px] font-bold text-slate-400">({lang === 'bn' ? 'বেসিক স্যালারি' : 'Basic'})</span>
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap gap-1.5">
                     {teacher.permissions &&
                       Object.entries(teacher.permissions)
@@ -519,6 +682,229 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
             </div>
           </div>
         )}
+        </>
+      ) : activeTab === 'attendance' ? (
+        <div className={`p-6 rounded-3xl border shadow-sm ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>
+                {lang === 'bn' ? 'শিক্ষক হাজিরা' : 'Teacher Attendance'}
+              </h2>
+              <p className="text-xs font-bold text-slate-500 mt-1">
+                {lang === 'bn' ? 'দৈনিক উপস্থিতির রেকর্ড' : 'Daily attendance record'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <input 
+                type="date"
+                value={attendanceDate}
+                onChange={(e) => setAttendanceDate(e.target.value)}
+                className={`px-4 py-2 border rounded-xl outline-none font-bold text-sm ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}
+              />
+              <button
+                onClick={saveTeacherAttendance}
+                disabled={savingAttendance}
+                className={`px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all ${savingAttendance ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-blue-600 text-white shadow-md hover:bg-blue-700 active:scale-95"}`}
+              >
+                {savingAttendance ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span className="hidden sm:inline">{lang === 'bn' ? 'সেভ করুন' : 'Save'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {teachers.length === 0 ? (
+               <div className="text-center py-10 text-slate-500 font-bold">
+                 {lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}
+               </div>
+            ) : (
+              teachers.map(teacher => {
+                const status = teacherAttendance[teacher.id] || 'present';
+                
+                return (
+                  <div key={teacher.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row gap-4 items-center justify-between transition-all ${isDark ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDark ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-white text-slate-500 shadow-sm border-slate-200"}`}>
+                        <User size={24} />
+                      </div>
+                      <div>
+                        <h3 className={`font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>{teacher.name}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 capitalize">{teacher.designation || 'Teacher'}</p>
+                      </div>
+                    </div>
+                    
+                    <div className={`flex p-1 rounded-xl w-full sm:w-auto overflow-x-auto no-scrollbar ${isDark ? 'bg-slate-900' : 'bg-slate-100/50'}`}>
+                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'present' ? 'bg-emerald-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}>
+                        {lang === 'bn' ? 'উপস্থিত' : 'Present'}
+                      </button>
+                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'absent' ? 'bg-red-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-red-400' : 'text-slate-500 hover:text-red-600'}`}>
+                        {lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}
+                      </button>
+                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'late' ? 'bg-amber-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-amber-400' : 'text-slate-500 hover:text-amber-600'}`}>
+                        {lang === 'bn' ? 'বিলম্ব' : 'Late'}
+                      </button>
+                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'half_day' ? 'bg-purple-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-purple-400' : 'text-slate-500 hover:text-purple-600'}`}>
+                        {lang === 'bn' ? 'অর্ধ-দিবস' : 'Half Day'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      ) : activeTab === 'attendance_report' ? (
+        <div className={`p-6 rounded-3xl border shadow-sm ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>
+                {lang === 'bn' ? 'শিক্ষক হাজিরা এনালাইসিস' : 'Teacher Attendance Analysis'}
+              </h2>
+              <p className="text-xs font-bold text-slate-500 mt-1">
+                {lang === 'bn' ? 'মাসিক রিপোর্ট' : 'Monthly report'}
+              </p>
+            </div>
+            <input 
+              type="month"
+              value={attendanceMonth}
+              onChange={(e) => setAttendanceMonth(e.target.value)}
+              className={`px-4 py-2 border rounded-xl outline-none font-bold text-sm ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}
+            />
+          </div>
+
+          <div className="space-y-4">
+            {teachers.length === 0 ? (
+               <div className="text-center py-10 text-slate-500 font-bold">
+                 {lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}
+               </div>
+            ) : (
+              teachers.map(teacher => {
+                let presentCount = 0;
+                let absentCount = 0;
+                let lateCount = 0;
+                let halfDayCount = 0;
+                
+                Object.values(reportData).forEach(dailyRecord => {
+                  const status = dailyRecord[teacher.id];
+                  if (status === 'present') presentCount++;
+                  else if (status === 'absent') absentCount++;
+                  else if (status === 'late') lateCount++;
+                  else if (status === 'half_day') halfDayCount++;
+                });
+                
+                return (
+                  <div key={teacher.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row gap-4 items-center justify-between transition-all ${isDark ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center gap-3 w-full sm:w-auto min-w-[200px]">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDark ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-white text-slate-500 shadow-sm border-slate-200"}`}>
+                        <User size={24} />
+                      </div>
+                      <div>
+                        <h3 className={`font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>{teacher.name}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 capitalize">{teacher.designation || 'Teacher'}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-2 w-full">
+                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-100 text-emerald-600"}`}>
+                        <span className="text-2xl font-black">{presentCount}</span>
+                        <span className="text-[10px] uppercase tracking-widest font-bold">Present</span>
+                      </div>
+                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-red-50 border-red-100 text-red-600"}`}>
+                        <span className="text-2xl font-black">{absentCount}</span>
+                        <span className="text-[10px] uppercase tracking-widest font-bold">Absent</span>
+                      </div>
+                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-100 text-amber-600"}`}>
+                        <span className="text-2xl font-black">{lateCount}</span>
+                        <span className="text-[10px] uppercase tracking-widest font-bold">Late</span>
+                      </div>
+                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-purple-500/10 border-purple-500/20 text-purple-400" : "bg-purple-50 border-purple-100 text-purple-600"}`}>
+                        <span className="text-2xl font-black">{halfDayCount}</span>
+                        <span className="text-[10px] uppercase tracking-widest font-bold">Half Day</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className={`p-6 rounded-3xl border shadow-sm ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>
+                {lang === 'bn' ? 'বেতন পরিশোধ' : 'Pay Salary'}
+              </h2>
+              <p className="text-xs font-bold text-slate-500 mt-1">
+                {lang === 'bn' ? 'মাসিক বেতন পরিশোধ এবং অটোমেটিক ফান্ড আপডেট' : 'Pay monthly salary and auto-update funds'}
+              </p>
+            </div>
+            <input 
+              type="month"
+              value={salaryMonth}
+              onChange={(e) => setSalaryMonth(e.target.value)}
+              className={`px-4 py-2 border rounded-xl outline-none font-bold text-sm ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}
+            />
+          </div>
+
+          <div className="space-y-4">
+            {teachers.length === 0 ? (
+               <div className="text-center py-10 text-slate-500 font-bold">
+                 {lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}
+               </div>
+            ) : (
+              teachers.map(teacher => {
+                const paidKey = `${teacher.id}_${salaryMonth}`;
+                const isPaid = paidSalaries.includes(paidKey);
+                
+                return (
+                  <div key={teacher.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row gap-4 items-center justify-between transition-all ${isDark ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDark ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-white text-slate-500 shadow-sm border-slate-200"}`}>
+                        <User size={24} />
+                      </div>
+                      <div>
+                        <h3 className={`font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>{teacher.name}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 capitalize">{teacher.designation || 'Teacher'}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+                      {teacher.basic_salary ? (
+                        <div className="text-right">
+                          <p className={`text-lg font-black ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>৳ {teacher.basic_salary}</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Basic Salary</p>
+                        </div>
+                      ) : (
+                        <div className="text-right text-xs font-bold text-slate-400 italic">
+                          {lang === 'bn' ? 'স্যালারি সেট নেই' : 'No salary set'}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => handlePaySalary(teacher)}
+                        disabled={!teacher.basic_salary || isPaid || payingId === teacher.id}
+                        className={`px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all ${
+                          !teacher.basic_salary 
+                            ? (isDark ? "bg-slate-700 text-slate-500" : "bg-slate-200 text-slate-400") 
+                            : isPaid 
+                              ? "bg-slate-300 text-slate-600 shadow-inner" 
+                              : payingId === teacher.id
+                                ? "bg-blue-400 text-white"
+                                : "bg-emerald-500 text-white shadow-md hover:bg-emerald-600 active:scale-95"
+                        }`}
+                      >
+                        {payingId === teacher.id ? <Loader2 size={16} className="animate-spin" /> : isPaid ? <CheckCircle2 size={16} /> : <Save size={16} />}
+                        {isPaid ? (lang === 'bn' ? 'পরিশোধিত' : 'Paid') : (lang === 'bn' ? 'পরিশোধ করুন' : 'Pay')}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Add/Edit Modal */}
@@ -629,6 +1015,27 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                               setFormData({
                                 ...formData,
                                 designation: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                          {lang === 'bn' ? 'বেসিক স্যালারি' : 'Basic Salary'}
+                        </label>
+                        <div className="relative">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                            ৳
+                          </div>
+                          <input
+                            type="number"
+                            className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-100 text-slate-700"}`}
+                            value={formData.basic_salary || ""}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                basic_salary: e.target.value,
                               })
                             }
                           />

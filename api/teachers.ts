@@ -140,10 +140,10 @@ export default async function handler(req, res) {
     }
 
     if (action === 'create' && req.method === 'POST') {
-      const { institute_id, name, phone, pin, designation, photo_url, permissions } = body;
+      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions } = body;
       if (!institute_id || !name || !phone || !pin) return res.status(400).json({ error: 'Required fields missing' });
       
-      console.log('Creating teacher:', { institute_id, name, phone });
+      console.log('Creating teacher:', { institute_id, name, phone, basic_salary });
 
       const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
 
@@ -153,6 +153,7 @@ export default async function handler(req, res) {
         mobile: phone,
         password_hash: passwordHash,
         designation,
+        basic_salary: basic_salary ? Number(basic_salary) : null,
         photo_url,
         permissions: permissions || {},
         is_active: true
@@ -172,10 +173,67 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
+    if (action === 'attendance' && req.method === 'GET') {
+      const institute_id = req.query.institute_id || url.searchParams.get('institute_id');
+      const date = req.query.date || url.searchParams.get('date');
+      if (!institute_id || !date) return res.status(400).json({ error: 'Institute ID and date are required' });
+      
+      const { data: instData, error: instError } = await supabase.from('institutions').select('config_json').eq('id', institute_id).single();
+      if (instError) throw instError;
+      
+      const config = instData.config_json || {};
+      const attendanceData = config.teacher_attendance?.[date] || {};
+      
+      return res.status(200).json({ attendance: attendanceData });
+    }
+
+    if (action === 'save-attendance' && req.method === 'POST') {
+      const { institute_id, date, attendance } = body;
+      if (!institute_id || !date || !attendance) return res.status(400).json({ error: 'Missing required fields' });
+      
+      const { data: instData, error: instError } = await supabase.from('institutions').select('config_json').eq('id', institute_id).single();
+      if (instError) throw instError;
+      
+      const config = instData.config_json || {};
+      if (!config.teacher_attendance) config.teacher_attendance = {};
+      
+      config.teacher_attendance[date] = attendance;
+      
+      const { error: updateError } = await supabase.from('institutions').update({ config_json: config }).eq('id', institute_id);
+      if (updateError) throw updateError;
+      
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'attendance-report' && req.method === 'GET') {
+      const institute_id = req.query.institute_id || url.searchParams.get('institute_id');
+      const month = req.query.month || url.searchParams.get('month'); // YYYY-MM
+      if (!institute_id) return res.status(400).json({ error: 'Institute ID is required' });
+      
+      const { data: instData, error: instError } = await supabase.from('institutions').select('config_json').eq('id', institute_id).single();
+      if (instError) throw instError;
+      
+      const config = instData.config_json || {};
+      const allAttendance = config.teacher_attendance || {};
+      
+      // Filter by month if provided
+      let result = allAttendance;
+      if (month) {
+        result = {};
+        Object.keys(allAttendance).forEach(date => {
+          if (date.startsWith(month as string)) {
+            result[date] = allAttendance[date];
+          }
+        });
+      }
+      
+      return res.status(200).json({ report: result });
+    }
+
     if (action === 'update' && req.method === 'PUT') {
-      const { id, name, phone, pin, designation, photo_url, is_active, permissions } = body;
+      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
-      const updateData: any = { teacher_name: name, mobile: phone, designation, photo_url, is_active, permissions };
+      const updateData: any = { teacher_name: name, mobile: phone, designation, basic_salary: basic_salary ? Number(basic_salary) : null, photo_url, is_active, permissions };
       if (pin) {
         updateData.password_hash = crypto.createHash('sha256').update(pin).digest('hex');
       }

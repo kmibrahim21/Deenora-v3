@@ -375,6 +375,7 @@ export interface Teacher {
   phone: string;
   pin?: string;
   designation?: string;
+  basic_salary?: number;
   is_active: boolean;
   permissions?: TeacherPermissions;
   created_at: string;

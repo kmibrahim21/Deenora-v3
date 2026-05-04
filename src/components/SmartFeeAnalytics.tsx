@@ -75,9 +75,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   ];
 
   // Filters
-  const [viewMode, setViewMode] = useState<'monthly' | 'yearly'>('monthly');
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'yearly' | 'custom'>('daily');
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
 
   const [localClasses, setLocalClasses] = useState<Class[]>([]);
@@ -122,8 +124,18 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     console.log("Fetching analytics for:", { institutionId, viewMode, selectedMonth, selectedYear, selectedClassId });
     try {
       const activeYearId = madrasah?.config_json?.active_academic_year_id;
-      // Determine date filter for ledger
-      const dateFilter = viewMode === 'monthly' ? selectedMonth : selectedYear;
+      let dateFilter = selectedMonth;
+      if (viewMode === 'daily') dateFilter = selectedDate;
+      else if (viewMode === 'yearly') dateFilter = selectedYear;
+      else if (viewMode === 'custom') dateFilter = ''; // handle custom range separately
+      
+      const isDateInRange = (dateStr: string) => {
+        if (viewMode === 'custom') {
+           if (!dateRange.start || !dateRange.end) return true;
+           return dateStr >= dateRange.start && dateStr <= dateRange.end;
+        }
+        return dateStr.startsWith(dateFilter);
+      };
 
       // 1. Fetch Fee Structures
       let structureQuery = supabase.from('fee_structures').select('*').eq('institution_id', institutionId);
@@ -172,7 +184,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
       if (ledger) {
         // Filter ledger by period and class (if applicable) for the report
-        const filteredLedger = ledger.filter(l => l.transaction_date.startsWith(dateFilter));
+        const filteredLedger = ledger.filter(l => isDateInRange(l.transaction_date));
         setLedgerHistory(filteredLedger);
       }
 
@@ -184,7 +196,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
       // Calculate Expenses
       ledger?.forEach(l => {
-        if (l.type === 'expense' && l.transaction_date.startsWith(dateFilter)) {
+        if (l.type === 'expense' && isDateInRange(l.transaction_date)) {
           totalExpense += l.amount;
         }
       });
@@ -204,8 +216,10 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 if (!isExpired && !isNotStarted) activeMonthsCount++;
             }
         } else {
-            const isExpired = s.due_date && s.due_date.slice(0, 7) < dateFilter;
-            const isNotStarted = s.start_date && s.start_date.slice(0, 7) > dateFilter;
+            // Use selectedMonth for daily, monthly and custom to get a baseline expected amount
+            const evalMonth = selectedMonth; 
+            const isExpired = s.due_date && s.due_date.slice(0, 7) < evalMonth;
+            const isNotStarted = s.start_date && s.start_date.slice(0, 7) > evalMonth;
             if (!isExpired && !isNotStarted) activeMonthsCount = 1;
         }
 
@@ -556,7 +570,10 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
   const handleDownloadPDF = async () => {
     if (!madrasah || !stats) return;
-    const period = viewMode === 'monthly' ? selectedMonth : selectedYear;
+    let period = selectedMonth;
+    if (viewMode === 'daily') period = selectedDate;
+    else if (viewMode === 'yearly') period = selectedYear;
+    else if (viewMode === 'custom') period = `${dateRange.start} - ${dateRange.end}`;
     try {
       await generateAccountingReportPDF(
         { name: madrasah.name },
@@ -578,13 +595,24 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     </div>
   );
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+      let displayPeriod = selectedMonth;
+      if (viewMode === 'daily') displayPeriod = selectedDate;
+      else if (viewMode === 'yearly') displayPeriod = selectedYear;
+      else if (viewMode === 'custom') displayPeriod = `${dateRange.start} - ${dateRange.end}`;
+
+      return (
+        <div className="space-y-6 animate-in fade-in duration-500">
       
       {/* Filters */}
       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-2xl border shadow-sm flex flex-wrap gap-4 items-center justify-between`}>
         <div className="flex items-center gap-2">
-            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'} p-1 rounded-xl flex`}>
+            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'} p-1 rounded-xl flex overflow-x-auto no-scrollbar`}>
+                <button 
+                    onClick={() => setViewMode('daily')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'daily' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-sm text-blue-400' : 'bg-white shadow-sm text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    দৈনিক
+                </button>
                 <button 
                     onClick={() => setViewMode('monthly')}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'monthly' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-sm text-blue-400' : 'bg-white shadow-sm text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
@@ -597,9 +625,42 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 >
                     {localT.yearly[lang]}
                 </button>
+                <button 
+                    onClick={() => setViewMode('custom')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'custom' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-sm text-blue-400' : 'bg-white shadow-sm text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    কাস্টম
+                </button>
             </div>
             
-            {viewMode === 'monthly' ? (
+            {viewMode === 'daily' && (
+                <input 
+                    type="date" 
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                />
+            )}
+            
+            {viewMode === 'custom' && (
+                <div className="flex items-center gap-1">
+                    <input 
+                        type="date" 
+                        value={dateRange.start}
+                        onChange={(e) => setDateRange(prev => ({...prev, start: e.target.value}))}
+                        className={`px-2 py-2 border rounded-l-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    />
+                    <span className="text-slate-400">-</span>
+                    <input 
+                        type="date" 
+                        value={dateRange.end}
+                        onChange={(e) => setDateRange(prev => ({...prev, end: e.target.value}))}
+                        className={`px-2 py-2 border rounded-r-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    />
+                </div>
+            )}
+
+            {viewMode === 'monthly' && (
                 <input 
                     type="month" 
                     value={selectedMonth}
@@ -608,7 +669,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     max={activeYear?.end_date ? activeYear.end_date.slice(0, 7) : undefined}
                     className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
                 />
-            ) : (
+            )}
+            {viewMode === 'yearly' && (
                 <select 
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
@@ -744,7 +806,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-50 text-purple-500'}`}>
               <PieChart size={20} />
            </div>
-           <h3 className={`text-lg font-black font-noto ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{localT.feeBreakdown[lang]} ({viewMode === 'monthly' ? selectedMonth : selectedYear})</h3>
+           <h3 className={`text-lg font-black font-noto ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{localT.feeBreakdown[lang]} ({displayPeriod})</h3>
         </div>
         
         <div className="space-y-3">

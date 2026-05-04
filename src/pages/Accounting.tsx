@@ -52,6 +52,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [isSaving, setIsSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>('student_history');
   const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, ids: string[]}>({show: false, ids: []});
 
@@ -322,57 +323,94 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
       {activeTab === 'ledger' && (
         <div className="space-y-4 animate-in slide-in-from-bottom-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
-            <div>
-              <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>লেনদেনের ইতিহাস</h3>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">{ledger.length} লেনদেন</span>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              {selectedLedgerIds.length > 0 && (
-                <button
-                  onClick={() => setDeleteConfirm({show: true, ids: selectedLedgerIds})}
-                  className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all bg-red-500 text-white shadow-sm hover:bg-red-600 flex items-center gap-1"
-                >
-                  <Trash2 size={12} /> {selectedLedgerIds.length} টি মুছুন
-                </button>
-              )}
-              {ledger.length > 0 && (
-                <button
-                  onClick={() => setDeleteConfirm({show: true, ids: ledger.map(l => l.id)})}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 ${isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
-                >
-                  <Trash2 size={12} /> সব মুছুন
-                </button>
-              )}
-              <div className={`flex p-1 rounded-xl border shadow-inner w-fit ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200/50'}`}>
-                <button 
-                  onClick={() => setLedgerFilter('all')}
-                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'all' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
-                >
-                  ইতিহাস
-                </button>
-                <button 
-                  onClick={() => setLedgerFilter('income')}
-                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'income' ? (isDark ? 'bg-slate-900 text-emerald-400 shadow-sm' : 'bg-white text-emerald-500 shadow-sm') : 'text-slate-400'}`}
-                >
-                  আয়
-                </button>
-                <button 
-                  onClick={() => setLedgerFilter('expense')}
-                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${ledgerFilter === 'expense' ? (isDark ? 'bg-slate-900 text-red-400 shadow-sm' : 'bg-white text-red-500 shadow-sm') : 'text-slate-400'}`}
-                >
-                  ব্যয়
-                </button>
+          <div className="flex flex-col gap-4 px-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center justify-between sm:justify-start gap-4">
+                <div>
+                  <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>লেনদেনের ইতিহাস</h3>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">{ledger.length} লেনদেন</span>
+                </div>
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2">
+                  {selectedLedgerIds.length > 0 && (
+                    <button
+                      onClick={() => setDeleteConfirm({show: true, ids: selectedLedgerIds})}
+                      className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-red-500 text-white shadow-sm hover:bg-red-600 flex items-center gap-1 active:scale-95"
+                    >
+                      <Trash2 size={12} /> <span className="hidden sm:inline">{selectedLedgerIds.length} টি মুছুন</span>
+                    </button>
+                  )}
+                  {ledger.length > 0 && (
+                    <button
+                      onClick={() => setDeleteConfirm({show: true, ids: ledger.map(l => l.id)})}
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+                    >
+                      <Trash2 size={12} /> <span className="hidden sm:inline">সব মুছুন</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Primary Tabs */}
+              <div className="flex overflow-x-auto no-scrollbar pb-1 sm:pb-0 w-full sm:w-auto snap-x justify-start sm:justify-end">
+                <div className={`flex p-1 rounded-2xl border snap-start w-max ${isDark ? 'bg-slate-800 border-slate-700 shadow-inner' : 'bg-slate-100 border-slate-200/50 shadow-inner'}`}>
+                  <button 
+                    onClick={() => setHistoryTab('student_history')}
+                    className={`px-5 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'student_history' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    শিক্ষার্থী ইতিহাস
+                  </button>
+                  <button 
+                    onClick={() => setHistoryTab('income_expense')}
+                    className={`px-5 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'income_expense' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    আয় ব্যয় ইতিহাস
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Sub Filters */}
+            {historyTab === 'income_expense' && (
+              <div className="flex justify-start sm:justify-end pt-2 sm:border-t border-slate-200 dark:border-slate-800">
+                <div className={`flex p-1 rounded-2xl border w-full sm:w-auto overflow-x-auto no-scrollbar snap-x ${isDark ? 'bg-slate-800 border-slate-700 shadow-inner' : 'bg-slate-100 border-slate-200/50 shadow-inner'}`}>
+                  <button 
+                    onClick={() => setLedgerFilter('all')}
+                    className={`flex-1 sm:flex-none px-6 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap snap-start ${ledgerFilter === 'all' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    সব
+                  </button>
+                  <button 
+                    onClick={() => setLedgerFilter('income')}
+                    className={`flex-1 sm:flex-none px-6 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap snap-start ${ledgerFilter === 'income' ? (isDark ? 'bg-slate-900 text-emerald-400 shadow-sm border border-slate-700/50' : 'bg-white text-emerald-500 shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    আয়
+                  </button>
+                  <button 
+                    onClick={() => setLedgerFilter('expense')}
+                    className={`flex-1 sm:flex-none px-6 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap snap-start ${ledgerFilter === 'expense' ? (isDark ? 'bg-slate-900 text-red-400 shadow-sm border border-slate-700/50' : 'bg-white text-red-500 shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    ব্যয়
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           
           {loading ? (
             <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#2563EB]" size={32} /></div>
           ) : ledger.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {ledger.filter(e => ledgerFilter === 'all' || e.type === ledgerFilter).map(entry => {
+              {ledger.filter(e => {
+                const isStudent = e.category === 'Student Fee' || e.category.includes('Fee') || e.category.includes('ফি');
+                if (historyTab === 'student_history') return isStudent;
+                if (historyTab === 'income_expense') {
+                   if (isStudent) return false;
+                   if (ledgerFilter !== 'all' && e.type !== ledgerFilter) return false;
+                   return true;
+                }
+                return true;
+              }).map(entry => {
                 let displayName = entry.category;
                 let details = '';
                 let feeType = '';
@@ -396,38 +434,41 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 }
 
                 return (
-                  <div key={entry.id} className={`group p-5 rounded-[2.5rem] border-2 transition-all flex items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] ${isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
-                    <div className="flex items-center gap-3 w-full">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedLedgerIds.includes(entry.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedLedgerIds([...selectedLedgerIds, entry.id]);
-                          } else {
-                            setSelectedLedgerIds(selectedLedgerIds.filter(id => id !== entry.id));
-                          }
-                        }}
-                        className={`w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ${isDark ? 'bg-slate-800 border-slate-600' : ''}`}
-                      />
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-4">
+                  <div key={entry.id} className={`group p-4 sm:p-5 rounded-3xl sm:rounded-[2.5rem] border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] gap-4 ${isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
+                    <div className="flex items-start sm:items-center gap-3 w-full">
+                      <div className="pt-2 sm:pt-0">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedLedgerIds.includes(entry.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedLedgerIds([...selectedLedgerIds, entry.id]);
+                            } else {
+                              setSelectedLedgerIds(selectedLedgerIds.filter(id => id !== entry.id));
+                            }
+                          }}
+                          className={`w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ${isDark ? 'bg-slate-800 border-slate-600' : ''}`}
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-3 sm:gap-0">
+                        <div className="flex items-center gap-3">
                           <div className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center shrink-0 shadow-inner border transition-transform group-hover:scale-110 ${entry.type === 'income' ? (isDark ? 'bg-emerald-900/20 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100') : (isDark ? 'bg-red-900/20 text-red-400 border-red-800/50' : 'bg-red-50 text-red-600 border-red-100')}`}>
                             {entry.type === 'income' ? <ArrowUpCircle size={24} /> : <ArrowDownCircle size={24} />}
                           </div>
                           <div>
-                            <h5 className={`font-black font-noto text-sm mb-0.5 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{displayName}</h5>
+                            <h5 className={`font-black font-noto text-sm sm:text-base mb-0.5 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{displayName}</h5>
                             <div className="flex flex-col gap-0.5">
                               {entry.category === 'Student Fee' ? (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-slate-400 font-bold">{details}</span>
-                                  <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
-                                  <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter">{feeType}</span>
+                                  <span className="text-[10px] text-slate-400 font-bold max-w-[120px] sm:max-w-none truncate">{details}</span>
+                                  <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'} shrink-0`} />
+                                  <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter shrink-0">{feeType}</span>
                                 </div>
                               ) : (
                                 <>
                                   {cleanDescription && cleanDescription !== entry.category && (
-                                    <p className="text-[11px] text-slate-500 font-bold font-noto leading-tight mb-1">{cleanDescription}</p>
+                                    <p className="text-[11px] text-slate-500 font-bold font-noto leading-tight mb-1 line-clamp-1">{cleanDescription}</p>
                                   )}
                                   <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                                 </>
@@ -435,16 +476,17 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                             </div>
                           </div>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-1">
-                          <div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
+                          <div className="text-left sm:text-right">
                             <p className={`text-base font-black ${entry.type === 'income' ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
                               {entry.type === 'income' ? '+' : '-'} ৳{entry.amount.toLocaleString()}
                             </p>
-                            <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest">{entry.category}</p>
+                            <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{entry.category}</p>
                           </div>
                           <button 
                             onClick={() => setDeleteConfirm({show: true, ids: [entry.id]})}
-                            className={`p-1.5 rounded-full transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/20' : 'text-red-400 hover:bg-red-50 hover:text-red-600'}`}
+                            className={`p-2 sm:p-1.5 rounded-full transition-colors flex shrink-0 items-center justify-center ${isDark ? 'text-red-400 hover:bg-slate-800 bg-slate-800/50 sm:bg-transparent sm:hover:bg-red-500/20' : 'text-red-500 hover:bg-red-100 bg-red-50 sm:bg-transparent sm:text-red-400 sm:hover:bg-red-50 sm:hover:text-red-600'}`}
                             title="Delete"
                           >
                             <Trash2 size={16} />
