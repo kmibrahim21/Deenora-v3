@@ -534,7 +534,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2 px-1">
-                     {(type === 'income' ? ['সদকা সংগ্রহ', 'লিল্লাহ ফান্ড', 'যাকাত ফান্ড'] : ['রান্না খরচ', 'খাদ্য খরচ', 'শিক্ষক বেতন', 'মাদরাসা maintenance']).map(suggestion => (
+                     {(type === 'income' 
+                        ? (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? ['ভর্তি ফি', 'মাসিক বেতন', 'সেশন চার্জ', 'পরীক্ষার ফি'] : ['সদকা সংগ্রহ', 'লিল্লাহ ফান্ড', 'যাকাত ফান্ড']) 
+                        : (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? ['অফিস খরচ', 'বিদ্যুৎ বিল', 'শিক্ষক বেতন', 'অন্যান্য খরচ'] : ['রান্না খরচ', 'খাদ্য খরচ', 'শিক্ষক বেতন', 'মাদরাসা maintenance'])
+                     ).map(suggestion => (
                         <button 
                            key={suggestion}
                            type="button"
