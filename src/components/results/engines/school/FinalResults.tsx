@@ -186,10 +186,12 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       const processed = students.map(student => {
         const studentMarks: any = {};
         let totalWeightedSum = 0;
+        let overallMaxMarks = 0;
         let hasFailedAny = false;
 
         subjectList.forEach(sub => {
           let weightedSum = 0;
+          let subjectMaxMarks = 0;
           let weightUsed = 0;
 
           examsData.forEach(exam => {
@@ -203,10 +205,12 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
               const fullMarks = markEntry.exam_subjects?.full_marks || 100;
               const passMarks = markEntry.exam_subjects?.pass_marks || 33;
               
-              // Normalize to the exam's weight. 
-              // Example: If weight is 30% and student got 25/50, contribution is (25/50) * 30 = 15
-              const contribution = (obtained / fullMarks) * exam.weight;
+              // Actual weighted marks calculation based on total marks
+              const contribution = obtained * (exam.weight / 100);
+              const maxContribution = fullMarks * (exam.weight / 100);
+              
               weightedSum += contribution;
+              subjectMaxMarks += maxContribution;
               weightUsed += exam.weight;
               
               // Pass status: if the component score was less than pass pct
@@ -216,16 +220,13 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
             }
           });
 
-          // If weights sum up to less than 100, we might need to normalize
-          // studentMarks[sub] = weightedSum;
           studentMarks[sub] = weightedSum.toFixed(1);
           totalWeightedSum += weightedSum;
+          overallMaxMarks += subjectMaxMarks;
         });
 
-        // Calculate Grade based on average percentage
-        // Since weightedSum per subject is already maxed at 100 (if weights sum to 100),
-        // we can use totalWeightedSum / subjectList.length as the final score pct.
-        const finalPercentage = subjectList.length > 0 ? (totalWeightedSum / subjectList.length) : 0;
+        // Calculate Grade based on average percentage of the total weighted marks
+        const finalPercentage = overallMaxMarks > 0 ? (totalWeightedSum / overallMaxMarks) * 100 : 0;
         const { gpa, grade } = getGradeInfo(finalPercentage, hasFailedAny);
 
         return {
