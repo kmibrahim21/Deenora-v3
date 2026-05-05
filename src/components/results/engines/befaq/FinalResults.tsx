@@ -124,13 +124,13 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
     }
 
     const newResult: BefaqFinalResult = {
-      id: window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
+      id: crypto.randomUUID(),
       institution_id: madrasah!.id,
       class_id: selectedClassId,
       title,
       created_at: new Date().toISOString(),
       exams: selectedExams.map(e => ({
-        id: (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)),
+        id: crypto.randomUUID(),
         exam_id: e.examId,
         weight: e.weight,
         exam: availableExams.find(ex => ex.id === e.examId)

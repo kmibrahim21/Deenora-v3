@@ -956,7 +956,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         }).filter(p => p.length === 11))];
 
         const payload = {
-          request_id: window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
+          request_id: crypto.randomUUID(),
           voice: voiceName,
           sender: '8804445629106', // Default sender for admin
           phone_numbers: targetPhones
@@ -1287,19 +1287,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const { error: updateError } = await supabase.from('transactions').update({ status: 'approved' }).eq('id', tr.id);
         if (updateError) throw updateError;
       } else {
-        // ৩. SMS রিচার্জ অনুমোদন (RPC handles transactions, madrasahs balance and admin stock)
-        const { data, error } = await supabase.rpc('approve_payment_with_sms', { 
-          t_id: tr.id, 
-          m_id: tr.institution_id, 
-          sms_to_give: sms 
-        });
+        // ৩. SMS রিচার্জ অনুমোদন (Manual implementation to fix Issue 2 - Avoid unintended voice balance increase)
         
-        if (error) throw error;
+        // 1. Update Transaction
+        const { error: trUpdateError } = await supabase.from('transactions').update({ 
+          status: 'approved', 
+          sms_count: sms 
+        }).eq('id', tr.id);
+        if (trUpdateError) throw trUpdateError;
 
-        // RPC রেসপন্স চেক করা (Database level error capture)
-        const res = data as { success: boolean, error?: string };
-        if (res && res.success === false) {
-          throw new Error(res.error || "Approval failed on server");
+        // 2. Update Institution SMS Balance ONLY
+        const { data: instData, error: instFetchError } = await supabase
+          .from('institutions')
+          .select('sms_balance')
+          .eq('id', tr.institution_id)
+          .single();
+        if (instFetchError) throw instFetchError;
+        
+        const { error: instUpdateError } = await supabase
+          .from('institutions')
+          .update({ 
+            sms_balance: (instData.sms_balance || 0) + sms 
+          })
+          .eq('id', tr.institution_id);
+        if (instUpdateError) throw instUpdateError;
+
+        // 3. Update Admin SMS Stock
+        const { data: stockData, error: stockFetchError } = await supabase
+          .from('admin_sms_stock')
+          .select('*')
+          .limit(1)
+          .single();
+        if (!stockFetchError && stockData) {
+          const { error: stockUpdateError } = await supabase
+            .from('admin_sms_stock')
+            .update({ 
+              remaining_sms: (stockData.remaining_sms || 0) - sms,
+              last_updated: new Date().toISOString()
+            })
+            .eq('id', stockData.id);
+          if (stockUpdateError) console.error("Admin stock update failed:", stockUpdateError);
         }
       }
       
@@ -2315,10 +2342,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {pendingTrans.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
-                    return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
+                    return (paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice')) && !desc.includes('refund');
                   }).length > 0 ? pendingTrans.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
-                    return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
+                    return (paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice')) && !desc.includes('refund');
                   }).map(tr => (
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border space-y-5 animate-in slide-in-from-left-4`}>
                       <div className="flex items-center justify-between">
@@ -2399,9 +2426,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {transactionHistory.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
+                    const isRefund = desc.includes('refund');
+                    if (isRefund) return false;
                     return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
                   }).length > 0 ? transactionHistory.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
+                    const isRefund = desc.includes('refund');
+                    if (isRefund) return false;
                     return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
                   }).map(tr => (
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-5 rounded-[2rem] border flex items-center justify-between group hover:border-blue-500/30 transition-all`}>

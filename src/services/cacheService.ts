@@ -11,7 +11,7 @@ export class CacheService {
       // Add new records
       const dataArray = Array.isArray(data) ? data : [data];
       const cachedData: CachedData[] = dataArray.map(item => ({
-        id: item.id || (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)),
+        id: item.id || crypto.randomUUID(),
         institution_id: institutionId,
         data: item,
         timestamp: Date.now()

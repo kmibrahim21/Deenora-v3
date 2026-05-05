@@ -776,7 +776,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         return;
       }
 
-      const requestId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const requestId = crypto.randomUUID();
       const payload = {
         request_id: requestId,
         voice: voiceName, 
@@ -1137,7 +1137,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       // 1. Send to Awaj Digital API
-      const requestId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const requestId = crypto.randomUUID();
       
       // Find the actual sender object to get the calling number
       const senderObj = senders.find(s => 
@@ -1396,7 +1396,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         <div className="relative z-10">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">{t('available_balance', lang)}</p>
           <h3 className="text-4xl font-black flex items-baseline gap-2">
-            {Number(walletBalance || 0).toFixed(2)} <span className="text-lg opacity-60">৳</span>
+            {walletBalance.toFixed(2)} <span className="text-lg opacity-60">৳</span>
           </h3>
         </div>
         <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20">
