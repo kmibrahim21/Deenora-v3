@@ -1199,9 +1199,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
 
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
-            <div className={`p-8 border-b flex justify-between items-center relative overflow-hidden ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-start sm:items-center justify-center p-4 sm:p-6 pt-10 sm:pt-6 animate-in fade-in duration-300">
+          <div className={`rounded-[2.5rem] shadow-2xl w-full max-w-md max-h-[75vh] sm:max-h-[85vh] flex flex-col overflow-hidden border-4 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800 shadow-blue-500/10' : 'bg-white border-white shadow-slate-200/50'}`}>
+            <div className={`p-6 sm:p-8 border-b flex justify-between items-center relative overflow-hidden shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
               <div className="absolute top-0 left-0 w-1 h-full bg-[#2563EB]"></div>
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${isDark ? 'bg-slate-900 text-blue-400' : 'bg-white text-blue-600'}`}>
@@ -1222,7 +1222,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               </button>
             </div>
 
-            <div className="p-8 space-y-8">
+            <div className="p-6 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto flex-1 no-scrollbar">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Select Class for Sessions</label>
@@ -1306,7 +1306,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   </button>
                 </div>
 
-                <div className={`space-y-3 max-h-[280px] overflow-y-auto pr-2 scrollbar-hide rounded-3xl p-2 -mx-2 ${isDark ? 'bg-slate-800/30' : 'bg-slate-50/50'}`}>
+                <div className={`space-y-3 rounded-3xl p-2 -mx-2 ${isDark ? 'bg-slate-800/30' : 'bg-slate-50/50'}`}>
                   {settingsSessions.length > 0 ? settingsSessions.map((s, idx) => (
                     <div 
                       key={s.id} 
@@ -1339,7 +1339,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               </div>
             </div>
 
-            <div className={`p-8 border-t flex gap-4 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
+            <div className={`p-6 sm:p-8 border-t flex gap-4 shrink-0 ${isDark ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50/80 border-slate-100'}`}>
               <button 
                 onClick={() => setShowSettingsModal(false)}
                 className={`flex-1 h-14 font-black rounded-2xl border-2 active:scale-95 transition-all text-xs uppercase tracking-widest ${isDark ? 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
