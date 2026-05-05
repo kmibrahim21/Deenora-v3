@@ -572,7 +572,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             sNumber = '88' + sDigits;
           }
 
-          const requestId = crypto.randomUUID();
+          const requestId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
           const voiceName = voice.provider_voice_name || voice.title || voice.name || voice.voice_name || voice.id;
           
           const payload = {

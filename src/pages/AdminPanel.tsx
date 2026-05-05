@@ -956,7 +956,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         }).filter(p => p.length === 11))];
 
         const payload = {
-          request_id: crypto.randomUUID(),
+          request_id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
           voice: voiceName,
           sender: '8804445629106', // Default sender for admin
           phone_numbers: targetPhones

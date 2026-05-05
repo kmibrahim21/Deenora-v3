@@ -45,9 +45,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const targetClass = String(class_name);
-    // Include messages for the specific class OR messages for 'All'
-    // Format for PostgREST: or=(class_name.eq.Target,class_name.eq.All)
-    let filter = `or=(class_name.eq.${encodeURIComponent(targetClass)},class_name.eq.All)`;
+    
+    // Include messages for the specific class, 'All', and special app types
+    const orConditions = [
+      `class_name.eq.${encodeURIComponent(targetClass)}`,
+      `class_name.eq.All`,
+      `class_name.eq.APP_NOTICE`,
+      `class_name.eq.APP_HOLIDAY`,
+      `class_name.eq.APP_PTM`,
+      `class_name.eq.APP_EVENT`,
+      `class_name.eq.APP_ROUTINE_${encodeURIComponent(targetClass)}`,
+      `class_name.eq.APP_SYLLABUS_${encodeURIComponent(targetClass)}`
+    ];
+    let filter = `or=(${orConditions.join(',')})`;
+
     if (resolvedInstitutionId) {
       filter += `&institution_id=eq.${resolvedInstitutionId}`;
     }

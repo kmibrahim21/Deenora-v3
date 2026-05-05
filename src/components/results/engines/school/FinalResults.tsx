@@ -116,13 +116,13 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     }
 
     const newResult: FinalResult = {
-      id: crypto.randomUUID(),
+      id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
       institution_id: madrasah!.id,
       class_id: selectedClassId,
       title,
       created_at: new Date().toISOString(),
       exams: selectedExams.map(e => ({
-        id: crypto.randomUUID(),
+        id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
         final_result_id: '',
         exam_id: e.examId,
         weight: e.weight,
