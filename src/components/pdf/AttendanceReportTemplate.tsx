@@ -11,13 +11,38 @@ interface AttendanceReportTemplateProps {
 export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> = ({ reportData, madrasah, className, month, lang }) => {
     const isBn = lang === 'bn';
     
-    const ROWS_PER_PAGE = 30;
-    const totalPages = Math.ceil(reportData.length / ROWS_PER_PAGE) || 1;
+    const calculatedData = reportData.map(item => {
+        const late = item.late_days || 0;
+        const pct = item.total_days > 0 ? Math.round(((item.present_days + late) / item.total_days) * 100) : 0;
+        return { ...item, late, pct };
+    });
+
+    // Sort by percentage to calculate rank
+    calculatedData.sort((a, b) => b.pct - a.pct);
+    let currentRank = 1;
+    calculatedData.forEach((item, index) => {
+        if (index > 0 && item.pct === calculatedData[index - 1].pct) {
+            item.rank = calculatedData[index - 1].rank;
+        } else {
+            item.rank = currentRank;
+        }
+        currentRank++;
+    });
+
+    // Sort back by roll
+    calculatedData.sort((a, b) => {
+        const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || parseInt(a.roll?.replace(/\D/g,'')) || 0 : (a.roll || 0);
+        const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || parseInt(b.roll?.replace(/\D/g,'')) || 0 : (b.roll || 0);
+        return rollA - rollB;
+    });
+
+    const ROWS_PER_PAGE = 20;
+    const totalPages = Math.ceil(calculatedData.length / ROWS_PER_PAGE) || 1;
 
     return (
         <>
             {Array.from({ length: totalPages }).map((_, pageIndex) => {
-                const pageData = reportData.slice(pageIndex * ROWS_PER_PAGE, (pageIndex + 1) * ROWS_PER_PAGE);
+                const pageData = calculatedData.slice(pageIndex * ROWS_PER_PAGE, (pageIndex + 1) * ROWS_PER_PAGE);
                 
                 return (
                     <div key={pageIndex} className="page-container" style={{ width: '794px', height: '1123px', padding: '40px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box' }}>
@@ -27,9 +52,17 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                 {madrasah?.logo_url && (
                                     <img src={madrasah.logo_url} alt="Logo" style={{ width: '60px', height: '60px', objectFit: 'contain' }} crossOrigin="anonymous" />
                                 )}
-                                <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0', color: '#1e3a8a' }}>{madrasah?.name || 'Madrasah Name'}</h1>
+                                <h1 style={{ 
+                                    fontSize: (madrasah?.name?.length || 0) > 60 ? '14px' : (madrasah?.name?.length || 0) > 45 ? '18px' : (madrasah?.name?.length || 0) > 30 ? '22px' : '28px', 
+                                    fontWeight: 'bold', 
+                                    margin: '0', 
+                                    color: '#1e3a8a', 
+                                    lineHeight: '1.2', 
+                                    whiteSpace: 'nowrap',
+                                    display: 'inline-block'
+                                }}>{madrasah?.name || 'Madrasah Name'}</h1>
                             </div>
-                            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0', color: '#1e40af' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0', color: '#1e40af', marginTop: '10px' }}>
                                 {isBn ? 'হাজিরা রিপোর্ট' : 'Attendance Report'}
                             </h2>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', fontSize: '14px', fontWeight: 'bold', color: '#475569' }}>
@@ -49,12 +82,11 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                     <th style={thStyle}>{isBn ? 'অনুপস্থিত' : 'Absent'}</th>
                                     <th style={thStyle}>{isBn ? 'দেরি' : 'Late'}</th>
                                     <th style={thStyle}>{isBn ? 'শতকরা' : 'Percentage'}</th>
+                                    <th style={thStyle}>{isBn ? 'পজিশন' : 'Position'}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageData.map((item, idx) => {
-                                    const late = item.late_days || 0;
-                                    const pct = item.total_days > 0 ? Math.round(((item.present_days + late) / item.total_days) * 100) : 0;
                                     return (
                                         <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                                             <td style={tdStyle}>{item.roll || '-'}</td>
@@ -62,8 +94,9 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                             <td style={tdStyle}>{item.total_days}</td>
                                             <td style={{ ...tdStyle, color: '#16a34a' }}>{item.present_days}</td>
                                             <td style={{ ...tdStyle, color: '#dc2626' }}>{item.absent_days}</td>
-                                            <td style={{ ...tdStyle, color: '#d97706' }}>{late}</td>
-                                            <td style={{ ...tdStyle, fontWeight: 'bold' }}>{pct}%</td>
+                                            <td style={{ ...tdStyle, color: '#d97706' }}>{item.late}</td>
+                                            <td style={{ ...tdStyle, fontWeight: 'bold' }}>{item.pct}%</td>
+                                            <td style={{ ...tdStyle, fontWeight: 'bold', color: '#3b82f6' }}>{item.rank}</td>
                                         </tr>
                                     );
                                 })}

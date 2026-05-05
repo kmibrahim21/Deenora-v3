@@ -75,7 +75,11 @@ export const generateAttendanceReportPDF = async (
     const root = createRoot(container);
     
     await new Promise<void>((resolve) => {
-        root.render(<AttendanceReportTemplate reportData={reportData} madrasah={madrasah} className={className} month={month} lang={lang} />);
+        root.render(
+            <div id="pdf-wrapper">
+                <AttendanceReportTemplate reportData={reportData} madrasah={madrasah} className={className} month={month} lang={lang} />
+            </div>
+        );
         setTimeout(resolve, 800); 
     });
 
@@ -83,8 +87,9 @@ export const generateAttendanceReportPDF = async (
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    if (container.children.length > 0) {
-        const pages = Array.from(container.children).filter(el => el.tagName !== 'STYLE');
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper && wrapper.children.length > 0) {
+        const pages = Array.from(wrapper.children).filter(el => el.tagName !== 'STYLE');
         
         for (let i = 0; i < pages.length; i++) {
             const pageElement = pages[i] as HTMLElement;
