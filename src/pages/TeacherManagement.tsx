@@ -208,12 +208,15 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const fetchPaidSalaries = async () => {
     try {
        // Search ledger for expense category "Teacher Salary" or "শিক্ষক বেতন"
+       const monthStart = `${salaryMonth}-01`;
+       const monthEnd = `${salaryMonth}-31`; // Postgres handles 31 even for shorter months or we can be more precise
        const { data, error } = await supabase
          .from('ledger')
          .select('description')
          .eq('institution_id', madrasah!.id)
          .eq('type', 'expense')
-         .like('transaction_date', `${salaryMonth}%`)
+         .gte('transaction_date', monthStart)
+         .lte('transaction_date', monthEnd)
          .in('category', ['শিক্ষক বেতন', 'Teacher Salary']);
        
        if (data) {
@@ -244,7 +247,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         amount: teacher.basic_salary,
         type: 'expense',
         description: description,
-        transaction_date: new Date().toISOString()
+        transaction_date: new Date().toISOString().split('T')[0],
+        academic_year_id: madrasah.config_json?.active_academic_year_id
       });
 
       if (error) throw error;

@@ -101,15 +101,15 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         }
 
         const activeYearId = madrasah.config_json?.active_academic_year_id;
+        const yearStart = madrasah.config_json?.academic_year_start;
         let query = supabase.from('ledger').select('*').eq('institution_id', madrasah.id);
         
-        if (activeYearId) {
-          query = query.eq('academic_year_id', activeYearId);
-        } else {
-          const yearStart = madrasah.config_json?.academic_year_start;
-          if (yearStart) {
-            query = query.gte('transaction_date', yearStart);
-          }
+        if (activeYearId && yearStart) {
+          query = query.or(`academic_year_id.eq.${activeYearId},and(academic_year_id.is.null,transaction_date.gte.${yearStart})`);
+        } else if (activeYearId) {
+          query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        } else if (yearStart) {
+          query = query.gte('transaction_date', yearStart);
         }
 
         const { data } = await query.order('transaction_date', { ascending: false });
