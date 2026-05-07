@@ -84,7 +84,9 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     { code: '{paid_amount}', label: lang === 'bn' ? 'পরিশোধিত টাকা' : 'Paid Amount' },
     { code: '{month}', label: lang === 'bn' ? 'মাস' : 'Month' },
     { code: '{result_grade}', label: lang === 'bn' ? 'রেজাল্ট গ্রেড' : 'Result Grade' },
+    { code: '{gpa}', label: lang === 'bn' ? 'জিপিএ' : 'GPA' },
     { code: '{exam_name}', label: lang === 'bn' ? 'পরীক্ষার নাম' : 'Exam Name' },
+    { code: '{exam_subject}', label: lang === 'bn' ? 'পরীক্ষার বিষয় ও নম্বর' : 'Exam Subjects & Marks' },
     { code: '{merit_position}', label: lang === 'bn' ? 'মেধাস্থান' : 'Merit Position' },
     { code: '{attendance_percentage}', label: lang === 'bn' ? 'উপস্থিতি হার' : 'Attendance %' },
     { code: '{institution_name}', label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name' },
@@ -561,7 +563,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                         <div className="flex items-start gap-1 p-1.5 rounded-lg bg-blue-100/50">
                           <Info size={12} className="text-blue-500 mt-0.5 shrink-0" />
                           <p className="text-[10px] text-blue-700 font-medium font-noto">
-                            {lang === 'bn' ? 'নোট: পরীক্ষার শর্টকোডগুলো ({exam_name}, {result_grade}, {merit_position}) ক্লাসের সর্বশেষ প্রকাশিত পরীক্ষার ফলাফল পাঠাবে। নির্দিষ্ট পরীক্ষার এসএমএস পাঠাতে পরীক্ষা সেকশন থেকে এসএমএস অপশন ব্যবহার করুন।' : 'Note: Exam shortcodes ({exam_name}, {result_grade}, {merit_position}) fetch the latest published exam for the class.'}
+                            {lang === 'bn' ? 'নোট: পরীক্ষার শর্টকোডগুলো ({exam_name}, {exam_subject}, {result_grade}, {gpa}, {merit_position}) ক্লাসের সর্বশেষ প্রকাশিত পরীক্ষার ফলাফল পাঠাবে। নির্দিষ্ট পরীক্ষার এসএমএস পাঠাতে পরীক্ষা সেকশন থেকে এসএমএস অপশন ব্যবহার করুন।' : 'Note: Exam shortcodes ({exam_name}, {exam_subject}, {result_grade}, {gpa}, {merit_position}) fetch the latest published exam for the class.'}
                           </p>
                         </div>
                       </div>

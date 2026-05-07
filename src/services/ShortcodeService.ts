@@ -19,8 +19,10 @@ export const ShortcodeService = {
       '{due_amount}': data.due_amount !== undefined ? data.due_amount : '-',
       '{paid_amount}': data.paid_amount !== undefined ? data.paid_amount : '-',
       '{result_grade}': data.result_grade || '-',
+      '{gpa}': data.result_gpa || '-',
       '{merit_position}': data.merit_position || '-',
       '{exam_name}': data.exam_name || '-',
+      '{exam_subject}': data.exam_subject || '-',
       '{attendance_percentage}': data.attendance_percentage !== undefined ? `${data.attendance_percentage}%` : '-',
       '{institution_name}': data.institution_name || '-',
       '{month}': data.month || '-',
@@ -140,7 +142,7 @@ export const ShortcodeService = {
            // To calculate merit position, we need marks for ALL students in this class for this exam
            const { data: allMarksData } = await supabase
              .from('exam_marks')
-             .select('student_id, marks_obtained, exam_subjects(full_marks)')
+             .select('student_id, marks_obtained, exam_subjects(full_marks, subject_name)')
              .eq('exam_id', latestExam.id);
            
            if (allMarksData) {
@@ -172,7 +174,10 @@ export const ShortcodeService = {
                exam_subjects: { 
                  full_marks: Array.isArray(m.exam_subjects) 
                    ? (m.exam_subjects[0]?.full_marks || 100) 
-                   : ((m.exam_subjects as any)?.full_marks || 100) 
+                   : ((m.exam_subjects as any)?.full_marks || 100),
+                 subject_name: Array.isArray(m.exam_subjects)
+                   ? (m.exam_subjects[0]?.subject_name || '')
+                   : ((m.exam_subjects as any)?.subject_name || '')
                }
              }));
              marks.push(...normalizedMarks);
@@ -195,7 +200,7 @@ export const ShortcodeService = {
         if (latestExam) {
            const { data: allMarksData } = await supabase
              .from('befaq_results')
-             .select('student_id, marks_obtained, befaq_subjects(total_marks)')
+             .select('student_id, marks_obtained, befaq_subjects(total_marks, subject_name)')
              .eq('exam_id', latestExam.id);
            
            if (allMarksData) {
@@ -224,7 +229,10 @@ export const ShortcodeService = {
                exam_subjects: { 
                  full_marks: Array.isArray(m.befaq_subjects) 
                    ? (m.befaq_subjects[0]?.total_marks || 100) 
-                   : ((m.befaq_subjects as any)?.total_marks || 100) 
+                   : ((m.befaq_subjects as any)?.total_marks || 100),
+                 subject_name: Array.isArray(m.befaq_subjects)
+                   ? (m.befaq_subjects[0]?.subject_name || '')
+                   : ((m.befaq_subjects as any)?.subject_name || '')
                }
              }));
              marks.push(...normalizedMarks);
@@ -257,15 +265,22 @@ export const ShortcodeService = {
       const percentage = totalFull > 0 ? (totalObtained / totalFull) * 100 : 0;
       
       let grade = '-';
+      let gpa = '-';
       if (totalFull > 0) {
-        if (percentage >= 80) grade = 'A+';
-        else if (percentage >= 70) grade = 'A';
-        else if (percentage >= 60) grade = 'A-';
-        else if (percentage >= 50) grade = 'B';
-        else if (percentage >= 40) grade = 'C';
-        else if (percentage >= 33) grade = 'D';
-        else grade = 'F';
+        if (percentage >= 80) { grade = 'A+'; gpa = '5.00'; }
+        else if (percentage >= 70) { grade = 'A'; gpa = '4.00'; }
+        else if (percentage >= 60) { grade = 'A-'; gpa = '3.50'; }
+        else if (percentage >= 50) { grade = 'B'; gpa = '3.00'; }
+        else if (percentage >= 40) { grade = 'C'; gpa = '2.00'; }
+        else if (percentage >= 33) { grade = 'D'; gpa = '1.00'; }
+        else { grade = 'F'; gpa = '0.00'; }
       }
+
+      // Calculate Subject-wise Marks String
+      const subjectsStr = studentMarks
+        .filter(m => m.exam_subjects?.subject_name)
+        .map(m => `${m.exam_subjects.subject_name}: ${m.marks_obtained}`)
+        .join(', ');
 
       // Calculate Attendance Percentage
       const studentAttendance = attendance?.filter(a => a.student_id === s.id) || [];
@@ -282,7 +297,9 @@ export const ShortcodeService = {
         due_amount: balance.due,
         paid_amount: balance.paid,
         exam_name: examsMap[s.id] || '-',
+        exam_subject: subjectsStr || '-',
         result_grade: grade || '-',
+        result_gpa: gpa || '-',
         merit_position: meritPositions[s.id] ? String(meritPositions[s.id]) : '-',
         attendance_percentage: attPercentage || 0,
         month: currentMonth || '-'
