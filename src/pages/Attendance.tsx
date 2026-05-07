@@ -1161,7 +1161,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                             <div className="min-w-0">
                               <h5 className={`font-black font-noto text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{a.students?.student_name}</h5>
                               <div className="mt-1 space-y-0.5">
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.students?.classes?.class_name || 'Class'}</p>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.classes?.class_name || 'Class'}</p>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Roll: {a.students?.roll}</p>
                               </div>
                             </div>

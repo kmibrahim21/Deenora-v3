@@ -30,6 +30,10 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Phone
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -596,9 +600,17 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    {teacher.phone && (
+                      <a
+                        href={`tel:${teacher.phone}`}
+                        className={`p-2 rounded-lg font-black flex items-center justify-center transition-all ${isDark ? "bg-blue-900/30 text-blue-400 hover:bg-blue-900/50" : "bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
+                      >
+                        <Phone size={14} />
+                      </a>
+                    )}
                     <button
                       onClick={() => openEditModal(teacher)}
-                      className={`p-2 rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition-all ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"}`}
+                      className={`p-2 rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600 transition-all ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"}`}
                     >
                       <Edit3 size={14} />
                     </button>
@@ -688,101 +700,110 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         )}
         </>
       ) : activeTab === 'attendance' ? (
-        <div className={`p-6 rounded-3xl border shadow-sm ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>
-                {lang === 'bn' ? 'শিক্ষক হাজিরা' : 'Teacher Attendance'}
-              </h2>
-              <p className="text-xs font-bold text-slate-500 mt-1">
-                {lang === 'bn' ? 'দৈনিক উপস্থিতির রেকর্ড' : 'Daily attendance record'}
-              </p>
+        <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+            <div className="w-full sm:w-1/2 relative animate-in fade-in">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
+                {lang === 'bn' ? 'তারিখ' : 'Date'}
+              </label>
+              <div className="relative">
+                <input 
+                  type="date" 
+                  className={`w-full h-14 pl-10 pr-2 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-sm ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                  value={attendanceDate}
+                  onChange={(e) => setAttendanceDate(e.target.value)}
+                />
+                <Calendar className="absolute left-3 top-4 text-[#2563EB]" size={18}/>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <input 
-                type="date"
-                value={attendanceDate}
-                onChange={(e) => setAttendanceDate(e.target.value)}
-                className={`px-4 py-2 border rounded-xl outline-none font-bold text-sm ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}
-              />
+            <div className="w-full sm:w-auto self-end">
               <button
                 onClick={saveTeacherAttendance}
                 disabled={savingAttendance}
-                className={`px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all ${savingAttendance ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-blue-600 text-white shadow-md hover:bg-blue-700 active:scale-95"}`}
+                className={`w-full sm:w-auto h-14 px-8 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${savingAttendance ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-[#2563EB] text-white hover:bg-blue-700 shadow-premium"}`}
               >
-                {savingAttendance ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                <span className="hidden sm:inline">{lang === 'bn' ? 'সেভ করুন' : 'Save'}</span>
+                {savingAttendance ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                <span>{lang === 'bn' ? 'হাজিরা সেভ করুন' : 'Save Attendance'}</span>
               </button>
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3 animate-in slide-in-from-bottom-5">
+             <div className="flex items-center justify-between px-6 pt-2">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teacher List'}</h4>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'উপস্থিতি' : 'Attendance'}</h4>
+             </div>
+             
             {teachers.length === 0 ? (
-               <div className="text-center py-10 text-slate-500 font-bold">
-                 {lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}
+               <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                 <Users size={40} className="text-slate-400/20 mb-4" />
+                 <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
                </div>
             ) : (
-              teachers.map(teacher => {
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+              {teachers.map(teacher => {
                 const status = teacherAttendance[teacher.id] || 'present';
                 
                 return (
-                  <div key={teacher.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row gap-4 items-center justify-between transition-all ${isDark ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDark ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-white text-slate-500 shadow-sm border-slate-200"}`}>
-                        <User size={24} />
+                  <div key={teacher.id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                    <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+                      <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                        <User size={20} />
                       </div>
-                      <div>
-                        <h3 className={`font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>{teacher.name}</h3>
-                        <p className="text-[10px] font-bold text-slate-400 capitalize">{teacher.designation || 'Teacher'}</p>
+                      <div className="min-w-0">
+                        <h5 className={`font-black font-noto text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                        <div className="mt-1 flex items-center gap-2">
+                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
+                           {teacher.phone && (
+                             <a href={`tel:${teacher.phone}`} className={`shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all ${isDark ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
+                               <Phone size={10} />
+                             </a>
+                           )}
+                        </div>
                       </div>
                     </div>
                     
-                    <div className={`flex p-1 rounded-xl w-full sm:w-auto overflow-x-auto no-scrollbar ${isDark ? 'bg-slate-900' : 'bg-slate-100/50'}`}>
-                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'present' ? 'bg-emerald-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-500 hover:text-emerald-600'}`}>
-                        {lang === 'bn' ? 'উপস্থিত' : 'Present'}
-                      </button>
-                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'absent' ? 'bg-red-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-red-400' : 'text-slate-500 hover:text-red-600'}`}>
-                        {lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}
-                      </button>
-                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'late' ? 'bg-amber-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-amber-400' : 'text-slate-500 hover:text-amber-600'}`}>
-                        {lang === 'bn' ? 'বিলম্ব' : 'Late'}
-                      </button>
-                      <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${status === 'half_day' ? 'bg-purple-500 text-white shadow-sm' : isDark ? 'text-slate-400 hover:text-purple-400' : 'text-slate-500 hover:text-purple-600'}`}>
-                        {lang === 'bn' ? 'অর্ধ-দিবস' : 'Half Day'}
-                      </button>
+                    <div className="flex gap-2 shrink-0 items-center justify-between sm:justify-end w-full sm:w-auto">
+                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={20}/></button>
+                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={20}/></button>
+                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={20}/></button>
+                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-xs font-black">1/2</span></button>
                     </div>
                   </div>
                 )
-              })
+              })}
+              </div>
             )}
           </div>
         </div>
       ) : activeTab === 'attendance_report' ? (
-        <div className={`p-6 rounded-3xl border shadow-sm ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>
-                {lang === 'bn' ? 'শিক্ষক হাজিরা এনালাইসিস' : 'Teacher Attendance Analysis'}
-              </h2>
-              <p className="text-xs font-bold text-slate-500 mt-1">
-                {lang === 'bn' ? 'মাসিক রিপোর্ট' : 'Monthly report'}
-              </p>
+        <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+            <div className="w-full relative animate-in fade-in">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
+                {lang === 'bn' ? 'মাস নির্বাচন করুন' : 'Select Month'}
+              </label>
+              <div className="relative">
+                <input 
+                  type="month" 
+                  className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                  value={attendanceMonth}
+                  onChange={(e) => setAttendanceMonth(e.target.value)}
+                />
+                <Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/>
+              </div>
             </div>
-            <input 
-              type="month"
-              value={attendanceMonth}
-              onChange={(e) => setAttendanceMonth(e.target.value)}
-              className={`px-4 py-2 border rounded-xl outline-none font-bold text-sm ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}
-            />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3 animate-in slide-in-from-bottom-5">
             {teachers.length === 0 ? (
-               <div className="text-center py-10 text-slate-500 font-bold">
-                 {lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}
+               <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                 <Users size={40} className="text-slate-400/20 mb-4" />
+                 <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
                </div>
             ) : (
-              teachers.map(teacher => {
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {teachers.map(teacher => {
                 let presentCount = 0;
                 let absentCount = 0;
                 let lateCount = 0;
@@ -797,83 +818,86 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 });
                 
                 return (
-                  <div key={teacher.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row gap-4 items-center justify-between transition-all ${isDark ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
-                    <div className="flex items-center gap-3 w-full sm:w-auto min-w-[200px]">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDark ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-white text-slate-500 shadow-sm border-slate-200"}`}>
+                  <div key={teacher.id} className={`p-5 rounded-[1.8rem] border shadow-bubble flex flex-col sm:flex-row gap-5 items-center justify-between group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                      <div className={`w-14 h-14 rounded-[1.2rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
                         <User size={24} />
                       </div>
-                      <div>
-                        <h3 className={`font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>{teacher.name}</h3>
-                        <p className="text-[10px] font-bold text-slate-400 capitalize">{teacher.designation || 'Teacher'}</p>
+                      <div className="min-w-0">
+                        <h5 className={`font-black font-noto text-base truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
                       </div>
                     </div>
                     
-                    <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-2 w-full">
-                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-emerald-50 border-emerald-100 text-emerald-600"}`}>
-                        <span className="text-2xl font-black">{presentCount}</span>
-                        <span className="text-[10px] uppercase tracking-widest font-bold">Present</span>
+                    <div className="flex-1 grid grid-cols-4 gap-2 w-full mt-2 sm:mt-0">
+                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>P</span>
+                         <span className="text-xl font-black text-emerald-500">{presentCount}</span>
                       </div>
-                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-red-50 border-red-100 text-red-600"}`}>
-                        <span className="text-2xl font-black">{absentCount}</span>
-                        <span className="text-[10px] uppercase tracking-widest font-bold">Absent</span>
+                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>A</span>
+                         <span className="text-xl font-black text-red-500">{absentCount}</span>
                       </div>
-                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-amber-50 border-amber-100 text-amber-600"}`}>
-                        <span className="text-2xl font-black">{lateCount}</span>
-                        <span className="text-[10px] uppercase tracking-widest font-bold">Late</span>
+                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>L</span>
+                         <span className="text-xl font-black text-amber-500">{lateCount}</span>
                       </div>
-                      <div className={`px-4 py-2 rounded-xl border flex flex-col items-center justify-center ${isDark ? "bg-purple-500/10 border-purple-500/20 text-purple-400" : "bg-purple-50 border-purple-100 text-purple-600"}`}>
-                        <span className="text-2xl font-black">{halfDayCount}</span>
-                        <span className="text-[10px] uppercase tracking-widest font-bold">Half Day</span>
+                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>1/2</span>
+                         <span className="text-xl font-black text-purple-500">{halfDayCount}</span>
                       </div>
                     </div>
                   </div>
                 )
-              })
+              })}
+              </div>
             )}
           </div>
         </div>
       ) : (
-        <div className={`p-6 rounded-3xl border shadow-sm ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>
-                {lang === 'bn' ? 'বেতন পরিশোধ' : 'Pay Salary'}
-              </h2>
-              <p className="text-xs font-bold text-slate-500 mt-1">
-                {lang === 'bn' ? 'মাসিক বেতন পরিশোধ এবং অটোমেটিক ফান্ড আপডেট' : 'Pay monthly salary and auto-update funds'}
-              </p>
+        <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+            <div className="w-full relative animate-in fade-in">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
+                {lang === 'bn' ? 'মাস নির্বাচন করুন' : 'Select Month'}
+              </label>
+              <div className="relative">
+                <input 
+                  type="month" 
+                  className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                  value={salaryMonth}
+                  onChange={(e) => setSalaryMonth(e.target.value)}
+                />
+                <Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/>
+              </div>
             </div>
-            <input 
-              type="month"
-              value={salaryMonth}
-              onChange={(e) => setSalaryMonth(e.target.value)}
-              className={`px-4 py-2 border rounded-xl outline-none font-bold text-sm ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-700"}`}
-            />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3 animate-in slide-in-from-bottom-5">
             {teachers.length === 0 ? (
-               <div className="text-center py-10 text-slate-500 font-bold">
-                 {lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}
+               <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                 <Users size={40} className="text-slate-400/20 mb-4" />
+                 <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
                </div>
             ) : (
-              teachers.map(teacher => {
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {teachers.map(teacher => {
                 const paidKey = `${teacher.id}_${salaryMonth}`;
                 const isPaid = paidSalaries.includes(paidKey);
                 
                 return (
-                  <div key={teacher.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row gap-4 items-center justify-between transition-all ${isDark ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-200"}`}>
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDark ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-white text-slate-500 shadow-sm border-slate-200"}`}>
+                  <div key={teacher.id} className={`p-5 rounded-[1.8rem] border shadow-bubble flex flex-col sm:flex-row gap-5 items-center justify-between group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                    <div className="flex items-center gap-4 w-full sm:w-auto min-w-0">
+                      <div className={`w-14 h-14 rounded-[1.2rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
                         <User size={24} />
                       </div>
-                      <div>
-                        <h3 className={`font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}>{teacher.name}</h3>
-                        <p className="text-[10px] font-bold text-slate-400 capitalize">{teacher.designation || 'Teacher'}</p>
+                      <div className="min-w-0">
+                        <h5 className={`font-black font-noto text-base truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
                       {teacher.basic_salary ? (
                         <div className="text-right">
                           <p className={`text-lg font-black ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>৳ {teacher.basic_salary}</p>
@@ -888,14 +912,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       <button
                         onClick={() => handlePaySalary(teacher)}
                         disabled={!teacher.basic_salary || isPaid || payingId === teacher.id}
-                        className={`px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all ${
+                        className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 min-w-[120px] ${
                           !teacher.basic_salary 
-                            ? (isDark ? "bg-slate-700 text-slate-500" : "bg-slate-200 text-slate-400") 
+                            ? (isDark ? "bg-slate-800 text-slate-500 shadow-none border border-slate-700" : "bg-slate-100 text-slate-400 shadow-none border border-slate-200") 
                             : isPaid 
-                              ? "bg-slate-300 text-slate-600 shadow-inner" 
+                              ? "bg-slate-200 text-slate-600 shadow-inner border border-slate-300" 
                               : payingId === teacher.id
-                                ? "bg-blue-400 text-white"
-                                : "bg-emerald-500 text-white shadow-md hover:bg-emerald-600 active:scale-95"
+                                ? "bg-blue-400 text-white shadow-none"
+                                : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20"
                         }`}
                       >
                         {payingId === teacher.id ? <Loader2 size={16} className="animate-spin" /> : isPaid ? <CheckCircle2 size={16} /> : <Save size={16} />}
@@ -904,7 +928,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     </div>
                   </div>
                 )
-              })
+              })}
+              </div>
             )}
           </div>
         </div>
