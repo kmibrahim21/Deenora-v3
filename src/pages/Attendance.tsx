@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -55,9 +55,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | 'half_day'>>({});
   const [arrivalTime, setArrivalTime] = useState<Record<string, string>>({});
   const [reportData, setReportData] = useState<any[]>([]);
-  const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
+  const [reportType, setReportType] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   const [reportView, setReportView] = useState<'list' | 'analytics'>('list');
   const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dailyAbsentees, setDailyAbsentees] = useState<any[]>([]);
+  const [attendanceNotTaken, setAttendanceNotTaken] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -149,12 +152,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   useEffect(() => {
     if (selectedClass && madrasah) {
       if (activeTab === 'daily') {
-        fetchStudents(selectedClass.id);
-        fetchDayEvents();
+        if (selectedClass.id !== 'all') {
+          fetchStudents(selectedClass.id);
+          fetchDayEvents();
+        }
       }
       else fetchReport(selectedClass.id);
     }
-  }, [selectedClass?.id, activeTab, date, selectedSession, selectedMonth, reportType, selectedYear, madrasah?.id]);
+  }, [selectedClass?.id, activeTab, date, selectedSession, selectedMonth, reportType, selectedYear, reportDate, madrasah?.id]);
 
   useEffect(() => {
     if (madrasah) {
@@ -324,36 +329,85 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setFetchError(null);
     try {
       if (!isOnline) {
-        const cachedReport = await CacheService.getCachedData('attendance', madrasah?.id || '');
-        // Filter cached report by class and date range
-        // For simplicity, we just set the cached data if it matches the class
-        const filtered = cachedReport.filter(r => r.class_id === cid);
-        setReportData(filtered);
+        if (reportType === 'daily') {
+           const cachedDaily = await CacheService.getCachedData('attendance_daily', madrasah?.id || '');
+           setDailyAbsentees(cachedDaily || []);
+        } else {
+           const cachedReport = await CacheService.getCachedData('attendance', madrasah?.id || '');
+           const filtered = cachedReport.filter(r => r.class_id === cid);
+           setReportData(filtered);
+        }
         setLoading(false);
         return;
       }
 
-      let startDate, endDate;
+      if (reportType === 'daily') {
+        let checkQuery = supabase.from('attendance')
+           .select('id')
+           .eq('institution_id', madrasah?.id)
+           .eq('date', reportDate)
+           .limit(1);
 
-      if (reportType === 'monthly') {
-          startDate = `${selectedMonth}-01`;
-          endDate = new Date(new Date(selectedMonth).getFullYear(), new Date(selectedMonth).getMonth() + 1, 0).toISOString().split('T')[0];
+        if (cid && cid !== 'all') {
+           checkQuery = checkQuery.eq('class_id', cid);
+        }
+        if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+           checkQuery = checkQuery.eq('session', selectedSession);
+        }
+
+        const { data: checkData, error: checkError } = await checkQuery;
+        if (checkError) throw checkError;
+
+        if (!checkData || checkData.length === 0) {
+           setDailyAbsentees([]);
+           setAttendanceNotTaken(true);
+        } else {
+           setAttendanceNotTaken(false);
+           let query = supabase.from('attendance')
+              .select(`
+                *,
+                students(id, student_name, roll, guardian_phone),
+                classes(class_name)
+              `)
+              .eq('institution_id', madrasah?.id)
+              .eq('date', reportDate)
+              .eq('status', 'absent');
+              
+           if (cid && cid !== 'all') {
+              query = query.eq('class_id', cid);
+           }
+           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+              query = query.eq('session', selectedSession);
+           }
+
+           const { data, error } = await query;
+           if (error) throw error;
+           setDailyAbsentees(data || []);
+           await CacheService.cacheData('attendance_daily', madrasah?.id || '', data || []);
+        }
       } else {
-          startDate = `${selectedYear}-01-01`;
-          endDate = `${selectedYear}-12-31`;
-      }
+        let startDate, endDate;
 
-      const { data, error } = await supabase.rpc('get_attendance_report', {
-        p_class_id: cid,
-        p_start_date: startDate,
-        p_end_date: endDate,
-        p_session: selectedSession === 'all' ? null : selectedSession
-      });
+        if (reportType === 'monthly') {
+            startDate = `${selectedMonth}-01`;
+            endDate = new Date(new Date(selectedMonth).getFullYear(), new Date(selectedMonth).getMonth() + 1, 0).toISOString().split('T')[0];
+        } else {
+            startDate = `${selectedYear}-01-01`;
+            endDate = `${selectedYear}-12-31`;
+        }
 
-      if (error) throw error;
-      if (data) {
-        setReportData(data);
-        await CacheService.cacheData('attendance', madrasah?.id || '', data);
+        const { data, error } = await supabase.rpc('get_attendance_report', {
+          p_class_id: cid === 'all' ? null : cid,
+          p_start_date: startDate,
+          p_end_date: endDate,
+          p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
+        });
+
+        if (error) throw error;
+        if (data) {
+          setReportData(data);
+          await CacheService.cacheData('attendance', madrasah?.id || '', data);
+        }
       }
     } catch (e: any) { 
       console.error(e);
@@ -430,10 +484,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     }
   };
 
-  const sendAbsentAlerts = async () => {
-    if (!madrasah || !selectedClass) return;
+  const sendAbsentAlerts = async (customAbsents?: any[], customClassName?: string) => {
+    if (!madrasah) return;
     
-    const absents = students.filter(s => attendance[s.id] === 'absent');
+    const absents = customAbsents || students.filter(s => attendance[s.id] === 'absent');
     if (absents.length === 0) {
       setErrorTitle(lang === 'bn' ? 'শিক্ষার্থী নির্বাচন করুন' : 'No Selection');
       setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত শিক্ষার্থী পাওয়া যায়নি!' : 'No absent students found to send alerts.');
@@ -483,8 +537,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setShowConfirmModal(true);
   };
 
-  const sendAbsentVoiceAlerts = async () => {
-    if (!madrasah || !selectedClass) return;
+  const sendAbsentVoiceAlerts = async (customAbsents?: any[], customClassName?: string) => {
+    if (!madrasah) return;
     
     if (!selectedVoiceTemplateId) {
       setErrorTitle(lang === 'bn' ? 'ভয়েস নির্বাচন করুন' : 'Select Voice');
@@ -493,7 +547,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       return;
     }
 
-    const absents = students.filter(s => attendance[s.id] === 'absent');
+    const absents = customAbsents || students.filter(s => attendance[s.id] === 'absent');
     if (absents.length === 0) {
       setErrorTitle(lang === 'bn' ? 'শিক্ষার্থী নির্বাচন করুন' : 'No Selection');
       setErrorDetails(lang === 'bn' ? 'কোনো অনুপস্থিত শিক্ষার্থী পাওয়া যায়নি!' : 'No absent students found!');
@@ -608,7 +662,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             institution_id: madrasah.id,
             voice_template_id: voice.id,
             target_type: 'students',
-            target_class_name: selectedClass?.class_name || 'Attendance Class',
+            target_class_name: customClassName || selectedClass?.class_name || 'Attendance Class',
             total_numbers: phoneNumbers.length,
             estimated_cost: estimatedCost,
             status: 'sending',
@@ -740,11 +794,16 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           <div className="relative">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{t('class_select', lang)}</label>
             <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-14 px-4 rounded-2xl border-2 flex items-center justify-between group active:scale-[0.99] transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
-              <span className="font-black font-noto truncate text-sm">{selectedClass?.class_name || t('class_choose', lang)}</span>
+              <span className="font-black font-noto truncate text-sm">{selectedClass ? (selectedClass.id === 'all' ? (lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)') : selectedClass.class_name) : t('class_choose', lang)}</span>
               <ChevronDown size={18} className="text-slate-300 transition-transform duration-300 group-focus:rotate-180" />
             </button>
             {showClassDropdown && (
               <div className={`absolute top-full left-0 right-0 mt-3 rounded-[2rem] shadow-bubble border z-[100] p-2 max-h-56 overflow-y-auto animate-in slide-in-from-top-2 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+                {activeTab === 'report' && (
+                  <button onClick={() => { setSelectedClass({id: 'all', class_name: lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)'} as any); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-4 rounded-xl mb-1 transition-all ${selectedClass?.id === 'all' ? 'bg-[#2563EB] text-white shadow-premium' : (isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-50 text-slate-700')}`}>
+                    <span className="font-black font-noto text-[15px]">{lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)'}</span>
+                  </button>
+                )}
                 {classes.map(cls => (
                   <button key={cls.id} onClick={() => { setSelectedClass(cls); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-4 rounded-xl mb-1 transition-all ${selectedClass?.id === cls.id ? 'bg-[#2563EB] text-white shadow-premium' : (isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-50 text-slate-700')}`}>
                     <span className="font-black font-noto text-[15px]">{cls.class_name}</span>
@@ -799,6 +858,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         ) : (
             <div className="space-y-4 animate-in fade-in">
                 <div className={`flex p-1 rounded-xl border transition-all ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                    <button onClick={() => setReportType('daily')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>দৈনিক</button>
                     <button onClick={() => setReportType('monthly')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'monthly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>মাসিক</button>
                     <button onClick={() => setReportType('yearly')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'yearly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>বাৎসরিক</button>
                 </div>
@@ -819,9 +879,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 
                 <div className="relative">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
-                        {reportType === 'monthly' ? 'মাস নির্বাচন করুন' : 'বছর নির্বাচন করুন'}
+                        {reportType === 'daily' ? 'তারিখ নির্বাচন করুন' : reportType === 'monthly' ? 'মাস নির্বাচন করুন' : 'বছর নির্বাচন করুন'}
                     </label>
-                    {reportType === 'monthly' ? (
+                    {reportType === 'daily' ? (
+                        <div className="relative"><input 
+                          type="date" 
+                          className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                          value={reportDate} 
+                          onChange={(e) => setReportDate(e.target.value)}
+                          min={activeYear?.start_date}
+                          max={activeYear?.end_date}
+                        /><Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/></div>
+                    ) : reportType === 'monthly' ? (
                         <div className="relative"><input 
                           type="month" 
                           className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
@@ -1076,6 +1145,131 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     <Users size={40} className="text-slate-400/20 mb-4" />
                     <p className="text-slate-400/40 uppercase text-xs font-black tracking-[0.2em]">{selectedClass ? 'No Students Found' : 'Please select a class'}</p>
                   </div>
+            ) : reportType === 'daily' ? (
+              <div className="space-y-6 animate-in slide-in-from-bottom-5">
+                 <div className="flex items-center gap-2 mb-2 mt-2">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'অনুপস্থিত শিক্ষার্থী তালিকা' : 'Absent Students'} ({dailyAbsentees.length})</h4>
+                 </div>
+                 {dailyAbsentees.length > 0 ? (
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                     {dailyAbsentees.map(a => (
+                       <div key={a.id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-4 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 ${isDark ? 'bg-slate-900 text-red-400 border-slate-700' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                              <XCircle size={20} />
+                            </div>
+                            <div className="min-w-0">
+                              <h5 className={`font-black font-noto text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{a.students?.student_name}</h5>
+                              <div className="mt-1 space-y-0.5">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.students?.classes?.class_name || 'Class'}</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Roll: {a.students?.roll}</p>
+                              </div>
+                            </div>
+                          </div>
+                          {a.students?.guardian_phone && (
+                            <a href={`tel:${a.students.guardian_phone}`} className={`shrink-0 w-11 h-11 rounded-[1.1rem] flex items-center justify-center border transition-all active:scale-95 ${isDark ? 'bg-blue-900/30 text-blue-400 border-blue-900/50 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'}`}>
+                              <Phone size={18} />
+                            </a>
+                          )}
+                       </div>
+                     ))}
+                   </div>
+                 ) : attendanceNotTaken ? (
+                    <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                       <AlertTriangle size={40} className="text-yellow-500 mb-3" />
+                       <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'হাজিরা নেওয়া হয়নি' : 'Attendance Not Taken'}</p>
+                    </div>
+                 ) : (
+                    <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                       <CheckCircle2 size={40} className="text-emerald-500 mb-3" />
+                       <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'সবাই উপস্থিত' : 'Everyone Present'}</p>
+                    </div>
+                 )}
+                 
+                 {dailyAbsentees.length > 0 && (
+                   <div className="flex flex-col gap-4 mt-8 border-t pt-8 border-slate-100 dark:border-slate-800">
+                      {/* Shared SMS/Voice UI for Daily Reports */}
+                      <div className="space-y-2">
+                          <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                              {lang === 'bn' ? 'এসএমএস এলার্ট (সকল ক্লাস বা নির্দিষ্ট)' : 'SMS Alert (All/Selected Classes)'}
+                          </p>
+                          <div className="flex items-center gap-2">
+                              <button 
+                                  onClick={() => {
+                                      if (!isOnline) {
+                                          setErrorTitle(lang === 'bn' ? 'অফলাইন' : 'Offline');
+                                          setErrorDetails(lang === 'bn' ? 'এসএমএস পাঠাতে ইন্টারনেট প্রয়োজন।' : 'Internet required to send SMS.');
+                                          setShowErrorModal(true);
+                                          return;
+                                      }
+                                      const mappedAbsents = dailyAbsentees.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
+                                      sendAbsentAlerts(mappedAbsents, selectedClass?.id === 'all' ? 'All Classes' : undefined);
+                                  }} 
+                                  disabled={sendingAlerts || !isOnline} 
+                                  className={`flex-[2.5] h-14 font-black rounded-2xl flex items-center justify-center gap-3 text-[13px] active:scale-95 transition-all border uppercase tracking-widest shadow-sm ${!isOnline ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' : isDark ? 'bg-slate-800 text-blue-400 border-slate-700 hover:bg-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100 hover:bg-blue-100'}`}
+                              >
+                                  {sendingAlerts ? <Loader2 className="animate-spin" size={20} /> : <><Send size={20} /> {t('absent_alert', lang)}</>}
+                              </button>
+                              <div className="flex-1 relative">
+                                  <button onClick={() => setShowSmsTemplateDropdown(!showSmsTemplateDropdown)} className={`w-full h-14 px-3 rounded-2xl border flex items-center justify-between active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-100 text-[#2563EB]'}`}>
+                                      <span className="text-[10px] font-black uppercase tracking-widest truncate">{selectedSmsTemplateId === 'default' ? (lang === 'bn' ? 'ডিফল্ট' : 'Default') : (smsTemplates.find(t => t.id === selectedSmsTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন' : 'Select'))}</span>
+                                      <ChevronDown size={14} className={`shrink-0 transition-transform duration-300 ${showSmsTemplateDropdown ? 'rotate-180' : ''}`} />
+                                  </button>
+                                  {showSmsTemplateDropdown && (
+                                      <div className={`absolute bottom-full right-0 mb-3 w-64 p-2 rounded-[1.5rem] shadow-xl border z-[110] max-h-48 overflow-y-auto animate-in slide-in-from-bottom-2 duration-300 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                          <button onClick={() => { setSelectedSmsTemplateId('default'); setShowSmsTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === 'default' ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}>{lang === 'bn' ? 'ডিফল্ট টেমপ্লেট' : 'Default Template'}</button>
+                                          {smsTemplates.map(t => (
+                                              <button key={t.id} onClick={() => { setSelectedSmsTemplateId(t.id); setShowSmsTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === t.id ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}>{t.title}</button>
+                                          ))}
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="space-y-2 mt-2">
+                          <p className={`text-[10px] font-black uppercase tracking-widest px-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                              {lang === 'bn' ? 'ভয়েস এলার্ট (সকল ক্লাস বা নির্দিষ্ট)' : 'Voice Alert (All/Selected Classes)'}
+                          </p>
+                          <div className="flex items-center gap-2">
+                              <button 
+                                  onClick={() => {
+                                      if (!isOnline) {
+                                          setErrorTitle(lang === 'bn' ? 'অফলাইন' : 'Offline');
+                                          setErrorDetails(lang === 'bn' ? 'ভয়েস কল পাঠাতে ইন্টারনেট প্রয়োজন।' : 'Internet required to send Voice Calls.');
+                                          setShowErrorModal(true);
+                                          return;
+                                      }
+                                      const mappedAbsents = dailyAbsentees.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
+                                      sendAbsentVoiceAlerts(mappedAbsents, selectedClass?.id === 'all' ? 'All Classes' : undefined);
+                                  }} 
+                                  disabled={sendingVoiceAlerts || !isOnline || voiceTemplates.length === 0} 
+                                  className={`flex-[2.5] h-14 font-black rounded-2xl flex items-center justify-center gap-3 text-[13px] active:scale-95 transition-all border uppercase tracking-widest shadow-sm ${!isOnline || voiceTemplates.length === 0 ? 'bg-slate-300 text-slate-500 border-slate-300 cursor-not-allowed' : isDark ? 'bg-slate-800 text-emerald-400 border-slate-700 hover:bg-slate-700' : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'}`}
+                              >
+                                  {sendingVoiceAlerts ? <Loader2 className="animate-spin" size={20} /> : <><MessageSquare size={20} /> {lang === 'bn' ? 'ভয়েস কল এলার্ট' : 'Voice Call Alert'}</>}
+                              </button>
+                              <div className="flex-1 relative">
+                                  <button onClick={() => setShowVoiceTemplateDropdown(!showVoiceTemplateDropdown)} className={`w-full h-14 px-3 rounded-2xl border flex items-center justify-between active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-100 text-[#2563EB]'}`}>
+                                      <span className="text-[10px] font-black uppercase tracking-widest truncate">{selectedVoiceTemplateId ? (voiceTemplates.find(v => v.id === selectedVoiceTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন' : 'Select')) : (lang === 'bn' ? 'নির্বাচন' : 'Select')}</span>
+                                      <ChevronDown size={14} className={`shrink-0 transition-transform duration-300 ${showVoiceTemplateDropdown ? 'rotate-180' : ''}`} />
+                                  </button>
+                                  {showVoiceTemplateDropdown && (
+                                      <div className={`absolute bottom-full right-0 mb-3 w-64 p-2 rounded-[1.5rem] shadow-xl border z-[110] max-h-48 overflow-y-auto animate-in slide-in-from-bottom-2 duration-300 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                          {voiceTemplates.length === 0 ? (
+                                              <p className="p-4 text-xs text-slate-500 font-bold text-center italic">{lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস নেই' : 'No approved voices found.'}</p>
+                                          ) : (
+                                              voiceTemplates.map(v => (
+                                                  <button key={v.id} onClick={() => { setSelectedVoiceTemplateId(v.id); setShowVoiceTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedVoiceTemplateId === v.id ? (isDark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}>{v.title}</button>
+                                              ))
+                                          )}
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                   </div>
+                 )}
+              </div>
             ) : (
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-6">
