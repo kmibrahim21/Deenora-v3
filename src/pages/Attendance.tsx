@@ -390,7 +390,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
         if (reportType === 'monthly') {
             startDate = `${selectedMonth}-01`;
-            endDate = new Date(new Date(selectedMonth).getFullYear(), new Date(selectedMonth).getMonth() + 1, 0).toISOString().split('T')[0];
+            const [year, month] = selectedMonth.split('-');
+            endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0];
         } else {
             startDate = `${selectedYear}-01-01`;
             endDate = `${selectedYear}-12-31`;
@@ -759,7 +760,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     if (!reportData || reportData.length === 0 || !selectedClass) return;
     setDownloadingReport(true);
     try {
-        const monthLabel = reportType === 'monthly' ? new Date(selectedMonth).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' }) : '';
+        const monthLabel = reportType === 'monthly' ? new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' }) : '';
         await generateAttendanceReportPDF(reportData, madrasah, selectedClass.class_name, monthLabel, lang);
     } catch (err: any) {
         console.error('Failed to generate PDF:', err);

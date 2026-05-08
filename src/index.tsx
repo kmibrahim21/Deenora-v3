@@ -44,9 +44,13 @@ if (typeof window !== 'undefined') {
   });
 }
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 const root = createRoot(rootElement);
 root.render(
-  <App />
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
 );
 
 // Register PWA service worker explicitly

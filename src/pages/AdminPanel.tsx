@@ -1638,7 +1638,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                        <button 
                          onClick={() => {
                            setCommsModal({ show: true, institutions: unpaidInstitutions, type: 'sms' });
-                           setCommMessage(`আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${new Date(selectedMonthForReminder).toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' })} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`);
+                           const [rYear, rMonth] = selectedMonthForReminder.split('-');
+                           setCommMessage(`আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${new Date(parseInt(rYear), parseInt(rMonth) - 1).toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' })} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`);
                          }}
                          className="flex-1 py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                        >
