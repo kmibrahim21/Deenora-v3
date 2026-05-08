@@ -230,7 +230,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       let studentsToAssign = [...stds];
       if (seatPlanConfig.randomize) {
-          studentsToAssign = studentsToAssign.sort(() => Math.random() - 0.5);
+          // Fisher-Yates shuffle for true randomness
+          for (let i = studentsToAssign.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [studentsToAssign[i], studentsToAssign[j]] = [studentsToAssign[j], studentsToAssign[i]];
+          }
       }
 
       const assignments: SeatAssignment[] = [];
