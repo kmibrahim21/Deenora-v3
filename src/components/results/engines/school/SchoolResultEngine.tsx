@@ -136,6 +136,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       }
       setClasses(sortMadrasahClasses(filteredClasses));
     }
+    setLoading(false);
   };
 
   const fetchSubjects = async (examId: string) => {

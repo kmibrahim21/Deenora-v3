@@ -145,6 +145,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       }
       setClasses(sortMadrasahClasses(filteredClasses));
     }
+    setLoading(false);
   };
 
   const fetchSubjects = async (examId: string) => {
