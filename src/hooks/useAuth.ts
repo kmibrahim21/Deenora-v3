@@ -405,26 +405,40 @@ export const useAuth = () => {
   useEffect(() => {
     let channel: any;
     if (profile?.institution_id && profile.institution_id !== 'super_admin') {
-      channel = supabase
-        .channel('institution-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'institutions',
-            filter: `id=eq.${profile.institution_id}`,
-          },
-          (payload) => {
-            console.log('useAuth: Received real-time update for institution:', payload.new);
-            setMadrasah(payload.new as Institution);
-          }
-        )
-        .subscribe();
+      try {
+        channel = supabase
+          .channel('institution-changes')
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'institutions',
+              filter: `id=eq.${profile.institution_id}`,
+            },
+            (payload) => {
+              console.log('useAuth: Received real-time update for institution:', payload.new);
+              setMadrasah(payload.new as Institution);
+            }
+          )
+          .subscribe((status, err) => {
+             if (err) {
+               console.warn("Realtime subscription error:", err);
+             }
+          });
+      } catch (e) {
+        console.warn("Could not start realtime subscription:", e);
+      }
     }
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (e) {
+          console.warn("Error removing channel:", e);
+        }
+      }
     };
   }, [profile?.institution_id]);
 
