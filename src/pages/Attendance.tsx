@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
 import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone } from 'lucide-react';

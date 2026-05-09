@@ -11,7 +11,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { apiUrl } = req.body;
+    const { apiUrl, apiUrls } = req.body;
+
+    // Create a custom agent to ignore SSL certificate errors if any
+    const agent = new https.Agent({
+      rejectUnauthorized: false
+    });
+
+    if (apiUrls && Array.isArray(apiUrls)) {
+      const results = await Promise.allSettled(apiUrls.map(async (url) => {
+        const response = await fetch(url, { method: 'GET' });
+        const text = await response.text();
+        return { success: response.ok, response: text, url };
+      }));
+      
+      const formattedResults = results.map(r => r.status === 'fulfilled' ? r.value : { success: false, response: r.reason, url: '' });
+      return res.status(200).json({ success: true, results: formattedResults });
+    }
 
     if (!apiUrl) {
       return res.status(400).json({ error: 'apiUrl is required' });
@@ -36,13 +52,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Create a custom agent to ignore SSL certificate errors if any
-    const agent = new https.Agent({
-      rejectUnauthorized: false
-    });
-
-    const response = await fetch(apiUrl, {
+    const fetchOptions = {
       method: 'GET'
-    });
+    };
+
+    const response = await fetch(apiUrl, fetchOptions);
 
     const text = await response.text();
 

@@ -154,31 +154,34 @@ export const SMSService = {
         });
 
         if (validMsgs.length > 0) {
-          const content = validMsgs.map(m => ({
-            callerID: callerId,
-            toUser: normalizePhone(m.phone) as string,
-            messageContent: m.text
-          }));
+          const apiUrls = validMsgs.map(m => {
+            let url = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${normalizePhone(m.phone)}&messageContent=${encodeURIComponent(m.text)}&type=3`;
+            if (clientId) url += `&clientid=${clientId}`;
+            return url;
+          });
 
-          let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
-          if (clientId) apiUrl += `&clientid=${clientId}`;
-          let isFailed = false;
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ apiUrl })
+              body: JSON.stringify({ apiUrls })
             }); 
-            if (!res.ok) isFailed = true;
+            if (!res.ok) {
+              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+            } else {
+              const parsed = await res.json();
+              if (parsed.results) {
+                parsed.results.forEach((r: any, idx: number) => {
+                  const log = logs.find(l => l.recipient === validMsgs[idx].phone);
+                  if (log && (!r.success || (typeof r.response === 'string' && r.response.toLowerCase().includes('error')))) {
+                    log.status = 'failed';
+                  }
+                });
+              }
+            }
           } catch (err) { 
             console.warn("Personalized SMS batch failed:", err); 
-            isFailed = true;
-          }
-          
-          if (isFailed) {
-            logs.forEach(l => {
-              if (l.status === 'sent') l.status = 'failed';
-            });
+            logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
           }
         }
         
@@ -225,32 +228,34 @@ export const SMSService = {
         });
 
         if (validMsgs.length > 0) {
-          const content = validMsgs.map(s => ({
-            callerID: callerId,
-            toUser: normalizePhone(s.guardian_phone) as string,
-            messageContent: message
-          }));
+          const apiUrls = validMsgs.map(s => {
+            let url = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${normalizePhone(s.guardian_phone)}&messageContent=${encodeURIComponent(message)}&type=3`;
+            if (clientId) url += `&clientid=${clientId}`;
+            return url;
+          });
           
-          let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
-          if (clientId) apiUrl += `&clientid=${clientId}`;
-          
-          let isFailed = false;
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ apiUrl })
+              body: JSON.stringify({ apiUrls })
             }); 
-            if (!res.ok) isFailed = true;
+            if (!res.ok) {
+              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+            } else {
+              const parsed = await res.json();
+              if (parsed.results) {
+                parsed.results.forEach((r: any, idx: number) => {
+                  const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone);
+                  if (log && (!r.success || (typeof r.response === 'string' && r.response.toLowerCase().includes('error')))) {
+                    log.status = 'failed';
+                  }
+                });
+              }
+            }
           } catch (err) { 
             console.warn("SMS batch failed:", err); 
-            isFailed = true;
-          }
-          
-          if (isFailed) {
-            logs.forEach(l => {
-              if (l.status === 'sent') l.status = 'failed';
-            });
+            logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
           }
         }
         
