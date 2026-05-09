@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Language, Class, SMSTemplate, Institution, UserRole, Profile } from 'types';
 import { t } from 'translations';
@@ -55,6 +55,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const isSendingRef = useRef(false);
   const [templates, setTemplates] = useState<SMSTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<SMSTemplate | null>(null);
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
@@ -537,6 +538,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
       window.location.href = `sms:${phones}?body=${encodeURIComponent(finalBody)}`;
     } else {
+      if (isSendingRef.current) return;
+      isSendingRef.current = true;
       setSending(true);
       try {
         // Map reminders to Student-like objects for SMSService
@@ -563,6 +566,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       } catch (err: any) {
         alert(err.message || 'Failed to send SMS');
       } finally {
+        isSendingRef.current = false;
         setSending(false);
       }
     }

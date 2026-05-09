@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap } from 'lucide-react';
 import { supabase, offlineApi, smsApi } from 'supabase';
@@ -43,6 +43,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [sending, setSending] = useState(false);
+  const isSendingRef = useRef(false);
   
   const [statusModal, setStatusModal] = useState<{show: boolean, type: 'success' | 'error' | 'balance', title: string, message: string}>({
     show: false, type: 'success', title: '', message: ''
@@ -180,7 +181,9 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   };
 
   const handlePremiumSMS = async () => {
+    if (isSendingRef.current) return;
     if (!selectedTemplate || selectedIds.size === 0 || !institutionId) return;
+    isSendingRef.current = true;
     setSending(true);
     try {
       const selectedStudents = students.filter(s => selectedIds.has(s.id));
@@ -191,7 +194,10 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     } catch (err: any) {
       const isBal = err.message.toLowerCase().includes('balance');
       setStatusModal({ show: true, type: isBal ? 'balance' : 'error', title: isBal ? 'ব্যালেন্স শেষ!' : 'ব্যর্থ', message: err.message });
-    } finally { setSending(false); }
+    } finally { 
+      isSendingRef.current = false;
+      setSending(false); 
+    }
   };
 
   const canSendSystemSMS = true;

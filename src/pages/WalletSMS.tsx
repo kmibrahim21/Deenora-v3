@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CreditCard, Loader2, Send, ChevronDown, BookOpen, Users, CheckCircle2, MessageSquare, Plus, Edit3, Trash2, Smartphone, X, Check, History, Zap, AlertTriangle, Clock, Save, AlertCircle, Mic, Info, XCircle, Building2 } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
@@ -53,6 +53,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [bulkMessage, setBulkMessage] = useState('');
   const [sendingBulk, setSendingBulk] = useState(false);
+  const isSendingBulkRef = useRef(false);
   const [bulkSuccess, setBulkSuccess] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [classStudents, setClassStudents] = useState<Student[]>([]);
@@ -280,6 +281,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   };
 
   const handleSendBulk = async () => {
+    if (isSendingBulkRef.current) return;
     if (!bulkMessage.trim() || !madrasah) return;
     
     const isTargetingInstitutions = isSuperAdmin && (targetType === 'all_institutions' || targetType === 'specific_institution');
@@ -297,6 +299,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
       return;
     }
 
+    isSendingBulkRef.current = true;
     setSendingBulk(true);
     try {
       if (isTargetingInstitutions) {
@@ -328,7 +331,10 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         title: isBalanceError ? (lang === 'bn' ? 'ব্যালেন্স শেষ!' : 'Out of Balance!') : (lang === 'bn' ? 'ব্যর্থ' : 'Failed'),
         message: err.message
       });
-    } finally { setSendingBulk(false); }
+    } finally { 
+      isSendingBulkRef.current = false;
+      setSendingBulk(false); 
+    }
   };
 
   const handleSendFreeBulk = () => {

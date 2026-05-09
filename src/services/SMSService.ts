@@ -4,13 +4,15 @@ import { Student } from 'types';
 import { getSmsLengthInfo } from 'utils/smsUtils';
 import { ShortcodeService } from './ShortcodeService';
 
-const normalizePhone = (phone: string): string => {
+const normalizePhone = (phone?: string | null): string | null => {
+  if (!phone) return null;
   let p = phone.replace(/\D/g, ''); 
   if (p.length === 13 && p.startsWith('880')) return p;
   if (p.startsWith('0') && p.length === 11) return `88${p}`;
   if (p.startsWith('1') && p.length === 10) return `880${p}`;
   if (p.startsWith('880')) return p.slice(0, 13);
-  return p;
+  if (p.length === 11) return `88${p}`;
+  return null;
 };
 
 export const SMSService = {
@@ -126,30 +128,64 @@ export const SMSService = {
       }
 
       const sendPromises = batches.map(async (chunk) => {
-        const content = chunk.map(m => ({
-          callerID: callerId,
-          toUser: normalizePhone(m.phone),
-          messageContent: m.text
-        }));
+        const validMsgs: typeof chunk = [];
+        const logs: any[] = [];
+        
+        chunk.forEach(m => {
+          const normPhone = normalizePhone(m.phone);
+          if (!normPhone) {
+            logs.push({
+              institution_id: institutionId,
+              recipient: m.phone || 'Unknown',
+              message: m.text,
+              parts: m.parts,
+              status: 'failed'
+            });
+          } else {
+            validMsgs.push(m);
+            logs.push({
+              institution_id: institutionId,
+              recipient: m.phone,
+              message: m.text,
+              parts: m.parts,
+              status: 'sent'
+            });
+          }
+        });
 
-        let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
-        if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { 
-          await fetch('/api/sms', { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiUrl })
-          }); 
-        } catch (err) { console.warn("Personalized SMS batch failed:", err); }
+        if (validMsgs.length > 0) {
+          const content = validMsgs.map(m => ({
+            callerID: callerId,
+            toUser: normalizePhone(m.phone) as string,
+            messageContent: m.text
+          }));
+
+          let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
+          if (clientId) apiUrl += `&clientid=${clientId}`;
+          let isFailed = false;
+          try { 
+            const res = await fetch('/api/sms', { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ apiUrl })
+            }); 
+            if (!res.ok) isFailed = true;
+          } catch (err) { 
+            console.warn("Personalized SMS batch failed:", err); 
+            isFailed = true;
+          }
+          
+          if (isFailed) {
+            logs.forEach(l => {
+              if (l.status === 'sent') l.status = 'failed';
+            });
+          }
+        }
         
         // Insert logs
-        await supabase.from('sms_logs').insert(chunk.map(m => ({
-          institution_id: institutionId,
-          recipient: m.phone,
-          message: m.text,
-          parts: m.parts,
-          status: 'sent'
-        })));
+        if (logs.length > 0) {
+          await supabase.from('sms_logs').insert(logs);
+        }
       });
 
       await Promise.all(sendPromises);
@@ -162,31 +198,66 @@ export const SMSService = {
       }
 
       const sendPromises = batches.map(async (chunkStudents) => {
-        const content = chunkStudents.map(s => ({
-          callerID: callerId,
-          toUser: normalizePhone(s.guardian_phone),
-          messageContent: message
-        }));
+        const { parts } = getSmsLengthInfo(message);
+        const validMsgs: Student[] = [];
+        const logs: any[] = [];
         
-        let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
-        if (clientId) apiUrl += `&clientid=${clientId}`;
-        try { 
-          await fetch('/api/sms', { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiUrl })
-          }); 
-        } catch (err) { console.warn("SMS batch failed:", err); }
+        chunkStudents.forEach(s => {
+          const normPhone = normalizePhone(s.guardian_phone);
+          if (!normPhone) {
+            logs.push({
+              institution_id: institutionId,
+              recipient: s.guardian_phone || 'Unknown',
+              message: message,
+              parts: parts,
+              status: 'failed'
+            });
+          } else {
+            validMsgs.push(s);
+            logs.push({
+              institution_id: institutionId,
+              recipient: s.guardian_phone,
+              message: message,
+              parts: parts,
+              status: 'sent'
+            });
+          }
+        });
+
+        if (validMsgs.length > 0) {
+          const content = validMsgs.map(s => ({
+            callerID: callerId,
+            toUser: normalizePhone(s.guardian_phone) as string,
+            messageContent: message
+          }));
+          
+          let apiUrl = `https://smpp.revesms.com:7790/send?apikey=${apiKey}&secretkey=${secretKey}&type=3&content=${encodeURIComponent(JSON.stringify(content))}`;
+          if (clientId) apiUrl += `&clientid=${clientId}`;
+          
+          let isFailed = false;
+          try { 
+            const res = await fetch('/api/sms', { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ apiUrl })
+            }); 
+            if (!res.ok) isFailed = true;
+          } catch (err) { 
+            console.warn("SMS batch failed:", err); 
+            isFailed = true;
+          }
+          
+          if (isFailed) {
+            logs.forEach(l => {
+              if (l.status === 'sent') l.status = 'failed';
+            });
+          }
+        }
         
         // Insert logs
-        const { parts } = getSmsLengthInfo(message);
-        await supabase.from('sms_logs').insert(chunkStudents.map(s => ({
-          institution_id: institutionId,
-          recipient: s.guardian_phone,
-          message: message,
-          parts: parts,
-          status: 'sent'
-        })));
+        if (logs.length > 0) {
+          await supabase.from('sms_logs').insert(logs);
+        }
       });
 
       await Promise.all(sendPromises);
@@ -207,24 +278,34 @@ export const SMSService = {
     }
 
     const target = normalizePhone(phone);
-    let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
-    if (clientId) apiUrl += `&clientid=${clientId}`;
-    try { 
-      await fetch('/api/sms', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiUrl })
-      }); 
-    } catch (e) { console.warn("Direct SMS failed:", e); }
+    let finalStatus = 'sent';
+    
+    if (!target) {
+      finalStatus = 'failed';
+    } else {
+      let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
+      if (clientId) apiUrl += `&clientid=${clientId}`;
+      try { 
+        const res = await fetch('/api/sms', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiUrl })
+        }); 
+        if (!res.ok) finalStatus = 'failed';
+      } catch (e) { 
+        console.warn("Direct SMS failed:", e);
+        finalStatus = 'failed';
+      }
+    }
     
     if (institutionId) {
       const { parts } = getSmsLengthInfo(message);
       await supabase.from('sms_logs').insert({
         institution_id: institutionId,
-        recipient: phone,
+        recipient: phone || 'Unknown',
         message: message,
         parts: parts,
-        status: 'sent'
+        status: finalStatus
       });
     }
   },

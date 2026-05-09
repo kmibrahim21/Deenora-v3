@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, MessageSquare, Loader2, AlertCircle, CheckCircle2, ChevronDown, BookOpen, Eye, Info } from 'lucide-react';
 import { t } from 'translations';
 import { Language, Student, Institution, SMSTemplate } from 'types';
@@ -25,6 +25,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
   const [showShortcodes, setShowShortcodes] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [previewText, setPreviewText] = useState('');
+  const isSendingRef = useRef(false);
   const isDark = madrasah?.theme === 'dark';
 
   const availableShortcodes = [
@@ -69,7 +70,9 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
   };
 
   const handleSend = async () => {
+    if (isSendingRef.current) return;
     if (!message.trim() || students.length === 0) return;
+    isSendingRef.current = true;
     setSending(true);
     try {
       await smsApi.sendBulk(madrasah.id, students, message);
@@ -78,7 +81,10 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
     } catch (err: any) {
       setStatus('error');
       setErrorMsg(lang === 'bn' ? 'ব্যালেন্স নেই অথবা নেটওয়ার্ক সমস্যা' : 'Failed to send SMS');
-    } finally { setSending(false); }
+    } finally { 
+      isSendingRef.current = false;
+      setSending(false); 
+    }
   };
 
   if (status === 'success') {

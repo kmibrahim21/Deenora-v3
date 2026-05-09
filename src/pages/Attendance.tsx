@@ -65,6 +65,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingAlerts, setSendingAlerts] = useState(false);
+  const isSendingAlertsRef = useRef(false);
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -504,6 +505,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       icon: 'sms',
       color: 'blue',
       action: async () => {
+        if (isSendingAlertsRef.current) return;
+        isSendingAlertsRef.current = true;
         setSendingAlerts(true);
         setShowConfirmModal(false);
         try {
@@ -531,6 +534,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           setErrorDetails(err.message);
           setShowErrorModal(true);
         } finally { 
+          isSendingAlertsRef.current = false;
           setSendingAlerts(false); 
         }
       }
