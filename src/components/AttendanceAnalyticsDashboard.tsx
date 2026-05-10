@@ -63,15 +63,32 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
           endDate = `${selectedYear}-12-31`;
       }
 
-      const { data, error } = await supabase.rpc('get_attendance_report', {
-        p_class_id: cid,
-        p_start_date: startDate,
-        p_end_date: endDate,
-        p_session: selectedSession === 'all' ? null : selectedSession
-      });
+      let finalData: any[] = [];
 
-      if (error) throw error;
-      if (data) setReportData(data);
+      if (cid === 'all') {
+        const promises = classes.map((c: any) => supabase.rpc('get_attendance_report', {
+          p_class_id: c.id,
+          p_start_date: startDate,
+          p_end_date: endDate,
+          p_session: selectedSession === 'all' ? null : selectedSession
+        }));
+        const results = await Promise.all(promises);
+        results.forEach(res => {
+          if (res.error) console.error("Error fetching class report:", res.error);
+          if (res.data) finalData = [...finalData, ...res.data];
+        });
+      } else {
+        const { data, error } = await supabase.rpc('get_attendance_report', {
+          p_class_id: cid,
+          p_start_date: startDate,
+          p_end_date: endDate,
+          p_session: selectedSession === 'all' ? null : selectedSession
+        });
+        if (error) throw error;
+        if (data) finalData = data;
+      }
+
+      setReportData(finalData);
     } catch (e: any) { 
       console.error(e);
       setFetchError(e.message);
@@ -83,11 +100,14 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[1.8rem] border shadow-bubble space-y-4`}>
         <div className="relative">
           <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-12 px-4 rounded-xl border-2 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} flex items-center justify-between group active:scale-[0.99] transition-all`}>
-            <span className="font-black font-noto truncate text-sm">{selectedClass?.class_name || (lang === 'bn' ? 'ক্লাস নির্বাচন করুন' : 'Select Class')}</span>
+            <span className="font-black font-noto truncate text-sm">{selectedClass?.class_name || (lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)')}</span>
             <ChevronDown size={18} className="text-slate-400 transition-transform duration-300 group-focus:rotate-180" />
           </button>
           {showClassDropdown && (
             <div className={`absolute top-full left-0 right-0 mt-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} rounded-2xl shadow-bubble border z-[100] p-2 max-h-56 overflow-y-auto animate-in slide-in-from-top-2`}>
+              <button onClick={() => { setSelectedClass({id: 'all', class_name: lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)'} as any); setShowClassDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl mb-1 transition-all ${selectedClass?.id === 'all' ? 'bg-[#2563EB] text-white shadow-md' : madrasah?.theme === 'dark' ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
+                <span className="font-black font-noto text-sm">{lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)'}</span>
+              </button>
               {classes.map(cls => (
                 <button key={cls.id} onClick={() => { setSelectedClass(cls); setShowClassDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl mb-1 transition-all ${selectedClass?.id === cls.id ? 'bg-[#2563EB] text-white shadow-md' : madrasah?.theme === 'dark' ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
                   <span className="font-black font-noto text-sm">{cls.class_name}</span>

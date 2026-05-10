@@ -176,10 +176,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     try {
       const res = await fetch(`/api/teachers/attendance?institute_id=${madrasah!.id}&date=${attendanceDate}`);
       const data = await res.json();
-      if (data.attendance) {
+      if (data.attendance && Object.keys(data.attendance).length > 0) {
         setTeacherAttendance(data.attendance);
       } else {
-        setTeacherAttendance({});
+        const initial: Record<string, string> = {};
+        teachers.forEach(t => {
+          initial[t.id] = 'present';
+        });
+        setTeacherAttendance(initial);
       }
     } catch(err) {
       console.error("Error fetching teacher attendance:", err);
@@ -189,6 +193,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const saveTeacherAttendance = async () => {
     if (!madrasah?.id) return;
     setSavingAttendance(true);
+
+    const finalAttendance = { ...teacherAttendance };
+    teachers.forEach(t => {
+      if (!finalAttendance[t.id]) finalAttendance[t.id] = 'present';
+    });
+
     try {
       const res = await fetch('/api/teachers/save-attendance', {
         method: 'POST',
@@ -196,7 +206,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         body: JSON.stringify({
           institute_id: madrasah.id,
           date: attendanceDate,
-          attendance: teacherAttendance
+          attendance: finalAttendance
         })
       });
       if (!res.ok) throw new Error("Failed to save attendance");

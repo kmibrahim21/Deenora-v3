@@ -398,18 +398,33 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             endDate = `${selectedYear}-12-31`;
         }
 
-        const { data, error } = await supabase.rpc('get_attendance_report', {
-          p_class_id: cid === 'all' ? null : cid,
-          p_start_date: startDate,
-          p_end_date: endDate,
-          p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
-        });
+        let finalData: any[] = [];
 
-        if (error) throw error;
-        if (data) {
-          setReportData(data);
-          await CacheService.cacheData('attendance', madrasah?.id || '', data);
+        if (cid === 'all') {
+          const promises = classes.map((c: any) => supabase.rpc('get_attendance_report', {
+            p_class_id: c.id,
+            p_start_date: startDate,
+            p_end_date: endDate,
+            p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
+          }));
+          const results = await Promise.all(promises);
+          results.forEach(res => {
+            if (res.error) console.error("Error fetching class report:", res.error);
+            if (res.data) finalData = [...finalData, ...res.data];
+          });
+        } else {
+          const { data, error } = await supabase.rpc('get_attendance_report', {
+            p_class_id: cid,
+            p_start_date: startDate,
+            p_end_date: endDate,
+            p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
+          });
+          if (error) throw error;
+          if (data) finalData = data;
         }
+
+        setReportData(finalData);
+        await CacheService.cacheData('attendance', madrasah?.id || '', finalData);
       }
     } catch (e: any) { 
       console.error(e);
@@ -1278,15 +1293,17 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             ) : (
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-6">
+                  {!(selectedClass?.id === 'all') && (
                   <div className="flex flex-1 gap-2 min-w-[200px]">
                       <button onClick={() => setReportView('list')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>List View</button>
                       <button onClick={() => setReportView('analytics')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Analytics</button>
                   </div>
+                  )}
                   {reportData.length > 0 && selectedClass && (
                     <button 
                       onClick={handleDownloadReportPDF} 
                       disabled={downloadingReport}
-                      className={`h-12 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shrink-0 ${isDark ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'}`}
+                      className={`h-12 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shrink-0 ${isDark ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'} ${selectedClass?.id === 'all' ? 'w-full' : ''}`}
                     >
                       {downloadingReport ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                       {lang === 'bn' ? 'ডাউনলোড PDF' : 'Download PDF'}
@@ -1294,7 +1311,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   )}
                 </div>
 
-                {reportView === 'analytics' ? (
+                {reportView === 'analytics' || selectedClass?.id === 'all' ? (
                 <div className="space-y-6 animate-in fade-in">
                   {reportData.length > 0 ? (
                     <>
