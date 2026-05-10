@@ -217,6 +217,46 @@ const App: React.FC = () => {
     </Suspense>
   );
 
+  if (madrasah && !madrasah.is_super_admin && !madrasah.is_active) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] p-4 text-center">
+        <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+          <ShieldAlert className="text-red-500" size={32} />
+        </div>
+        <h2 className="text-2xl font-black text-white mb-2">Access Restricted</h2>
+        <p className="text-slate-400 mb-8 max-w-sm">
+          আপনার প্রতিষ্ঠানটির অ্যাক্সেস বন্ধ করা হয়েছে। দয়া করে অ্যাডমিনের সাথে যোগাযোগ করুন।
+        </p>
+        <button
+          onClick={handleLogout}
+          className="px-8 py-3 bg-red-500 text-white rounded-full font-black shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+        >
+          লগআউট করুন
+        </button>
+      </div>
+    );
+  }
+
+  if (profile && profile.role !== 'super_admin' && profile.is_active === false) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] p-4 text-center">
+        <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+          <ShieldAlert className="text-red-500" size={32} />
+        </div>
+        <h2 className="text-2xl font-black text-white mb-2">Account Blocked</h2>
+        <p className="text-slate-400 mb-8 max-w-sm">
+          আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে। দয়া করে আপনার প্রতিষ্ঠানের অ্যাডমিনের সাথে যোগাযোগ করুন।
+        </p>
+        <button
+          onClick={handleLogout}
+          className="px-8 py-3 bg-red-500 text-white rounded-full font-black shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+        >
+          লগআউট করুন
+        </button>
+      </div>
+    );
+  }
+
   const renderView = () => {
     const role = profile?.role || "accountant";
     
