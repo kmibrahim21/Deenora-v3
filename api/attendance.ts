@@ -4,6 +4,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') {
@@ -29,8 +30,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, message: 'Server configuration error' });
     }
 
-    // Fetch attendance from Supabase, order by date desc
-    const url = `${SUPABASE_URL}/rest/v1/attendance?select=*&student_id=eq.${student_id}&order=date.desc`;
+    // Fetch attendance from Supabase, order by date desc. Optimize select to prevent huge payloads
+    const url = `${SUPABASE_URL}/rest/v1/attendance?select=id,date,status,session,late_minutes&student_id=eq.${student_id}&order=date.desc&limit=100`;
     const response = await fetch(url, {
       headers: {
         'apikey': SUPABASE_KEY,

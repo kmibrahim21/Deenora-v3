@@ -4,6 +4,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') {
@@ -55,16 +56,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 3. Fetch based on engine
     if (engine === 'befaq') {
-      const marksRes = await fetch(`${SUPABASE_URL}/rest/v1/befaq_results?select=*&student_id=eq.${student_id}`, { headers });
+      const marksRes = await fetch(`${SUPABASE_URL}/rest/v1/befaq_results?select=exam_id,subject_id,marks_obtained&student_id=eq.${student_id}&limit=500`, { headers });
       if (marksRes.ok) {
         const marks = await marksRes.json();
         
         // Also fetch subjects to join
         const examIds = [...new Set(marks.map((m: any) => m.exam_id))];
         let allSubjects: any[] = [];
-        for (const exId of examIds) {
-          const subRes = await fetch(`${SUPABASE_URL}/rest/v1/befaq_subjects?select=*&exam_id=eq.${exId}`, { headers });
-          if (subRes.ok) allSubjects.push(...await subRes.json());
+        if (examIds.length > 0) {
+           const subRes = await fetch(`${SUPABASE_URL}/rest/v1/befaq_subjects?select=id,subject_name,passing_marks,total_marks&exam_id=in.(${examIds.join(',')})&limit=500`, { headers });
+           if (subRes.ok) allSubjects.push(...await subRes.json());
         }
 
         results = marks.map((m: any) => {
@@ -82,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } else {
       // School engine
-      const marksRes = await fetch(`${SUPABASE_URL}/rest/v1/exam_marks?select=*&student_id=eq.${student_id}`, { headers });
+      const marksRes = await fetch(`${SUPABASE_URL}/rest/v1/exam_marks?select=exam_id,subject_id,marks_obtained&student_id=eq.${student_id}&limit=500`, { headers });
       if (marksRes.ok) {
         const marks = await marksRes.json();
         
@@ -90,11 +91,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let allSubjects: any[] = [];
         let allExams: any[] = [];
         
-        for (const exId of examIds) {
-          const subRes = await fetch(`${SUPABASE_URL}/rest/v1/exam_subjects?select=*&exam_id=eq.${exId}`, { headers });
+        if (examIds.length > 0) {
+          const subRes = await fetch(`${SUPABASE_URL}/rest/v1/exam_subjects?select=id,subject_name,full_marks&exam_id=in.(${examIds.join(',')})&limit=500`, { headers });
           if (subRes.ok) allSubjects.push(...await subRes.json());
           
-          const exRes = await fetch(`${SUPABASE_URL}/rest/v1/exams?select=id,exam_name&id=eq.${exId}`, { headers });
+          const exRes = await fetch(`${SUPABASE_URL}/rest/v1/exams?select=id,exam_name&id=in.(${examIds.join(',')})&limit=50`, { headers });
           if (exRes.ok) allExams.push(...(await exRes.json()));
         }
 

@@ -5,6 +5,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') {
@@ -64,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       orQuery = `admission_number.ilike.*${encodeURIComponent(cleanStudent)}*,roll.eq.${cleanStudent}`;
     }
 
-    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=*,classes(class_name)&institution_id=eq.${institutionId}&or=(${orQuery})`;
+    const stdUrl = `${SUPABASE_URL}/rest/v1/students?select=id,student_name,roll,admission_number,guardian_name,guardian_phone,photo_url,institution_id,classes(class_name)&institution_id=eq.${institutionId}&or=(${orQuery})&limit=1`;
     
     // Add debugging console log
     console.log(`[Login Attempt] Institute: ${cleanInstitute}, Student: ${cleanStudent}, URL: ${stdUrl}`);

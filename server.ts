@@ -37,6 +37,11 @@ async function startServer() {
       }
 
       if (typeof handler === 'function') {
+        // Add cache headers for GET requests securely
+        if (req.method === 'GET' && !filePath.includes('auth')) {
+          res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
+        }
+
         // Mock Vercel style response
         const originalStatus = res.status.bind(res);
         const originalJson = res.json.bind(res);

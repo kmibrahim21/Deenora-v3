@@ -4,6 +4,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') {
@@ -63,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       filter += `&institution_id=eq.${resolvedInstitutionId}`;
     }
 
-    let apiUrl = `${SUPABASE_URL}/rest/v1/messages?${filter}&order=created_at.desc`;
+    let apiUrl = `${SUPABASE_URL}/rest/v1/messages?${filter}&order=created_at.desc&limit=50`;
 
     let response = await fetch(apiUrl, {
       method: 'GET',
@@ -81,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Table doesn't exist, use voice_broadcasts
       let vbFilter = `target_class_name=eq.${encodeURIComponent(targetClass)}`;
       if (resolvedInstitutionId) vbFilter += `&institution_id=eq.${resolvedInstitutionId}`;
-      apiUrl = `${SUPABASE_URL}/rest/v1/voice_broadcasts?${vbFilter}&order=created_at.desc`;
+      apiUrl = `${SUPABASE_URL}/rest/v1/voice_broadcasts?${vbFilter}&order=created_at.desc&limit=50`;
       
       response = await fetch(apiUrl, {
         method: 'GET',

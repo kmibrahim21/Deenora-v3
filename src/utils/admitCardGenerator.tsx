@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { toPng } from 'html-to-image';
+import { toJpeg } from 'html-to-image';
 import jsPDF from 'jspdf';
 import { Exam, Student } from '../types';
 
@@ -374,8 +374,9 @@ export const generateAdmitCardPDF = async (
         continue;
       }
 
-      const imgData = await toPng(element as HTMLElement, {
-        pixelRatio: 2, 
+      const imgData = await toJpeg(element as HTMLElement, {
+        pixelRatio: 1.5, 
+        quality: 0.8,
         backgroundColor: '#ffffff',
         cacheBust: true,
         style: {
@@ -395,7 +396,7 @@ export const generateAdmitCardPDF = async (
       const xPos = marginX + col * (cardWidthMm + gapX);
       const yPos = marginY + row * (cardHeightMm + gapY);
 
-      pdf.addImage(imgData, 'PNG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
+      pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
     } catch (err) {
       console.error('Error generating image for student:', student.student_name, err);
     }

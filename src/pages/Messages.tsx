@@ -74,15 +74,25 @@ export default function Messages({
     if (!madrasah?.id) return;
     setIsLoading(true);
     try {
+      const cacheKey = `messages_cache_${madrasah.id}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+          try { setMessages(JSON.parse(cached)); setIsLoading(false); } catch(e) {}
+      }
+
       const { data: cls } = await supabase.from('classes').select('id, class_name').eq('institution_id', madrasah.id).order('created_at');
       if (cls) setClasses(cls);
 
       const { data: history } = await supabase.from('messages')
-        .select('*')
+        .select('id, class_name, title, message, created_at, sender_name, type')
         .eq('institution_id', madrasah.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
       
-      if (history) setMessages(history);
+      if (history) {
+          setMessages(history);
+          sessionStorage.setItem(cacheKey, JSON.stringify(history));
+      }
 
     } catch (err: any) {
       console.error(err);

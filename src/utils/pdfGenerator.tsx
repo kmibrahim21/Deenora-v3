@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { Exam, Student, ExamSubject, Institution, SeatAssignment } from '../types';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { toPng } from 'html-to-image';
+import { toJpeg } from 'html-to-image';
 import { ResultSheetTemplate } from '../components/pdf/ResultSheetTemplate';
 import { ClassResultTemplate } from '../components/pdf/ClassResultTemplate';
 import { ClassFeeReportTemplate } from '../components/pdf/ClassFeeReportTemplate';
@@ -13,9 +13,20 @@ import { SeatPlanTemplate } from '../components/pdf/SeatPlanTemplate';
 import { AttendanceReportTemplate } from '../components/pdf/AttendanceReportTemplate';
 import { AccountingReportTemplate } from '../components/pdf/AccountingReportTemplate';
 
+const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
 
 const loadBengaliFont = async (doc: jsPDF) => {
+    if (!bengaliFontBase64) {
+        // Try Cache first
+        try {
+            const cached = localStorage.getItem(CACHE_KEY_FONT);
+            if (cached) {
+                bengaliFontBase64 = cached;
+            }
+        } catch(e) {}
+    }
+
     if (!bengaliFontBase64) {
         try {
             const response = await fetch('https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/unhinted/ttf/NotoSansBengali/NotoSansBengali-Regular.ttf');
@@ -26,10 +37,15 @@ const loadBengaliFont = async (doc: jsPDF) => {
             const buffer = await response.arrayBuffer();
             const bytes = new Uint8Array(buffer);
             let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
+            // Process chunk by chunk to prevent Maximum call stack error
+            const chunkSize = 8192;
+            for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
             }
             bengaliFontBase64 = window.btoa(binary);
+            try {
+                localStorage.setItem(CACHE_KEY_FONT, bengaliFontBase64);
+            } catch(e) {}
             console.log("Bengali font loaded successfully, base64 length:", bengaliFontBase64.length);
         } catch (e) {
             console.error("Failed to load Bengali font", e);
@@ -41,19 +57,42 @@ const loadBengaliFont = async (doc: jsPDF) => {
     doc.setFont('NotoSansBengali');
 };
 
+const imageCache: Record<string, string> = {};
+
 // Helper: Load Image
 const loadImage = (url: string): Promise<string> => {
+    if (imageCache[url]) {
+        return Promise.resolve(imageCache[url]);
+    }
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = 'Anonymous';
         img.src = url;
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
+            // Prevent huge resolution images hitting memory constraints during PDF gen
+            const MAX_WIDTH = 600;
+            const MAX_HEIGHT = 600;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width;
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width *= MAX_HEIGHT / height;
+                height = MAX_HEIGHT;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
             const ctx = canvas.getContext('2d');
-            ctx?.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL('image/png'));
+            ctx?.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/png');
+            imageCache[url] = dataUrl;
+            resolve(dataUrl);
         };
         img.onerror = reject;
     });
@@ -94,15 +133,16 @@ export const generateAttendanceReportPDF = async (
         for (let i = 0; i < pages.length; i++) {
             const pageElement = pages[i] as HTMLElement;
             
-            const imgData = await toPng(pageElement, {
-                pixelRatio: 2,
+            const imgData = await toJpeg(pageElement, {
+                pixelRatio: 1.5,
+        quality: 0.8,
                 backgroundColor: '#ffffff',
                 width: 794, 
                 height: 1123, 
             });
 
             if (i > 0) doc.addPage();
-            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
     }
     
@@ -141,23 +181,25 @@ export const generateSeatPlanPDF = async (
         for (let i = 0; i < roomDivs.length; i++) {
             const roomElement = roomDivs[i] as HTMLElement;
             
-            const imgData = await toPng(roomElement, {
-                pixelRatio: 2,
+            const imgData = await toJpeg(roomElement, {
+                pixelRatio: 1.5,
+        quality: 0.8,
                 backgroundColor: '#ffffff',
                 width: 794, // A4 width at 96 DPI
                 height: 1123, // A4 height at 96 DPI
             });
 
             if (i > 0) doc.addPage();
-            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
     } else {
         // Fallback if structure is different
-        const imgData = await toPng(container.firstElementChild as HTMLElement, {
-            pixelRatio: 2,
+        const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
+            pixelRatio: 1.5,
+        quality: 0.8,
             backgroundColor: '#ffffff',
         });
-        doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
     }
     
     root.unmount();
@@ -185,8 +227,9 @@ export const generateResultPDF = async (
         setTimeout(resolve, 800);
     });
 
-    const imgData = await toPng(container.firstElementChild as HTMLElement, {
-        pixelRatio: 2,
+    const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
+        pixelRatio: 1.5,
+        quality: 0.8,
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
@@ -196,7 +239,7 @@ export const generateResultPDF = async (
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
     
     root.unmount();
     document.body.removeChild(container);
@@ -322,14 +365,15 @@ export const generateClassResultPDF = async (
     if (wrapper && wrapper.children.length > 0) {
         const pages = Array.from(wrapper.children);
         for (let i = 0; i < pages.length; i++) {
-            const imgData = await toPng(pages[i] as HTMLElement, {
-                pixelRatio: 2,
+            const imgData = await toJpeg(pages[i] as HTMLElement, {
+                pixelRatio: 1.5,
+        quality: 0.8,
                 backgroundColor: '#ffffff',
                 width: 1123,
                 height: 794,
             });
             if (i > 0) doc.addPage();
-            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
     }
     
@@ -382,14 +426,15 @@ export const generateClassFeeReportPDF = async (
     if (wrapper && wrapper.children.length > 0) {
         const pages = Array.from(wrapper.children);
         for (let i = 0; i < pages.length; i++) {
-            const imgData = await toPng(pages[i] as HTMLElement, {
-                pixelRatio: 2,
+            const imgData = await toJpeg(pages[i] as HTMLElement, {
+                pixelRatio: 1.5,
+        quality: 0.8,
                 backgroundColor: '#ffffff',
                 width: 794,
                 height: 1123,
             });
             if (i > 0) doc.addPage();
-            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
     }
     
@@ -417,8 +462,9 @@ export const generateFeeReceiptPDF = async (
         setTimeout(resolve, 500);
     });
 
-    const imgData = await toPng(container.firstElementChild as HTMLElement, {
-        pixelRatio: 2,
+    const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
+        pixelRatio: 1.5,
+        quality: 0.8,
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
@@ -428,7 +474,7 @@ export const generateFeeReceiptPDF = async (
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
     
     root.unmount();
     document.body.removeChild(container);
@@ -480,14 +526,15 @@ export const generateFinalResultPDF = async (
     if (wrapper && wrapper.children.length > 0) {
         const pages = Array.from(wrapper.children);
         for (let i = 0; i < pages.length; i++) {
-            const imgData = await toPng(pages[i] as HTMLElement, {
-                pixelRatio: 2,
+            const imgData = await toJpeg(pages[i] as HTMLElement, {
+                pixelRatio: 1.5,
+        quality: 0.8,
                 backgroundColor: '#ffffff',
                 width: 1123,
                 height: 794,
             });
             if (i > 0) doc.addPage();
-            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
     }
     
@@ -518,8 +565,9 @@ export const generateAccountingReportPDF = async (
         setTimeout(resolve, 800);
     });
 
-    const imgData = await toPng(container.firstElementChild as HTMLElement, {
-        pixelRatio: 2,
+    const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
+        pixelRatio: 1.5,
+        quality: 0.8,
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
@@ -529,7 +577,7 @@ export const generateAccountingReportPDF = async (
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
     
     root.unmount();
     document.body.removeChild(container);
