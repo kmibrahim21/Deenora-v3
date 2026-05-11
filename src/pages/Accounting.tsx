@@ -20,9 +20,15 @@ interface AccountingProps {
   activeYear?: AcademicYear | null;
 }
 
+// Global cache for instant tab switching
+let globalLedgerCache: Record<string, LedgerEntry[]> = {};
+let globalClassesCache: Record<string, Class[]> = {};
+
 const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear }) => {
   const isTeacher = role === 'teacher';
   const canManageAccounting = !isTeacher || profile?.permissions?.can_manage_accounting;
+
+  const isDark = madrasah?.theme === 'dark';
 
   if (!canManageAccounting) {
     return (
@@ -44,11 +50,18 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   }
 
   const isOnline = useOfflineStatus();
-  const [activeTab, setActiveTab] = useState<'summary' | 'ledger' | 'fees' | 'structures' | 'add-ledger'>('fees');
+  const [activeTab, setActiveTab] = useState<'summary' | 'ledger' | 'fees' | 'structures' | 'add-ledger'>(() => {
+    return (localStorage.getItem('accounting_active_tab') as any) || 'fees';
+  });
+  
+  useEffect(() => {
+    localStorage.setItem('accounting_active_tab', activeTab);
+  }, [activeTab]);
+
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<any>(null);
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [ledger, setLedger] = useState<LedgerEntry[]>(() => (madrasah ? globalLedgerCache[madrasah.id] || [] : []));
+  const [classes, setClasses] = useState<Class[]>(() => (madrasah ? globalClassesCache[madrasah.id] || [] : []));
+  const [loading, setLoading] = useState(() => madrasah && !globalLedgerCache[madrasah.id]);
   const [isSaving, setIsSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
@@ -83,7 +96,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       if (role === 'teacher' && profile?.permissions?.allowed_classes) {
         filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
       }
-      setClasses(sortMadrasahClasses(filteredClasses));
+      const sorted = sortMadrasahClasses(filteredClasses);
+      setClasses(sorted);
+      if (madrasah.id) globalClassesCache[madrasah.id] = sorted;
     }
   };
 
@@ -91,7 +106,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     if (!madrasah?.id) return;
     
     if (activeTab === 'summary' || activeTab === 'ledger') {
-      setLoading(true);
+      if (ledger.length === 0) {
+        setLoading(true);
+      }
       try {
         if (!isOnline) {
           const cachedLedger = await CacheService.getCachedData('fees', madrasah.id);
@@ -115,6 +132,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         const { data } = await query.order('transaction_date', { ascending: false });
         if (data) {
           setLedger(data);
+          if (madrasah.id) globalLedgerCache[madrasah.id] = data;
           await CacheService.cacheData('fees', madrasah.id, data);
         }
         setRefreshKey(prev => prev + 1);
@@ -211,8 +229,6 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     } finally { setIsSaving(false); }
   };
 
-  const isDark = madrasah?.theme === 'dark';
-
   return (
     <div className={`space-y-6 animate-in fade-in duration-500 pb-24 ${isDark ? 'text-slate-200' : ''}`}>
       {/* Header Section */}
@@ -276,32 +292,35 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         </div>
       </div>
 
-      {selectedStudentForDetail ? (
-        <StudentAccountingDetail 
-          student={selectedStudentForDetail}
-          madrasah={madrasah!}
-          lang={lang}
-          classes={classes}
-          onBack={() => setSelectedStudentForDetail(null)}
-        />
-      ) : (
-        <>
-          {(activeTab === 'fees' || activeTab === 'structures') && madrasah && (
+      <div className={selectedStudentForDetail ? 'block' : 'hidden'}>
+        {selectedStudentForDetail && (
+          <StudentAccountingDetail 
+            student={selectedStudentForDetail}
+            madrasah={madrasah!}
+            lang={lang}
+            classes={classes}
+            onBack={() => setSelectedStudentForDetail(null)}
+          />
+        )}
+      </div>
+
+      <div className={!selectedStudentForDetail ? 'block' : 'hidden'}>
+          <div className={(activeTab === 'fees' || activeTab === 'structures') && madrasah ? 'block' : 'hidden'}>
             <>
               {feeEngine === 'school' && (
-                <SchoolFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
               )}
               {feeEngine === 'qawmi' && (
-                <QawmiFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
+                <QawmiFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
               )}
               {/* Default to School Engine for others for now */}
               {feeEngine !== 'school' && feeEngine !== 'qawmi' && (
-                <SchoolFeeEngine activeTab={activeTab} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
               )}
             </>
-          )}
+          </div>
           
-          {activeTab === 'summary' && (
+          <div className={activeTab === 'summary' ? 'block' : 'hidden'}>
         <div className="space-y-6 animate-in slide-in-from-bottom-5">
           <div className={`rounded-[2.5rem] p-1 border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white/40 border-white/20'} backdrop-blur-sm`}>
             {madrasah && (
@@ -319,9 +338,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             )}
           </div>
         </div>
-      )}
+      </div>
 
-      {activeTab === 'ledger' && (
+      <div className={activeTab === 'ledger' ? 'block' : 'hidden'}>
         <div className="space-y-4 animate-in slide-in-from-bottom-5">
           <div className="flex flex-col gap-4 px-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -507,9 +526,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      {activeTab === 'add-ledger' && (
+      <div className={activeTab === 'add-ledger' ? 'block' : 'hidden'}>
         <div className="space-y-8 animate-in slide-in-from-bottom-5 max-w-2xl mx-auto px-2">
           <div className={`rounded-[3rem] p-8 space-y-8 border shadow-xl ${isDark ? 'bg-slate-900 border-slate-800 shadow-slate-950/50' : 'bg-white border-white/20 shadow-blue-900/5'} backdrop-blur-sm`}>
              <div>
@@ -614,9 +633,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
              </div>
           </div>
         </div>
-      )}
-    </>
-  )}
+      </div>
+      </div>
 
   {/* ADD LEDGER MODAL REMOVED */}
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, HandHeart, Bell, Edit3, Trash2, Calendar } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, HandHeart, Bell, Edit3, Trash2, Calendar, Phone } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 
@@ -16,19 +16,36 @@ interface QawmiFeeEngineProps {
   activeYear?: any;
 }
 
+// Global cache to prevent re-fetching on tab switch
+let globalQawmiFeesReport: Record<string, any[]> = {};
+let globalQawmiStructures: Record<string, any[]> = {};
+
 export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear }) => {
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
-  const [feesReport, setFeesReport] = useState<any[]>([]);
-  const [structures, setStructures] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  
+  const selectedClassInitial = () => localStorage.getItem('qawmi_fee_selectedClass') || '';
+  const selectedMonthInitial = () => localStorage.getItem('qawmi_fee_selectedMonth') || new Date().toISOString().slice(0, 7);
+  const cacheKey = `${madrasah.id}_${selectedMonthInitial()}_${selectedClassInitial()}`;
+  
+  const [feesReport, setFeesReport] = useState<any[]>(() => globalQawmiFeesReport[cacheKey] || []);
+  const [structures, setStructures] = useState<any[]>(() => globalQawmiStructures[madrasah.id] || []);
+  const [loading, setLoading] = useState(() => !globalQawmiFeesReport[cacheKey]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   
   // Fee Collection State
-  const [selectedClass, setSelectedClass] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedClass, setSelectedClass] = useState<string>(selectedClassInitial);
+  const [selectedMonth, setSelectedMonth] = useState(selectedMonthInitial);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [anyStudentsInMadrasah, setAnyStudentsInMadrasah] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('qawmi_fee_selectedClass', selectedClass);
+  }, [selectedClass]);
+
+  useEffect(() => {
+    localStorage.setItem('qawmi_fee_selectedMonth', selectedMonth);
+  }, [selectedMonth]);
   
   // Collection Modal State
   const [showFeeCollection, setShowFeeCollection] = useState(false);
@@ -87,7 +104,9 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   };
 
   const fetchData = async () => {
-    setLoading(true);
+    if (feesReport.length === 0 && structures.length === 0) {
+      setLoading(true);
+    }
     setFetchError(null);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
@@ -204,6 +223,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         });
 
         setFeesReport(correctedData || []);
+        const cacheKeyCurrent = `${madrasah.id}_${selectedMonth}_${selectedClass}`;
+        globalQawmiFeesReport[cacheKeyCurrent] = correctedData || [];
 
         if (!data || data.length === 0) {
           let checkQuery = supabase.from('students').select('id', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
@@ -218,7 +239,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
       if (activeTab === 'structures') {
         const { data } = await supabase.from('fee_structures').select('*, classes(class_name)').eq('institution_id', madrasah.id);
-        if (data) setStructures(data || []);
+        if (data) {
+           setStructures(data || []);
+           globalQawmiStructures[madrasah.id] = data || [];
+        }
       }
     } catch (e: any) {
       console.error("Fetch Error:", e);
@@ -603,6 +627,15 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                         </div>
                      </div>
                      <div className="flex items-center gap-2">
+                       {item.guardian_phone && (
+                          <a
+                            href={`tel:${item.guardian_phone}`}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 text-orange-400 border-orange-500/20 hover:bg-orange-500/10' : 'bg-white text-orange-500 border-orange-200 hover:bg-orange-50'} active:scale-95`}
+                            title="কল করুন"
+                          >
+                             <Phone size={16} />
+                          </a>
+                       )}
                        <button 
                           onClick={() => {
                               setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l));

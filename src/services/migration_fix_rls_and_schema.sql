@@ -271,15 +271,9 @@ ALTER TABLE student_fee_settings ENABLE ROW LEVEL SECURITY;
 
 -- RLS for student_fee_settings
 DROP POLICY IF EXISTS "Enable read access for institution admins" ON student_fee_settings;
-CREATE POLICY "Enable read access for institution admins" ON student_fee_settings
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM profiles 
-            WHERE id = auth.uid() 
-            AND institution_id = student_fee_settings.institution_id 
-            AND role IN ('madrasah_admin', 'super_admin', 'accountant', 'teacher')
-        )
-    );
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON student_fee_settings;
+CREATE POLICY "Enable read access for authenticated users" ON student_fee_settings
+    FOR SELECT USING (auth.role() = 'authenticated');
 
 DROP POLICY IF EXISTS "Enable insert for institution admins" ON student_fee_settings;
 CREATE POLICY "Enable insert for institution admins" ON student_fee_settings

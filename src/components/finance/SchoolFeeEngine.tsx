@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, UserRole, Profile } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 
@@ -16,20 +16,38 @@ interface SchoolFeeEngineProps {
   activeYear?: any;
 }
 
+// Global cache to prevent re-fetching on tab switch
+let globalSchoolFeesReport: Record<string, any[]> = {};
+let globalSchoolStructures: Record<string, any[]> = {};
+
 export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear }) => {
   const isDark = madrasah.theme === 'dark';
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
-  const [feesReport, setFeesReport] = useState<any[]>([]);
-  const [structures, setStructures] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
   
+  const selectedClassInitial = () => localStorage.getItem('school_fee_selectedClass') || '';
+  const selectedMonthInitial = () => localStorage.getItem('school_fee_selectedMonth') || new Date().toISOString().slice(0, 7);
+  const cacheKey = `${madrasah.id}_${selectedMonthInitial()}_${selectedClassInitial()}`;
+  
+  const [feesReport, setFeesReport] = useState<any[]>(() => globalSchoolFeesReport[cacheKey] || []);
+  const [structures, setStructures] = useState<any[]>(() => globalSchoolStructures[madrasah.id] || []);
+  const [loading, setLoading] = useState(() => !globalSchoolFeesReport[cacheKey]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   // Fee Collection State
-  const [selectedClass, setSelectedClass] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedClass, setSelectedClass] = useState<string>(selectedClassInitial);
+  const [selectedMonth, setSelectedMonth] = useState(selectedMonthInitial);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'unpaid'>('all');
+
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [anyStudentsInMadrasah, setAnyStudentsInMadrasah] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('school_fee_selectedClass', selectedClass);
+  }, [selectedClass]);
+
+  useEffect(() => {
+    localStorage.setItem('school_fee_selectedMonth', selectedMonth);
+  }, [selectedMonth]);
   
   // Collection Modal State
   const [showFeeCollection, setShowFeeCollection] = useState(false);
@@ -88,7 +106,9 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   };
 
   const fetchData = async () => {
-    setLoading(true);
+    if (feesReport.length === 0 && structures.length === 0) {
+      setLoading(true);
+    }
     setFetchError(null);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
@@ -204,6 +224,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         });
 
         setFeesReport(correctedData || []);
+        const cacheKeyCurrent = `${madrasah.id}_${selectedMonth}_${selectedClass}`;
+        globalSchoolFeesReport[cacheKeyCurrent] = correctedData || [];
 
         if (!data || data.length === 0) {
           let checkQuery = supabase.from('students').select('id', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
@@ -218,7 +240,10 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
       if (activeTab === 'structures') {
         const { data } = await supabase.from('fee_structures').select('*, classes(class_name)').eq('institution_id', madrasah.id);
-        if (data) setStructures(data || []);
+        if (data) {
+           setStructures(data || []);
+           globalSchoolStructures[madrasah.id] = data || [];
+        }
       }
     } catch (e: any) {
       console.error("Fetch Error:", e);
@@ -606,6 +631,15 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         </div>
                      </div>
                      <div className="flex items-center gap-1.5">
+                       {item.guardian_phone && (
+                          <a
+                            href={`tel:${item.guardian_phone}`}
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-slate-900 text-orange-400 border-orange-500/20 hover:bg-orange-500/10' : 'bg-white text-orange-500 border-orange-200 hover:bg-orange-50'} active:scale-95`}
+                            title="কল করুন"
+                          >
+                             <Phone size={14} />
+                          </a>
+                       )}
                        <button 
                           onClick={() => {
                               setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l));

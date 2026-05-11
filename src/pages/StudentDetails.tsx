@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote } from 'lucide-react';
+import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
 import { t } from 'translations';
@@ -21,7 +21,37 @@ import { openWhatsAppChooser } from '../utils/whatsapp';
 const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEdit, onBack, lang, readOnly, institutionId, triggerRefresh }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [editedNotes, setEditedNotes] = useState(student.notes || '');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  
   const isDark = madrasah?.theme === 'dark';
+
+  const handleSaveNotes = async () => {
+    setIsSavingNotes(true);
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({ notes: editedNotes })
+        .eq('id', student.id);
+      
+      if (error) {
+        if (error.message.includes('column "notes"')) {
+            alert("Database Error: 'notes' column is missing from 'students' table. Please run this in Supabase SQL Editor: ALTER TABLE students ADD COLUMN notes TEXT;");
+        } else {
+            throw error;
+        }
+      } else {
+         student.notes = editedNotes;
+         setIsEditingNotes(false);
+         if (triggerRefresh) triggerRefresh();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
 
   const initiateWhatsAppCall = async (phone: string) => {
     openWhatsAppChooser(phone);
@@ -272,6 +302,77 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 </div>
               </div>
             )}
+
+            {/* Student Notes Section */}
+            <div className={`flex flex-col p-5 rounded-[1.2rem] border-2 transition-all group ${isDark ? 'bg-slate-800/80 border-slate-700 hover:border-amber-400/30' : 'bg-[#FFFBEB]/50 border-amber-100 hover:bg-white hover:border-amber-400/40 hover:shadow-lg hover:shadow-amber-200/40'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-10 h-10 rounded-[0.6rem] flex items-center justify-center shrink-0 shadow-md border transition-all duration-300 ${isDark ? 'bg-amber-900/30 text-amber-500 border-amber-800' : 'bg-amber-100 text-amber-600 border-amber-200'} group-hover:scale-105`}>
+                    <FileText size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{lang === 'bn' ? 'শিক্ষার্থী নোট (এডমিন/শিক্ষক)' : 'Student Notes'}</p>
+                    <p className={`text-[10px] font-bold ${isDark ? 'text-amber-500/70' : 'text-amber-600/70'}`}>
+                      {lang === 'bn' ? 'শিক্ষার্থীর পড়াশুনা বা চারিত্রিক দিক' : 'Behavior or Academic Notes'}
+                    </p>
+                  </div>
+                </div>
+                {!readOnly && !isEditingNotes && (
+                  <button 
+                    onClick={() => {
+                        setEditedNotes(student.notes || '');
+                        setIsEditingNotes(true);
+                    }}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all active:scale-95 ${isDark ? 'bg-slate-900 border-slate-700 text-amber-500 hover:bg-slate-800 hover:border-amber-500/50' : 'bg-white border-amber-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300'} shadow-sm`}
+                    title="Edit Note"
+                  >
+                    <Edit3 size={16} />
+                  </button>
+                )}
+              </div>
+
+              {isEditingNotes ? (
+                <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                  <textarea
+                    value={editedNotes}
+                    onChange={(e) => setEditedNotes(e.target.value)}
+                    placeholder={lang === 'bn' ? 'শিক্ষার্থীর সম্পর্কে কিছু লিখুন...' : 'Write something about the student...'}
+                    className={`w-full min-h-[100px] p-3 rounded-xl border-2 text-sm focus:outline-none focus:ring-0 transition-all font-noto ${isDark ? 'bg-slate-900/80 border-slate-700 focus:border-amber-500/50 text-slate-200 placeholder:text-slate-600' : 'bg-white border-amber-200 focus:border-amber-500 text-slate-700 placeholder:text-slate-400'} shadow-inner`}
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => {
+                        setIsEditingNotes(false);
+                        setEditedNotes(student.notes || '');
+                      }}
+                      className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-lg border transition-all active:scale-95 ${isDark ? 'text-slate-400 border-slate-700 hover:bg-slate-800' : 'text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+                      disabled={isSavingNotes}
+                    >
+                      {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                    </button>
+                    <button
+                      onClick={handleSaveNotes}
+                      disabled={isSavingNotes || editedNotes === student.notes}
+                      className="px-4 py-2 text-xs font-black uppercase tracking-widest rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {isSavingNotes ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      {lang === 'bn' ? 'সেভ করুন' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className={`mt-1 p-4 rounded-xl border ${isDark ? 'bg-slate-900/50 border-slate-800/50 text-slate-300' : 'bg-white/60 border-amber-50 text-slate-700'} shadow-inner min-h-[60px]`}>
+                  {student.notes ? (
+                    <p className="text-sm font-medium font-noto leading-relaxed whitespace-pre-wrap">{student.notes}</p>
+                  ) : (
+                    <p className={`text-xs italic ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
+                      {lang === 'bn' ? 'কোনো নোট দেওয়া নেই।' : 'No notes added.'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </div>

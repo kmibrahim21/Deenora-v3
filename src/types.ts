@@ -183,6 +183,7 @@ export interface Student {
   guardian_phone: string;
   guardian_phone_2?: string;
   address?: string;
+  notes?: string;
   photo_url?: string;
   student_type?: 'boarding' | 'day_scholar';
   department?: 'hifz' | 'nazera' | 'kitab' | 'other';
