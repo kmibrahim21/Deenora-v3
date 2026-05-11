@@ -119,7 +119,13 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       }
 
       if (activeTab === 'fees') {
-        const classId = selectedClass === '' ? null : selectedClass;
+        if (!selectedClass) {
+          setFeesReport([]);
+          setLoading(false);
+          return;
+        }
+
+        const classId = selectedClass;
         
         const { data: feeStructures } = await supabase.from('fee_structures')
             .select('*')
@@ -513,12 +519,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                {/* Class Selector */}
                <div className="relative flex-1 min-w-[140px]">
                   <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-11 px-4 rounded-xl border flex items-center justify-between group active:scale-[0.98] transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                     <span className={`text-[11px] font-black truncate ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{classes.find(c => c.id === selectedClass)?.class_name || 'সব জামাত (Classes)'}</span>
+                     <span className={`text-[11px] font-black truncate ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{classes.find(c => c.id === selectedClass)?.class_name || 'জামাত নির্বাচন করুন'}</span>
                      <ChevronDown size={16} className={`transition-colors ${madrasah.theme === 'dark' ? 'text-slate-500 group-hover:text-blue-400' : 'text-slate-400 group-hover:text-[#2563EB]'}`} />
                   </button>
                   {showClassDropdown && (
                       <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-xl border z-50 p-1 max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-200 ${madrasah.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-                          <button onClick={() => { setSelectedClass(''); setShowClassDropdown(false); }} className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black transition-colors ${madrasah.theme === 'dark' ? 'text-slate-400 hover:bg-slate-700 hover:text-blue-400' : 'text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]'}`}>সব জামাত</button>
                           {classes.map(c => (
                               <button key={c.id} onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black transition-colors ${madrasah.theme === 'dark' ? 'text-slate-400 hover:bg-slate-700 hover:text-blue-400' : 'text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]'}`}>{c.class_name}</button>
                           ))}
@@ -656,6 +661,18 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                      </div>
                   </div>
                 )})
+            ) : !selectedClass ? (
+              <div className={`text-center py-16 rounded-[3rem] border-2 border-dashed mx-2 px-6 flex flex-col items-center col-span-full ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                 <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-5 ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-600' : 'bg-blue-50 text-blue-200'}`}>
+                    <Info size={32} />
+                 </div>
+                 <h3 className={`text-lg font-black font-noto leading-tight ${madrasah.theme === 'dark' ? 'text-slate-300' : 'text-[#1E293B]'}`}>
+                   জামাত নির্বাচন করুন
+                 </h3>
+                 <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wide leading-relaxed">
+                   শিক্ষার্থীদের ফি দেখতে একটি নির্দিষ্ট জামাত নির্বাচন করুন।
+                 </p>
+              </div>
             ) : !fetchError && (
               <div className={`text-center py-16 rounded-[3rem] border-2 border-dashed mx-2 px-6 flex flex-col items-center col-span-full ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-5 ${madrasah.theme === 'dark' ? 'bg-slate-800 text-slate-600' : 'bg-blue-50 text-blue-200'}`}>
