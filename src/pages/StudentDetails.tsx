@@ -24,8 +24,23 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState(student.notes || '');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [libraryIssues, setLibraryIssues] = useState<any[]>([]);
   
   const isDark = madrasah?.theme === 'dark';
+
+  useEffect(() => {
+    if (student?.id) {
+       supabase.from('library_issues')
+          .select('*, book:library_books(title)')
+          .eq('user_type', 'student')
+          .eq('student_id', student.id)
+          .order('issue_date', { ascending: false })
+          .then(({ data, error }) => {
+              if (error && error.message.includes('does not exist')) return;
+              if (data) setLibraryIssues(data);
+          });
+    }
+  }, [student?.id]);
 
   const handleSaveNotes = async () => {
     setIsSavingNotes(true);
@@ -299,6 +314,39 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-black text-slate-400 uppercase tracking-[0.1em] mb-0.5">{t('address', lang)}</p>
                   <p className={`text-sm font-bold font-noto leading-relaxed ${isDark ? 'text-slate-300' : 'text-[#1E293B]'}`}>{student.address}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Library History */}
+            {libraryIssues.length > 0 && (
+              <div className={`p-4 sm:p-5 rounded-[1.2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg'}`}>
+                <div className="flex items-center gap-1.5 px-1.5 mb-3">
+                  <div className="w-0.5 h-3.5 bg-gradient-to-b from-indigo-500 to-indigo-800 rounded-full shadow-lg shadow-indigo-500/20" />
+                  <h3 className={`text-xs font-black uppercase tracking-[0.15em] flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                    {lang === 'bn' ? 'লাইব্রেরী' : 'Library Items'}
+                    <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-[10px]">{libraryIssues.length}</span>
+                  </h3>
+                </div>
+                <div className="space-y-2.5">
+                  {libraryIssues.map(issue => (
+                    <div key={issue.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                      <div>
+                        <p className="font-bold text-sm tracking-tight">{issue.book?.title || 'Unknown Book'}</p>
+                        <p className="text-[10px] font-black text-slate-400 mt-1 uppercase">Issued: {new Date(issue.issue_date).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${issue.status === 'returned' ? 'bg-emerald-500/10 text-emerald-500' : issue.status === 'lost' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                           {issue.status}
+                        </span>
+                        {issue.status === 'issued' && (
+                          <p className={`text-[9px] font-black mt-1 uppercase ${issue.due_date < new Date().toISOString().split('T')[0] ? 'text-red-500' : 'text-slate-400'}`}>
+                            Due: {new Date(issue.due_date).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

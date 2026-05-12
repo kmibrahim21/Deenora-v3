@@ -126,12 +126,17 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         attendanceQuery = attendanceQuery.in('class_id', allowedClasses);
       }
 
+      let ledgerQuery = supabase.from('ledger').select('type, amount').eq('institution_id', institutionId).gte('transaction_date', new Date().toISOString().slice(0, 7) + '-01');
+      if (activeYearId) {
+        ledgerQuery = ledgerQuery.eq('academic_year_id', activeYearId);
+      }
+
       const promises: any[] = [
         studentQuery,
         classQuery,
         supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId),
         supabase.from('institutions').select('sms_balance, balance').eq('id', institutionId).maybeSingle(),
-        supabase.from('ledger').select('type, amount').eq('institution_id', institutionId).gte('transaction_date', new Date().toISOString().slice(0, 7) + '-01')
+        ledgerQuery
       ];
 
       if (modules.modules.attendance) {

@@ -22,6 +22,7 @@ export interface Institution {
       admit_card: boolean;
       seat_plan: boolean;
       accounting: boolean;
+      library?: boolean;
       academic_year_promotion?: boolean;
       voice_broadcast?: boolean;
       sms?: boolean;
@@ -410,6 +411,7 @@ export type View =
   | 'admin-voice-service'
   | 'admin-tutorials'
   | 'messages'
+  | 'library'
   | 'super-account';
 
 export interface Tutorial {

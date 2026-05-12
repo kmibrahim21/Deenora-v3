@@ -18,13 +18,14 @@ interface AccountingProps {
   role: UserRole;
   profile?: Profile | null;
   activeYear?: AcademicYear | null;
+  triggerRefresh?: () => void;
 }
 
 // Global cache for instant tab switching
 let globalLedgerCache: Record<string, LedgerEntry[]> = {};
 let globalClassesCache: Record<string, Class[]> = {};
 
-const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear }) => {
+const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear, triggerRefresh }) => {
   const isTeacher = role === 'teacher';
   const canManageAccounting = !isTeacher || profile?.permissions?.can_manage_accounting;
 
@@ -189,6 +190,13 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
       setSelectedLedgerIds([]);
       setDeleteConfirm({show: false, ids: []});
+      
+      // Clear relevant caches
+      if (madrasah?.id) {
+        await CacheService.clearCache('stats', madrasah.id);
+      }
+      
+      if (triggerRefresh) triggerRefresh();
       fetchData();
     } catch (err: any) {
       alert(err.message);
@@ -219,6 +227,13 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       setAmount(''); setCategory(''); setDesc('');
       setTransactionDate(new Date().toISOString().split('T')[0]);
       setActiveTab('ledger');
+
+      // Clear relevant caches
+      if (madrasah?.id) {
+        await CacheService.clearCache('stats', madrasah.id);
+      }
+      
+      if (triggerRefresh) triggerRefresh();
       fetchData();
     } catch (err: any) { 
       if (err.message?.includes('row-level security policy')) {

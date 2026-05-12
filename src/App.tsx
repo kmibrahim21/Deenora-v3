@@ -39,6 +39,7 @@ const FinalResults = React.lazy(() => import("pages/FinalResults"));
 const VoiceBroadcast = React.lazy(() => import("pages/VoiceBroadcast"));
 const SmsVoiceMenu = React.lazy(() => import("pages/SmsVoiceMenu"));
 const MessagesPattern = React.lazy(() => import("pages/Messages"));
+const LibraryPattern = React.lazy(() => import("pages/Library"));
 const AcademicCalendarPage = React.lazy(
   () => import("pages/AcademicCalendarPage"),
 );
@@ -640,6 +641,7 @@ const App: React.FC = () => {
             role={role}
             profile={profile}
             activeYear={activeYear}
+            triggerRefresh={triggerRefresh}
           />
         );
       case "attendance":
@@ -676,6 +678,8 @@ const App: React.FC = () => {
             profile={profile}
           />
         );
+      case "library":
+        return <LibraryPattern lang={lang} madrasah={madrasah} profile={profile} />;
       case "messages":
         return (
           <MessagesPattern lang={lang} madrasah={madrasah} profile={profile} />

@@ -124,12 +124,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editAddress, setEditAddress] = useState('');
   const [editActive, setEditActive] = useState(true);
   const [editVoiceSenderId, setEditVoiceSenderId] = useState('');
-  const [editModules, setEditModules] = useState({
+  const [editModules, setEditModules] = useState<{ [key: string]: boolean }>({
     attendance: true,
     results: true,
     admit_card: true,
     seat_plan: true,
     accounting: true,
+    library: false,
     academic_year_promotion: true,
     voice_broadcast: false,
     sms: true,
@@ -1059,6 +1060,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       admit_card: true,
       seat_plan: true,
       accounting: true,
+      library: false,
       academic_year_promotion: true,
       voice_broadcast: true,
       sms: true,

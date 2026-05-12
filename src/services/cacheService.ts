@@ -33,4 +33,13 @@ export class CacheService {
       return [];
     }
   }
+
+  static async clearCache(storeName: 'students' | 'teachers' | 'attendance' | 'attendance_daily' | 'fees' | 'stats', institutionId: string) {
+    try {
+      const table = offlineDb[storeName];
+      await table.where('institution_id').equals(institutionId).delete();
+    } catch (error) {
+      console.error(`[CacheService] Error clearing cache in ${storeName}:`, error);
+    }
+  }
 }
