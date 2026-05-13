@@ -106,6 +106,35 @@ body {
 .font-hind { font-family: 'Hind Siliguri', sans-serif; }
 .font-serif-bn { font-family: 'Noto Serif Bengali', serif; }
 
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 10mm;
+    }
+    .print\:hidden {
+      display: none !important;
+    }
+    .page-break {
+      page-break-after: always;
+    }
+    body {
+      background: white !important;
+    }
+    .no-scrollbar {
+      overflow: visible !important;
+    }
+  }
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(25px);

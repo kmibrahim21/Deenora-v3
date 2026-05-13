@@ -44,6 +44,7 @@ const AcademicCalendarPage = React.lazy(
   () => import("pages/AcademicCalendarPage"),
 );
 const Tutorials = React.lazy(() => import("pages/Tutorials"));
+const ClassRoutine = React.lazy(() => import("pages/ClassRoutine"));
 const VoiceServiceDashboard = React.lazy(() =>
   import("components/VoiceServiceDashboard").then((module) => ({
     default: module.VoiceServiceDashboard,
@@ -336,6 +337,7 @@ const App: React.FC = () => {
               setView("voice-broadcast");
             }}
             onNavigateToMessages={() => setView("messages")}
+            onNavigateToClassRoutine={() => setView("class-routine")}
           />
         );
       case "classes":
@@ -684,6 +686,15 @@ const App: React.FC = () => {
         return (
           <MessagesPattern lang={lang} madrasah={madrasah} profile={profile} />
         );
+      case "class-routine":
+        return (
+          <ClassRoutine
+            lang={lang}
+            madrasah={madrasah}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            profile={profile}
+          />
+        );
       default:
         return (
           <Home
@@ -717,6 +728,7 @@ const App: React.FC = () => {
               setView("voice-broadcast");
             }}
             onNavigateToMessages={() => setView("messages")}
+            onNavigateToClassRoutine={() => setView("class-routine")}
           />
         );
     }

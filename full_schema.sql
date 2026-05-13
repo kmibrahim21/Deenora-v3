@@ -1129,3 +1129,34 @@ CREATE POLICY "Enable all access for institution admins" ON student_fee_settings
         )
     )
 );
+
+CREATE TABLE IF NOT EXISTS class_routines (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+    class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    subject_name TEXT NOT NULL,
+    teacher_id UUID REFERENCES teachers(id) ON DELETE SET NULL,
+    day TEXT NOT NULL CHECK (day IN ('Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')),
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    room_number TEXT,
+    is_break BOOLEAN DEFAULT FALSE,
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for class_routines
+ALTER TABLE class_routines ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable read access for authenticated users" ON class_routines;
+CREATE POLICY "Enable read access for authenticated users" ON class_routines FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Enable all access for institution admins" ON class_routines;
+CREATE POLICY "Enable all access for institution admins" ON class_routines FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (
+            (profiles.role = 'madrasah_admin' AND profiles.institution_id = class_routines.institution_id) OR
+            (profiles.role = 'super_admin')
+        )
+    )
+);

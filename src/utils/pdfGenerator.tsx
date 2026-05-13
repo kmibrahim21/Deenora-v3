@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Exam, Student, ExamSubject, Institution, SeatAssignment } from '../types';
+import { Exam, Student, ExamSubject, Institution, SeatAssignment, Class, ClassRoutine } from '../types';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { toJpeg } from 'html-to-image';
@@ -12,6 +12,8 @@ import { FinalResultTemplate } from '../components/pdf/FinalResultTemplate';
 import { SeatPlanTemplate } from '../components/pdf/SeatPlanTemplate';
 import { AttendanceReportTemplate } from '../components/pdf/AttendanceReportTemplate';
 import { AccountingReportTemplate } from '../components/pdf/AccountingReportTemplate';
+import { RoutinePDFTemplate } from '../components/pdf/RoutinePDFTemplate';
+import { MasterRoutinePDFTemplate } from '../components/pdf/MasterRoutinePDFTemplate';
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
@@ -583,4 +585,106 @@ export const generateAccountingReportPDF = async (
     document.body.removeChild(container);
     
     doc.save(`Accounting_Report_${period}.pdf`);
+};
+
+// --- CLASS ROUTINE GENERATOR ---
+export const generateClassRoutinePDF = async (
+    madrasah: Institution | null,
+    routines: ClassRoutine[],
+    classes: Class[],
+    days: any[],
+    lang: 'en' | 'bn' = 'bn'
+) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                <RoutinePDFTemplate madrasah={madrasah} routines={routines} classes={classes} days={days} lang={lang} />
+            </div>
+        );
+        setTimeout(resolve, 1000); // Give time for images to load
+    });
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper) {
+        const pageContainers = wrapper.querySelectorAll('.pdf-page-container');
+        
+        let pageAdded = false;
+        for (let i = 0; i < pageContainers.length; i++) {
+            const pageElement = pageContainers[i] as HTMLElement;
+
+            const imgData = await toJpeg(pageElement, {
+                pixelRatio: 1.5,
+                quality: 0.8,
+                backgroundColor: '#ffffff',
+                width: 794,
+                height: 1123,
+            });
+
+            if (pageAdded) doc.addPage();
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            pageAdded = true;
+        }
+    }
+    
+    doc.save(`${madrasah?.name || 'Madrasah'}_Class_Routine.pdf`);
+    root.unmount();
+    document.body.removeChild(container);
+};
+
+export const generateMasterClassRoutinePDF = async (
+    madrasah: Institution | null,
+    routines: ClassRoutine[],
+    classes: Class[],
+    days: any[],
+    lang: 'en' | 'bn' = 'bn'
+) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                <MasterRoutinePDFTemplate madrasah={madrasah} routines={routines} classes={classes} days={days} lang={lang} />
+            </div>
+        );
+        setTimeout(resolve, 1500);
+    });
+
+    const doc = new jsPDF('l', 'mm', 'a4'); // LANDSCAPE
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper) {
+        const pageElement = wrapper.querySelector('.pdf-page-container') as HTMLElement;
+        if (pageElement) {
+            const imgData = await toJpeg(pageElement, {
+                pixelRatio: 2,
+                quality: 0.95,
+                backgroundColor: '#ffffff',
+                width: 1123,
+                height: 794,
+            });
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        }
+    }
+    
+    doc.save(`${madrasah?.name || 'Madrasah'}_Master_Routine.pdf`);
+    root.unmount();
+    document.body.removeChild(container);
 };

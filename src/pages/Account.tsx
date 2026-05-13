@@ -69,6 +69,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
       voice_broadcast: configObj.modules?.voice_broadcast ?? true,
       sms: configObj.modules?.sms ?? true,
+      class_routine: configObj.modules?.class_routine ?? false,
     };
   }, [madrasah]);
 
@@ -330,86 +331,71 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const isTeacher = profile?.role === 'teacher';
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-36 relative z-10">
+    <div className="space-y-6 animate-in fade-in duration-700 pb-36 relative z-10">
 
-      <div className="relative pt-20 px-1">
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} rounded-[4rem] p-6 sm:p-10 pt-28 md:pt-36 shadow-bubble border relative text-center`}>
-          <div className="absolute inset-0 overflow-hidden rounded-[4rem]">
-            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-blue-600 to-indigo-700 opacity-[0.03]" />
+      <div className="relative pt-12 px-1">
+        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} rounded-[3rem] sm:rounded-[4rem] p-6 sm:p-10 pt-24 md:pt-32 shadow-bubble border relative text-center`}>
+          <div className="absolute inset-0 overflow-hidden rounded-[3rem] sm:rounded-[4rem]">
+            <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-blue-600 to-indigo-700 opacity-[0.03]" />
           </div>
-          <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-20">
+          <div className="absolute -top-12 sm:-top-16 left-1/2 -translate-x-1/2 z-20">
             <div className="relative group">
-              <div className={`w-40 h-40 p-4 rounded-full shadow-bubble border-[12px] flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-900' : 'bg-white border-slate-50'}`}>
-                {logoUrl ? <img src={logoUrl} className="w-full h-full object-contain" alt="Profile" /> : <div className={`w-full h-full rounded-full flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}><UserIcon size={70} strokeWidth={1.5} /></div>}
+              <div className={`w-32 h-32 sm:w-40 sm:h-40 p-3 sm:p-4 rounded-full shadow-bubble border-[8px] sm:border-[12px] flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-900' : 'bg-white border-slate-50'}`}>
+                {logoUrl ? <img src={logoUrl} className="w-full h-full object-contain" alt="Profile" /> : <div className={`w-full h-full rounded-full flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}><UserIcon size={50} className="sm:w-[70px] sm:h-[70px]" strokeWidth={1.5} /></div>}
               </div>
               {madrasah && madrasah.id !== 'super_admin' && (
                 <button 
                   onClick={() => fileInputRef.current?.click()} 
-                  className="absolute bottom-2 right-2 w-11 h-11 bg-[#2563EB] text-white rounded-2xl flex items-center justify-center shadow-premium border-4 border-white active:scale-90 transition-all z-30"
+                  className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 w-9 h-9 sm:w-11 sm:h-11 bg-[#2563EB] text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-premium border-4 border-white active:scale-90 transition-all z-30"
                 >
-                  {saving ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
+                  {saving ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} className="sm:w-5 sm:h-5" />}
                 </button>
               )}
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
             </div>
           </div>
-          <div className="space-y-6 mt-4">
+          <div className="space-y-4 mt-2">
              <div className="space-y-1">
-               <div className="px-4 pb-3">
-                 <h2 className={`text-[22px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{madrasah?.name || 'User'}</h2>
+               <div className="px-4">
+                 <h2 className={`text-[20px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{madrasah?.name || 'User'}</h2>
                </div>
                
-               <div className="flex flex-col items-center gap-1 mt-3">
+               <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-1.5 px-2">
                  {madrasah?.address && (
-                   <div className="flex items-center justify-center gap-1.5 text-slate-400">
-                     <MapPin size={14} />
-                     <p className="text-xs font-bold">{madrasah.address}</p>
+                   <div className="flex items-center gap-1.5 text-slate-400">
+                     <MapPin size={11} className="shrink-0" />
+                     <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.address}</p>
                    </div>
                  )}
                  {madrasah?.phone && (
-                   <div className="flex items-center justify-center gap-1.5 text-slate-400">
-                     <Smartphone size={14} />
-                     <p className="text-xs font-bold">{madrasah.phone}</p>
+                   <div className="flex items-center gap-1.5 text-slate-400">
+                     <Smartphone size={11} className="shrink-0" />
+                     <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.phone}</p>
                    </div>
                  )}
                  {madrasah?.email && (
-                   <div className="flex items-center justify-center gap-1.5 text-slate-400">
-                     <Mail size={14} />
-                     <p className="text-xs font-bold">{madrasah.email}</p>
+                   <div className="flex items-center gap-1.5 text-slate-400">
+                     <Mail size={11} className="shrink-0" />
+                     <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.email}</p>
                    </div>
                  )}
                </div>
              </div>
              
              {madrasah && madrasah.id !== 'super_admin' && !isTeacher && (
-               <>
-                 <div className="pt-4 space-y-3">
-                    <div onClick={() => copyToClipboard(madrasah.id)} className={`p-5 rounded-[2.5rem] border flex items-center gap-5 active:scale-[0.98] cursor-pointer group ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
-                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-white border-slate-100 text-[#2563EB]'}`}>
-                        <Fingerprint size={24} />
+               <div className="pt-2">
+                  {(madrasah.config_json as any)?.institute_code && (
+                    <div className={`p-4 rounded-[2rem] border flex items-center justify-center gap-4 inline-flex ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-white border-slate-100 text-amber-600'}`}>
+                        <Box size={20} />
                        </div>
-                       <div className="flex-1 text-left min-w-0">
-                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{t('madrasah_uuid', lang)}</p>
-                          <p className={`text-[12px] font-black truncate ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>{madrasah.id}</p>
+                       <div className="text-left">
+                          <p className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">{lang === 'bn' ? 'ইনস্টিটিউট কোড' : 'Institute Code'}</p>
+                          <p className={`text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>{(madrasah.config_json as any).institute_code}</p>
                        </div>
-                       {copiedId ? <Check size={22} className="text-emerald-500 shrink-0" /> : <Copy size={20} className="text-slate-200 shrink-0" />}
                     </div>
-
-                    {(madrasah.config_json as any)?.institute_code && (
-                      <div className={`p-5 rounded-[2.5rem] border flex items-center gap-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
-                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-white border-slate-100 text-amber-600'}`}>
-                          <Box size={24} />
-                         </div>
-                         <div className="flex-1 text-left min-w-0">
-                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">{lang === 'bn' ? 'ইনস্টিটিউট কোড' : 'Institute Code'}</p>
-                            <p className={`text-[12px] font-black truncate ${madrasah?.theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>{(madrasah.config_json as any).institute_code}</p>
-                         </div>
-                      </div>
-                    )}
-                    
-
-                 </div>
-               </>
+                  )}
+               </div>
              )}
           </div>
         </div>
@@ -514,6 +500,26 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               </div>
             </button>
           </>
+        )}
+
+        {/* Class Routine Card */}
+        {modules.class_routine && (
+          <button 
+            onClick={() => setView('class-routine')}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <LayoutDashboard size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                {lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
+              </h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {lang === 'bn' ? 'সময়সূচী' : 'Schedule'}
+              </p>
+            </div>
+          </button>
         )}
 
         {/* Video Tutorial Card */}

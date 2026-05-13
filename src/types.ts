@@ -383,6 +383,23 @@ export interface Teacher {
   created_at: string;
 }
 
+export interface ClassRoutine {
+  id: string;
+  institution_id: string;
+  class_id: string;
+  subject_name: string;
+  teacher_id?: string;
+  day: 'Saturday' | 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  start_time: string;
+  end_time: string;
+  room_number?: string;
+  is_break?: boolean;
+  note?: string;
+  created_at?: string;
+  classes?: Class;
+  teachers?: Teacher;
+}
+
 export type View = 
   | 'home' 
   | 'classes' 
@@ -412,6 +429,7 @@ export type View =
   | 'admin-tutorials'
   | 'messages'
   | 'library'
+  | 'class-routine'
   | 'super-account';
 
 export interface Tutorial {
