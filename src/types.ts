@@ -27,6 +27,7 @@ export interface Institution {
       voice_broadcast?: boolean;
       sms?: boolean;
       messages?: boolean;
+      certificates?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     result_system: 'grading' | 'marks' | 'hifz';
@@ -430,6 +431,7 @@ export type View =
   | 'messages'
   | 'library'
   | 'class-routine'
+  | 'certificates'
   | 'super-account';
 
 export interface Tutorial {

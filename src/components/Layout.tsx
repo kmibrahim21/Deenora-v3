@@ -196,12 +196,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-sm font-bold font-noto">{t('menu_students', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
-              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && modules.modules.class_routine && (
-                <button onClick={() => setView('class-routine')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${currentView === 'class-routine' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
-                  <LayoutDashboard size={22} strokeWidth={currentView === 'class-routine' ? 2.5 : 2} />
-                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}</span>
-                </button>
-              )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_send_sms') || hasPermission('can_use_voice_call')) && (modules.modules.sms !== false || modules.modules.voice_broadcast) && (
                 <button 
                   onClick={() => {
@@ -359,12 +353,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 <button onClick={() => setView('classes')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('classes') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
                   <BookOpen size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{t('menu_students', lang, madrasah?.institution_type)}</span>
-                </button>
-              )}
-              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && modules.modules.class_routine && (
-                <button onClick={() => setView('class-routine')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${currentView === 'class-routine' ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
-                  <LayoutDashboard size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'রুটিন' : 'Routine'}</span>
                 </button>
               )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_send_sms') || hasPermission('can_use_voice_call')) && (modules.modules.sms !== false || modules.modules.voice_broadcast) && (

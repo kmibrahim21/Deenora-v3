@@ -148,7 +148,8 @@ async function setupInstitution(supabase, userId, body, res) {
         accounting: true,
         academic_year_promotion: true,
         voice_broadcast: true,
-        sms: true
+        sms: true,
+        certificates: false
       },
       result_engine: 'school',
       result_system: 'grading',

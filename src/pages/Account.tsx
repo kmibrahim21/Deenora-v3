@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
@@ -69,6 +69,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
       voice_broadcast: configObj.modules?.voice_broadcast ?? true,
       sms: configObj.modules?.sms ?? true,
+      messages: configObj.modules?.messages ?? true,
       class_routine: configObj.modules?.class_routine ?? false,
     };
   }, [madrasah]);
@@ -329,6 +330,9 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
   const displayName = madrasah?.name || 'User';
   const isTeacher = profile?.role === 'teacher';
+  const role = profile?.role || 'teacher';
+  const isAdmin = role === 'madrasah_admin' || role === 'super_admin';
+  const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-36 relative z-10">
@@ -517,6 +521,46 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               </h5>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                 {lang === 'bn' ? 'সময়সূচী' : 'Schedule'}
+              </p>
+            </div>
+          </button>
+        )}
+
+        {/* Message Card */}
+        {(isAdmin || canSendSMS) && modules.messages && (
+          <button 
+            onClick={() => setView('messages')}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <MessageCircle size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                {lang === 'bn' ? 'বার্তা পাঠান' : 'Send Message'}
+              </h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {lang === 'bn' ? 'বার্তা' : 'Messages'}
+              </p>
+            </div>
+          </button>
+        )}
+
+        {/* Certificate Card */}
+        {isAdmin && madrasah?.config_json?.modules?.certificates && (
+          <button 
+            onClick={() => setView('certificates')}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Award size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                {lang === 'bn' ? 'সার্টিফিকেট' : 'Certificates'}
+              </h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {lang === 'bn' ? 'জেনারেটর' : 'Generator'}
               </p>
             </div>
           </button>
