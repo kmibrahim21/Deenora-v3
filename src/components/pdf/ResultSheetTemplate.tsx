@@ -150,12 +150,12 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({ student, exam,
                  
                  return (
                    <tr key={i}>
-                     <td className="border border-black p-2 text-center font-semibold">{i + 1}</td>
-                     <td className="border border-black p-2 font-bold font-tiro text-sm">{m.subject_name}</td>
-                     <td className="border border-black p-2 text-center font-semibold">{m.full_marks || '100'}</td>
-                     <td className="border border-black p-2 text-center font-bold">{m.grade || '-'}</td>
-                     <td className="border border-black p-2 text-center font-bold">{m.grade_point || '-'}</td>
-                     <td className="border border-black p-2 text-center text-xs">{m.remarks || remark}</td>
+                     <td className="border border-black p-2 text-center font-bold text-[16px]">{i + 1}</td>
+                     <td className="border border-black p-2 font-bold font-tiro text-[15px]">{m.subject_name}</td>
+                     <td className="border border-black p-2 text-center font-bold text-[16px]">{m.full_marks || '100'}</td>
+                     <td className="border border-black p-2 text-center font-bold text-[16px]">{m.grade || '-'}</td>
+                     <td className="border border-black p-2 text-center font-bold text-[16px]">{m.grade_point || '-'}</td>
+                     <td className="border border-black p-2 text-center text-sm">{m.remarks || remark}</td>
                    </tr>
                  );
                })}
