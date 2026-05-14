@@ -187,9 +187,20 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const settings = madrasah.config_json?.attendance_settings || {};
       if (settingsClassId === 'global') {
         setSettingsSessions(settings.sessions || []);
+        setStartTime(settings.start_time || '08:00');
+        setEndTime(settings.end_time || '14:00');
+        setHalfDayTime(settings.half_day_time || '12:00');
+        setFullDayTime(settings.full_day_time || '14:00');
       } else {
         const classSessions = settings.class_sessions?.[settingsClassId];
         setSettingsSessions(classSessions || []);
+
+        // Load class specific times if available
+        const classTimes = settings.class_times?.[settingsClassId];
+        setStartTime(classTimes?.start_time || settings.start_time || '08:00');
+        setEndTime(classTimes?.end_time || settings.end_time || '14:00');
+        setHalfDayTime(classTimes?.half_day_time || settings.half_day_time || '12:00');
+        setFullDayTime(classTimes?.full_day_time || settings.full_day_time || '14:00');
       }
     }
   }, [settingsClassId, madrasah?.config_json]);
@@ -433,7 +444,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   };
 
   const computeLateMins = (arrTime: string | null | undefined) => {
-    const sTime = madrasah?.config_json?.attendance_settings?.start_time || '08:00';
+    const classTimes = selectedClass && selectedClass.id !== 'all' 
+                        ? madrasah?.config_json?.attendance_settings?.class_times?.[selectedClass.id] 
+                        : null;
+    const sTime = classTimes?.start_time || madrasah?.config_json?.attendance_settings?.start_time || '08:00';
     if (!arrTime || !sTime) return 0;
     const [sh, sm] = sTime.split(':').map(Number);
     const [lh, lm] = arrTime.split(':').map(Number);
@@ -720,23 +734,32 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     try {
       const currentSettings = madrasah.config_json?.attendance_settings || {};
       const classSessions = { ...(currentSettings.class_sessions || {}) };
+      const classTimes = { ...(currentSettings.class_times || {}) };
       
+      let updatedSettings = { ...currentSettings };
+
       if (settingsClassId === 'global') {
-        currentSettings.sessions = settingsSessions;
+        updatedSettings.sessions = settingsSessions;
+        updatedSettings.start_time = startTime;
+        updatedSettings.end_time = endTime;
+        updatedSettings.half_day_time = halfDayTime;
+        updatedSettings.full_day_time = fullDayTime;
       } else {
         classSessions[settingsClassId] = settingsSessions;
-        currentSettings.class_sessions = classSessions;
-      }
-
-      const updatedConfig = {
-        ...madrasah.config_json,
-        attendance_settings: {
-          ...currentSettings,
+        updatedSettings.class_sessions = classSessions;
+        
+        classTimes[settingsClassId] = {
           start_time: startTime,
           end_time: endTime,
           half_day_time: halfDayTime,
           full_day_time: fullDayTime,
-        }
+        };
+        updatedSettings.class_times = classTimes;
+      }
+
+      const updatedConfig = {
+        ...madrasah.config_json,
+        attendance_settings: updatedSettings
       };
       
       const { error } = await supabase
@@ -1456,10 +1479,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     {settingsClassId !== 'global' && (
                       <button 
                         onClick={() => {
-                          const globalSessions = madrasah?.config_json?.attendance_settings?.sessions || [];
-                          setSettingsSessions(globalSessions);
+                          const settings = madrasah?.config_json?.attendance_settings || {};
+                          setSettingsSessions(settings.sessions || []);
+                          setStartTime(settings.start_time || '08:00');
+                          setEndTime(settings.end_time || '14:00');
+                          setHalfDayTime(settings.half_day_time || '12:00');
+                          setFullDayTime(settings.full_day_time || '14:00');
                         }}
-                        title="Copy Global Sessions"
+                        title="Copy Global Settings"
                         className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-blue-600 border-blue-100'}`}
                       >
                         <RefreshCw size={20} />
