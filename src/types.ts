@@ -461,6 +461,7 @@ export interface Transaction {
   created_at: string;
   sms_count?: number;
   module?: 'sms' | 'voice' | 'subscription';
+  metadata?: any;
   institutions?: Institution;
 }
 

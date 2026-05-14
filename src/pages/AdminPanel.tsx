@@ -158,6 +158,50 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
   const [editPackageRate, setEditPackageRate] = useState<number>(0);
   const [editPackageName, setEditPackageName] = useState<string>('');
+
+  const formatMonthsRange = (months: string[]) => {
+    if (!months || months.length === 0) return '';
+    
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    // Sort months chronologically: '2024-05' matches string sorting
+    const sortedMonths = [...months].sort();
+    
+    let range = '';
+    if (sortedMonths.length === 1) {
+      const [_, month] = sortedMonths[0].split('-');
+      range = monthNames[parseInt(month) - 1];
+    } else {
+      const start = sortedMonths[0];
+      const end = sortedMonths[sortedMonths.length - 1];
+      
+      const startMonth = monthNames[parseInt(start.split('-')[1]) - 1];
+      const endMonth = monthNames[parseInt(end.split('-')[1]) - 1];
+      
+      range = `${startMonth} to ${endMonth}`;
+    }
+
+    return `'${range}'`;
+  };
+
+  const getEnglishPkgName = (name: string) => {
+    const mapping: { [key: string]: string } = {
+      'স্টার্টার': 'STARTER',
+      'বেসিক': 'BASIC',
+      'স্মার্ট': 'SMART',
+      'একাডেমিক': 'ACADEMIC',
+      'স্ট্যান্ডার্ড': 'STANDARD',
+      'ফিনান্স': 'FINANCE',
+      'প্রফেশনাল': 'PROFESSIONAL',
+      'এন্টারপ্রাইজ': 'ENTERPRISE'
+    };
+    const mapped = mapping[name] || name;
+    return mapped.toUpperCase();
+  };
+
   const [selectedInstIds, setSelectedInstIds] = useState<string[]>([]);
   const [commsModal, setCommsModal] = useState<{
     show: boolean,
@@ -188,14 +232,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         setPackages([...data, { name: 'Custom', rate: 0 }]);
       } else {
         const defaults = [
-          { name: 'স্টার্টার', rate: 0.50, sort_order: 1 },
-          { name: 'বেসিক', rate: 0.75, sort_order: 2 },
-          { name: 'স্মার্ট', rate: 1.00, sort_order: 3 },
-          { name: 'একাডেমিক', rate: 1.00, sort_order: 4 },
-          { name: 'স্ট্যান্ডার্ড', rate: 1.50, sort_order: 5 },
-          { name: 'ফিনান্স', rate: 1.50, sort_order: 6 },
-          { name: 'প্রফেশনাল', rate: 1.75, sort_order: 7 },
-          { name: 'এন্টারপ্রাইজ', rate: 2.50, sort_order: 8 },
+          { name: 'STARTER', rate: 0.50, sort_order: 1 },
+          { name: 'BASIC', rate: 0.75, sort_order: 2 },
+          { name: 'SMART', rate: 1.00, sort_order: 3 },
+          { name: 'ACADEMIC', rate: 1.00, sort_order: 4 },
+          { name: 'STANDARD', rate: 1.50, sort_order: 5 },
+          { name: 'FINANCE', rate: 1.50, sort_order: 6 },
+          { name: 'PROFESSIONAL', rate: 1.75, sort_order: 7 },
+          { name: 'ENTERPRISE', rate: 2.50, sort_order: 8 },
           { name: 'Custom', rate: 0, sort_order: 99 }
         ];
         setPackages(defaults);
@@ -1343,11 +1387,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         if (userPhone) {
           let msg = '';
           if (isVoice) {
-            msg = `আস-সালামু আলাইকুম, আপনার পেমেন্ট অনুমোদিত হয়েছে। আপনার অ্যাকাউন্টে ${tr.amount} ৳ ভয়েস ব্যালেন্স যোগ করা হয়েছে। ধন্যবাদ।`;
+            msg = `Assalamu Alaikum, Your payment has been approved. ${tr.amount}tk Voice Balance has been added to your account. Thank you.`;
           } else if (isSubscription) {
-            msg = `আস-সালামু আলাইকুম, আপনার সাবস্ক্রিপশন পেমেন্ট (${tr.amount} ৳) অনুমোদিত হয়েছে। ধন্যবাদ।`;
+            const pkgName = getEnglishPkgName(tr.metadata?.package_name || '');
+            const monthRange = formatMonthsRange(tr.metadata?.months || []);
+            msg = `Assalamu Alaikum, Your payment for ${pkgName ? `'${pkgName}' ` : ''}subscription ${monthRange ? '(' + monthRange + ') ' : ''}(${tr.amount}tk) has been approved. Thank you.`;
           } else {
-            msg = `আস-সালামু আলাইকুম, আপনার পেমেন্ট অনুমোদিত হয়েছে। আপনার অ্যাকাউন্টে ${sms} টি SMS যোগ করা হয়েছে। ধন্যবাদ।`;
+            msg = `Assalamu Alaikum, Your payment has been approved. ${sms} SMS credits have been added to your account. Thank you.`;
           }
           // Fire and forget SMS to avoid blocking UI
           smsApi.sendDirect(userPhone, msg).catch(err => console.error("SMS Send Error:", err));
@@ -3037,7 +3083,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     if (updateError) throw updateError;
 
                                     setEditPaidMonths(updatedPaidMonths);
-                                    setSelectedMonthsForPayment([]);
+                                     // Send Notification SMS
+                                     if (selectedUser.phone) {
+                                       const pkgName = getEnglishPkgName(editPackageName);
+                                       const monthRange = formatMonthsRange(selectedMonthsForPayment);
+                                       const msg = `Assalamu Alaikum, Your payment for '${pkgName}' subscription ${monthRange ? '(' + monthRange + ') ' : ''}(${amount}tk) has been received and approved. Thank you.`;
+                                       smsApi.sendDirect(selectedUser.phone, msg).catch(err => console.error("SMS Send Error:", err));
+                                     }
+
+                                     setSelectedMonthsForPayment([]);
                                     setEditDiscount(0);
                                     setOverrideTotal('');
                                     setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'পেমেন্ট রিসিভ করা হয়েছে এবং প্রোফাইল আপডেট হয়েছে।' });
