@@ -686,14 +686,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     return data || [];
   };
 
-  const enforceAutoDeactivation = async () => {
+  const enforceAutoDeactivation = async (force: boolean = false) => {
     const today = new Date();
-    // Start from May 2026 onwards
-    if (today.getFullYear() < 2026 || (today.getFullYear() === 2026 && today.getMonth() < 4)) {
-       return;
+    
+    if (!force) {
+      // Start from May 2026 onwards
+      if (today.getFullYear() < 2026 || (today.getFullYear() === 2026 && today.getMonth() < 4)) {
+         return;
+      }
+      // Only deactivate after the 15th
+      if (today.getDate() <= 15) return;
     }
-    // Only deactivate after the 15th
-    if (today.getDate() <= 15) return;
     
     const currentMonthStr = today.toISOString().slice(0, 7);
     
@@ -753,7 +756,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
       
       if (newVal) {
-         await enforceAutoDeactivation();
+         await enforceAutoDeactivation(true);
          await handleRefresh();
       } else {
          // Activate all when turned off
