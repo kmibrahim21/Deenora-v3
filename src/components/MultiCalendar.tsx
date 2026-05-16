@@ -354,6 +354,7 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({ lang, institutionId, isAd
                     <h4 className={`font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{event.title}</h4>
                     <p className="text-xs font-bold text-slate-400 mt-0.5">
                       {format(new Date(event.event_date), 'd MMMM yyyy')}
+                      {event.end_date && event.end_date !== event.event_date && ` - ${format(new Date(event.end_date), 'd MMMM yyyy')}`}
                     </p>
                   </div>
                 </div>
@@ -444,6 +445,8 @@ const EventModal: React.FC<{
   const [type, setType] = useState<'madrasah' | 'holiday' | 'closed'>(
     (eventToEdit?.event_type as 'madrasah' | 'holiday' | 'closed') || ((eventToEdit as any)?.type as 'madrasah' | 'holiday' | 'closed') || 'madrasah'
   );
+  const [startDate, setStartDate] = useState(eventToEdit?.event_date || format(date, 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(eventToEdit?.end_date || eventToEdit?.event_date || format(date, 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(false);
   const isDark = madrasah?.theme === 'dark';
 
@@ -454,26 +457,56 @@ const EventModal: React.FC<{
     
     try {
       let error;
+      
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (start > end) {
+        alert(lang === 'bn' ? 'শুরুর তারিখ শেষের তারিখের আগে বা সমান হতে হবে' : 'Start date must be before or equal to end date');
+        setLoading(false);
+        return;
+      }
+      
       if (eventToEdit) {
         const { error: updateError } = await supabase
           .from('calendar_events')
           .update({
             title,
+            event_date: format(start, 'yyyy-MM-dd'),
+            end_date: format(end, 'yyyy-MM-dd'),
             event_type: type,
           })
           .eq('id', eventToEdit.id)
           .eq('institution_id', institutionId);
         error = updateError;
+        if (updateError && updateError.message.includes('end_date')) {
+          alert(lang === 'bn' 
+            ? 'ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_add_calendar_end_date.sql স্ক্রিপ্টটি রান করুন।'
+            : 'Database update required: Please run src/services/migration_add_calendar_end_date.sql in your Supabase SQL Editor.'
+          );
+          setLoading(false);
+          return;
+        }
       } else {
         const { error: insertError } = await supabase
           .from('calendar_events')
           .insert({
             institution_id: institutionId,
             title,
-            event_date: format(date, 'yyyy-MM-dd'),
+            event_date: format(start, 'yyyy-MM-dd'),
+            end_date: format(end, 'yyyy-MM-dd'),
             event_type: type,
             created_at: new Date().toISOString()
           });
+          
+        if (insertError && insertError.message.includes('end_date')) {
+          alert(lang === 'bn' 
+            ? 'ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_add_calendar_end_date.sql স্ক্রিপ্টটি রান করুন।'
+            : 'Database update required: Please run src/services/migration_add_calendar_end_date.sql in your Supabase SQL Editor.'
+          );
+          setLoading(false);
+          return;
+        }
         error = insertError;
       }
 
@@ -549,6 +582,29 @@ const EventModal: React.FC<{
                 </button>
               </div>
             </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block px-1">{lang === 'bn' ? 'শুরু' : 'Start Date'}</label>
+                  <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className={`w-full px-4 py-3 border rounded-xl text-xs font-bold outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-slate-800 focus:ring-2 focus:ring-blue-500/20'}`}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block px-1">{lang === 'bn' ? 'শেষ' : 'End Date'}</label>
+                  <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className={`w-full px-4 py-3 border rounded-xl text-xs font-bold outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-slate-800 focus:ring-2 focus:ring-blue-500/20'}`}
+                    required
+                  />
+                </div>
+              </div>
 
             <button 
               type="submit" 

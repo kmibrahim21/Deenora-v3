@@ -36,7 +36,9 @@ import {
   Phone,
   History,
   DollarSign,
-  Download
+  Download,
+  CalendarOff,
+  AlertTriangle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -51,6 +53,7 @@ import { supabase } from "supabase";
 import { useOfflineStatus } from "hooks/useOffline";
 import { CacheService } from "services/cacheService";
 import { generateAttendanceReportPDF } from "../utils/pdfGenerator";
+import { getEventsForDate } from "../utils/calendarUtils";
 
 interface TeacherManagementProps {
   lang: Language;
@@ -145,6 +148,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [reportData, setReportData] = useState<Record<string, Record<string, string>>>({});
   const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isHoliday, setIsHoliday] = useState(false);
+  const [dayEvents, setDayEvents] = useState<any[]>([]);
   const [teacherAttendance, setTeacherAttendance] = useState<Record<string, string>>({});
   const [savingAttendance, setSavingAttendance] = useState(false);
   const [paidSalaries, setPaidSalaries] = useState<Record<string, number>>({});
@@ -163,6 +168,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
     if (activeTab === 'attendance' && attendanceSubTab === 'take' && madrasah?.id) {
        fetchTeacherAttendance();
+       fetchDayEvents();
     }
     if (activeTab === 'attendance' && attendanceSubTab === 'report' && madrasah?.id) {
        fetchAttendanceReport();
@@ -209,6 +215,39 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
+  const fetchDayEvents = async () => {
+    if (!madrasah) return;
+    try {
+      const { data: customEvents } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .eq('institution_id', madrasah.id)
+        .eq('event_date', attendanceDate);
+      
+      let events = getEventsForDate(new Date(attendanceDate), customEvents || []);
+      
+      const weeklyHolidays = madrasah.config_json?.weekly_holidays || [5];
+      const dayIndex = new Date(attendanceDate).getDay();
+      const isWeeklyHoliday = weeklyHolidays.includes(dayIndex);
+      
+      if (isWeeklyHoliday) {
+        const dayNamesBn = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+        const dayNamesEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        
+        events.push({
+          title: lang === 'bn' ? `সাপ্তাহিক ছুটি (${dayNamesBn[dayIndex]})` : `Weekly Holiday (${dayNamesEn[dayIndex]})`,
+          type: 'holiday',
+          id: 'weekly-holiday',
+        });
+      }
+      
+      setDayEvents(events);
+      setIsHoliday(events.length > 0);
+    } catch (e) {
+      console.error('Error fetching day events:', e);
+    }
+  };
+
   const saveTeacherAttendance = async () => {
     if (!madrasah?.id) return;
     setSavingAttendance(true);
@@ -250,6 +289,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       let absentCount = 0;
       let lateCount = 0;
       let halfDayCount = 0;
+      let holidayCount = 0;
       let totalDays = 0;
       
       if (reportData) {
@@ -261,6 +301,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           else if (status === 'absent') absentCount++;
           else if (status === 'late') lateCount++;
           else if (status === 'half_day') halfDayCount++;
+          else if (status === 'holiday') holidayCount++;
         });
       }
       
@@ -271,7 +312,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         present_days: presentCount,
         absent_days: absentCount,
         late_days: lateCount,
-        half_day: halfDayCount
+        half_day: halfDayCount,
+        holiday_days: holidayCount
       };
     });
 
@@ -858,47 +900,75 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between px-2 pt-1">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teacher List'}</h4>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'উপস্থিতি' : 'Attendance'}</h4>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {teachers.map(teacher => {
-                    const status = teacherAttendance[teacher.id] || 'present';
-                    return (
-                      <div key={teacher.id} className={`p-3 rounded-2xl border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                            <User size={16} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h5 className={`font-black font-noto text-xs break-words whitespace-normal leading-tight ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
-                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex gap-1.5 shrink-0 ml-2">
-                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={14}/></button>
-                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={14}/></button>
-                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={14}/></button>
-                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-[10px] font-black">1/2</span></button>
-                        </div>
+                {isHoliday ? (
+                  <div className={`p-10 border-2 border-dashed rounded-[3rem] flex flex-col items-center text-center space-y-4 animate-in zoom-in duration-500 ${isDark ? 'bg-slate-900 border-slate-700 shadow-slate-950/50' : 'bg-blue-50 border-blue-200 shadow-blue-900/5'}`}>
+                    <div className="relative inline-block">
+                      <div className="absolute inset-0 bg-blue-500 blur-3xl opacity-20 animate-pulse" />
+                      <div className={`relative w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-inner border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-100 text-[#2563EB] border-blue-200'}`}>
+                        <AlertTriangle size={40} />
                       </div>
-                    );
-                  })}
-                </div>
-                
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-center mt-4">
-                  <button
-                    onClick={saveTeacherAttendance}
-                    disabled={savingAttendance}
-                    className={`w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${savingAttendance ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-[#2563EB] text-white hover:bg-blue-700 shadow-blue-500/30"}`}
-                  >
-                    {savingAttendance ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-                    <span>{lang === 'bn' ? 'হাজিরা সংরক্ষণ করুন' : 'Save Attendance'}</span>
-                  </button>
-                </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-blue-900'}`}>{lang === 'bn' ? 'আজ হাজিরা বন্ধ' : 'Attendance Closed Today'}</h3>
+                      <p className={`text-sm font-bold max-w-[250px] ${isDark ? 'text-slate-400' : 'text-blue-700/70'}`}>
+                        {dayEvents.map(e => e.title).join(', ') || (lang === 'bn' ? 'আজকের দিনে বিশেষ ইভেন্ট বা ছুটি রয়েছে।' : 'There is a special event or holiday today.')}
+                      </p>
+                      <p className={`text-[10px] font-black uppercase tracking-widest pt-2 ${isDark ? 'text-blue-400' : 'text-blue-400'}`}>{lang === 'bn' ? 'ক্যালেন্ডার অনুযায়ী আজ হাজিরা গ্রহণ করা সম্ভব নয়' : 'Based on the calendar, attendance cannot be taken today'}</p>
+                    </div>
+                  </div>
+                ) : teachers.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between px-2 pt-1">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teacher List'}</h4>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'উপস্থিতি' : 'Attendance'}</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {teachers.map(teacher => {
+                        const status = teacherAttendance[teacher.id] || 'present';
+                        return (
+                          <div key={teacher.id} className={`p-3 rounded-2xl border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                                <User size={16} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h5 className={`font-black font-noto text-xs break-words whitespace-normal leading-tight ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-1.5 shrink-0 ml-2">
+                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={14}/></button>
+                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={14}/></button>
+                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={14}/></button>
+                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-[10px] font-black">1/2</span></button>
+                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'holiday'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'holiday' ? 'bg-blue-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Holiday"><CalendarOff size={14}/></button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-center mt-4">
+                      <button
+                        onClick={saveTeacherAttendance}
+                        disabled={savingAttendance}
+                        className={`w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${savingAttendance ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-[#2563EB] text-white hover:bg-blue-700 shadow-blue-500/30"}`}
+                      >
+                        {savingAttendance ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                        <span>{lang === 'bn' ? 'হাজিরা সংরক্ষণ করুন' : 'Save Attendance'}</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className={`p-10 rounded-[3rem] border flex flex-col items-center justify-center text-center space-y-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                    <Users size={32} className={isDark ? 'text-slate-600' : 'text-slate-300'} />
+                    <p className={`text-sm font-bold ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -971,6 +1041,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       let absentCount = 0;
                       let lateCount = 0;
                       let halfDayCount = 0;
+                      let holidayCount = 0;
                       
                       Object.values(reportData).forEach(dailyRecord => {
                         const status = dailyRecord[teacher.id];
@@ -978,6 +1049,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         else if (status === 'absent') absentCount++;
                         else if (status === 'late') lateCount++;
                         else if (status === 'half_day') halfDayCount++;
+                        else if (status === 'holiday') holidayCount++;
                       });
                       
                       return (
@@ -992,7 +1064,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                             </div>
                           </div>
                           
-                          <div className="grid grid-cols-4 gap-1 w-full sm:w-36">
+                          <div className="grid grid-cols-5 gap-1 w-full sm:w-44">
                             <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                               <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>P</span>
                               <span className="text-[11px] font-black text-emerald-500">{presentCount}</span>
@@ -1008,6 +1080,10 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                             <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                               <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>H</span>
                               <span className="text-[11px] font-black text-purple-500">{halfDayCount}</span>
+                            </div>
+                            <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>O</span>
+                              <span className="text-[11px] font-black text-blue-500">{holidayCount}</span>
                             </div>
                           </div>
                         </div>

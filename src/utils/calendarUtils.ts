@@ -143,14 +143,25 @@ export const getEventsForDate = (date: Date, customEvents: any[] = []) => {
   
   const events = customEvents.filter(e => {
     if (!e.event_date) return false;
-    // If it's already yyyy-MM-dd string
-    if (e.event_date === dateStr) return true;
-    // If it's a full ISO string, extract the date part
+    
+    // Check if the date is within the start and end date (inclusive)
+    const thisDate = new Date(dateStr);
+    
     try {
-      const eDate = new Date(e.event_date);
-      return format(eDate, 'yyyy-MM-dd') === dateStr;
+      const eStartDate = new Date(e.event_date);
+      const formattedStartDate = format(eStartDate, 'yyyy-MM-dd');
+      
+      // If it has an end date, check range
+      if (e.end_date) {
+        const eEndDate = new Date(e.end_date);
+        const formattedEndDate = format(eEndDate, 'yyyy-MM-dd');
+        return dateStr >= formattedStartDate && dateStr <= formattedEndDate;
+      }
+      
+      // Otherwise just exact match
+      return formattedStartDate === dateStr;
     } catch (err) {
-      return false;
+      return e.event_date === dateStr;
     }
   });
   

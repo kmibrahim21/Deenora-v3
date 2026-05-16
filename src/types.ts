@@ -250,7 +250,7 @@ export interface Attendance {
   institution_id: string;
   student_id: string;
   class_id?: string;
-  status: 'present' | 'absent' | 'late' | 'half_day';
+  status: 'present' | 'absent' | 'late' | 'half_day' | 'holiday';
   date: string;
   session?: string;
   late_minutes?: number;
@@ -487,6 +487,7 @@ export interface CalendarEvent {
   title: string;
   description?: string;
   event_date: string; // YYYY-MM-DD
+  end_date?: string; // YYYY-MM-DD
   event_type: 'islamic' | 'madrasah' | 'holiday' | 'closed';
   created_at: string;
 }

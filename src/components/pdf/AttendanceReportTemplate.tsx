@@ -16,8 +16,9 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
         const present = item.present_days || 0;
         const total = item.total_days || 0;
         const absent = item.absent_days || 0;
-        const pct = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
-        return { ...item, late, present, absent, total, pct };
+        const holiday = item.holiday_days || 0;
+        const pct = (total - holiday) > 0 ? Math.round(((present + late) / (total - holiday)) * 100) : 0;
+        return { ...item, late, present, absent, total, holiday, pct };
     });
 
     // Sort by percentage to calculate rank
@@ -84,6 +85,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                     <th style={thStyle}>{isBn ? 'উপস্থিত' : 'Present'}</th>
                                     <th style={thStyle}>{isBn ? 'অনুপস্থিত' : 'Absent'}</th>
                                     <th style={thStyle}>{isBn ? 'দেরি' : 'Late'}</th>
+                                    <th style={thStyle}>{isBn ? 'ছুটি' : 'Holiday'}</th>
                                     <th style={thStyle}>{isBn ? 'শতকরা' : 'Percentage'}</th>
                                     <th style={thStyle}>{isBn ? 'পজিশন' : 'Position'}</th>
                                 </tr>
@@ -98,6 +100,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                             <td style={{ ...tdStyle, color: '#16a34a' }}>{item.present_days}</td>
                                             <td style={{ ...tdStyle, color: '#dc2626' }}>{item.absent_days}</td>
                                             <td style={{ ...tdStyle, color: '#d97706' }}>{item.late}</td>
+                                            <td style={{ ...tdStyle, color: '#3b82f6' }}>{item.holiday}</td>
                                             <td style={{ ...tdStyle, fontWeight: 'bold' }}>{item.pct}%</td>
                                             <td style={{ ...tdStyle, fontWeight: 'bold', color: '#3b82f6' }}>{item.rank}</td>
                                         </tr>
