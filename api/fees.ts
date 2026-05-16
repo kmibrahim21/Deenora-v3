@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, message: 'Server configuration error' });
     }
 
-    const url = `${SUPABASE_URL}/rest/v1/fees?select=id,month,total_amount,discount,paid_amount,status,payment_date&student_id=eq.${student_id}&order=month.desc&limit=100`;
+    const url = `${SUPABASE_URL}/rest/v1/fees?select=id,month,amount_paid,amount_due,discount,status,paid_at&student_id=eq.${student_id}&order=month.desc&limit=100`;
     const response = await fetch(url, {
       headers: {
         'apikey': SUPABASE_KEY,
@@ -61,7 +61,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    const data = await response.json();
+    const rawData = await response.json();
+    const data = Array.isArray(rawData) ? rawData.map(f => ({
+      id: f.id,
+      month: f.month,
+      total_amount: (Number(f.amount_paid) || 0) + (Number(f.amount_due) || 0),
+      discount: f.discount,
+      paid_amount: f.amount_paid,
+      status: f.status,
+      payment_date: f.paid_at
+    })) : [];
 
     return res.status(200).json({
       success: true,

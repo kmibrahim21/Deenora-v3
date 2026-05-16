@@ -83,7 +83,10 @@ async function startServer() {
       }
     } catch (error: any) {
       console.error(`API Error (${filePath}):`, error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ 
+        error: error.message,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+      });
     }
   };
 

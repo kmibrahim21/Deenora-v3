@@ -79,6 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const marksRes = await fetch(`${SUPABASE_URL}/rest/v1/befaq_results?select=exam_id,subject_id,marks_obtained&student_id=eq.${student_id}&limit=500`, { headers });
       if (marksRes.ok) {
         const marks = await marksRes.json();
+        if (!Array.isArray(marks)) throw new Error('Invalid marks data received from database');
         
         // Also fetch subjects to join
         const examIds = [...new Set(marks.map((m: any) => m.exam_id))];
@@ -106,6 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const marksRes = await fetch(`${SUPABASE_URL}/rest/v1/exam_marks?select=exam_id,subject_id,marks_obtained&student_id=eq.${student_id}&limit=500`, { headers });
       if (marksRes.ok) {
         const marks = await marksRes.json();
+        if (!Array.isArray(marks)) throw new Error('Invalid marks data received from database');
         
         const examIds = [...new Set(marks.map((m: any) => m.exam_id))];
         let allSubjects: any[] = [];
