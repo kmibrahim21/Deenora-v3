@@ -36,6 +36,21 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
 
+  // Dynamic config helper
+  const config = React.useMemo(() => {
+    let conf = madrasah?.config_json as any;
+    if (typeof conf === 'string') {
+      try {
+        conf = JSON.parse(conf);
+      } catch (e) {
+        conf = {};
+      }
+    }
+    return (typeof conf === 'object' && conf !== null) ? conf : {};
+  }, [madrasah]);
+
+  const resultSystem = config.result_system || 'grading';
+
   useEffect(() => {
     if (madrasah) {
       fetchClasses();
@@ -202,7 +217,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       const examDataPromises = result.exams!.map(async (config) => {
         const { data: marks } = await supabase
           .from('exam_marks')
-          .select('*, exam_subjects(subject_name, full_marks, pass_marks)')
+          .select('*, exam_subjects(subject_name, full_marks, pass_marks, is_optional)')
           .eq('exam_id', config.exam_id);
         
         return {
@@ -232,10 +247,14 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         let overallMaxMarks = 0;
         let hasFailedAny = false;
 
+        let pointsSum = 0;
+        let numMainSubjects = 0;
+
         subjectList.forEach(sub => {
           let weightedSum = 0;
           let subjectMaxMarks = 0;
           let weightUsed = 0;
+          let isOptional = false;
 
           examsData.forEach(exam => {
             const markEntry = exam.marks.find((m: any) => 
@@ -247,7 +266,12 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
               const obtained = parseFloat(markEntry.marks_obtained);
               const fullMarks = markEntry.exam_subjects?.full_marks || 100;
               const passMarks = markEntry.exam_subjects?.pass_marks || 33;
+              if (markEntry.exam_subjects?.is_optional) {
+                isOptional = true;
+              }
               
+              const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+
               // Actual weighted marks calculation based on total marks
               const contribution = obtained * (exam.weight / 100);
               const maxContribution = fullMarks * (exam.weight / 100);
@@ -257,28 +281,74 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
               weightUsed += exam.weight;
               
               // Pass status: if the component score was less than pass pct
-              if ((obtained / fullMarks) * 100 < (passMarks / fullMarks) * 100) {
+              if (!isOptionalEffectively && (obtained / fullMarks) * 100 < (passMarks / fullMarks) * 100) {
                   hasFailedAny = true;
               }
             }
           });
 
+          if (subjectMaxMarks > 0) {
+            const pct = (weightedSum / subjectMaxMarks) * 100;
+            const { gpa: gpStr } = getGradeInfo(pct, pct >= 33); // Individual subject grade
+            const gp = parseFloat(gpStr);
+            
+            if (resultSystem === 'grading_optional') {
+                if (isOptional) {
+                    if (gp > 2) pointsSum += (gp - 2);
+                } else {
+                    pointsSum += gp;
+                    numMainSubjects++;
+                }
+            } else {
+                pointsSum += gp;
+                numMainSubjects++;
+            }
+          }
+
           studentMarks[sub] = weightedSum.toFixed(1);
-          totalWeightedSum += weightedSum;
-          overallMaxMarks += subjectMaxMarks;
+          if (resultSystem === 'grading_optional') {
+            if (!isOptional) {
+              totalWeightedSum += weightedSum;
+              overallMaxMarks += subjectMaxMarks;
+            }
+          } else {
+            totalWeightedSum += weightedSum;
+            overallMaxMarks += subjectMaxMarks;
+          }
         });
 
-        // Calculate Grade based on average percentage of the total weighted marks
         const finalPercentage = overallMaxMarks > 0 ? (totalWeightedSum / overallMaxMarks) * 100 : 0;
-        const { gpa, grade } = getGradeInfo(finalPercentage, hasFailedAny);
+        let finalGpa = '0.00';
+        let finalGradeStr = 'F';
+
+        if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+           if (hasFailedAny) {
+             finalGpa = '0.00';
+             finalGradeStr = 'F';
+           } else {
+             let avgGp = pointsSum / numMainSubjects;
+             if (avgGp > 5.0) avgGp = 5.0;
+             finalGpa = avgGp.toFixed(2);
+             if (avgGp >= 5.0) finalGradeStr = 'A+';
+             else if (avgGp >= 4.0) finalGradeStr = 'A';
+             else if (avgGp >= 3.5) finalGradeStr = 'A-';
+             else if (avgGp >= 3.0) finalGradeStr = 'B';
+             else if (avgGp >= 2.0) finalGradeStr = 'C';
+             else if (avgGp >= 1.0) finalGradeStr = 'D';
+           }
+        } else {
+           const { gpa, grade } = getGradeInfo(finalPercentage, hasFailedAny);
+           finalGpa = gpa;
+           finalGradeStr = grade;
+        }
 
         return {
           ...student,
           marks: studentMarks,
           total: totalWeightedSum.toFixed(1),
           average: finalPercentage.toFixed(1),
-          gpa,
-          grade
+          gpa: finalGpa,
+          grade: finalGradeStr
         };
       });
 

@@ -32,7 +32,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({ student, exam,
   };
 
   const totalMarks = marks.reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
-  const averageGpa = marks.length > 0 ? (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(2) : '0.00';
+  const averageGpa = student.gpa || (marks.length > 0 ? (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(2) : '0.00');
+  const finalGrade = student.grade || (averageGpa === '5.00' ? 'A+' : averageGpa >= '4.00' ? 'A' : averageGpa >= '3.50' ? 'A-' : averageGpa >= '3.00' ? 'B' : averageGpa >= '2.00' ? 'C' : averageGpa >= '1.00' ? 'D' : 'F');
 
   return (
     <div className={`w-[794px] h-[1123px] p-6 bg-white ${isBangla ? 'font-noto' : 'font-hind'} text-slate-900 relative overflow-hidden`} style={{ boxSizing: 'border-box' }}>
@@ -151,7 +152,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({ student, exam,
                  return (
                    <tr key={i}>
                      <td className="border border-black p-2 text-center font-bold text-[16px]">{i + 1}</td>
-                     <td className="border border-black p-2 font-bold font-tiro text-[15px]">{m.subject_name}</td>
+                     <td className="border border-black p-2 font-bold font-tiro text-[15px]">{m.subject_name} {m.is_optional ? `(${isBangla ? 'ঐচ্ছিক' : 'Optional'})` : ''}</td>
                      <td className="border border-black p-2 text-center font-bold text-[16px]">{m.full_marks || '100'}</td>
                      <td className="border border-black p-2 text-center font-bold text-[16px]">{m.grade || '-'}</td>
                      <td className="border border-black p-2 text-center font-bold text-[16px]">{m.grade_point || '-'}</td>

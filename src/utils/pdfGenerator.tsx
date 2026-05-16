@@ -255,7 +255,7 @@ export const generateClassResultPDF = async (
     subjects: any[],
     students: any[],
     marksData: any,
-    madrasah: { name: string },
+    madrasah: { name: string, config_json?: any },
     lang: 'en' | 'bn' = 'en'
 ) => {
     // Pre-calculate totals, GPA, rank
@@ -265,18 +265,61 @@ export const generateClassResultPDF = async (
         let totalPossible = 0;
         let hasFailed = false;
 
+        let pointsSum = 0;
+        let numMainSubjects = 0;
+
+        let configObj = madrasah?.config_json as any;
+        if (typeof configObj === 'string') {
+            try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
+        }
+        const config = (typeof configObj === 'object' && configObj !== null) ? configObj : {};
+        const resultSystem = config.result_system || 'grading';
+
         subjects.forEach(s => {
             const m = studentMarks[s.id];
             const fullMarkValue = Number(s.full_marks || 100);
             const passMarkValue = Number(s.pass_marks || 33);
-            totalPossible += fullMarkValue;
+            const isOptional = !!s.is_optional;
 
             if (m !== undefined && m !== '') {
                 const markVal = Number(m);
-                total += markVal;
-                if (markVal < passMarkValue) hasFailed = true;
+                const failed = markVal < passMarkValue;
+                const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+                if (!isOptionalEffectively && failed) hasFailed = true;
+
+                const pct = (markVal / fullMarkValue) * 100;
+                let gp = 0.00;
+                if (!failed) {
+                    if (pct >= 80) gp = 5.00;
+                    else if (pct >= 70) gp = 4.00;
+                    else if (pct >= 60) gp = 3.50;
+                    else if (pct >= 50) gp = 3.00;
+                    else if (pct >= 40) gp = 2.00;
+                    else if (pct >= 33) gp = 1.00;
+                }
+
+                if (resultSystem === 'grading_optional') {
+                    if (!isOptional) {
+                        total += markVal;
+                        totalPossible += fullMarkValue;
+                        pointsSum += gp;
+                        numMainSubjects++;
+                    } else if (gp > 2) {
+                        pointsSum += (gp - 2);
+                    }
+                } else {
+                    total += markVal;
+                    totalPossible += fullMarkValue;
+                    pointsSum += gp;
+                    numMainSubjects++;
+                }
             } else {
-                hasFailed = true;
+                const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+                if (!isOptionalEffectively) {
+                    hasFailed = true;
+                    totalPossible += fullMarkValue;
+                    numMainSubjects++;
+                }
             }
         });
         
@@ -284,13 +327,28 @@ export const generateClassResultPDF = async (
         
         let gpa = '0.00';
         let grade = 'F';
-        if (!hasFailed) {
-            if (avgPercentage >= 80) { gpa = '5.00'; grade = 'A+'; }
-            else if (avgPercentage >= 70) { gpa = '4.00'; grade = 'A'; }
-            else if (avgPercentage >= 60) { gpa = '3.50'; grade = 'A-'; }
-            else if (avgPercentage >= 50) { gpa = '3.00'; grade = 'B'; }
-            else if (avgPercentage >= 40) { gpa = '2.00'; grade = 'C'; }
-            else if (avgPercentage >= 33) { gpa = '1.00'; grade = 'D'; }
+
+        if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+            if (!hasFailed) {
+                let avgGp = pointsSum / numMainSubjects;
+                if (avgGp > 5.0) avgGp = 5.0;
+                gpa = avgGp.toFixed(2);
+                if (avgGp >= 5.0) grade = 'A+';
+                else if (avgGp >= 4.0) grade = 'A';
+                else if (avgGp >= 3.5) grade = 'A-';
+                else if (avgGp >= 3.0) grade = 'B';
+                else if (avgGp >= 2.0) grade = 'C';
+                else if (avgGp >= 1.0) grade = 'D';
+            }
+        } else if (totalPossible > 0) {
+            if (!hasFailed) {
+                if (avgPercentage >= 80) { gpa = '5.00'; grade = 'A+'; }
+                else if (avgPercentage >= 70) { gpa = '4.00'; grade = 'A'; }
+                else if (avgPercentage >= 60) { gpa = '3.50'; grade = 'A-'; }
+                else if (avgPercentage >= 50) { gpa = '3.00'; grade = 'B'; }
+                else if (avgPercentage >= 40) { gpa = '2.00'; grade = 'C'; }
+                else if (avgPercentage >= 33) { gpa = '1.00'; grade = 'D'; }
+            }
         }
 
         return {

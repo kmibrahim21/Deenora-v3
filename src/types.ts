@@ -30,7 +30,7 @@ export interface Institution {
       certificates?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
-    result_system: 'grading' | 'marks' | 'hifz';
+    result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional';
     attendance_type: 'daily' | 'period';
     fee_structure: 'monthly' | 'session';
     ui_mode: 'madrasah' | 'school';
@@ -235,6 +235,7 @@ export interface ExamSubject {
   full_marks: number;
   pass_marks: number;
   sort_order?: number;
+  is_optional?: boolean;
 }
 
 export interface ExamMark {

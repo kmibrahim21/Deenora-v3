@@ -55,29 +55,34 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Dynamic module configuration
-  const modules = React.useMemo(() => {
-    let config = madrasah?.config_json as any;
-    if (typeof config === 'string') {
+  // Dynamic configuration helper
+  const config = React.useMemo(() => {
+    let conf = madrasah?.config_json as any;
+    if (typeof conf === 'string') {
       try {
-        config = JSON.parse(config);
+        conf = JSON.parse(conf);
       } catch (e) {
-        config = {};
+        conf = {};
       }
     }
-    const configObj: any = (typeof config === 'object' && config !== null) ? config : {};
-    
-    return {
-      attendance: configObj.modules?.attendance ?? true,
-      results: configObj.modules?.results ?? true,
-      admit_card: configObj.modules?.admit_card ?? true,
-      seat_plan: configObj.modules?.seat_plan ?? true,
-      accounting: configObj.modules?.accounting ?? true,
-      academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
-      voice_broadcast: configObj.modules?.voice_broadcast ?? true,
-      sms: configObj.modules?.sms ?? true,
-    };
+    return (typeof conf === 'object' && conf !== null) ? conf : {};
   }, [madrasah]);
+
+  const resultSystem = config.result_system || 'grading';
+
+  // Dynamic module configuration
+  const modules = React.useMemo(() => {
+    return {
+      attendance: config.modules?.attendance ?? true,
+      results: config.modules?.results ?? true,
+      admit_card: config.modules?.admit_card ?? true,
+      seat_plan: config.modules?.seat_plan ?? true,
+      accounting: config.modules?.accounting ?? true,
+      academic_year_promotion: config.modules?.academic_year_promotion ?? true,
+      voice_broadcast: config.modules?.voice_broadcast ?? true,
+      sms: config.modules?.sms ?? true,
+    };
+  }, [config]);
 
   // Form states
   const [examName, setExamName] = useState('');
@@ -87,6 +92,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [fullMarks, setFullMarks] = useState('100');
   const [passMarks, setPassMarks] = useState('33');
   const [sortOrder, setSortOrder] = useState('0');
+  const [isOptional, setIsOptional] = useState(false);
 
   useEffect(() => {
     if (madrasah) {
@@ -191,19 +197,60 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       const mks = marksRes.data || [];
 
       const ranked = stds.map(student => {
-        const studentMarks = mks.filter(m => m.student_id === student.id);
-        const totalMarks = studentMarks.reduce((sum, m) => sum + (parseFloat(m.marks_obtained) || 0), 0);
-        
-        // Calculate pass status
+        const studentMarksForStudent = mks.filter(m => m.student_id === student.id);
+        const studentMarksObjLocal: Record<string, string> = {};
+        studentMarksForStudent.forEach(m => {
+          studentMarksObjLocal[m.subject_id] = m.marks_obtained;
+        });
+
+        let totalMarks = 0;
+        let totalPossible = 0;
         let passStatus = true;
-        if (subs.length > 0) {
-          subs.forEach(sub => {
-            const mark = studentMarks.find(m => m.subject_id === sub.id);
-            const score = parseFloat(mark?.marks_obtained || '0');
-            if (score < sub.pass_marks) passStatus = false;
-          });
-        } else {
-           passStatus = totalMarks > 0;
+        let pointsSum = 0;
+        let numMainSubjects = 0;
+
+        subs.forEach(sub => {
+          const score = parseFloat(studentMarksObjLocal[sub.id] || '0');
+          const isOptionalEffectively = !!sub.is_optional && resultSystem === 'grading_optional';
+          const failed = score < (sub.pass_marks || 33);
+          
+          if (!isOptionalEffectively && failed) passStatus = false;
+
+          const pct = (score / (sub.full_marks || 100)) * 100;
+          const { gpa: gpStr } = getGradeInfo(pct, !failed);
+          const gp = parseFloat(gpStr);
+
+          if (resultSystem === 'grading_optional') {
+            if (!sub.is_optional) {
+              totalMarks += score;
+              totalPossible += (sub.full_marks || 100);
+              pointsSum += gp;
+              numMainSubjects++;
+            } else {
+              if (gp > 2) pointsSum += (gp - 2);
+            }
+          } else {
+            totalMarks += score;
+            totalPossible += (sub.full_marks || 100);
+            pointsSum += gp;
+            numMainSubjects++;
+          }
+        });
+
+        // For non grading_optional, we still need totalPossible for pct if used
+        if (subs.length === 0) passStatus = totalMarks > 0;
+
+        let finalGpa = '0.00';
+        if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+          if (!passStatus) finalGpa = '0.00';
+          else {
+            let avgGp = pointsSum / numMainSubjects;
+            if (avgGp > 5.0) avgGp = 5.0;
+            finalGpa = avgGp.toFixed(2);
+          }
+        } else if (totalPossible > 0) {
+          const overallPct = (totalMarks / totalPossible) * 100;
+          finalGpa = getGradeInfo(overallPct, passStatus).gpa;
         }
 
         return {
@@ -211,10 +258,21 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           student_name: student.student_name,
           roll: student.roll,
           total_marks: totalMarks,
-          pass_status: passStatus
+          pass_status: passStatus,
+          gpa: finalGpa
         };
       })
-      .sort((a, b) => b.total_marks - a.total_marks)
+      .sort((a, b) => {
+        if (a.pass_status && !b.pass_status) return -1;
+        if (!a.pass_status && b.pass_status) return 1;
+        
+        // If GPA exists (grading mode), sort by GPA then total marks
+        if (a.gpa !== '0.00' || b.gpa !== '0.00') {
+           const gpaDiff = parseFloat(b.gpa) - parseFloat(a.gpa);
+           if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+        }
+        return b.total_marks - a.total_marks;
+      })
       .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
       setRankingData(ranked);
@@ -235,6 +293,79 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (scorePercentage >= 40) return { gpa: '2.00', grade: 'C' };
     if (scorePercentage >= 33) return { gpa: '1.00', grade: 'D' };
     return { gpa: '0.00', grade: 'F' };
+  };
+
+  const calculateStudentResult = (studentId: string, currentSubjects: ExamSubject[]) => {
+    const studentMarksObj = marksData[studentId] || {};
+    let totalMarks = 0;
+    let totalPossible = 0;
+    let hasFailedSub = false;
+
+    let pointsSum = 0;
+    let numMainSubjects = 0;
+
+    for (const s of currentSubjects) {
+      const obtained = parseFloat(studentMarksObj[s.id] || '0');
+      const pass = s.pass_marks || 33;
+      const full = s.full_marks || 100;
+      
+      const pct = (obtained / full) * 100;
+      const failed = obtained < pass;
+
+      const isOptionalEffectively = s.is_optional && resultSystem === 'grading_optional';
+
+      if (!isOptionalEffectively && failed) {
+        hasFailedSub = true;
+      }
+
+      const { gpa: gpStr } = getGradeInfo(pct, !failed);
+      const gp = parseFloat(gpStr);
+
+      if (resultSystem === 'grading_optional') {
+        if (!s.is_optional) {
+          totalMarks += obtained;
+          totalPossible += full;
+          pointsSum += gp;
+          numMainSubjects++;
+        } else {
+          if (gp > 2) {
+            pointsSum += (gp - 2);
+          }
+        }
+      } else {
+        totalMarks += obtained;
+        totalPossible += full;
+        pointsSum += gp;
+        numMainSubjects++;
+      }
+    }
+
+    const pct = totalPossible > 0 ? (totalMarks / totalPossible) * 100 : 0;
+
+    if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+      if (hasFailedSub) return { total: totalMarks, average: pct, gpa: '0.00', grade: 'F', pass_status: false };
+      let avgGp = pointsSum / numMainSubjects;
+      if (avgGp > 5.0) avgGp = 5.0;
+      
+      let finalGrade = 'F';
+      if (avgGp >= 5.0) finalGrade = 'A+';
+      else if (avgGp >= 4.0) finalGrade = 'A';
+      else if (avgGp >= 3.5) finalGrade = 'A-';
+      else if (avgGp >= 3.0) finalGrade = 'B';
+      else if (avgGp >= 2.0) finalGrade = 'C';
+      else if (avgGp >= 1.0) finalGrade = 'D';
+
+      return { total: totalMarks, average: pct, gpa: avgGp.toFixed(2), grade: finalGrade, pass_status: true };
+    }
+
+    const { gpa, grade } = getGradeInfo(pct, !hasFailedSub);
+    return { 
+      total: totalMarks, 
+      average: pct, 
+      gpa: gpa, 
+      grade: grade, 
+      pass_status: !hasFailedSub 
+    };
   };
 
   // Template Configurations
@@ -471,7 +602,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       subject_name: subName,
       full_marks: parseInt(fullMarks),
       pass_marks: parseInt(passMarks),
-      sort_order: parseInt(sortOrder) || 0
+      sort_order: parseInt(sortOrder) || 0,
+      is_optional: isOptional
     };
 
     let error;
@@ -493,6 +625,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       setEditingSubject(null);
       setSubName('');
       setSortOrder('0');
+      setIsOptional(false);
       fetchSubjects(selectedExam.id);
     } else {
       console.error('Error saving subject:', error);
@@ -507,6 +640,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setFullMarks(subject.full_marks?.toString() || '100');
     setPassMarks(subject.pass_marks?.toString() || '33');
     setSortOrder(subject.sort_order?.toString() || '0');
+    setIsOptional(subject.is_optional || false);
     setShowAddSubject(true);
   };
 
@@ -983,14 +1117,50 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
                                     {(() => {
-                                        const total = (Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0);
-                                        const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
-                                        const pct = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
-                                        const passStatus = subjects.length > 0 && subjects.every(sub => {
-                                            const mark = parseFloat((marksData[std.id] || {})[sub.id] || '0');
-                                            return mark >= (sub.pass_marks || 33);
+                                        let totalMarks = 0;
+                                        let totalPossible = 0;
+                                        let pointsSum = 0;
+                                        let numMainSubjects = 0;
+                                        let passStatus = true;
+                                        
+                                        subjects.forEach(sub => {
+                                          const score = parseFloat((marksData[std.id] || {})[sub.id] || '0');
+                                          const isOptionalEffectively = !!sub.is_optional && resultSystem === 'grading_optional';
+                                          const failed = score < (sub.pass_marks || 33);
+                                          
+                                          if (!isOptionalEffectively && failed) passStatus = false;
+                                          
+                                          const pct = (score / (sub.full_marks || 100)) * 100;
+                                          const { gpa: gpStr } = getGradeInfo(pct, !failed);
+                                          const gp = parseFloat(gpStr);
+
+                                          if (resultSystem === 'grading_optional') {
+                                            if (!sub.is_optional) {
+                                              totalMarks += score;
+                                              totalPossible += (sub.full_marks || 100);
+                                              pointsSum += gp;
+                                              numMainSubjects++;
+                                            } else {
+                                              if (gp > 2) pointsSum += (gp - 2);
+                                            }
+                                          } else {
+                                            totalMarks += score;
+                                            totalPossible += (sub.full_marks || 100);
+                                            pointsSum += gp;
+                                            numMainSubjects++;
+                                          }
                                         });
-                                        return getGradeInfo(pct, passStatus).gpa;
+
+                                        if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+                                          if (!passStatus) return '0.00';
+                                          let avgGp = pointsSum / numMainSubjects;
+                                          if (avgGp > 5.0) avgGp = 5.0;
+                                          return avgGp.toFixed(2);
+                                        } else if (totalPossible > 0) {
+                                          const overallPct = (totalMarks / totalPossible) * 100;
+                                          return getGradeInfo(overallPct, passStatus).gpa;
+                                        }
+                                        return '0.00';
                                     })()}
                                 </td>
                             </tr>
@@ -1061,13 +1231,26 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       marks_obtained: obtained,
                                                       grade: subGradeInfo(pct, hasFailedSub).grade,
                                                       grade_point: subGradeInfo(pct, hasFailedSub).gpa,
-                                                      full_marks: s.full_marks || 100
+                                                      full_marks: s.full_marks || 100,
+                                                      is_optional: s.is_optional
                                                   };
                                               });
                                               if (selectedExam && madrasah) {
                                                 const studentObj = students.find(st => st.id === item.student_id);
+                                                const resultInfo = calculateStudentResult(item.student_id, subjects);
                                                 generateResultPDF(
-                                                    { id: item.student_id, student_name: item.student_name, roll: item.roll, classes: { class_name: selectedExam.classes?.class_name }, photo_url: studentObj?.photo_url, attendance: '95', merit_position: item.rank, section: madrasah?.theme === 'dark' ? 'None' : 'N/A' },
+                                                    { 
+                                                      id: item.student_id, 
+                                                      student_name: item.student_name, 
+                                                      roll: item.roll, 
+                                                      classes: { class_name: selectedExam.classes?.class_name }, 
+                                                      photo_url: studentObj?.photo_url, 
+                                                      attendance: '95', 
+                                                      merit_position: item.rank, 
+                                                      section: madrasah?.theme === 'dark' ? 'None' : 'N/A',
+                                                      gpa: resultInfo.gpa,
+                                                      grade: resultInfo.grade
+                                                    },
                                                     selectedExam,
                                                     preparedMarks,
                                                     { name: madrasah.name, logo_url: madrasah.logo_url, address: madrasah.address },
@@ -1086,9 +1269,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   {item.pass_status && (
                                     <div className="flex gap-1.5">
                                        {(() => {
-                                           const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
-                                           const pct = totalPossible > 0 ? (item.total_marks / totalPossible) * 100 : 0;
-                                           const info = getGradeInfo(pct, item.pass_status);
+                                           const info = calculateStudentResult(item.student_id, subjects);
                                            return (
                                                <>
                                                   <span className="px-2 py-0.5 bg-blue-50 text-[#2563EB] rounded-lg text-[8px] font-black border border-blue-100">{t('gpa', lang)}: {info.gpa}</span>
@@ -1298,10 +1479,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95`}>
              <div className="flex items-center justify-between">
                <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{editingSubject ? 'বিষয় এডিট করুন' : 'বিষয় যোগ করুন'}</h3>
-               <button onClick={() => { setShowAddSubject(false); setEditingSubject(null); setSubName(''); setSortOrder('0'); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
+               <button onClick={() => { setShowAddSubject(false); setEditingSubject(null); setSubName(''); setSortOrder('0'); setIsOptional(false); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
              </div>
              <div className="space-y-4">
                 <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="বিষয়ের নাম (যেমন: কুরআন)" value={subName} onChange={(e) => setSubName(e.target.value)} /><BookOpen size={20} className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" /></div>
+                {resultSystem === 'grading_optional' && (
+                  <div className="flex items-center gap-2 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+                    <input type="checkbox" id="isOptional" checked={isOptional} onChange={(e) => setIsOptional(e.target.checked)} className="w-5 h-5 rounded-lg border-slate-300 text-[#2563EB] focus:ring-[#2563EB]" />
+                    <label htmlFor="isOptional" className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>৪র্থ বিষয় / Optional Subject</label>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পূর্ণমান" value={fullMarks} onChange={(e) => setFullMarks(e.target.value)} /><Star className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পাস" value={passMarks} onChange={(e) => setPassMarks(e.target.value)} /><AlertCircle className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
