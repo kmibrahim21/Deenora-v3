@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, Plus, Trash2, Loader2, Calendar, Clock, BookOpen, User, Book, MapPin, Coffee, Printer, Download, Copy, Check, LayoutGrid, List, CreditCard } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, Loader2, Calendar, Clock, BookOpen, User, Book, MapPin, Coffee, Printer, Download, Copy, Check, LayoutGrid, List, CreditCard, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Teacher, ClassRoutine as ClassRoutineType, Profile } from 'types';
 import { generateClassRoutinePDF, generateMasterClassRoutinePDF } from '../utils/pdfGenerator';
@@ -34,6 +34,9 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
   const [isAdding, setIsAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [format, setFormat] = useState<ViewFormat>('grid');
+  const [deleteModal, setDeleteModal] = useState<{show: boolean, id: string | null}>({show: false, id: null});
+  const [toast, setToast] = useState<{show: boolean, message: string, type: 'success' | 'error' | 'info'}>({show: false, message: '', type: 'info'});
+
   
   // Form state
   const [formData, setFormData] = useState<Partial<ClassRoutineType>>({
@@ -71,9 +74,16 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
     }
   };
 
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({show: true, message, type});
+    setTimeout(() => {
+      setToast(prev => ({...prev, show: false}));
+    }, 3000);
+  };
+
   const handleSave = async () => {
     if (!madrasah || !formData.class_id || (!formData.subject_name && !formData.is_break) || !formData.day || !formData.start_time || !formData.end_time) {
-      alert(lang === 'bn' ? 'সবগুলো ঘর পূরণ করুন' : 'Please fill all required fields');
+      showToast(lang === 'bn' ? 'সবগুলো ঘর পূরণ করুন' : 'Please fill all required fields', 'error');
       return;
     }
 
@@ -82,7 +92,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
       const { error } = await supabase.from('class_routines').insert({
         institution_id: madrasah.id,
         class_id: formData.class_id,
-        subject_name: formData.is_break ? (lang === 'bn' ? 'বিরতি' : 'Break') : formData.subject_name,
+        subject_name: formData.is_break ? (formData.subject_name || (lang === 'bn' ? 'বিরতি' : 'Break')) : formData.subject_name,
         teacher_id: formData.teacher_id || null,
         day: formData.day,
         start_time: formData.start_time,
@@ -102,32 +112,41 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         is_break: false
       }));
       fetchData();
+      showToast(lang === 'bn' ? 'সফলভাবে সংরক্ষণ করা হয়েছে' : 'Saved successfully', 'success');
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const confirmDelete = (id: string) => {
     if (!id) {
-      alert('Error: Routine ID missing');
+      showToast('Error: Routine ID missing', 'error');
       return;
     }
-    console.log('Attempting to delete routine:', id);
-    if (!confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত?' : 'Are you sure?')) return;
+    setDeleteModal({show: true, id});
+  };
+
+  const executeDelete = async () => {
+    const id = deleteModal.id;
+    if (!id) return;
     
+    setSaving(true);
     try {
       const { error } = await supabase.from('class_routines').delete().eq('id', id);
       if (error) {
         console.error('Delete error:', error);
-        alert('Delete failed: ' + error.message);
+        showToast('Delete failed: ' + error.message, 'error');
         return;
       }
-      alert(lang === 'bn' ? 'সফলভাবে ডিলিট হয়েছে' : 'Deleted successfully');
+      showToast(lang === 'bn' ? 'সফলভাবে ডিলিট হয়েছে' : 'Deleted successfully', 'success');
+      setDeleteModal({show: false, id: null});
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Error deleting routine');
+      showToast(err.message || 'Error deleting routine', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -151,10 +170,10 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         note: routine.note
       });
       setIsAdding(true);
-      alert(lang === 'bn' ? 'তথ্য কপি হয়েছে, এবার সংরক্ষণ করুন' : 'Data copied, now save it');
+      showToast(lang === 'bn' ? 'তথ্য কপি হয়েছে, এবার সংরক্ষণ করুন' : 'Data copied, now save it', 'success');
     } catch (err) {
       console.error('Copy error:', err);
-      alert('Error copying data');
+      showToast('Error copying data', 'error');
     }
   };
 
@@ -164,7 +183,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
       await generateClassRoutinePDF(madrasah, routines, classes, DAYS, lang);
     } catch (err) {
       console.error('PDF generation error:', err);
-      alert('Error generating PDF');
+      showToast('Error generating PDF', 'error');
     } finally {
       setDownloading(false);
     }
@@ -197,7 +216,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
           </button>
           <div className="text-left">
             <h1 className={`text-xl font-black font-noto tracking-tight flex items-center gap-2 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              <Calendar className="text-emerald-500" size={24} />
+              <Calendar className="text-[#2563EB]" size={24} />
               {lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
             </h1>
           </div>
@@ -207,7 +226,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
           {canManage && (
             <button 
               onClick={() => setIsAdding(true)}
-              className="h-10 px-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 flex items-center gap-2"
+              className="h-10 px-4 bg-[#2563EB] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 flex items-center gap-2"
             >
               <Plus size={16} />
               {lang === 'bn' ? 'এড' : 'Add'}
@@ -221,9 +240,9 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
             className="h-10 px-3 bg-white border border-slate-100 text-slate-600 rounded-2xl flex items-center gap-1.5 shadow-sm active:scale-90 font-bold text-[9px] uppercase tracking-wider disabled:opacity-50"
           >
             {downloading ? (
-              <Loader2 size={16} className="animate-spin text-emerald-500" />
+              <Loader2 size={16} className="animate-spin text-[#2563EB]" />
             ) : (
-              <Download size={16} className="text-emerald-500" />
+              <Download size={16} className="text-[#2563EB]" />
             )}
             <span className="hidden sm:inline">{downloading ? (lang === 'bn' ? 'অপেক্ষা...' : 'Wait...') : (lang === 'bn' ? 'আলাদা PDF' : 'Individual PDF')}</span>
           </button>
@@ -232,7 +251,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
             onClick={handleDownloadMasterPDF}
             disabled={downloading || masterDownloading}
             title={lang === 'bn' ? 'মাস্টার রুটিন ডাউনলোড (একসাথে)' : 'Download Master Routine'}
-            className="h-10 px-3 bg-emerald-500 border border-emerald-600 text-white rounded-2xl flex items-center gap-1.5 shadow-sm active:scale-90 font-bold text-[9px] uppercase tracking-wider disabled:opacity-50"
+            className="h-10 px-3 bg-[#2563EB] border border-[#2563EB] text-white rounded-2xl flex items-center gap-1.5 shadow-sm active:scale-90 font-bold text-[9px] uppercase tracking-wider disabled:opacity-50"
           >
             {masterDownloading ? (
               <Loader2 size={16} className="animate-spin text-white" />
@@ -255,7 +274,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
           <div className="flex overflow-x-auto gap-2 no-scrollbar pb-1 flex-1">
             <button 
               onClick={() => setSelectedClassId('all')}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all ${selectedClassId === 'all' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all ${selectedClassId === 'all' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}
             >
               সকল ক্লাস
             </button>
@@ -263,7 +282,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
               <button 
                 key={cls.id}
                 onClick={() => setSelectedClassId(cls.id)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all ${selectedClassId === cls.id ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}
               >
                 {cls.class_name}
               </button>
@@ -309,7 +328,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                 <div key={cls.id} className="space-y-4">
                   {selectedClassId === 'all' && (
                     <div className="flex items-center gap-2 px-4 print:hidden">
-                      <div className="w-1 h-6 bg-emerald-500 rounded-full" />
+                      <div className="w-1 h-6 bg-[#2563EB] rounded-full" />
                       <h2 className="text-xl font-black font-noto text-slate-800">{cls.class_name}</h2>
                     </div>
                   )}
@@ -322,7 +341,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                       className={cls.class_name} 
                       getBanglaNumber={getBanglaNumber}
                       canManage={canManage}
-                      handleDelete={handleDelete}
+                      handleDelete={confirmDelete}
                       handleCopy={handleCopy}
                     />
                   ) : format === 'list' ? (
@@ -331,7 +350,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                       days={DAYS} 
                       getBanglaNumber={getBanglaNumber}
                       canManage={canManage}
-                      handleDelete={handleDelete}
+                      handleDelete={confirmDelete}
                       handleCopy={handleCopy}
                     />
                   ) : (
@@ -340,7 +359,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                       days={DAYS} 
                       getBanglaNumber={getBanglaNumber}
                       canManage={canManage}
-                      handleDelete={handleDelete}
+                      handleDelete={confirmDelete}
                       handleCopy={handleCopy}
                     />
                   )}
@@ -354,25 +373,30 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
 
       {/* Add/Edit Modal */}
       {isAdding && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="w-full max-w-sm bg-white rounded-[3rem] p-6 shadow-2xl space-y-4 overflow-y-auto max-h-[90vh] no-scrollbar">
-             <div className="flex items-center gap-3 border-b-2 border-slate-50 pb-4">
-               <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                 <Plus size={20} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 pb-24 sm:pb-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-7 shadow-2xl space-y-6 overflow-y-auto max-h-[80vh] no-scrollbar relative overflow-hidden">
+             
+             {/* Decorative Background */}
+             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
+             <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl" />
+
+             <div className="flex items-center gap-4 border-b-2 border-slate-50 pb-5 relative z-10">
+               <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-[1rem] flex items-center justify-center shadow-sm">
+                 <Plus size={24} strokeWidth={2.5} />
                </div>
-               <h3 className="font-black font-noto text-lg text-slate-800">রুটিন এড করুন</h3>
+               <h3 className="font-black font-noto text-xl text-slate-800 tracking-tight">রুটিন এড করুন</h3>
              </div>
 
-             <div className="space-y-4">
-                <div className="flex bg-slate-50 p-1 rounded-xl">
-                   <button onClick={() => setFormData({...formData, is_break: false})} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${!formData.is_break ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-400'}`}>ক্লাস</button>
-                   <button onClick={() => setFormData({...formData, is_break: true})} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${formData.is_break ? 'bg-white shadow-sm text-amber-600' : 'text-slate-400'}`}>বিরতি</button>
+             <div className="space-y-4 relative z-10">
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl shadow-inner">
+                   <button onClick={() => setFormData({...formData, is_break: false})} className={`flex-1 py-2.5 text-[11px] font-black uppercase rounded-xl transition-all ${!formData.is_break ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>ক্লাস</button>
+                   <button onClick={() => setFormData({...formData, is_break: true})} className={`flex-1 py-2.5 text-[11px] font-black uppercase rounded-xl transition-all ${formData.is_break ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}>বিরতি</button>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">ক্লাস</label>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">ক্লাস</label>
                   <select 
-                    className="w-full h-11 border-2 border-slate-50 rounded-xl px-4 font-bold outline-none"
+                    className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white hover:bg-slate-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[right_16px_center] bg-no-repeat"
                     value={formData.class_id || ''}
                     onChange={e => setFormData({...formData, class_id: e.target.value})}
                   >
@@ -381,23 +405,21 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                   </select>
                 </div>
 
-                {!formData.is_break && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">বিষয়ের নাম</label>
-                    <input 
-                      type="text"
-                      className="w-full h-11 border-2 border-slate-50 rounded-xl px-4 font-bold outline-none"
-                      value={formData.subject_name || ''}
-                      onChange={e => setFormData({...formData, subject_name: e.target.value})}
-                      placeholder="যেমন: আরবী"
-                    />
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">{formData.is_break ? 'বিরতির বিষয়' : 'বিষয়ের নাম'}</label>
+                  <input 
+                    type="text"
+                    className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white placeholder-slate-300"
+                    value={formData.subject_name || ''}
+                    onChange={e => setFormData({...formData, subject_name: e.target.value})}
+                    placeholder={formData.is_break ? "যেমন: টিফিন, নামায" : "যেমন: আরবী"}
+                  />
+                </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">বার</label>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">বার</label>
                   <select 
-                    className="w-full h-11 border-2 border-slate-50 rounded-xl px-4 font-bold outline-none"
+                    className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white hover:bg-slate-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[right_16px_center] bg-no-repeat"
                     value={formData.day || ''}
                     onChange={e => setFormData({...formData, day: e.target.value as any})}
                   >
@@ -405,22 +427,22 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">শুরু</label>
-                    <input type="time" className="w-full h-11 border-2 border-slate-50 rounded-xl px-4 font-bold" value={formData.start_time} onChange={e => setFormData({...formData, start_time: e.target.value})} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">শুরু</label>
+                    <input type="time" className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white" value={formData.start_time} onChange={e => setFormData({...formData, start_time: e.target.value})} />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">শেষ</label>
-                    <input type="time" className="w-full h-11 border-2 border-slate-50 rounded-xl px-4 font-bold" value={formData.end_time} onChange={e => setFormData({...formData, end_time: e.target.value})} />
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">শেষ</label>
+                    <input type="time" className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white" value={formData.end_time} onChange={e => setFormData({...formData, end_time: e.target.value})} />
                   </div>
                 </div>
 
                 {!formData.is_break && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">শিক্ষক</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">শিক্ষক</label>
                     <select 
-                      className="w-full h-11 border-2 border-slate-50 rounded-xl px-4 font-bold outline-none"
+                      className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white hover:bg-slate-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[right_16px_center] bg-no-repeat"
                       value={formData.teacher_id || ''}
                       onChange={e => setFormData({...formData, teacher_id: e.target.value})}
                     >
@@ -431,12 +453,53 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                 )}
              </div>
 
-             <div className="flex gap-2 pt-4">
-                <button onClick={() => setIsAdding(false)} className="flex-1 h-12 bg-slate-100 text-slate-500 font-black rounded-2xl text-[10px] uppercase">বাতিল</button>
-                <button onClick={handleSave} disabled={saving} className="flex-[2] h-12 bg-emerald-600 text-white font-black rounded-2xl text-[10px] uppercase shadow-lg flex items-center justify-center">
-                  {saving ? <Loader2 className="animate-spin" size={16} /> : 'সংরক্ষণ'}
+             <div className="flex gap-3 pt-6 relative z-10">
+                <button onClick={() => setIsAdding(false)} className="flex-1 h-12 md:h-14 bg-slate-100 text-slate-600 font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase hover:bg-slate-200 transition-colors">বাতিল</button>
+                <button onClick={handleSave} disabled={saving} className="flex-[2] h-12 md:h-14 bg-[#2563EB] text-white font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase shadow-lg shadow-blue-500/20 flex items-center justify-center hover:bg-blue-700 transition-colors active:scale-95">
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : 'সংরক্ষণ করুন'}
                 </button>
              </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.show && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 pb-24 sm:pb-4 animate-in fade-in zoom-in-95 duration-300">
+          <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl space-y-6 text-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full mx-auto flex items-center justify-center mb-6 relative">
+              <div className="absolute inset-0 border-4 border-white rounded-full"></div>
+              <Trash2 size={32} strokeWidth={2} />
+            </div>
+            <div className="space-y-2 relative z-10">
+              <h3 className="text-2xl font-black font-noto tracking-tight text-slate-800">আপনি কি নিশ্চিত?</h3>
+              <p className="text-sm font-medium text-slate-500 leading-relaxed">এই রুটিনটি স্থায়ীভাবে মুছে ফেলা হবে। এই কাজ আর বাতিল করা যাবে না।</p>
+            </div>
+            <div className="flex gap-3 pt-4 relative z-10">
+               <button onClick={() => setDeleteModal({show: false, id: null})} className="flex-1 h-12 md:h-14 bg-slate-100 text-slate-600 font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase hover:bg-slate-200 transition-colors">না, বাতিল</button>
+               <button onClick={executeDelete} disabled={saving} className="flex-1 h-12 md:h-14 bg-red-500 text-white font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase shadow-lg shadow-red-500/20 flex items-center justify-center hover:bg-red-600 transition-colors active:scale-95">
+                 {saving ? <Loader2 className="animate-spin" size={18} /> : 'হ্যাঁ, ডিলিট'}
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed bottom-24 sm:bottom-10 left-1/2 -translate-x-1/2 z-[120] animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className={`px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 border backdrop-blur-md ${
+            toast.type === 'success' ? 'bg-emerald-50/90 text-emerald-700 border-emerald-100' :
+            toast.type === 'error' ? 'bg-red-50/90 text-red-700 border-red-100' :
+            'bg-blue-50/90 text-blue-700 border-blue-100'
+          }`}>
+            <div className="shrink-0 bg-white/50 p-1.5 rounded-full">
+              {toast.type === 'success' ? <CheckCircle size={20} strokeWidth={2.5} className="text-emerald-500" /> :
+               toast.type === 'error' ? <AlertCircle size={20} className="text-red-500" /> :
+               <Info size={20} className="text-blue-500" />}
+            </div>
+            <span className="font-bold text-sm tracking-wide">{toast.message}</span>
           </div>
         </div>
       )}
@@ -458,7 +521,7 @@ const RoutineGrid = ({ routines, madrasah, days, className, getBanglaNumber, can
           <div className="flex items-center justify-center gap-4 mb-4">
              {madrasah?.logo_url && <img src={madrasah.logo_url} className="w-16 h-16 object-contain" alt="Logo" />}
              <div className="text-left">
-                <h1 className="text-xl font-black font-noto text-emerald-800">{madrasah?.name_english}</h1>
+                <h1 className="text-xl font-black font-noto text-blue-800">{madrasah?.name_english}</h1>
                 <h2 className="text-lg font-bold font-noto text-slate-800">{madrasah?.name}</h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{madrasah?.address}</p>
              </div>
@@ -590,9 +653,9 @@ const RoutineCards = ({ routines, days, getBanglaNumber, canManage, handleDelete
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {routines.map((r: any) => (
-        <div key={r.id} className="bg-white p-6 rounded-[2rem] border relative overflow-hidden group hover:shadow-lg transition-all border-l-4 border-l-emerald-500">
+        <div key={r.id} className="bg-white p-6 rounded-[2rem] border relative overflow-hidden group hover:shadow-lg transition-all border-l-4 border-l-[#2563EB]">
            <div className="flex justify-between items-start mb-4">
-             <div className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+             <div className="bg-blue-50 text-[#2563EB] px-3 py-1 rounded-full text-[10px] font-black uppercase">
                {DAYS.find(d => d.id === r.day)?.bn}
              </div>
              <div className="text-xs font-black text-slate-400 flex items-center gap-1">

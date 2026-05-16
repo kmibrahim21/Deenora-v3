@@ -22,6 +22,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingBulkSMS, setIsEditingBulkSMS] = useState(false);
+  const [isEditingGlobalUpdate, setIsEditingGlobalUpdate] = useState(false);
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [isEditingPackages, setIsEditingPackages] = useState(false);
   const [showPackageForm, setShowPackageForm] = useState(false);
@@ -35,7 +36,10 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     reve_caller_id: '',
     bkash_number: '',
     sms_rate: 0.50,
-    voice_rate: 1.00
+    voice_rate: 1.00,
+    global_update_active: false,
+    global_update_message: '',
+    global_update_version: 0
   });
 
   useEffect(() => {
@@ -145,7 +149,10 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       reve_caller_id: settings.reve_caller_id || '',
       bkash_number: settings.bkash_number || '',
       sms_rate: settings.sms_rate || 0.50,
-      voice_rate: settings.voice_rate || 1.00
+      voice_rate: settings.voice_rate || 1.00,
+      global_update_active: settings.global_update_active || false,
+      global_update_message: settings.global_update_message || '',
+      global_update_version: settings.global_update_version || 0
     });
   };
 
@@ -164,6 +171,22 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       if (error) throw error;
       setIsEditingBulkSMS(false);
       setShowSuccessModal({ show: true, title: 'Bulk SMS আপডেট', message: 'Bulk SMS ও রেট সেটিংস আপডেট হয়েছে।' });
+      fetchGlobalSettings();
+    } catch (err: any) { alert(err.message); } finally { setSaving(false); }
+  };
+
+  const handleSaveGlobalUpdate = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('system_settings').update({
+        global_update_active: globalSettings.global_update_active,
+        global_update_message: globalSettings.global_update_message,
+        global_update_version: globalSettings.global_update_version
+      }).eq('id', '00000000-0000-0000-0000-000000000001');
+
+      if (error) throw error;
+      setIsEditingGlobalUpdate(false);
+      setShowSuccessModal({ show: true, title: 'আপডেট সেটিংস', message: 'গ্লোবাল আপডেট সফলভাবে সেভ হয়েছে।' });
       fetchGlobalSettings();
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
   };
@@ -346,6 +369,19 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         </div>
 
         <button 
+          onClick={() => setIsEditingGlobalUpdate(true)} 
+          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+        >
+          <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Globe size={24} />
+          </div>
+          <div>
+            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'গ্লোবাল আপডেট' : 'Global Update'}</h5>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Pop-up Control</p>
+          </div>
+        </button>
+
+        <button 
           onClick={onLogout} 
           className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all ${madrasah?.theme === 'dark' ? 'bg-red-900/20 border-red-900/30' : 'bg-red-50/50 border-red-100'}`}
         >
@@ -482,6 +518,75 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         document.body
       )}
 
+      {isEditingGlobalUpdate && createPortal(
+        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className={`w-full max-w-sm rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[85vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className="p-5 shrink-0 relative overflow-hidden">
+                 <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-3">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-orange-900/30 text-orange-400 border-orange-900/50' : 'bg-orange-50 text-orange-600 border-orange-100'}`}><Globe size={20} strokeWidth={2.5} /></div>
+                       <div><h3 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'গ্লোবাল আপডেট' : 'Global Update'}</h3><p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em]">Service Control</p></div>
+                    </div>
+                    <button onClick={() => setIsEditingGlobalUpdate(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500 border-slate-700' : 'bg-slate-50 text-slate-300 border-slate-100'}`}><X size={18} /></button>
+                 </div>
+              </div>
+              <div className="px-6 pb-8 space-y-5 overflow-y-auto custom-scrollbar flex-1 relative z-10">
+                 <div className="space-y-4">
+                    <div className={`p-5 rounded-[2rem] border flex items-center justify-between ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                       <div className="text-left">
+                          <h5 className={`text-sm font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'আপডেট শো করুন' : 'Show Update Popup'}</h5>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">{lang === 'bn' ? 'সবার জন্য পপআপ' : 'Popup for everyone'}</p>
+                       </div>
+                       <button 
+                          onClick={() => setGlobalSettings({...globalSettings, global_update_active: !globalSettings.global_update_active})} 
+                          className={`w-12 h-6 rounded-full relative transition-all duration-300 ${globalSettings.global_update_active ? 'bg-orange-500' : 'bg-slate-300'}`}
+                       >
+                          <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${globalSettings.global_update_active ? 'left-6.5' : 'left-0.5'}`} />
+                       </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-slate-400 uppercase px-1">{lang === 'bn' ? 'আপডেট মেসেজ' : 'Update Message'}</label>
+                       <textarea 
+                          rows={4} 
+                          className={`w-full rounded-2xl p-4 font-bold outline-none border resize-none text-xs ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                          value={globalSettings.global_update_message} 
+                          onChange={(e) => setGlobalSettings({...globalSettings, global_update_message: e.target.value})}
+                          placeholder={lang === 'bn' ? 'এখানে মেসেজ লিখুন...' : 'Write message here...'}
+                       />
+                    </div>
+
+                    <div className="space-y-1.5">
+                       <div className="flex items-center justify-between px-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">{lang === 'bn' ? 'ভার্সন কোড' : 'Version Code'}</label>
+                          <span className="text-[8px] font-bold text-orange-500 uppercase">{lang === 'bn' ? 'সবার জন্য পপআপ শো করতে ভার্সন বাড়ান' : 'Increase to force show for all'}</span>
+                       </div>
+                       <div className="flex gap-2">
+                          <input 
+                             type="number" 
+                             className={`flex-1 h-11 rounded-xl px-4 font-bold text-xs outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                             value={globalSettings.global_update_version} 
+                             onChange={(e) => setGlobalSettings({...globalSettings, global_update_version: parseInt(e.target.value) || 0})}
+                          />
+                          <button 
+                             onClick={() => setGlobalSettings({...globalSettings, global_update_version: globalSettings.global_update_version + 1})}
+                             className="px-4 py-2 bg-orange-100 text-orange-600 rounded-xl font-bold text-[10px] uppercase active:scale-95 transition-all"
+                          >
+                             +1
+                          </button>
+                       </div>
+                    </div>
+                 </div>
+                 <div className="pt-2">
+                    <button onClick={handleSaveGlobalUpdate} disabled={saving} className="relative w-full h-16 bg-orange-600 text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/20 text-[13px] uppercase tracking-[0.25em]">
+                       {saving ? <Loader2 className="animate-spin" size={22} /> : <>{lang === 'bn' ? 'আপডেট সেভ করুন' : 'Save Update'}</>}
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
       {isEditingPayment && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
            <div className={`w-full max-w-sm rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[85vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>

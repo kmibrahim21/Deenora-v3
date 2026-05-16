@@ -121,7 +121,7 @@ export const generateAttendanceReportPDF = async (
                 <AttendanceReportTemplate reportData={reportData} madrasah={madrasah} className={className} month={month} lang={lang} />
             </div>
         );
-        setTimeout(resolve, 800); 
+        setTimeout(resolve, 1500); 
     });
 
     const doc = new jsPDF('p', 'mm', 'a4');

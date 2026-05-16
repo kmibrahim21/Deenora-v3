@@ -47,6 +47,7 @@ export interface Institution {
       full_day_time?: string;
       sessions?: { id: string; name: string }[];
       class_sessions?: Record<string, { id: string; name: string }[]>;
+      class_times?: Record<string, { start_time?: string; end_time?: string; half_day_time?: string; full_day_time?: string }>;
     };
     subscription?: {
       package_name?: string;
@@ -379,6 +380,7 @@ export interface Teacher {
   pin?: string;
   designation?: string;
   basic_salary?: number;
+  monthly_salary?: number;
   is_active: boolean;
   permissions?: TeacherPermissions;
   created_at: string;

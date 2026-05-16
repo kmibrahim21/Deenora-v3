@@ -12,9 +12,12 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
     const isBn = lang === 'bn';
     
     const calculatedData = reportData.map(item => {
-        const late = item.late_days || 0;
-        const pct = item.total_days > 0 ? Math.round(((item.present_days + late) / item.total_days) * 100) : 0;
-        return { ...item, late, pct };
+        const late = item.late || item.late_days || 0;
+        const present = item.present_days || 0;
+        const total = item.total_days || 0;
+        const absent = item.absent_days || 0;
+        const pct = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+        return { ...item, late, present, absent, total, pct };
     });
 
     // Sort by percentage to calculate rank
@@ -114,8 +117,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
             })}
             
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&display=swap');
-                div, th, td { font-family: 'Noto Sans Bengali', sans-serif; }
+                div, th, td { font-family: 'Noto Sans Bengali', "Inter", system-ui, sans-serif; }
             `}</style>
         </>
     );

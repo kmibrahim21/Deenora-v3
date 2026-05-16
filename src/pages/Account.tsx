@@ -8,6 +8,27 @@ import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
 import MultiCalendar from 'components/MultiCalendar';
 
+const ActionCard = ({ icon: Icon, title, subtitle, colorClass, onClick, dark }: any) => (
+  <button 
+    onClick={onClick}
+    className={`w-full p-4 sm:p-5 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center justify-center text-center gap-2 sm:gap-3 active:scale-[0.98] ${dark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+  >
+    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1rem] sm:rounded-2xl flex items-center justify-center shrink-0 ${colorClass}`}>
+      <Icon className="w-6 h-6 sm:w-7 sm:h-7" strokeWidth={1.5} />
+    </div>
+    <div className="flex-1 w-full flex flex-col items-center justify-center">
+      <h5 className={`text-[12px] sm:text-[14px] font-black font-noto leading-[1.3] text-balance ${dark ? 'text-white' : 'text-slate-800'}`}>
+        {title}
+      </h5>
+      {subtitle && (
+        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 tracking-wide">
+          {subtitle}
+        </p>
+      )}
+    </div>
+  </button>
+);
+
 interface AccountProps {
   lang: Language;
   setLang: (l: Language) => void;
@@ -30,7 +51,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   
-  const [stats, setStats] = useState({ students: 0, classes: 0 });
+  const [stats, setStats] = useState({ students: 0, classes: 0, teachers: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
   const [packages, setPackages] = useState<any[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
@@ -185,11 +206,12 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     try {
       const { data: profile } = await supabase.from('institutions').select('*').eq('id', initialMadrasah.id).maybeSingle();
       if (profile) setMadrasah(profile);
-      const [stdRes, clsRes] = await Promise.all([
+      const [stdRes, clsRes, teacherRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id),
-        supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id)
+        supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id),
+        supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('institution_id', initialMadrasah.id)
       ]);
-      setStats({ students: stdRes.count || 0, classes: clsRes.count || 0 });
+      setStats({ students: stdRes.count || 0, classes: clsRes.count || 0, teachers: teacherRes.count || 0 });
     } catch (e) { console.error(e); } finally { setLoadingStats(false); }
   };
 
@@ -405,226 +427,153 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         </div>
       </div>
 
+
+
       {/* Main Options Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mx-1">
+      <div className="grid grid-cols-2 gap-3 mx-1">
         {/* Academic Calendar Card */}
-        <button 
+        <ActionCard
+          icon={CalendarIcon}
+          title={lang === 'bn' ? 'একাডেমিক ক্যালেন্ডার' : 'Academic Calendar'}
+          subtitle={lang === 'bn' ? 'ছুটি ও ইভেন্ট' : 'Holidays'}
+          colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
           onClick={() => setView('academic-calendar')}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <CalendarIcon size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              {lang === 'bn' ? 'একাডেমিক ক্যালেন্ডার' : 'Academic Calendar'}
-            </h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {lang === 'bn' ? 'ছুটি ও ইভেন্ট' : 'Holidays'}
-            </p>
-          </div>
-        </button>
+          dark={madrasah?.theme === 'dark'}
+        />
 
         {!isTeacher && (
           <>
-            <button 
-              onClick={() => setIsEditingProfile(true)} 
-              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-            >
-              <div className="w-14 h-14 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Edit3 size={24} />
-              </div>
-              <div>
-                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('profile_settings', lang)}</h5>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{t('branding', lang)}</p>
-              </div>
-            </button>
+            <ActionCard
+              icon={Edit3}
+              title={t('profile_settings', lang)}
+              subtitle={t('branding', lang)}
+              colorClass="bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400"
+              onClick={() => setIsEditingProfile(true)}
+              dark={madrasah?.theme === 'dark'}
+            />
             
             {modules.academic_year_promotion && (
-              <button 
-                onClick={() => setView('academic-year')} 
-                className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-              >
-                <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <GraduationCap size={24} />
-                </div>
-                <div>
-                  <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}</h5>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}</p>
-                </div>
-              </button>
+              <ActionCard
+                icon={GraduationCap}
+                title={lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}
+                subtitle={lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}
+                colorClass="bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
+                onClick={() => setView('academic-year')}
+                dark={madrasah?.theme === 'dark'}
+              />
             )}
 
             {/* Subscription Card */}
-            <button 
+            <ActionCard
+              icon={CreditCard}
+              title={lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
+              subtitle={lang === 'bn' ? 'প্যাকেজ ও পেমেন্ট' : 'Plans & Billing'}
+              colorClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
               onClick={() => setIsEditingSubscription(true)}
-              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-            >
-              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <CreditCard size={24} />
-              </div>
-              <div>
-                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                  {lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription'}
-                </h5>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                  {lang === 'bn' ? 'প্যাকেজ ও পেমেন্ট' : 'Plans & Billing'}
-                </p>
-              </div>
-            </button>
+              dark={madrasah?.theme === 'dark'}
+            />
 
-            <button 
-              onClick={() => setView('data-management')} 
-              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-            >
-              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Database size={24} />
-              </div>
-              <div>
-                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('backup_restore', lang)}</h5>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Excel Tools</p>
-              </div>
-            </button>
+            <ActionCard
+              icon={Database}
+              title={t('backup_restore', lang)}
+              subtitle="Excel Tools"
+              colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+              onClick={() => setView('data-management')}
+              dark={madrasah?.theme === 'dark'}
+            />
+
 
             {/* Teacher Management Card */}
-            <button 
+            <ActionCard
+              icon={UserCheck}
+              title={lang === 'bn' ? 'শিক্ষক ব্যবস্থাপনা' : 'Teacher Management'}
+              subtitle={lang === 'bn' ? 'শিক্ষক ও স্টাফ' : 'Teachers & Staff'}
+              colorClass="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
               onClick={() => setView('teachers')}
-              className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-            >
-              <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <UserCheck size={24} />
-              </div>
-              <div>
-                <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                  {lang === 'bn' ? 'শিক্ষক ব্যবস্থাপনা' : 'Teacher Management'}
-                </h5>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                  {lang === 'bn' ? 'শিক্ষক ও স্টাফ' : 'Teachers & Staff'}
-                </p>
-              </div>
-            </button>
+              dark={madrasah?.theme === 'dark'}
+            />
           </>
         )}
 
         {/* Class Routine Card */}
         {modules.class_routine && (
-          <button 
+          <ActionCard
+            icon={LayoutDashboard}
+            title={lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
+            subtitle={lang === 'bn' ? 'সময়সূচী' : 'Schedule'}
+            colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
             onClick={() => setView('class-routine')}
-            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-          >
-            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <LayoutDashboard size={24} />
-            </div>
-            <div>
-              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                {lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
-              </h5>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                {lang === 'bn' ? 'সময়সূচী' : 'Schedule'}
-              </p>
-            </div>
-          </button>
+            dark={madrasah?.theme === 'dark'}
+          />
         )}
 
         {/* Message Card */}
         {(isAdmin || canSendSMS) && modules.messages && (
-          <button 
+          <ActionCard
+            icon={MessageCircle}
+            title={lang === 'bn' ? 'বার্তা পাঠান' : 'Send Message'}
+            subtitle={lang === 'bn' ? 'বার্তা' : 'Messages'}
+            colorClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
             onClick={() => setView('messages')}
-            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-          >
-            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <MessageCircle size={24} />
-            </div>
-            <div>
-              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                {lang === 'bn' ? 'বার্তা পাঠান' : 'Send Message'}
-              </h5>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                {lang === 'bn' ? 'বার্তা' : 'Messages'}
-              </p>
-            </div>
-          </button>
+            dark={madrasah?.theme === 'dark'}
+          />
         )}
 
         {/* Certificate Card */}
         {isAdmin && madrasah?.config_json?.modules?.certificates && (
-          <button 
+          <ActionCard
+            icon={Award}
+            title={lang === 'bn' ? 'সার্টিফিকেট' : 'Certificates'}
+            subtitle={lang === 'bn' ? 'জেনারেটর' : 'Generator'}
+            colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
             onClick={() => setView('certificates')}
-            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-          >
-            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Award size={24} />
-            </div>
-            <div>
-              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                {lang === 'bn' ? 'সার্টিফিকেট' : 'Certificates'}
-              </h5>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                {lang === 'bn' ? 'জেনারেটর' : 'Generator'}
-              </p>
-            </div>
-          </button>
+            dark={madrasah?.theme === 'dark'}
+          />
         )}
 
         {/* Video Tutorial Card */}
-        <button 
+        <ActionCard
+          icon={Play}
+          title={lang === 'bn' ? 'টিউটোরিয়াল' : 'Video Tutorials'}
+          subtitle={lang === 'bn' ? 'সহায়তা' : 'Help & Support'}
+          colorClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
           onClick={() => setView('tutorials')}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Play size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              {lang === 'bn' ? 'টিউটোরিয়াল' : 'Video Tutorials'}
-            </h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {lang === 'bn' ? 'সহায়তা' : 'Help & Support'}
-            </p>
-          </div>
-        </button>
+          dark={madrasah?.theme === 'dark'}
+        />
 
         {/* Change Password Card */}
-        <button 
+        <ActionCard
+          icon={Key}
+          title={lang === 'bn' ? 'পাসওয়ার্ড পরিবর্তন' : 'Change Password'}
+          subtitle={lang === 'bn' ? 'নিরাপত্তা' : 'Security'}
+          colorClass="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
           onClick={() => setIsChangingPassword(true)}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Key size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-              {lang === 'bn' ? 'পাসওয়ার্ড পরিবর্তন' : 'Change Password'}
-            </h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-              {lang === 'bn' ? 'নিরাপত্তা' : 'Security'}
-            </p>
-          </div>
-        </button>
+          dark={madrasah?.theme === 'dark'}
+        />
 
 
         {/* Language Card */}
         {!isTeacher && (
-          <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
-                <Languages size={24} />
+          <div className={`col-span-2 p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-2.5 sm:gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 rounded-[0.85rem] sm:rounded-[1rem] flex items-center justify-center shrink-0">
+                <Languages className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} />
               </div>
-              <div className="text-left">
-                <h5 className={`text-base font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('language', lang)}</h5>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">{t('change_lang', lang)}</p>
+              <div className="text-left min-w-0 pr-1 sm:pr-2 hidden sm:block">
+                <h5 className={`text-[11px] sm:text-[13px] font-black font-noto leading-[1.3] break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{t('language', lang)}</h5>
+                <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-0.5 break-words whitespace-normal">{t('change_lang', lang)}</p>
               </div>
             </div>
-            <div className={`flex p-1 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+            <div className={`flex p-1 rounded-xl border shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
               <button 
                 onClick={() => setLang('bn')} 
-                className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all ${lang === 'bn' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg text-[10px] font-black transition-all ${lang === 'bn' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
               >
                 বাংলা
               </button>
               <button 
                 onClick={() => setLang('en')} 
-                className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all ${lang === 'en' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
+                className={`px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg text-[10px] font-black transition-all ${lang === 'en' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}
               >
                 ENG
               </button>
@@ -634,45 +583,43 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
         {/* Theme Switcher Card */}
         {!isTeacher && (
-          <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-blue-50 text-[#2563EB]'}`}>
-                {madrasah?.theme === 'dark' ? <Moon size={24} /> : <Sun size={24} />}
+          <div className={`col-span-2 p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-3 sm:gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+            <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-[0.85rem] sm:rounded-[1rem] flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400'}`}>
+                {madrasah?.theme === 'dark' ? <Moon className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} /> : <Sun className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} />}
               </div>
-              <div className="text-left">
-                <h5 className={`text-base font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+              <div className="text-left min-w-0 pr-1 sm:pr-2">
+                <h5 className={`text-[11px] sm:text-[13px] font-black font-noto leading-[1.3] break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
                   {lang === 'bn' ? 'ডার্ক মোড' : 'Dark Mode'}
                 </h5>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">
+                <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-0.5 break-words whitespace-normal">
                   {lang === 'bn' ? 'চোখের আরামের জন্য' : 'For eye comfort'}
                 </p>
               </div>
             </div>
             <button 
               onClick={toggleTheme}
-              className={`w-14 h-8 rounded-full p-1 transition-colors relative ${madrasah?.theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'}`}
+              className={`w-11 h-6 sm:w-14 sm:h-8 shrink-0 rounded-full p-1 transition-colors relative ${madrasah?.theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'}`}
             >
-              <div className={`w-6 h-6 rounded-full bg-white shadow-sm transition-transform ${madrasah?.theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`} />
+              <div className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-white shadow-sm transition-transform ${madrasah?.theme === 'dark' ? 'translate-x-5 sm:translate-x-6' : 'translate-x-0'}`} />
             </button>
           </div>
         )}
 
         <button 
           onClick={onLogout} 
-          className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all ${madrasah?.theme === 'dark' ? 'bg-red-900/20 border-red-900/30' : 'bg-red-50/50 border-red-100'}`}
+          className={`col-span-2 p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-3 sm:gap-4 group active:scale-[0.98] transition-all min-w-0 ${madrasah?.theme === 'dark' ? 'bg-red-900/20 border-red-900/30' : 'bg-red-50/50 border-red-100'}`}
         >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <LogOut size={24} />
+          <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-[0.85rem] sm:rounded-[1rem] flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-red-900/40 text-red-400' : 'bg-red-100 text-red-600'}`}>
+              <LogOut className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} />
             </div>
-            <div className="text-left">
-              <h5 className={`text-base font-black font-noto leading-none ${madrasah?.theme === 'dark' ? 'text-red-400' : 'text-red-600'}`}>{t('logout', lang)}</h5>
-              <p className="text-[10px] font-bold text-red-300 uppercase tracking-widest mt-1.5">{t('logout_system', lang)}</p>
+            <div className="text-left min-w-0 pr-1 sm:pr-2">
+              <h5 className={`text-[11px] sm:text-[13px] font-black font-noto leading-[1.3] break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-red-400' : 'text-red-600'}`}>{t('logout', lang)}</h5>
+              <p className="text-[9px] sm:text-[10px] font-bold text-red-300 mt-0.5 break-words whitespace-normal">{t('logout_system', lang)}</p>
             </div>
           </div>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-red-900/50' : 'bg-white text-red-200'}`}>
-            <ChevronRight size={20} />
-          </div>
+          <ChevronRight className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${madrasah?.theme === 'dark' ? 'text-red-900/50' : 'text-red-200'}`} />
         </button>
       </div>
 

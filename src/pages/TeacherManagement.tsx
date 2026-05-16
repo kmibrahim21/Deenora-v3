@@ -33,7 +33,10 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Phone
+  Phone,
+  History,
+  DollarSign,
+  Download
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -47,6 +50,7 @@ import { t } from "translations";
 import { supabase } from "supabase";
 import { useOfflineStatus } from "hooks/useOffline";
 import { CacheService } from "services/cacheService";
+import { generateAttendanceReportPDF } from "../utils/pdfGenerator";
 
 interface TeacherManagementProps {
   lang: Language;
@@ -131,15 +135,22 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const [permissions, setPermissions] =
     useState<Partial<TeacherPermissions>>(initialPermissions);
-  const [activeTab, setActiveTab] = useState<'teachers' | 'salary' | 'attendance' | 'attendance_report'>('teachers');
+  const [activeTab, setActiveTab] = useState<'teachers' | 'salary' | 'attendance'>('teachers');
+  const [attendanceSubTab, setAttendanceSubTab] = useState<'take' | 'report'>('take');
   const [salaryMonth, setSalaryMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [attendanceMonth, setAttendanceMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [reportType, setReportType] = useState<'daily' | 'monthly' | 'yearly'>('monthly');
+  const [reportYear, setReportYear] = useState(() => new Date().getFullYear().toString());
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [reportData, setReportData] = useState<Record<string, Record<string, string>>>({});
   const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [teacherAttendance, setTeacherAttendance] = useState<Record<string, string>>({});
   const [savingAttendance, setSavingAttendance] = useState(false);
-  const [paidSalaries, setPaidSalaries] = useState<string[]>([]);
+  const [paidSalaries, setPaidSalaries] = useState<Record<string, number>>({});
+  const [paymentHistory, setPaymentHistory] = useState<Record<string, any[]>>({});
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [paymentModal, setPaymentModal] = useState<{show: boolean, teacher: Teacher | null, amount: string}>({show: false, teacher: null, amount: ""});
 
   useEffect(() => {
     fetchTeachers();
@@ -150,17 +161,25 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     if (activeTab === 'salary' && madrasah?.id) {
        fetchPaidSalaries();
     }
-    if (activeTab === 'attendance' && madrasah?.id) {
+    if (activeTab === 'attendance' && attendanceSubTab === 'take' && madrasah?.id) {
        fetchTeacherAttendance();
     }
-    if (activeTab === 'attendance_report' && madrasah?.id) {
+    if (activeTab === 'attendance' && attendanceSubTab === 'report' && madrasah?.id) {
        fetchAttendanceReport();
     }
-  }, [salaryMonth, attendanceDate, attendanceMonth, activeTab, madrasah?.id]);
+  }, [salaryMonth, attendanceDate, attendanceMonth, activeTab, attendanceSubTab, reportType, reportYear, reportDate, madrasah?.id]);
 
   const fetchAttendanceReport = async () => {
+    let filter = '';
+    if (reportType === 'daily') {
+      filter = reportDate;
+    } else if (reportType === 'monthly') {
+      filter = attendanceMonth;
+    } else {
+      filter = reportYear;
+    }
     try {
-      const res = await fetch(`/api/teachers/attendance-report?institute_id=${madrasah!.id}&month=${attendanceMonth}`);
+      const res = await fetch(`/api/teachers/attendance-report?institute_id=${madrasah!.id}&month=${filter}`);
       const data = await res.json();
       if (data.report) {
         setReportData(data.report);
@@ -219,57 +238,155 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  const fetchPaidSalaries = async () => {
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true);
+    let titleStr = '';
+    if (reportType === 'daily') titleStr = reportDate;
+    else if (reportType === 'monthly') titleStr = attendanceMonth;
+    else titleStr = reportYear;
+
+    const mappedData = teachers.map(teacher => {
+      let presentCount = 0;
+      let absentCount = 0;
+      let lateCount = 0;
+      let halfDayCount = 0;
+      let totalDays = 0;
+      
+      if (reportData) {
+        Object.keys(reportData).forEach(dateStr => {
+          totalDays++;
+          const dayData = reportData[dateStr] || {};
+          const status = dayData[teacher.id];
+          if (status === 'present') presentCount++;
+          else if (status === 'absent') absentCount++;
+          else if (status === 'late') lateCount++;
+          else if (status === 'half_day') halfDayCount++;
+        });
+      }
+      
+      return {
+        roll: '-',
+        student_name: teacher.name,
+        total_days: totalDays,
+        present_days: presentCount,
+        absent_days: absentCount,
+        late_days: lateCount,
+        half_day: halfDayCount
+      };
+    });
+
+    console.log("Generating PDf with mapped data:", mappedData);
+
     try {
-       // Search ledger for expense category "Teacher Salary" or "শিক্ষক বেতন"
-       const monthStart = `${salaryMonth}-01`;
-       const monthEnd = `${salaryMonth}-31`; // Postgres handles 31 even for shorter months or we can be more precise
+      if (mappedData.length === 0) {
+        alert(lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found to generate report');
+        return;
+      }
+      console.log("Calling generateAttendanceReportPDF...");
+      await generateAttendanceReportPDF(mappedData, madrasah, lang === 'bn' ? 'শিক্ষক' : 'Teachers', titleStr, lang);
+      console.log("PDF generated successfully!");
+    } catch (error: any) {
+      console.error("PDF generation failed:", error);
+      alert(lang === 'bn' ? `পিডিএফ তৈরি করতে ব্যর্থ হয়েছে। ত্রুটি: ${error?.message || 'Unknown'}` : `Failed to generate PDF. Error: ${error?.message || 'Unknown'}`);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const fetchPaidSalaries = async () => {
+    if (!madrasah?.id) return;
+    try {
+       // Search ledger for records where description contains the salaryMonth
        const { data, error } = await supabase
          .from('ledger')
-         .select('description')
-         .eq('institution_id', madrasah!.id)
+         .select('description, amount, transaction_date, id')
+         .eq('institution_id', madrasah.id)
          .eq('type', 'expense')
-         .gte('transaction_date', monthStart)
-         .lte('transaction_date', monthEnd)
-         .in('category', ['শিক্ষক বেতন', 'Teacher Salary']);
+         .ilike('description', `%Salary paid for ${salaryMonth}%`);
        
+       if (error) throw error;
+
+       const paidList: Record<string, number> = {};
+       const historyList: Record<string, any[]> = {};
+
        if (data) {
-         // To know who was paid, we can extract teacher ID from description or we can assume it starts with "Salary for [Teacher Name] ([Teacher ID])"
-         // Actually, let's look for Teacher ID inside brackets in description if we format it like that.
-         const paidList: string[] = [];
          data.forEach(item => {
-            const match = item.description.match(/\((.*?)\)/);
+            const match = item.description.match(/\[ID:(.*?)\]/) || item.description.match(/\(([^)]+)\)$/);
             if (match && match[1]) {
-               paidList.push(`${match[1]}_${salaryMonth}`);
+               const tid = match[1];
+               const key = `${tid}_${salaryMonth}`;
+               paidList[key] = (paidList[key] || 0) + (item.amount || 0);
+               
+               if (!historyList[key]) historyList[key] = [];
+               historyList[key].push(item);
             }
          });
-         setPaidSalaries(paidList);
        }
+       setPaidSalaries(paidList);
+       setPaymentHistory(historyList);
     } catch(err) {
        console.error("Error fetching paid salaries", err);
     }
   };
 
-  const handlePaySalary = async (teacher: Teacher) => {
-    if (!teacher.basic_salary || !madrasah?.id) return;
+  const handlePaySalary = async () => {
+    if (!madrasah?.id) {
+       alert(lang === 'bn' ? 'মাদরাসা তথ্য পাওয়া যায়নি। অনুগ্রহ করে পেজটি রিফ্রেশ করুন।' : 'Institution information not found. Please refresh the page.');
+       return;
+    }
+    if (!paymentModal.teacher || !paymentModal.amount) {
+       alert(lang === 'bn' ? 'দয়া করে পরিমাণ লিখুন।' : 'Please enter an amount.');
+       return;
+    }
+    const teacher = paymentModal.teacher;
+    const amountToPay = parseFloat(paymentModal.amount);
+    if(isNaN(amountToPay) || amountToPay <= 0) {
+       alert(lang === 'bn' ? 'সঠিক পরিমাণ লিখুন।' : 'Please enter a valid amount.');
+       return;
+    }
+
     setPayingId(teacher.id);
     try {
-      const description = `Salary paid for ${salaryMonth} to ${teacher.name} (${teacher.id})`;
-      const { error } = await supabase.from('ledger').insert({
+      const description = `Salary paid for ${salaryMonth} to ${teacher.name} [ID:${teacher.id}]`;
+      
+      const payload: any = {
         institution_id: madrasah.id,
         category: lang === 'bn' ? 'শিক্ষক বেতন' : 'Teacher Salary',
-        amount: teacher.basic_salary,
+        amount: amountToPay,
         type: 'expense',
         description: description,
-        transaction_date: new Date().toISOString().split('T')[0],
-        academic_year_id: madrasah.config_json?.active_academic_year_id
-      });
+        transaction_date: new Date().toISOString().split('T')[0]
+      };
 
-      if (error) throw error;
-      setPaidSalaries(prev => [...prev, `${teacher.id}_${salaryMonth}`]);
-    } catch(err) {
+      if (madrasah.config_json?.active_academic_year_id) {
+        payload.academic_year_id = madrasah.config_json.active_academic_year_id;
+      }
+
+      const { data, error } = await supabase.from('ledger').insert(payload).select();
+
+      if (error) {
+        console.error("Supabase insert error:", error);
+        throw error;
+      }
+
+      const key = `${teacher.id}_${salaryMonth}`;
+      setPaidSalaries(prev => ({
+        ...prev,
+        [key]: (prev[key] || 0) + amountToPay
+      }));
+
+      if (data && data[0]) {
+        setPaymentHistory(prev => ({
+          ...prev,
+          [key]: [...(prev[key] || []), data[0]]
+        }));
+      }
+
+      setPaymentModal({show: false, teacher: null, amount: ""});
+      alert(lang === 'bn' ? 'বেতন পরিশোধ সফল হয়েছে' : 'Salary paid successfully');
+    } catch(err: any) {
       console.error("Error paying salary:", err);
-      setError("Failed to pay salary");
+      alert(lang === 'bn' ? `বেতন পরিশোধ ব্যর্থ: ${err.message || 'unknown error'}` : `Failed to pay salary: ${err.message || 'unknown error'}`);
     } finally {
       setPayingId(null);
     }
@@ -460,7 +577,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       phone: teacher.phone || "",
       pin: "", // Don't show pin
       designation: teacher.designation || "",
-      basic_salary: teacher.basic_salary ? teacher.basic_salary.toString() : "",
+      basic_salary: (teacher.basic_salary || teacher.monthly_salary) ? (teacher.basic_salary || teacher.monthly_salary)!.toString() : "",
       is_active: teacher.is_active,
     });
     setPermissions({ ...initialPermissions, ...(teacher.permissions || {}) });
@@ -485,23 +602,23 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     >
       {/* Header */}
       <div
-        className={`px-4 py-4 border-b ${isDark ? "bg-slate-900 border-slate-800" : "bg-transparent border-blue-100"}`}
+        className={`px-4 py-2.5 border-b ${isDark ? "bg-slate-900 border-slate-800" : "bg-transparent border-blue-100"}`}
       >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all ${isDark ? "bg-slate-800 text-blue-400 border-slate-700" : "bg-blue-50 text-[#2563EB] border-blue-100"}`}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center border shadow-sm active:scale-95 transition-all ${isDark ? "bg-slate-800 text-blue-400 border-slate-700" : "bg-blue-50 text-[#2563EB] border-blue-100"}`}
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={16} />
             </button>
             <div>
               <h1
-                className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}
+                className={`text-lg font-black font-noto ${isDark ? "text-white" : "text-slate-900"}`}
               >
                 {t("teacher_management", lang)}
               </h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                 {madrasah?.name}
               </p>
             </div>
@@ -515,9 +632,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
               resetForm();
               setShowAddModal(true);
             }}
-            className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg active:scale-95 transition-all ${!isOnline ? "bg-slate-400 text-white cursor-not-allowed shadow-none" : "bg-blue-600 text-white shadow-blue-600/20"}`}
+            className={`px-3 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg active:scale-95 transition-all ${!isOnline ? "bg-slate-400 text-white cursor-not-allowed shadow-none" : "bg-blue-600 text-white shadow-blue-600/20"}`}
           >
-            <UserPlus size={18} />
+            <UserPlus size={16} />
             <span className="hidden sm:inline">{t("add_teacher", lang)}</span>
           </button>
         </div>
@@ -525,28 +642,22 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
       <div className="max-w-5xl mx-auto p-4 space-y-6">
         {/* Tabs */}
-        <div className={`p-1.5 flex gap-1 rounded-2xl w-fit mx-auto sm:mx-0 ${isDark ? "bg-slate-900 border border-slate-800" : "bg-slate-100 border border-slate-200/50"}`}>
+        <div className={`p-1 flex gap-1 rounded-xl w-fit mx-auto sm:mx-0 ${isDark ? "bg-slate-900 border border-slate-800" : "bg-slate-100 border border-slate-200/50"}`}>
           <button
             onClick={() => setActiveTab('teachers')}
-            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'teachers' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'teachers' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
           >
             {lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teachers List'}
           </button>
           <button
             onClick={() => setActiveTab('attendance')}
-            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'attendance' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'attendance' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
           >
             {lang === 'bn' ? 'হাজিরা' : 'Attendance'}
           </button>
           <button
-            onClick={() => setActiveTab('attendance_report')}
-            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'attendance_report' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
-          >
-            {lang === 'bn' ? 'হাজিরা রিপোর্ট' : 'Attendance Report'}
-          </button>
-          <button
             onClick={() => setActiveTab('salary')}
-            className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'salary' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'salary' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
           >
             {lang === 'bn' ? 'বেতন প্রদান' : 'Pay Salary'}
           </button>
@@ -558,7 +669,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
             <div className="relative group">
               <Search
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors"
-                size={20}
+                size={18}
               />
               <input
                 type="text"
@@ -567,7 +678,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     ? "শিক্ষকের নাম বা মোবাইল দিয়ে খুঁজুন..."
                     : "Search by teacher name or mobile..."
                 }
-                className={`w-full pl-12 pr-4 py-4 border rounded-2xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 ${isDark ? "bg-slate-900 border-slate-800 text-slate-200" : "bg-white border-slate-200 text-slate-700"}`}
+                className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none text-[13px] font-bold transition-all focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 ${isDark ? "bg-slate-900 border-slate-800 text-slate-200" : "bg-white border-slate-200 text-slate-700"}`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -575,35 +686,35 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
             {/* Teachers List */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <Loader2 size={40} className="text-blue-500 animate-spin" />
-                <p className="text-slate-400 font-bold text-sm uppercase tracking-widest animate-pulse">
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <Loader2 size={32} className="text-blue-500 animate-spin" />
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">
                   Loading Teachers...
                 </p>
               </div>
             ) : filteredTeachers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {filteredTeachers.map((teacher) => (
               <motion.div
                 key={teacher.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`border rounded-3xl p-4 shadow-sm hover:shadow-md transition-all group ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}
+                className={`border rounded-2xl p-3 shadow-sm hover:shadow-md transition-all group ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2.5">
                     <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center border ${isDark ? "bg-blue-900/20 text-blue-400 border-blue-900/30" : "bg-blue-50 text-blue-600 border-blue-100"}`}
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center border ${isDark ? "bg-blue-900/20 text-blue-400 border-blue-900/30" : "bg-blue-50 text-blue-600 border-blue-100"}`}
                     >
-                      <User size={24} />
+                      <User size={20} />
                     </div>
                     <div>
                       <h3
-                        className={`text-sm font-black font-noto leading-tight ${isDark ? "text-white" : "text-slate-900"}`}
+                        className={`text-xs font-black font-noto leading-tight ${isDark ? "text-white" : "text-slate-900"}`}
                       >
                         {teacher.name}
                       </h3>
-                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                      <p className="text-[9px] font-bold text-slate-400 mt-0.5">
                         {teacher.designation ||
                           (lang === "bn" ? "শিক্ষক" : "Teacher")}
                       </p>
@@ -613,24 +724,24 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     {teacher.phone && (
                       <a
                         href={`tel:${teacher.phone}`}
-                        className={`p-2 rounded-lg font-black flex items-center justify-center transition-all ${isDark ? "bg-blue-900/30 text-blue-400 hover:bg-blue-900/50" : "bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
+                        className={`p-1.5 rounded-md font-black flex items-center justify-center transition-all ${isDark ? "bg-blue-900/30 text-blue-400 hover:bg-blue-900/50" : "bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
                       >
-                        <Phone size={14} />
+                        <Phone size={12} />
                       </a>
                     )}
                     <button
                       onClick={() => openEditModal(teacher)}
-                      className={`p-2 rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600 transition-all ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"}`}
+                      className={`p-1.5 rounded-md font-black text-[9px] uppercase tracking-widest flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600 transition-all ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"}`}
                     >
-                      <Edit3 size={14} />
+                      <Edit3 size={12} />
                     </button>
                     <button
                       onClick={() =>
                         setDeleteModal({ show: true, teacherId: teacher.id })
                       }
-                      className={`p-2 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition-all ${isDark ? "bg-red-900/20 text-red-400" : "bg-red-50 text-red-600"}`}
+                      className={`p-1.5 rounded-md flex items-center justify-center hover:bg-red-500 hover:text-white transition-all ${isDark ? "bg-red-900/20 text-red-400" : "bg-red-50 text-red-600"}`}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -710,240 +821,382 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         )}
         </>
       ) : activeTab === 'attendance' ? (
-        <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-            <div className="w-full sm:w-1/2 relative animate-in fade-in">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
-                {lang === 'bn' ? 'তারিখ' : 'Date'}
-              </label>
-              <div className="relative">
-                <input 
-                  type="date" 
-                  className={`w-full h-14 pl-10 pr-2 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-sm ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
-                  value={attendanceDate}
-                  onChange={(e) => setAttendanceDate(e.target.value)}
-                />
-                <Calendar className="absolute left-3 top-4 text-[#2563EB]" size={18}/>
-              </div>
-            </div>
-            <div className="w-full sm:w-auto self-end">
-              <button
-                onClick={saveTeacherAttendance}
-                disabled={savingAttendance}
-                className={`w-full sm:w-auto h-14 px-8 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${savingAttendance ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-[#2563EB] text-white hover:bg-blue-700 shadow-premium"}`}
-              >
-                {savingAttendance ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                <span>{lang === 'bn' ? 'হাজিরা সেভ করুন' : 'Save Attendance'}</span>
-              </button>
-            </div>
+        <div className="space-y-4 animate-in fade-in">
+          {/* Sub-Tabs Switcher */}
+          <div className={`flex p-0.5 rounded-xl border w-fit mx-auto ${isDark ? 'bg-slate-900 border-slate-800 shadow-xl shadow-black/20' : 'bg-slate-100 border-slate-200'}`}>
+            <button 
+              onClick={() => setAttendanceSubTab('take')}
+              className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${attendanceSubTab === 'take' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-lg' : 'bg-white text-[#2563EB] shadow-md') : 'text-slate-400'}`}
+            >
+              {lang === 'bn' ? 'প্রতিদিনের হাজিরা' : 'Daily Attendance'}
+            </button>
+            <button 
+              onClick={() => setAttendanceSubTab('report')}
+              className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${attendanceSubTab === 'report' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-lg' : 'bg-white text-[#2563EB] shadow-md') : 'text-slate-400'}`}
+            >
+              {lang === 'bn' ? 'হাজিরা রিপোর্ট' : 'Attendance Report'}
+            </button>
           </div>
 
-          <div className="space-y-3 animate-in slide-in-from-bottom-5">
-             <div className="flex items-center justify-between px-6 pt-2">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teacher List'}</h4>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'উপস্থিতি' : 'Attendance'}</h4>
-             </div>
-             
-            {teachers.length === 0 ? (
-               <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                 <Users size={40} className="text-slate-400/20 mb-4" />
-                 <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
-               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {teachers.map(teacher => {
-                const status = teacherAttendance[teacher.id] || 'present';
+          {attendanceSubTab === 'take' ? (
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-3">
+                <div className="w-full relative">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1 block text-center sm:text-left">
+                    {lang === 'bn' ? 'তারিখ নির্বাচন করুন' : 'Select Date'}
+                  </label>
+                  <div className="relative max-w-xs mx-auto sm:mx-0">
+                    <input 
+                      type="date" 
+                      className={`w-full h-11 pl-9 pr-2 border-2 rounded-xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-xs ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-100 text-[#1E3A8A]'}`} 
+                      value={attendanceDate}
+                      onChange={(e) => setAttendanceDate(e.target.value)}
+                    />
+                    <Calendar className="absolute left-3 top-3 text-[#2563EB]" size={16}/>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-2 pt-1">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teacher List'}</h4>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'উপস্থিতি' : 'Attendance'}</h4>
+                </div>
                 
-                return (
-                  <div key={teacher.id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                    <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
-                      <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                        <User size={20} />
-                      </div>
-                      <div className="min-w-0">
-                        <h5 className={`font-black font-noto text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
-                        <div className="mt-1 flex items-center gap-2">
-                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
-                           {teacher.phone && (
-                             <a href={`tel:${teacher.phone}`} className={`shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all ${isDark ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
-                               <Phone size={10} />
-                             </a>
-                           )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {teachers.map(teacher => {
+                    const status = teacherAttendance[teacher.id] || 'present';
+                    return (
+                      <div key={teacher.id} className={`p-3 rounded-2xl border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                            <User size={16} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h5 className={`font-black font-noto text-xs break-words whitespace-normal leading-tight ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-1.5 shrink-0 ml-2">
+                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={14}/></button>
+                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={14}/></button>
+                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={14}/></button>
+                          <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-[10px] font-black">1/2</span></button>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex gap-2 shrink-0 items-center justify-between sm:justify-end w-full sm:w-auto">
-                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={20}/></button>
-                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={20}/></button>
-                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={20}/></button>
-                       <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`flex-1 sm:w-10 sm:flex-none h-10 rounded-xl flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-xs font-black">1/2</span></button>
-                    </div>
-                  </div>
-                )
-              })}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : activeTab === 'attendance_report' ? (
-        <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-            <div className="w-full relative animate-in fade-in">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
-                {lang === 'bn' ? 'মাস নির্বাচন করুন' : 'Select Month'}
-              </label>
-              <div className="relative">
-                <input 
-                  type="month" 
-                  className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
-                  value={attendanceMonth}
-                  onChange={(e) => setAttendanceMonth(e.target.value)}
-                />
-                <Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/>
+                    );
+                  })}
+                </div>
+                
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-center mt-4">
+                  <button
+                    onClick={saveTeacherAttendance}
+                    disabled={savingAttendance}
+                    className={`w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${savingAttendance ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-[#2563EB] text-white hover:bg-blue-700 shadow-blue-500/30"}`}
+                  >
+                    {savingAttendance ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                    <span>{lang === 'bn' ? 'হাজিরা সংরক্ষণ করুন' : 'Save Attendance'}</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="space-y-3 animate-in slide-in-from-bottom-5">
-            {teachers.length === 0 ? (
-               <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                 <Users size={40} className="text-slate-400/20 mb-4" />
-                 <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
-               </div>
-            ) : (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {teachers.map(teacher => {
-                let presentCount = 0;
-                let absentCount = 0;
-                let lateCount = 0;
-                let halfDayCount = 0;
-                
-                Object.values(reportData).forEach(dailyRecord => {
-                  const status = dailyRecord[teacher.id];
-                  if (status === 'present') presentCount++;
-                  else if (status === 'absent') absentCount++;
-                  else if (status === 'late') lateCount++;
-                  else if (status === 'half_day') halfDayCount++;
-                });
-                
-                return (
-                  <div key={teacher.id} className={`p-5 rounded-[1.8rem] border shadow-bubble flex flex-col sm:flex-row gap-5 items-center justify-between group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                    <div className="flex items-center gap-4 w-full sm:w-auto">
-                      <div className={`w-14 h-14 rounded-[1.2rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                        <User size={24} />
-                      </div>
-                      <div className="min-w-0">
-                        <h5 className={`font-black font-noto text-base truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex-1 grid grid-cols-4 gap-2 w-full mt-2 sm:mt-0">
-                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>P</span>
-                         <span className="text-xl font-black text-emerald-500">{presentCount}</span>
-                      </div>
-                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>A</span>
-                         <span className="text-xl font-black text-red-500">{absentCount}</span>
-                      </div>
-                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>L</span>
-                         <span className="text-xl font-black text-amber-500">{lateCount}</span>
-                      </div>
-                      <div className={`px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                         <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'} mb-1`}>1/2</span>
-                         <span className="text-xl font-black text-purple-500">{halfDayCount}</span>
-                      </div>
+          ) : (
+            <div className="space-y-4 animate-in fade-in duration-500">
+              <div className={`p-4 rounded-2xl border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700 shadow-black/20' : 'bg-white border-slate-100'}`}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
+                      {lang === 'bn' ? 'রিপোর্টের ধরন' : 'Report Type'}
+                    </label>
+                    <div className={`flex p-0.5 rounded-lg border transition-all ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                      <button onClick={() => setReportType('daily')} className={`flex-1 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${reportType === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'দৈনিক' : 'Daily'}</button>
+                      <button onClick={() => setReportType('monthly')} className={`flex-1 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${reportType === 'monthly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'মাসিক' : 'Monthly'}</button>
+                      <button onClick={() => setReportType('yearly')} className={`flex-1 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${reportType === 'yearly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'বাৎসরিক' : 'Yearly'}</button>
                     </div>
                   </div>
-                )
-              })}
+
+                  <div className="relative">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
+                      {lang === 'bn' ? 'নির্বাচন করুন' : 'Select'}
+                    </label>
+                    <div className="relative">
+                      {reportType === 'daily' ? (
+                        <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className={`w-full h-11 pl-9 pr-4 border-2 rounded-xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-xs ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} />
+                      ) : reportType === 'monthly' ? (
+                        <input type="month" value={attendanceMonth} onChange={(e) => setAttendanceMonth(e.target.value)} className={`w-full h-11 pl-9 pr-4 border-2 rounded-xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-xs ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} />
+                      ) : (
+                        <select value={reportYear} onChange={(e) => setReportYear(e.target.value)} className={`w-full h-11 pl-9 pr-4 border-2 rounded-xl font-black outline-none focus:border-[#2563EB]/20 transition-all text-xs ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
+                          {Array.from({length: 5}).map((_, i) => {
+                            const y = (new Date().getFullYear() - i).toString();
+                            return <option key={y} value={y}>{y}</option>;
+                          })}
+                        </select>
+                      )}
+                      <Calendar className="absolute left-3 top-3 text-[#2563EB]" size={14}/>
+                    </div>
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={isGeneratingPDF || Object.keys(reportData).length === 0}
+                      className={`w-full h-11 px-6 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${
+                        isGeneratingPDF || Object.keys(reportData).length === 0
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                          : isDark
+                          ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/50'
+                          : 'bg-[#2563EB] hover:bg-blue-600 text-white shadow-blue-500/30'
+                      }`}
+                    >
+                      {isGeneratingPDF ? <Loader2 size={16} className="animate-spin" /> : 
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                      }
+                      <span>{lang === 'bn' ? 'পিডিএফ ডাউনলোড' : 'Download PDF'}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+
+              <div className="space-y-3 pt-2">
+                {teachers.length === 0 ? (
+                  <div className={`p-8 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <Users size={32} className="text-slate-400/20 mb-3" />
+                    <p className="text-[13px] font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {teachers.map(teacher => {
+                      let presentCount = 0;
+                      let absentCount = 0;
+                      let lateCount = 0;
+                      let halfDayCount = 0;
+                      
+                      Object.values(reportData).forEach(dailyRecord => {
+                        const status = dailyRecord[teacher.id];
+                        if (status === 'present') presentCount++;
+                        else if (status === 'absent') absentCount++;
+                        else if (status === 'late') lateCount++;
+                        else if (status === 'half_day') halfDayCount++;
+                      });
+                      
+                      return (
+                        <div key={teacher.id} className={`p-3 rounded-xl border shadow-bubble flex flex-col sm:flex-row gap-3 items-center justify-between group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                          <div className="flex items-center gap-3 w-full sm:w-auto flex-1">
+                            <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                              <User size={16} />
+                            </div>
+                            <div className="min-w-0">
+                              <h5 className={`font-black font-noto text-xs truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-4 gap-1 w-full sm:w-36">
+                            <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>P</span>
+                              <span className="text-[11px] font-black text-emerald-500">{presentCount}</span>
+                            </div>
+                            <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>A</span>
+                              <span className="text-[11px] font-black text-red-500">{absentCount}</span>
+                            </div>
+                            <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>L</span>
+                              <span className="text-[11px] font-black text-amber-500">{lateCount}</span>
+                            </div>
+                            <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>H</span>
+                              <span className="text-[11px] font-black text-purple-500">{halfDayCount}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+        <div className={`p-4 rounded-[2rem] space-y-3 transition-all ${isDark ? 'bg-slate-800/50 border border-slate-700 shadow-bubble' : 'bg-transparent'}`}>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-            <div className="w-full relative animate-in fade-in">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
-                {lang === 'bn' ? 'মাস নির্বাচন করুন' : 'Select Month'}
+            <div className="flex-1 w-full relative animate-in fade-in">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 mb-1.5 block">
+                {lang === 'bn' ? 'মাস নির্বাচন' : 'Select Month'}
               </label>
-              <div className="relative">
-                <input 
-                  type="month" 
-                  className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 z-10 pointer-events-none group-focus-within:scale-110 transition-transform">
+                  <Calendar size={18} strokeWidth={2.5} />
+                </div>
+                <input
+                  type="month"
                   value={salaryMonth}
                   onChange={(e) => setSalaryMonth(e.target.value)}
+                  className={`w-full pl-11 pr-5 py-3 rounded-[1.4rem] border-2 font-black text-xs transition-all outline-none focus:ring-4 focus:ring-blue-500/10 appearance-none ${
+                    isDark 
+                      ? "bg-slate-900 border-slate-800 text-white placeholder-slate-600 focus:border-blue-500/50" 
+                      : "bg-white border-slate-100 text-[#1E3A8A] placeholder-slate-300 focus:border-blue-500"
+                  }`}
                 />
-                <Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/>
               </div>
             </div>
           </div>
-
-          <div className="space-y-3 animate-in slide-in-from-bottom-5">
-            {teachers.length === 0 ? (
-               <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                 <Users size={40} className="text-slate-400/20 mb-4" />
-                 <p className="text-sm font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
-               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {teachers.map(teacher => {
                 const paidKey = `${teacher.id}_${salaryMonth}`;
-                const isPaid = paidSalaries.includes(paidKey);
+                const paidSoFar = paidSalaries[paidKey] || 0;
+                const totalSalary = Number(teacher.basic_salary) || Number(teacher.monthly_salary) || 0;
+                const due = Math.max(0, totalSalary - paidSoFar);
+                const percentage = totalSalary > 0 ? Math.min(100, (paidSoFar / totalSalary) * 100) : 0;
+                const isFullyPaid = paidSoFar >= totalSalary && totalSalary > 0;
                 
                 return (
-                  <div key={teacher.id} className={`p-5 rounded-[1.8rem] border shadow-bubble flex flex-col sm:flex-row gap-5 items-center justify-between group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                    <div className="flex items-center gap-4 w-full sm:w-auto min-w-0">
-                      <div className={`w-14 h-14 rounded-[1.2rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                        <User size={24} />
-                      </div>
-                      <div className="min-w-0">
-                        <h5 className={`font-black font-noto text-base truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
+                  <div key={teacher.id} className={`p-3 rounded-2xl border shadow-bubble flex flex-col gap-3 group transition-all relative overflow-hidden ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/80 backdrop-blur-sm border-slate-200/50 hover:bg-white hover:border-blue-200'}`}>
+                    {/* Background accent */}
+                    <div className={`absolute top-0 right-0 w-20 h-20 -mr-10 -mt-10 rounded-full blur-3xl opacity-20 pointer-events-none ${isFullyPaid ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+
+                    <div className="flex items-center justify-between gap-3 z-10">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                          <User size={16} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h5 className={`font-black font-noto text-xs truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                            {totalSalary > 0 && (
+                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${isDark ? 'bg-blue-900/30 border-blue-800 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
+                                ৳{totalSalary}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
-                      {teacher.basic_salary ? (
-                        <div className="text-right">
-                          <p className={`text-lg font-black ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>৳ {teacher.basic_salary}</p>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Basic Salary</p>
+
+                    {totalSalary > 0 && (
+                      <div className="space-y-2.5 z-10">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between px-1">
+                             <div className="flex flex-col">
+                               <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{lang === 'bn' ? 'পরিশোধিত' : 'Paid'}</span>
+                               <span className="text-xs font-black text-emerald-500">৳ {paidSoFar}</span>
+                             </div>
+                             <div className="flex flex-col items-end">
+                               <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{lang === 'bn' ? 'বকেয়া' : 'Due'}</span>
+                               <span className={`text-xs font-black ${due > 0 ? 'text-red-500' : 'text-slate-400'}`}>৳ {due}</span>
+                             </div>
+                          </div>
+                          <div className={`w-full h-2 rounded-full p-0.5 overflow-hidden border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-200/50'}`}>
+                             <motion.div 
+                               initial={{ width: 0 }}
+                               animate={{ width: `${percentage}%` }}
+                               transition={{ duration: 1, ease: "circOut" }}
+                               className={`h-full rounded-full shadow-lg ${isFullyPaid ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-500 to-[#2563EB]'}`}
+                             />
+                          </div>
                         </div>
-                      ) : (
-                        <div className="text-right text-xs font-bold text-slate-400 italic">
+
+                        {paymentHistory[paidKey] && paymentHistory[paidKey].length > 0 && (
+                          <div className={`p-2 rounded-xl border ${isDark ? 'bg-slate-900/30 border-slate-700/40' : 'bg-slate-50/30 border-slate-200/50'} backdrop-blur-sm`}>
+                            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                              <History size={10} className="text-blue-500" />
+                              {lang === 'bn' ? 'পেমেন্ট হিস্ট্রি' : 'Payment History'}
+                            </p>
+                            <div className="space-y-1.5">
+                              {paymentHistory[paidKey].slice().reverse().map((p, idx) => (
+                                <div key={p.id || idx} className="flex items-center justify-between text-[10px] font-black">
+                                  <span className="text-slate-500 flex items-center gap-1.5 text-[9px]">
+                                    <div className="w-1 h-1 rounded-full bg-emerald-500/40" />
+                                    {new Date(p.transaction_date).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                  <span className={`px-1.5 py-0.5 rounded-md transition-all ${isDark ? 'bg-slate-800 text-slate-200' : 'bg-white text-emerald-600 shadow-sm border border-slate-100'}`}>৳ {p.amount}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-0.5 z-10">
+                      {!totalSalary && (
+                        <div className="text-[9px] font-bold text-slate-400 italic">
                           {lang === 'bn' ? 'স্যালারি সেট নেই' : 'No salary set'}
                         </div>
                       )}
 
-                      <button
-                        onClick={() => handlePaySalary(teacher)}
-                        disabled={!teacher.basic_salary || isPaid || payingId === teacher.id}
-                        className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 min-w-[120px] ${
-                          !teacher.basic_salary 
-                            ? (isDark ? "bg-slate-800 text-slate-500 shadow-none border border-slate-700" : "bg-slate-100 text-slate-400 shadow-none border border-slate-200") 
-                            : isPaid 
-                              ? "bg-slate-200 text-slate-600 shadow-inner border border-slate-300" 
-                              : payingId === teacher.id
-                                ? "bg-blue-400 text-white shadow-none"
-                                : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20"
-                        }`}
-                      >
-                        {payingId === teacher.id ? <Loader2 size={16} className="animate-spin" /> : isPaid ? <CheckCircle2 size={16} /> : <Save size={16} />}
-                        {isPaid ? (lang === 'bn' ? 'পরিশোধিত' : 'Paid') : (lang === 'bn' ? 'পরিশোধ করুন' : 'Pay')}
-                      </button>
+                      <div className="flex flex-wrap gap-1.5 w-full">
+                        <button
+                          onClick={async () => {
+                            if (!totalSalary) {
+                               alert(lang === 'bn' ? 'দয়া করে এই শিক্ষকের প্রোফাইলে গিয়ে মাসিক বেতন সেট করুন।' : 'Please set the monthly salary in the teacher\'s profile first.');
+                               return;
+                            }
+                            if (due <= 0) return;
+                            
+                            setPayingId(teacher.id);
+                            try {
+                              const description = `Salary paid for ${salaryMonth} to ${teacher.name} [ID:${teacher.id}]`;
+                              const payload: any = {
+                                institution_id: madrasah!.id,
+                                category: lang === 'bn' ? 'শিক্ষক বেতন' : 'Teacher Salary',
+                                amount: due,
+                                type: 'expense',
+                                description: description,
+                                transaction_date: new Date().toISOString().split('T')[0]
+                              };
+                              if (madrasah?.config_json?.active_academic_year_id) {
+                                payload.academic_year_id = madrasah.config_json.active_academic_year_id;
+                              }
+                              const { data, error } = await supabase.from('ledger').insert(payload).select().single();
+                              if (error) throw error;
+                              
+                              const key = `${teacher.id}_${salaryMonth}`;
+                              setPaidSalaries(prev => ({ ...prev, [key]: (prev[key] || 0) + due }));
+                              if (data) {
+                                 setPaymentHistory(prev => ({
+                                    ...prev,
+                                    [key]: [...(prev[key] || []), data]
+                                 }));
+                              }
+                              alert(lang === 'bn' ? 'বেতন পরিশোধ হয়েছে' : 'Salary paid successfully');
+                            } catch (err: any) {
+                              alert(lang === 'bn' ? `ব্যর্থ: ${err.message}` : `Failed: ${err.message}`);
+                            } finally {
+                              setPayingId(null);
+                            }
+                          }}
+                          disabled={isFullyPaid || payingId === teacher.id}
+                          className={`flex-1 px-3 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 ${
+                            isFullyPaid 
+                              ? "bg-slate-100 text-slate-400 shadow-none cursor-default border border-slate-200" 
+                              : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/30"
+                          }`}
+                        >
+                          {payingId === teacher.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                          {isFullyPaid ? (lang === 'bn' ? 'পরিশোধিত' : 'Paid') : (lang === 'bn' ? 'পুরো পরিশোধ' : 'Full Pay')}
+                        </button>
+
+                        {!isFullyPaid && (
+                          <button
+                            onClick={() => setPaymentModal({show: true, teacher: teacher, amount: ""})}
+                            className={`flex-1 px-3 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all border-2 ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50 shadow-sm'}`}
+                          >
+                            <span className="opacity-50 font-bold text-[10px]">৳</span>
+                            {lang === 'bn' ? 'আংশিক' : 'Partial'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )
               })}
-              </div>
-            )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
 
       {/* Add/Edit Modal */}
@@ -1405,6 +1658,73 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           </div>,
           document.body,
         )}
+
+      {/* Salary Payment Modal */}
+      <AnimatePresence>
+        {paymentModal.show && paymentModal.teacher && (
+          <div key="salary-payment-modal" className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+             <motion.div
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               onClick={() => setPaymentModal({show: false, teacher: null, amount: ""})}
+               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+             />
+             <motion.div
+               initial={{ opacity: 0, scale: 0.9, y: 20 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.9, y: 20 }}
+               className={`w-full max-w-sm rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col z-10 ${isDark ? "bg-slate-900 border border-slate-800" : "bg-white"}`}
+             >
+                <div className={`p-8 pb-6 border-b text-center ${isDark ? "border-slate-800" : "border-slate-100"}`}>
+                   <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 border-4 border-emerald-100 shadow-inner flex items-center justify-center mx-auto mb-4">
+                      <DollarSign size={28} strokeWidth={2.5} />
+                   </div>
+                   <h2 className={`text-xl font-black font-noto ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
+                     {lang === 'bn' ? 'বেতন পরিশোধ' : 'Pay Salary'}
+                   </h2>
+                   <p className="text-xs font-bold text-slate-400 mt-2">
+                     {paymentModal.teacher.name}
+                   </p>
+                </div>
+                <div className="p-8 space-y-6">
+                   <div>
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-2 block text-center">
+                       {lang === 'bn' ? 'পরিমাণ (৳)' : 'Amount (৳)'}
+                     </label>
+                     <input
+                       type="number"
+                       min="0"
+                       autoFocus
+                       value={paymentModal.amount}
+                       onChange={(e) => setPaymentModal(p => ({...p, amount: e.target.value}))}
+                       className={`w-full h-16 text-center text-3xl font-black rounded-3xl outline-none transition-all ${isDark ? 'bg-slate-800 border-2 border-slate-700 text-emerald-400 focus:border-emerald-500/50' : 'bg-slate-50 border-2 border-slate-100 text-emerald-600 focus:border-emerald-400'}`}
+                     />
+                     <p className="text-[9px] text-center text-slate-400 mt-2 font-bold uppercase tracking-widest">
+                       {lang === 'bn' ? 'পরিশোধের পরিমাণ লিখুন' : 'Enter payment amount'}
+                     </p>
+                   </div>
+                   <div className="flex gap-3">
+                     <button
+                       onClick={() => setPaymentModal({show: false, teacher: null, amount: ""})}
+                       className={`flex-1 py-4 font-black rounded-2xl text-xs uppercase tracking-widest transition-all ${isDark ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                     >
+                       {lang === "bn" ? "বাতিল" : "Cancel"}
+                     </button>
+                     <button
+                       onClick={handlePaySalary}
+                       disabled={payingId === paymentModal.teacher.id || !paymentModal.amount || parseFloat(paymentModal.amount) <= 0}
+                       className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:active:scale-100 text-white font-black rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+                     >
+                       {payingId === paymentModal.teacher.id ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                       {lang === "bn" ? "নিশ্চিত করুন" : "Confirm"}
+                     </button>
+                   </div>
+                </div>
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -14,10 +14,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Globe,
+  RefreshCw
 } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
+import { useGlobalUpdate } from "hooks/useGlobalUpdate";
 
 const Auth = React.lazy(() => import("pages/Auth"));
 const Home = React.lazy(() => import("pages/Home"));
@@ -94,6 +97,8 @@ const App: React.FC = () => {
     title: "",
     message: "",
   });
+
+  const { config: globalUpdate, showPopup: showUpdatePopup, dismissPopup: dismissUpdatePopup } = useGlobalUpdate();
 
   const triggerRefresh = () => {
     setDataVersion((prev) => prev + 1);
@@ -760,6 +765,49 @@ const App: React.FC = () => {
       >
         {renderView()}
       </Suspense>
+
+      {/* Global Update Popup */}
+      {showUpdatePopup && globalUpdate && createPortal(
+        <div className="modal-overlay bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-500 z-[110]">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-50'} w-full max-w-sm rounded-[3rem] p-8 text-center shadow-2xl border animate-in zoom-in-95 duration-500 relative overflow-hidden`}>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-600"></div>
+            
+            <div className="w-20 h-20 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-orange-100 shadow-inner relative">
+              <Globe size={40} strokeWidth={2.5} className="animate-pulse" />
+              <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white">!</div>
+            </div>
+
+            <h3 className={`text-[22px] font-black font-noto leading-tight tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+              {lang === 'bn' ? 'নতুন আপডেট উপলব্ধ!' : 'Update Available!'}
+            </h3>
+            
+            <div className={`mt-4 p-5 rounded-2xl text-[13px] font-bold font-noto leading-relaxed break-words whitespace-normal border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700 text-slate-300' : 'bg-orange-50/30 border-orange-100 text-slate-600'}`}>
+              {globalUpdate.global_update_message || (lang === 'bn' ? 'সিস্টেমে নতুন কিছু পরিবর্তন করা হয়েছে। আরও ভালো অভিজ্ঞতার জন্য এখনই আপডেট করুন।' : 'Some changes have been made to the system. Update now for a better experience.')}
+            </div>
+
+            <div className="flex flex-col gap-3 mt-8">
+              <button
+                onClick={() => {
+                  dismissUpdatePopup();
+                  window.location.reload();
+                }}
+                className="w-full py-4 bg-orange-600 text-white font-black rounded-full text-sm uppercase tracking-[0.2em] transition-all shadow-premium active:scale-95 flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={18} className="animate-spin" style={{ animationDuration: '3s' }} />
+                {lang === 'bn' ? 'এখনই আপডেট করুন' : 'Update Now'}
+              </button>
+              
+              <button
+                onClick={dismissUpdatePopup}
+                className={`w-full py-3 font-bold text-[11px] uppercase tracking-[0.1em] transition-all opacity-40 hover:opacity-100 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-500'}`}
+              >
+                {lang === 'bn' ? 'পরে করবো' : 'Maybe Later'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Status Modal - PORTALED */}
       {statusModal.show &&
