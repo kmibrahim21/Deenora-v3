@@ -65,9 +65,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = Array.isArray(rawData) ? rawData.map(f => ({
       id: f.id,
       month: f.month,
-      total_amount: (Number(f.amount_paid) || 0) + (Number(f.amount_due) || 0),
-      discount: f.discount,
-      paid_amount: f.amount_paid,
+      total_amount: (Number(f.amount_paid) || 0) + (Number(f.amount_due) || 0) + (Number(f.discount) || 0),
+      discount: Number(f.discount) || 0,
+      paid_amount: Number(f.amount_paid) || 0,
+      due_amount: Number(f.amount_due) || 0,
+      amount_due: Number(f.amount_due) || 0,
       status: f.status,
       payment_date: f.paid_at
     })) : [];
