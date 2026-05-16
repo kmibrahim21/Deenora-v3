@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const student_id = req.query.student_id || req.query.studentId;
+    const student_id = req.query.student_id || req.query.studentId || req.query.student || req.query.id;
 
     if (!student_id) {
       console.error('API Error: Missing student_id. Received query:', req.query);
@@ -27,14 +27,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Basic UUID validation
+    // Basic UUID validation - make it slightly more lenient or log if it fails
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(String(student_id))) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid student_id format (must be a valid UUID)',
-        received_id: student_id
-      });
+      console.warn('API Warning: student_id is not a standard UUID format:', student_id);
+      // We will still try the query, but log the warning. Some systems might use different IDs.
     }
 
     const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;

@@ -17,10 +17,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { institute, student } = req.query;
+    const institute = req.query.institute || req.query.institution || req.query.institute_code || req.query.instituteCode;
+    const student = req.query.student || req.query.student_id || req.query.studentId || req.query.id || req.query.admission_number;
 
     if (!institute || !student) {
-      return res.status(400).json({ success: false, message: 'Missing institute or student query parameters' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing institute or student query parameters',
+        received_params: req.query
+      });
     }
 
     const cleanInstitute = String(institute).trim();
@@ -35,8 +40,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, message: 'Server configuration error' });
     }
 
-    // First query institute (case-insensitive for safety, using the new institute_code column)
-    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&institute_code=ilike.${cleanInstitute}`;
+    // First query institute (Check both institute_code and name/short name)
+    const instUrl = `${SUPABASE_URL}/rest/v1/institutions?select=id,name,logo_url&or=(institute_code.ilike.${encodeURIComponent(cleanInstitute)},name.ilike.${encodeURIComponent(cleanInstitute)})`;
     const instResponse = await fetch(instUrl, {
       headers: {
         'apikey': SUPABASE_KEY,
@@ -62,8 +67,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // If cleanStudent is a valid number, we can search both.
     // If cleanStudent has letters/symbols, we should NOT search roll to avoid PostgREST integer syntax error.
     // Allow partial match (like '%1122%') using '*' prefix and suffix in Postgrest for ilike
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let orQuery = `admission_number.ilike.*${encodeURIComponent(cleanStudent)}*`;
-    if (!isNaN(Number(cleanStudent))) {
+    if (uuidRegex.test(cleanStudent)) {
+      orQuery = `id.eq.${cleanStudent}`;
+    } else if (!isNaN(Number(cleanStudent))) {
       orQuery = `admission_number.ilike.*${encodeURIComponent(cleanStudent)}*,roll.eq.${cleanStudent}`;
     }
 
