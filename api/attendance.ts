@@ -16,10 +16,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { student_id } = req.query;
+    const student_id = req.query.student_id || req.query.studentId;
 
     if (!student_id) {
-      return res.status(400).json({ success: false, message: 'Missing student_id query parameter' });
+      console.error('API Error: Missing student_id. Received query:', req.query);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing student_id query parameter',
+        received_params: req.query
+      });
+    }
+
+    // Basic UUID validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(String(student_id))) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid student_id format (must be a valid UUID)',
+        received_id: student_id
+      });
     }
 
     const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -41,7 +56,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!response.ok) {
-        return res.status(500).json({ success: false, message: 'Database query failed' });
+        const errorText = await response.text();
+        console.error('Supabase Attendance Query Error:', response.status, errorText);
+        return res.status(500).json({ 
+          success: false, 
+          message: `Database query failed (${response.status})`,
+          debug: process.env.NODE_ENV !== 'production' ? errorText : undefined
+        });
     }
 
     const data = await response.json();

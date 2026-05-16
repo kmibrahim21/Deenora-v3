@@ -46,7 +46,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!instResponse.ok) {
-      return res.status(500).json({ success: false, message: 'Institution query failed' });
+      const errTxt = await instResponse.text();
+      console.error('Institution query failed:', instResponse.status, errTxt);
+      return res.status(500).json({ success: false, message: `Institution query failed (${instResponse.status})` });
     }
 
     const institutions = await instResponse.json();
@@ -79,7 +81,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (!stdResponse.ok) {
-        return res.status(500).json({ success: false, message: 'Student query failed' });
+        const errTxt = await stdResponse.text();
+        console.error('Student query failed:', stdResponse.status, errTxt);
+        return res.status(500).json({ success: false, message: `Student query failed (${stdResponse.status})` });
     }
 
     const students = await stdResponse.json();

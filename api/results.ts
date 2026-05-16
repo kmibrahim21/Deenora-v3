@@ -16,10 +16,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { student_id } = req.query;
+    const student_id = req.query.student_id || req.query.studentId;
 
     if (!student_id) {
-      return res.status(400).json({ success: false, message: 'Missing student_id query parameter' });
+      console.error('API Error: Missing student_id. Received query:', req.query);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing student_id query parameter',
+        received_params: req.query
+      });
+    }
+
+    // Basic UUID validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(String(student_id))) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid student_id format (must be a valid UUID)',
+        received_id: student_id
+      });
     }
 
     const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -38,7 +53,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 1. Get student to find institution_id
     const studentRes = await fetch(`${SUPABASE_URL}/rest/v1/students?select=institution_id&id=eq.${student_id}`, { headers });
-    if (!studentRes.ok) throw new Error('Student lookup failed');
+    if (!studentRes.ok) {
+      const errTxt = await studentRes.text();
+      console.error('Student lookup failed:', studentRes.status, errTxt);
+      return res.status(500).json({ success: false, message: `Student lookup failed (${studentRes.status})` });
+    }
     const studentData = await studentRes.json();
     if (!studentData || studentData.length === 0) {
       return res.status(404).json({ success: false, message: 'Student not found' });
@@ -47,7 +66,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Get institution result config
     const instRes = await fetch(`${SUPABASE_URL}/rest/v1/institutions?select=config_json&id=eq.${institution_id}`, { headers });
-    if (!instRes.ok) throw new Error('Institution lookup failed');
+    if (!instRes.ok) {
+        const errTxt = await instRes.text();
+        console.error('Institution lookup failed:', instRes.status, errTxt);
+        return res.status(500).json({ success: false, message: `Institution lookup failed (${instRes.status})` });
+    }
     const instData = await instRes.json();
     const config = instData[0]?.config_json || {};
     const engine = config.result_engine || 'school';
