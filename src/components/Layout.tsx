@@ -58,6 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         sms: configObj.modules?.sms ?? true,
         messages: configObj.modules?.messages ?? true,
         class_routine: configObj.modules?.class_routine ?? false,
+        certificates: configObj.modules?.certificates ?? true,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',
@@ -85,7 +86,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
       'students': true,
       'settings': true,
       'academic-year': modules.modules.academic_year_promotion,
-      'class-routine': modules.modules.class_routine
+      'class-routine': modules.modules.class_routine,
+      'certificates': modules.modules.certificates
     };
 
     return moduleMap[module] ?? true;
@@ -122,6 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     if (tab === 'sms-voice-menu' && currentView === 'sms-voice-menu') return true;
     if (tab === 'teachers' && currentView === 'teachers') return true;
     if (tab === 'classes' && (currentView === 'classes' || currentView === 'students' || currentView === 'student-details' || currentView === 'student-form')) return true;
+    if (tab === 'certificates' && currentView === 'certificates') return true;
     return false;
   };
 

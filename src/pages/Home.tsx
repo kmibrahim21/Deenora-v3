@@ -28,9 +28,10 @@ interface HomeProps {
   onNavigateToTeachers?: () => void;
   onNavigateToVoiceBroadcast?: () => void;
   onNavigateToMessages?: () => void;
+  onNavigateToCertificates?: () => void;
 }
 
-const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast, onNavigateToMessages }) => {
+const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast, onNavigateToMessages, onNavigateToCertificates }) => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   
   const role = profile?.role || 'teacher';

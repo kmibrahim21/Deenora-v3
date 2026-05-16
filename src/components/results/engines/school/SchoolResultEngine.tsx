@@ -342,7 +342,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
     const pct = totalPossible > 0 ? (totalMarks / totalPossible) * 100 : 0;
 
-    if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+    if (numMainSubjects > 0) {
       if (hasFailedSub) return { total: totalMarks, average: pct, gpa: '0.00', grade: 'F', pass_status: false };
       let avgGp = pointsSum / numMainSubjects;
       if (avgGp > 5.0) avgGp = 5.0;
@@ -358,13 +358,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       return { total: totalMarks, average: pct, gpa: avgGp.toFixed(2), grade: finalGrade, pass_status: true };
     }
 
-    const { gpa, grade } = getGradeInfo(pct, !hasFailedSub);
     return { 
       total: totalMarks, 
       average: pct, 
-      gpa: gpa, 
-      grade: grade, 
-      pass_status: !hasFailedSub 
+      gpa: '0.00', 
+      grade: 'F', 
+      pass_status: false 
     };
   };
 

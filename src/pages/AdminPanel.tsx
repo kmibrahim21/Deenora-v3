@@ -1214,7 +1214,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         institute_code: editInstituteCode.trim(),
         config_json: {
           ...latestConfig,
-          modules: editModules,
+          modules: { ...editModules },
           result_engine: editResultEngine,
           result_system: editResultSystem,
           fee_structure: editFeeStructure,
@@ -2783,7 +2783,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  </h4>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                {Object.entries(editModules).filter(([key]) => key !== 'certificates').map(([key, value]) => (
+                                {Object.entries(editModules).map(([key, value]) => (
                                   <div key={key} className={`flex items-center justify-between p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100'}`}>
                                     <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{key.replace(/_/g, ' ')}</span>
                                     <button 

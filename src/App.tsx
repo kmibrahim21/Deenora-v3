@@ -343,6 +343,7 @@ const App: React.FC = () => {
               setView("voice-broadcast");
             }}
             onNavigateToMessages={() => setView("messages")}
+            onNavigateToCertificates={() => setView("certificates")}
           />
         );
       case "classes":
@@ -742,6 +743,7 @@ const App: React.FC = () => {
               setView("voice-broadcast");
             }}
             onNavigateToMessages={() => setView("messages")}
+            onNavigateToCertificates={() => setView("certificates")}
           />
         );
     }

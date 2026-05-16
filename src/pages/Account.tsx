@@ -92,6 +92,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       sms: configObj.modules?.sms ?? true,
       messages: configObj.modules?.messages ?? true,
       class_routine: configObj.modules?.class_routine ?? false,
+      certificates: configObj.modules?.certificates ?? true,
     };
   }, [madrasah]);
 
@@ -520,16 +521,14 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         )}
 
         {/* Certificate Card */}
-        {isAdmin && madrasah?.config_json?.modules?.certificates && (
-          <ActionCard
-            icon={Award}
-            title={lang === 'bn' ? 'সার্টিফিকেট' : 'Certificates'}
-            subtitle={lang === 'bn' ? 'জেনারেটর' : 'Generator'}
-            colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
-            onClick={() => setView('certificates')}
-            dark={madrasah?.theme === 'dark'}
-          />
-        )}
+        <ActionCard
+          icon={Award}
+          title={lang === 'bn' ? 'সার্টিফিকেট' : 'Certificates'}
+          subtitle={lang === 'bn' ? 'জেনারেটর' : 'Generator'}
+          colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+          onClick={() => setView('certificates')}
+          dark={madrasah?.theme === 'dark'}
+        />
 
         {/* Video Tutorial Card */}
         <ActionCard
