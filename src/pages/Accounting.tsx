@@ -130,7 +130,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           }
         }
 
-        const { data } = await query.order('transaction_date', { ascending: false });
+        const { data } = await query.order('transaction_date', { ascending: false }).limit(2000);
         if (data) {
           setLedger(data);
           if (madrasah.id) globalLedgerCache[madrasah.id] = data;
@@ -473,20 +473,45 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 // Remove hidden payload securely
                 const cleanDescription = entry.description.split(' || FEE_ID: ')[0];
 
-                if (entry.category === 'Student Fee') {
+                if (entry.category === 'Student Fee' || entry.category.includes('Fee') || entry.category.includes('ফি')) {
+                  // Try to find Fee Type and Details in description
+                  // Expected format often: "Monthly Fee - Student Name (Details)" or similar
                   const parts = cleanDescription.split(' - ');
                   if (parts.length >= 2) {
                     feeType = parts[0];
-                    const namePart = parts.slice(1).join(' - ');
-                    const nameMatch = namePart.match(/^(.*?)\s*\((.*?)\)/);
-                    if (nameMatch) {
-                      displayName = nameMatch[1];
-                      details = nameMatch[2];
+                    const nameAndDetails = parts.slice(1).join(' - ');
+                    
+                    // Regex for "Name (Details)"
+                    const match = nameAndDetails.match(/^(.*?)\s*\((.*?)\)/);
+                    if (match) {
+                      displayName = match[1];
+                      details = match[2];
                     } else {
-                      displayName = namePart;
+                      displayName = nameAndDetails;
+                      details = ''; // Reset details if no parenthesis match
                     }
+                  } else {
+                    // Fallback if no " - " separator
+                    feeType = entry.category;
+                    displayName = cleanDescription;
                   }
                 }
+                
+                // Robust date formatter for Safari/iOS
+                const formatDate = (dateStr: string) => {
+                  if (!dateStr) return '';
+                  try {
+                    // Replace dashes with slashes for better Safari compatibility if needed, 
+                    // but usually T00:00:00 works if handled correctly.
+                    // Let's normalize it.
+                    const normalized = dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`;
+                    const date = new Date(normalized);
+                    if (isNaN(date.getTime())) return dateStr; // Fallback to raw string
+                    return date.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+                  } catch (e) {
+                    return dateStr;
+                  }
+                };
 
                 return (
                   <div key={entry.id} className={`group p-4 sm:p-5 rounded-3xl sm:rounded-[2.5rem] border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] gap-4 ${isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
@@ -522,7 +547,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                                     <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter shrink-0">{feeType}</span>
                                   </div>
                                   <span className="text-[10px] text-slate-400 font-bold">
-                                    {entry.transaction_date ? new Date(entry.transaction_date.includes('T') ? entry.transaction_date : entry.transaction_date + 'T00:00:00').toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                                    {formatDate(entry.transaction_date)}
                                   </span>
                                 </div>
                               ) : (
@@ -531,7 +556,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                                     <p className="text-[11px] text-slate-500 font-bold font-noto leading-tight mb-1 line-clamp-1">{cleanDescription}</p>
                                   )}
                                   <span className="text-[10px] text-slate-400 font-bold">
-                                    {entry.transaction_date ? new Date(entry.transaction_date.includes('T') ? entry.transaction_date : entry.transaction_date + 'T00:00:00').toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                                    {formatDate(entry.transaction_date)}
                                   </span>
                                 </>
                               )}

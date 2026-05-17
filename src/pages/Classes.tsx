@@ -63,12 +63,23 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
             filteredClasses = classesData.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
           }
 
-          const withCounts = await Promise.all(filteredClasses.map(async (cls) => {
-            const { count } = await supabase
-              .from('students')
-              .select('*', { count: 'exact', head: true })
-              .eq('class_id', cls.id);
-            return { ...cls, student_count: count || 0 };
+          const { data: studentData, error: statsError } = await supabase
+            .from('students')
+            .select('class_id')
+            .eq('institution_id', madrasah.id);
+          
+          const counts: Record<string, number> = {};
+          if (studentData) {
+            studentData.forEach(s => {
+              if (s.class_id) {
+                counts[s.class_id] = (counts[s.class_id] || 0) + 1;
+              }
+            });
+          }
+
+          const withCounts = filteredClasses.map(cls => ({
+            ...cls,
+            student_count: counts[cls.id] || 0
           }));
           const sorted = sortMadrasahClasses(withCounts);
           setClasses(sorted);

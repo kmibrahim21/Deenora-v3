@@ -412,13 +412,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         let finalData: any[] = [];
 
         if (cid === 'all') {
-          const promises = classes.map((c: any) => supabase.rpc('get_attendance_report', {
-            p_class_id: c.id,
-            p_start_date: startDate,
-            p_end_date: endDate,
-            p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
-          }));
-          const results = await Promise.all(promises);
+          const results = [];
+          for (const c of classes) {
+            const { data, error } = await supabase.rpc('get_attendance_report', {
+              p_class_id: c.id,
+              p_start_date: startDate,
+              p_end_date: endDate,
+              p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
+            });
+            results.push({ data, error });
+            // Small delay to prevent rate limit triggers if many classes
+            if (classes.length > 5) await new Promise(r => setTimeout(r, 50));
+          }
           results.forEach(res => {
             if (res.error) console.error("Error fetching class report:", res.error);
             if (res.data) finalData = [...finalData, ...res.data];
