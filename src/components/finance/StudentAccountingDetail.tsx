@@ -50,7 +50,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
 
       let finalFees = feesData || [];
       if (ledgerData) {
-         setLedgerEntries(ledgerData.sort((a, b) => new Date(b.transaction_date.replace(/-/g, '/')).getTime() - new Date(a.transaction_date.replace(/-/g, '/')).getTime()));
+         setLedgerEntries(ledgerData.sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()));
          
          // AUTO-CLEANUP ORPHANED FEES (Self-healing mechanism)
          if (feesData) {
@@ -188,7 +188,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const currentMonthIdx = now.getMonth() + 1;
   const yearStr = now.getFullYear().toString();
   const academicYearStart = madrasah.config_json?.academic_year_start;
-  const acStart = academicYearStart ? new Date(academicYearStart.replace(/-/g, '/')) : new Date(now.getFullYear(), 0, 1);
+  const acStart = academicYearStart ? new Date(academicYearStart) : new Date(now.getFullYear(), 0, 1);
   const startMonthIdx = acStart.getFullYear() === now.getFullYear() ? acStart.getMonth() + 1 : 1;
 
   let totalPayableYearToDate = 0;
@@ -435,9 +435,13 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <p className={`text-xs font-black ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>৳{entry.amount}</p>
-                          <span className="text-[9px] font-bold text-slate-400">{new Date(entry.transaction_date.replace(/-/g, '/')).toLocaleDateString('bn-BD')}</span>
+                          <span className="text-[9px] font-bold text-slate-400">
+                            {entry.transaction_date ? new Date(entry.transaction_date.includes('T') ? entry.transaction_date : entry.transaction_date + 'T00:00:00').toLocaleDateString('bn-BD') : ''}
+                          </span>
                         </div>
-                        <p className="text-[10px] text-slate-500 font-medium leading-relaxed line-clamp-2">{entry.description}</p>
+                        <p className="text-[10px] text-slate-500 font-medium leading-relaxed whitespace-pre-wrap">
+                          {entry.description.split(' || FEE_ID: ')[0].split(' | Month: ')[0].split(' | মাস: ')[0]}
+                        </p>
                       </div>
                     </div>
                   ))

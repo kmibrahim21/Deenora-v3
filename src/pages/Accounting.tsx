@@ -515,17 +515,24 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                             <h5 className={`font-black font-noto text-sm sm:text-base mb-0.5 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{displayName}</h5>
                             <div className="flex flex-col gap-0.5">
                               {entry.category === 'Student Fee' ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-slate-400 font-bold max-w-[120px] sm:max-w-none truncate">{details}</span>
-                                  <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'} shrink-0`} />
-                                  <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter shrink-0">{feeType}</span>
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-slate-400 font-bold max-w-[120px] sm:max-w-none truncate">{details}</span>
+                                    <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'} shrink-0`} />
+                                    <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter shrink-0">{feeType}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-bold">
+                                    {entry.transaction_date ? new Date(entry.transaction_date.includes('T') ? entry.transaction_date : entry.transaction_date + 'T00:00:00').toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                                  </span>
                                 </div>
                               ) : (
                                 <>
                                   {cleanDescription && cleanDescription !== entry.category && (
                                     <p className="text-[11px] text-slate-500 font-bold font-noto leading-tight mb-1 line-clamp-1">{cleanDescription}</p>
                                   )}
-                                  <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date.replace(/-/g, '/')).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                  <span className="text-[10px] text-slate-400 font-bold">
+                                    {entry.transaction_date ? new Date(entry.transaction_date.includes('T') ? entry.transaction_date : entry.transaction_date + 'T00:00:00').toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                                  </span>
                                 </>
                               )}
                             </div>

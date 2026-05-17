@@ -206,7 +206,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       structures.forEach(s => {
         // Evaluate active months based on year Start and fee start/due dates
         let activeMonthsCount = 0;
-        const acStart = activeYear?.start_date ? new Date(activeYear.start_date.replace(/-/g, '/')) : new Date(new Date().getFullYear(), 0, 1);
+        const acStart = activeYear?.start_date ? new Date(activeYear.start_date) : new Date(new Date().getFullYear(), 0, 1);
         const startMonthIdx = acStart.getFullYear() === parseInt(selectedYear) ? acStart.getMonth() + 1 : 1;
         
         if (viewMode === 'yearly') {
