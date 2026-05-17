@@ -38,30 +38,40 @@ export const useGlobalUpdate = () => {
 
     fetchConfig();
 
-    // Realtime subscription
-    const subscription = supabase
-      .channel('system_updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'system_settings'
-        },
-        (payload) => {
-          console.log('Realtime System Settings Change:', payload);
-          const newDoc = payload.new as any;
-          if (newDoc && newDoc.id === '00000000-0000-0000-0000-000000000001') {
-            checkAndShowPopup(newDoc as GlobalUpdateConfig);
+    let subscription: any = null;
+    try {
+      subscription = supabase
+        .channel('system_updates')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'system_settings'
+          },
+          (payload) => {
+            console.log('Realtime System Settings Change:', payload);
+            const newDoc = payload.new as any;
+            if (newDoc && newDoc.id === '00000000-0000-0000-0000-000000000001') {
+              checkAndShowPopup(newDoc as GlobalUpdateConfig);
+            }
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('Supabase Realtime Subscription Status:', status);
-      });
+        )
+        .subscribe((status) => {
+          console.log('Supabase Realtime Subscription Status:', status);
+        });
+    } catch (err) {
+      console.warn('Could not start realtime subscription for global updates:', err);
+    }
 
     return () => {
-      subscription.unsubscribe();
+      if (subscription) {
+        try {
+          supabase.removeChannel(subscription);
+        } catch (err) {
+          console.warn('Error removing channel for global updates:', err);
+        }
+      }
     };
   }, []);
 
