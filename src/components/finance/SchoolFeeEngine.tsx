@@ -14,13 +14,19 @@ interface SchoolFeeEngineProps {
   role?: UserRole;
   profile?: Profile | null;
   activeYear?: any;
+  refreshKey?: number;
 }
 
 // Global cache to prevent re-fetching on tab switch
 let globalSchoolFeesReport: Record<string, any[]> = {};
 let globalSchoolStructures: Record<string, any[]> = {};
 
-export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear }) => {
+export const clearGlobalSchoolFeeCache = () => {
+  globalSchoolFeesReport = {};
+  globalSchoolStructures = {};
+};
+
+export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey }) => {
   const isDark = madrasah.theme === 'dark';
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
   
@@ -86,7 +92,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
   useEffect(() => {
     fetchData();
-  }, [madrasah.id, activeTab, selectedMonth, selectedClass]);
+  }, [madrasah.id, activeTab, selectedMonth, selectedClass, refreshKey]);
 
   useEffect(() => {
     if (selectedStudent) {

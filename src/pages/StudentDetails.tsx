@@ -333,7 +333,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                     <div key={issue.id} className={`flex items-center justify-between p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                       <div>
                         <p className="font-bold text-sm tracking-tight">{issue.book?.title || 'Unknown Book'}</p>
-                        <p className="text-[10px] font-black text-slate-400 mt-1 uppercase">Issued: {new Date(issue.issue_date).toLocaleDateString()}</p>
+                        <p className="text-[10px] font-black text-slate-400 mt-1 uppercase">Issued: {new Date(issue.issue_date.replace(/-/g, '/')).toLocaleDateString()}</p>
                       </div>
                       <div className="text-right">
                         <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${issue.status === 'returned' ? 'bg-emerald-500/10 text-emerald-500' : issue.status === 'lost' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
@@ -341,7 +341,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                         </span>
                         {issue.status === 'issued' && (
                           <p className={`text-[9px] font-black mt-1 uppercase ${issue.due_date < new Date().toISOString().split('T')[0] ? 'text-red-500' : 'text-slate-400'}`}>
-                            Due: {new Date(issue.due_date).toLocaleDateString()}
+                            Due: {new Date(issue.due_date.replace(/-/g, '/')).toLocaleDateString()}
                           </p>
                         )}
                       </div>

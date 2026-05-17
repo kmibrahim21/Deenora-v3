@@ -14,13 +14,19 @@ interface QawmiFeeEngineProps {
   role?: string;
   profile?: any;
   activeYear?: any;
+  refreshKey?: number;
 }
 
 // Global cache to prevent re-fetching on tab switch
 let globalQawmiFeesReport: Record<string, any[]> = {};
 let globalQawmiStructures: Record<string, any[]> = {};
 
-export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear }) => {
+export const clearGlobalQawmiFeeCache = () => {
+    globalQawmiFeesReport = {};
+    globalQawmiStructures = {};
+};
+
+export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey }) => {
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
   
   const selectedClassInitial = () => localStorage.getItem('qawmi_fee_selectedClass') || '';
@@ -84,7 +90,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
   useEffect(() => {
     fetchData();
-  }, [madrasah.id, activeTab, selectedMonth, selectedClass]);
+  }, [madrasah.id, activeTab, selectedMonth, selectedClass, refreshKey]);
 
   useEffect(() => {
     if (selectedStudent) {

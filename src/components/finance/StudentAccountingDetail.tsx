@@ -2,7 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, LedgerEntry, Fee } from 'types';
-import { X, ArrowLeft, Download, Calendar, DollarSign, ArrowUpCircle, FileText, Loader2, TrendingUp, TrendingDown, Clock } from 'lucide-react';
+import { X, ArrowLeft, Download, Calendar, DollarSign, ArrowUpCircle, FileText, Loader2, TrendingUp, TrendingDown, Clock, Trash2 } from 'lucide-react';
+import { CacheService } from '../../services/cacheService';
+import { clearGlobalSchoolFeeCache } from './SchoolFeeEngine';
+import { clearGlobalQawmiFeeCache } from './QawmiFeeEngine';
 
 interface StudentAccountingDetailProps {
   student: any;
@@ -36,8 +39,6 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         .select('*')
         .eq('student_id', student.student_id)
         .like('month', `${selectedYear}-%`);
-      
-      if (feesData) setFees(feesData);
 
       // 2. Fetch ledger entries mentioning this student
       const { data: ledgerData } = await supabase
@@ -46,8 +47,40 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         .eq('institution_id', madrasah.id)
         .eq('category', 'Student Fee')
         .ilike('description', `%${student.student_name}%`);
-      
-      if (ledgerData) setLedgerEntries(ledgerData.sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()));
+
+      let finalFees = feesData || [];
+      if (ledgerData) {
+         setLedgerEntries(ledgerData.sort((a, b) => new Date(b.transaction_date.replace(/-/g, '/')).getTime() - new Date(a.transaction_date.replace(/-/g, '/')).getTime()));
+         
+         // AUTO-CLEANUP ORPHANED FEES (Self-healing mechanism)
+         if (feesData) {
+             const feesToDelete: string[] = [];
+             for (const fee of feesData) {
+                const hasLedger = ledgerData.some(l => 
+                   l.description.includes(`FEE_ID: ${fee.id}`)
+                );
+                if (!hasLedger) {
+                   feesToDelete.push(fee.id);
+                }
+             }
+             
+             if (feesToDelete.length > 0) {
+                try {
+                   await supabase.from('fees').delete().in('id', feesToDelete);
+                   finalFees = feesData.filter(f => !feesToDelete.includes(f.id));
+                   if (madrasah?.id) {
+                      await CacheService.clearCache('stats', madrasah.id);
+                      await CacheService.clearCache('fees', madrasah.id);
+                      clearGlobalSchoolFeeCache();
+                      clearGlobalQawmiFeeCache();
+                   }
+                } catch (e) {
+                   console.error("Cleanup error:", e);
+                }
+             }
+         }
+      }
+      setFees(finalFees);
 
       // 3. Fetch fee structures for this student's class
       const { data: structureData } = await supabase
@@ -155,7 +188,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const currentMonthIdx = now.getMonth() + 1;
   const yearStr = now.getFullYear().toString();
   const academicYearStart = madrasah.config_json?.academic_year_start;
-  const acStart = academicYearStart ? new Date(academicYearStart) : new Date(now.getFullYear(), 0, 1);
+  const acStart = academicYearStart ? new Date(academicYearStart.replace(/-/g, '/')) : new Date(now.getFullYear(), 0, 1);
   const startMonthIdx = acStart.getFullYear() === now.getFullYear() ? acStart.getMonth() + 1 : 1;
 
   let totalPayableYearToDate = 0;
@@ -299,9 +332,11 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     }
 
                   return (
-                    <div key={monthStr} className={`p-5 rounded-3xl border transition-all hover:scale-[1.02] ${status === 'paid' ? (isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100') : (isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
-                      <p className={`text-[11px] font-black mb-2 ${status === 'paid' ? 'text-emerald-600' : status === 'partial' ? 'text-orange-600' : 'text-slate-400'}`}>{monthName}</p>
-                      <div className="flex items-center justify-between">
+                    <div key={monthStr} className={`relative p-5 rounded-3xl border transition-all hover:scale-[1.02] ${status === 'paid' ? (isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100') : (isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className={`text-[11px] font-black ${status === 'paid' ? 'text-emerald-600' : status === 'partial' ? 'text-orange-600' : 'text-slate-400'}`}>{monthName}</p>
+                      </div>
+                      <div className="flex items-center justify-between mt-auto">
                         <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full ${status === 'paid' ? 'bg-emerald-500 text-white' : status === 'partial' ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
                           {status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid'}
                         </span>
@@ -400,7 +435,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <p className={`text-xs font-black ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>৳{entry.amount}</p>
-                          <span className="text-[9px] font-bold text-slate-400">{new Date(entry.transaction_date).toLocaleDateString('bn-BD')}</span>
+                          <span className="text-[9px] font-bold text-slate-400">{new Date(entry.transaction_date.replace(/-/g, '/')).toLocaleDateString('bn-BD')}</span>
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium leading-relaxed line-clamp-2">{entry.description}</p>
                       </div>

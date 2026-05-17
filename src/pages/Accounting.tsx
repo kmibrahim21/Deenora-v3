@@ -4,8 +4,8 @@ import { supabase } from 'supabase';
 import { Institution, LedgerEntry, Language, UserRole, Class, Profile, AcademicYear } from 'types';
 import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2 } from 'lucide-react';
 import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
-import { SchoolFeeEngine } from 'components/finance/SchoolFeeEngine';
-import { QawmiFeeEngine } from 'components/finance/QawmiFeeEngine';
+import { SchoolFeeEngine, clearGlobalSchoolFeeCache } from 'components/finance/SchoolFeeEngine';
+import { QawmiFeeEngine, clearGlobalQawmiFeeCache } from 'components/finance/QawmiFeeEngine';
 import StudentAccountingDetail from 'components/finance/StudentAccountingDetail';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { useOfflineStatus } from 'hooks/useOffline';
@@ -160,11 +160,18 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       
       // Attempt to clean up fees table based on descriptions
       if (recordsToDelete) {
+         const feeIdsToDelete = [];
+         const fallbackDeletions = [];
+
          for (const record of recordsToDelete) {
-            if (record.description.includes(' || FEE_ID: ')) {
-               const feeId = record.description.split(' || FEE_ID: ')[1].trim();
-               await supabase.from('fees').delete().eq('id', feeId);
-            } else if (record.category === 'Student Fee' || record.category.includes('Fee') || record.category.includes('ফি')) {
+            if (record.description.includes('FEE_ID: ')) {
+               const regex = /FEE_ID:\s*([a-f0-9\-]+)/g;
+               let match;
+               while ((match = regex.exec(record.description)) !== null) {
+                  feeIdsToDelete.push(match[1]);
+               }
+            }
+            if (record.category === 'Student Fee' || record.category.includes('Fee') || record.category.includes('ফি')) {
                // Fallback mechanism for older records before FEE_ID injection
                const monthMatch = record.description.match(/(Month|মাস):\s*([\d]{4}-[\d]{2})/);
                const month = monthMatch ? monthMatch[2] : null;
@@ -177,13 +184,24 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                }
 
                if (month && name) {
-                  const { data: students } = await supabase.from('students').select('student_id').eq('institution_id', madrasah.id).eq('student_name', name);
-                  if (students && students.length > 0) {
-                     for (const stu of students) {
-                        await supabase.from('fees').delete().eq('student_id', stu.student_id).eq('month', month);
-                     }
-                  }
+                  fallbackDeletions.push({ name, month });
                }
+            }
+         }
+
+         // Batch delete known fee IDs
+         if (feeIdsToDelete.length > 0) {
+            const { error: fErr } = await supabase.from('fees').delete().in('id', feeIdsToDelete);
+            if (fErr) throw fErr;
+         }
+
+         // Perform fallback deletions
+         for (const del of fallbackDeletions) {
+            const { data: students } = await supabase.from('students').select('id').eq('institution_id', madrasah.id).eq('student_name', del.name);
+            if (students && students.length > 0) {
+               const studentIds = students.map(s => s.id);
+               const { error: fbErr } = await supabase.from('fees').delete().in('student_id', studentIds).eq('month', del.month);
+               if (fbErr) throw fbErr;
             }
          }
       }
@@ -191,9 +209,12 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       setSelectedLedgerIds([]);
       setDeleteConfirm({show: false, ids: []});
       
-      // Clear relevant caches
+      // Clear all relevant caches
       if (madrasah?.id) {
         await CacheService.clearCache('stats', madrasah.id);
+        await CacheService.clearCache('fees', madrasah.id);
+        clearGlobalSchoolFeeCache();
+        clearGlobalQawmiFeeCache();
       }
       
       if (triggerRefresh) triggerRefresh();
@@ -323,14 +344,14 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           <div className={(activeTab === 'fees' || activeTab === 'structures') && madrasah ? 'block' : 'hidden'}>
             <>
               {feeEngine === 'school' && (
-                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} refreshKey={refreshKey} />
               )}
               {feeEngine === 'qawmi' && (
-                <QawmiFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
+                <QawmiFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} refreshKey={refreshKey} />
               )}
               {/* Default to School Engine for others for now */}
               {feeEngine !== 'school' && feeEngine !== 'qawmi' && (
-                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} refreshKey={refreshKey} />
               )}
             </>
           </div>
@@ -504,7 +525,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                                   {cleanDescription && cleanDescription !== entry.category && (
                                     <p className="text-[11px] text-slate-500 font-bold font-noto leading-tight mb-1 line-clamp-1">{cleanDescription}</p>
                                   )}
-                                  <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                  <span className="text-[10px] text-slate-400 font-bold">{new Date(entry.transaction_date.replace(/-/g, '/')).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                                 </>
                               )}
                             </div>
