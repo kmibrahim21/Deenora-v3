@@ -36,12 +36,21 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     
     try {
       localStorage.removeItem('teacher_session');
-      const { data, error: signInError } = await (supabase.auth as any).signInWithPassword({ 
+      
+      // Use Promise.race to force a timeout in case Supabase auth hangs
+      const signInPromise = (supabase.auth as any).signInWithPassword({ 
         email: email.trim(), 
         password: code 
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Login Request Timed Out (Ensure network connection is stable)')), 15000)
+      );
+
+      const { data, error: signInError } = await Promise.race([signInPromise, timeoutPromise]) as any;
+
       if (signInError) throw signInError;
-      if (data.user) {
+      if (data?.user) {
         if (email.trim() === 'thedevomix@gmail.com' || email.trim() === 'kmibrahim@gmail.com' || email.trim() === 'ibrahimkhan269596@gmail.com') {
           try {
             await supabase.rpc('bootstrap_super_admin', {
@@ -55,15 +64,20 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
 
         offlineApi.removeCache('profile');
         if (isValidUUID(data.user.id)) {
-          const { data: profile } = await supabase.from('institutions').select('name').eq('id', data.user.id).maybeSingle();
-          if (profile) localStorage.setItem('m_name', profile.name);
-          else localStorage.setItem('m_name', 'Super Admin');
+          try {
+            const { data: profile } = await supabase.from('institutions').select('name').eq('id', data.user.id).maybeSingle();
+            if (profile) localStorage.setItem('m_name', profile.name);
+            else localStorage.setItem('m_name', 'Super Admin');
+          } catch (err) {
+            localStorage.setItem('m_name', 'Super Admin');
+          }
         } else {
           localStorage.setItem('m_name', 'Super Admin');
         }
       }
     } catch (err: any) { 
-      setError(t('login_error', lang)); 
+      console.error('Login Error:', err);
+      setError(err.message === 'Login Request Timed Out (Ensure network connection is stable)' ? err.message : t('login_error', lang)); 
     } finally { 
       setLoading(false); 
     }
@@ -75,7 +89,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     setError('');
     
     try {
-      const response = await fetch('/api/teachers/login', {
+      const fetchPromise = fetch('/api/teachers/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -86,6 +100,11 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         })
       });
 
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Login Request Timed Out')), 15000)
+      );
+
+      const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
       const data = await response.json();
 
       if (!response.ok) {
@@ -93,11 +112,11 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
       }
 
       if (data.user && data.auth) {
-        // Sign in to Supabase Auth to get a real session
-        const { error: signInError } = await (supabase.auth as any).signInWithPassword({
+        const signInPromise = (supabase.auth as any).signInWithPassword({
           email: data.auth.email,
           password: data.auth.password
         });
+        const { error: signInError } = await Promise.race([signInPromise, timeoutPromise]) as any;
         
         if (signInError) throw signInError;
 
