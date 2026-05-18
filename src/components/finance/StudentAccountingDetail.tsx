@@ -4,6 +4,7 @@ import { supabase } from 'supabase';
 import { Institution, Language, Class, LedgerEntry, Fee } from 'types';
 import { X, ArrowLeft, Download, Calendar, DollarSign, ArrowUpCircle, FileText, Loader2, TrendingUp, TrendingDown, Clock, Trash2 } from 'lucide-react';
 import { CacheService } from '../../services/cacheService';
+import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 import { clearGlobalSchoolFeeCache } from './SchoolFeeEngine';
 import { clearGlobalQawmiFeeCache } from './QawmiFeeEngine';
 
@@ -33,27 +34,37 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
     try {
       const yearStart = madrasah.config_json?.academic_year_start;
 
-      // 1. Fetch all fees for the student in the selected year
-      const { data: feesData } = await supabase
-        .from('fees')
-        .select('*')
-        .eq('student_id', student.student_id)
-        .like('month', `${selectedYear}-%`);
+      // 1. Fetch all fees for the student in the selected year (Selective Cache)
+      const { data: feesData } = await requestManager.cachedFetch(
+        'fees',
+        (q) => q.select('id, student_id, month, amount_paid, discount')
+          .eq('student_id', student.student_id)
+          .like('month', `${selectedYear}-%`),
+        `accounting-fees-${student.student_id}-${selectedYear}`,
+        CACHE_TTLS.SHORT
+      );
 
-      // 2. Fetch ledger entries mentioning this student
-      const { data: ledgerData } = await supabase
-        .from('ledger')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .eq('category', 'Student Fee')
-        .ilike('description', `%${student.student_name}%`);
+      // 2. Fetch ledger entries mentioning this student (Selective Cache)
+      const { data: ledgerData } = await requestManager.cachedFetch(
+        'ledger',
+        (q) => q.select('id, transaction_date, amount, category, description')
+          .eq('institution_id', madrasah.id)
+          .eq('category', 'Student Fee')
+          .ilike('description', `%${student.student_name}%`),
+        `accounting-history-${student.student_id}`,
+        CACHE_TTLS.SHORT
+      );
 
       let finalFees = feesData || [];
       if (ledgerData) {
          setLedgerEntries(ledgerData.sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()));
          
-         // AUTO-CLEANUP ORPHANED FEES (Self-healing mechanism)
-         if (feesData) {
+         // AUTO-CLEANUP ORPHANED FEES (Throttled Self-healing)
+         const lastCleanup = localStorage.getItem(`last_fee_cleanup_${student.student_id}`);
+         const now = Date.now();
+         const ONE_HOUR = 3600000;
+
+         if (feesData && (!lastCleanup || now - parseInt(lastCleanup) > ONE_HOUR)) {
              const feesToDelete: string[] = [];
              for (const fee of feesData) {
                 const hasLedger = ledgerData.some(l => 
@@ -71,6 +82,9 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                    if (madrasah?.id) {
                       await CacheService.clearCache('stats', madrasah.id);
                       await CacheService.clearCache('fees', madrasah.id);
+                      requestManager.invalidatePattern(`fees:${madrasah.id}`);
+                      requestManager.invalidatePattern(`stats:${madrasah.id}`);
+                      requestManager.invalidatePattern(`dashboard_`);
                       clearGlobalSchoolFeeCache();
                       clearGlobalQawmiFeeCache();
                    }
@@ -78,24 +92,31 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                    console.error("Cleanup error:", e);
                 }
              }
+             localStorage.setItem(`last_fee_cleanup_${student.student_id}`, now.toString());
          }
       }
       setFees(finalFees);
 
-      // 3. Fetch fee structures for this student's class
-      const { data: structureData } = await supabase
-        .from('fee_structures')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .or(`class_id.eq.${student.class_id},class_id.is.null`);
+      // 3. Fetch fee structures for this student's class (Selective Cache)
+      const { data: structureData } = await requestManager.cachedFetch(
+        'fee_structures',
+        (q) => q.select('id, fee_name, amount, due_date, start_date')
+          .eq('institution_id', madrasah.id)
+          .or(`class_id.eq.${student.class_id},class_id.is.null`),
+        `accounting-structures-${student.class_id}`,
+        CACHE_TTLS.LONG
+      );
       
       if (structureData) setStructures(structureData);
 
-      // 4. Fetch student fee settings
-      const { data: settingsData } = await supabase
-        .from('student_fee_settings')
-        .select('*')
-        .eq('student_id', student.student_id);
+      // 4. Fetch student fee settings (Selective Cache)
+      const { data: settingsData } = await requestManager.cachedFetch(
+        'student_fee_settings',
+        (q) => q.select('id, student_id, fee_structure_id, is_enabled, custom_amount')
+          .eq('student_id', student.student_id),
+        `accounting-settings-${student.student_id}`,
+        CACHE_TTLS.SHORT
+      );
       
       if (settingsData) setStudentFeeSettings(settingsData);
 
@@ -127,7 +148,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       // Refresh settings
       const { data: settingsData } = await supabase
         .from('student_fee_settings')
-        .select('*')
+        .select('id, student_id, fee_structure_id, is_enabled, custom_amount')
         .eq('student_id', student.student_id);
       
       if (settingsData) setStudentFeeSettings(settingsData);

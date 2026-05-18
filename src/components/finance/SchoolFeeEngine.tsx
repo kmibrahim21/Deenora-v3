@@ -4,6 +4,7 @@ import { Institution, Class, Student, UserRole, Profile } from 'types';
 import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
+import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 
 interface SchoolFeeEngineProps {
   activeTab: 'fees' | 'structures';
@@ -15,6 +16,7 @@ interface SchoolFeeEngineProps {
   profile?: Profile | null;
   activeYear?: any;
   refreshKey?: number;
+  triggerRefresh?: () => void;
 }
 
 // Global cache to prevent re-fetching on tab switch
@@ -26,7 +28,7 @@ export const clearGlobalSchoolFeeCache = () => {
   globalSchoolStructures = {};
 };
 
-export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey }) => {
+export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey, triggerRefresh }) => {
   const isDark = madrasah.theme === 'dark';
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
   
@@ -120,7 +122,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       
       if (activeYearId) {
-          const { data: yearData } = await supabase.from('academic_years').select('end_date').eq('id', activeYearId).single();
+          const { data: yearData } = await requestManager.cachedFetch(
+            'academic_years',
+            (q) => q.select('end_date').eq('id', activeYearId).single(),
+            `academic_year_end:${activeYearId}`,
+            CACHE_TTLS.LONG
+          );
           if (yearData) {
               setActiveYearEndDate(yearData.end_date);
           }
@@ -135,40 +142,54 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
         const classId = selectedClass;
         
-        const { data: feeStructures } = await supabase.from('fee_structures')
-            .select('*')
-            .eq('institution_id', madrasah.id);
+        const { data: feeStructures } = await requestManager.cachedFetch(
+          'fee_structures',
+          (q) => q.select('*').eq('institution_id', madrasah.id),
+          `structures:${madrasah.id}`,
+          CACHE_TTLS.MEDIUM
+        );
 
         const yearStart = madrasah.config_json?.academic_year_start;
 
-        let feesQuery = supabase.from('fees')
-            .select('student_id, amount_paid, discount')
-            .eq('institution_id', madrasah.id)
-            .eq('month', selectedMonth);
-        
-        if (activeYearId) {
-            feesQuery = feesQuery.eq('academic_year_id', activeYearId);
-        }
-        const { data: feesData } = await feesQuery;
+        const { data: feesData } = await requestManager.cachedFetch(
+          'fees',
+          (q) => {
+            let query = q.select('student_id, amount_paid, discount')
+              .eq('institution_id', madrasah.id)
+              .eq('month', selectedMonth);
+            if (activeYearId) {
+              query = query.eq('academic_year_id', activeYearId);
+            }
+            return query;
+          },
+          `fees:${madrasah.id}_${selectedMonth}`,
+          CACHE_TTLS.SHORT 
+        );
 
         // Fetch student fee settings for the whole institution
-        const { data: allSettings } = await supabase.from('student_fee_settings')
-            .select('*')
-            .eq('institution_id', madrasah.id);
+        const { data: allSettings } = await requestManager.cachedFetch(
+          'student_fee_settings',
+          (q) => q.select('*').eq('institution_id', madrasah.id),
+          `settings:${madrasah.id}`,
+          CACHE_TTLS.MEDIUM
+        );
 
-        let studentQuery = supabase.from('students')
-          .select('id, student_name, roll, class_id, classes(class_name), guardian_phone')
-          .eq('institution_id', madrasah.id);
-          
-        if (classId) {
-          studentQuery = studentQuery.eq('class_id', classId);
-        }
-        
-        if (activeYearId) {
-          studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-        }
-
-        const { data: studentsData, error } = await studentQuery;
+        const { data: studentsData, error } = await requestManager.cachedFetch(
+          'students',
+          (q) => {
+            let query = q.select('id, student_name, roll, class_id, classes(class_name), guardian_phone')
+              .eq('institution_id', madrasah.id);
+            if (classId) {
+              query = query.eq('class_id', classId);
+            }
+            if (activeYearId) {
+              query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+            }
+            return query;
+          },
+          `students_report:${madrasah.id}_${selectedClass}_${activeYearId || 'current'}`,
+          CACHE_TTLS.LONG
+        );
         
         if (error) throw error;
         
@@ -251,7 +272,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       }
 
       if (activeTab === 'structures') {
-        const { data } = await supabase.from('fee_structures').select('*, classes(class_name)').eq('institution_id', madrasah.id);
+        const { data } = await requestManager.cachedFetch(
+          'fee_structures',
+          (q) => q.select('*, classes(class_name)').eq('institution_id', madrasah.id),
+          `structures_full:${madrasah.id}`,
+          CACHE_TTLS.MEDIUM
+        );
         if (data) {
            setStructures(data || []);
            globalSchoolStructures[madrasah.id] = data || [];
@@ -416,6 +442,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       setCollectAmount('');
       setDiscount('');
       setSelectedStudent(null);
+      
+      requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      requestManager.invalidatePattern(`stats:${madrasah.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
+      
       fetchData();
     } catch (err: any) { 
       if (err.message?.includes('row-level security policy')) {
@@ -1013,7 +1044,14 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                                                 console.error("Delete Error:", error);
                                                                 setActionError("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
                                                             } else {
-                                                                fetchData();
+                                                                requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                                                                requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                                                                requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                            requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                            requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                            requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                            if (triggerRefresh) triggerRefresh();
+                            fetchData();
                                                             }
                                                             setDeleteConfirmId(null);
                                                         }} className="bg-red-500 text-white text-[9px] px-2.5 py-1.5 rounded-lg font-black">হ্যাঁ</button>

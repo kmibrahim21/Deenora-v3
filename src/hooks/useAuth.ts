@@ -20,7 +20,7 @@ export const useAuth = () => {
     try {
       const { data: year } = await requestManager.cachedFetch(
         'academic_years',
-        (q) => q.eq('institution_id', institutionId).eq('status', 'active'),
+        (q) => q.select().eq('institution_id', institutionId).eq('status', 'active'),
         `active_year:${institutionId}`
       );
       
@@ -65,7 +65,7 @@ export const useAuth = () => {
       // 1. Get the profile (Cached with Revalidation)
       const { data: profileData, error: profileError } = await requestManager.cachedFetch(
         'profiles',
-        (q) => q.eq('id', userId),
+        (q) => q.select().eq('id', userId),
         `profile:${userId}`
       );
       
@@ -86,7 +86,7 @@ export const useAuth = () => {
         if (isValidUUID(finalProfile.institution_id)) {
           const { data: institutionData, error: mError } = await requestManager.cachedFetch(
             'institutions',
-            (q) => q.eq('id', finalProfile.institution_id),
+            (q) => q.select().eq('id', finalProfile.institution_id),
             `institution:${finalProfile.institution_id}`
           );
 

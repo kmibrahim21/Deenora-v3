@@ -63,7 +63,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
          setIsEditingNotes(false);
          // Invalidate Pattern
          if (madrasah) {
-           requestManager.invalidatePattern(`students:${student.class_id}`);
+           requestManager.invalidatePattern('fetch:students:');
          }
          if (triggerRefresh) triggerRefresh();
       }
@@ -94,7 +94,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
       
       // Invalidate Patterns
       if (madrasah) {
-        requestManager.invalidatePattern(`students:${student.class_id}`);
+        requestManager.invalidatePattern('fetch:students:');
         requestManager.invalidatePattern(`stats:${madrasah.id}`);
         requestManager.invalidatePattern(`fees:${madrasah.id}`);
         requestManager.invalidatePattern(`dashboard_`);

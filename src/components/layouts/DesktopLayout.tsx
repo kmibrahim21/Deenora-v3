@@ -131,7 +131,7 @@ const DesktopLayout: React.FC<LayoutProps> = ({ children, currentView, setView, 
           </div>
           <div className="min-w-0 flex-1">
             <h1 className={`text-sm font-black leading-tight tracking-tight font-noto truncate ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
-              {isSuperAdmin ? (lang === 'bn' ? 'সুপার অ্যাডমিন' : 'Super Admin') : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'School Portal' : 'Madrasah Portal'))}
+              {isSuperAdmin ? (lang === 'bn' ? 'সুপার অ্যাডমিন' : 'Super Admin') : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
             </h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 font-noto">
               {role === 'super_admin' ? 'Super Admin Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}

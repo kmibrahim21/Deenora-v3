@@ -392,7 +392,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
     // Invalidate dashboard stats & ledger Pattern-based caches
     requestManager.invalidatePattern(`stats:${madrasah.id}`);
-    requestManager.invalidatePattern(`ledger:${madrasah.id}`);
+    requestManager.invalidatePattern('fetch:ledger:');
     requestManager.invalidatePattern(`dashboard_`);
 
     try {
@@ -1262,7 +1262,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
                             // Invalidate caches
                             requestManager.invalidatePattern(`stats:${madrasah?.id}`);
-                            requestManager.invalidatePattern(`ledger:${madrasah?.id}`);
+                            requestManager.invalidatePattern('fetch:ledger:');
                             requestManager.invalidatePattern(`dashboard_`);
 
                             try {

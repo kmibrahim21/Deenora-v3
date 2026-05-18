@@ -293,7 +293,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       requestManager.invalidatePattern(`students:${institution.id}`);
       requestManager.invalidatePattern(`fees:${institution.id}`);
       requestManager.invalidatePattern(`stats:${institution.id}`);
-      requestManager.invalidatePattern(`ledger:${institution.id}`);
+      requestManager.invalidatePattern('fetch:ledger:');
       requestManager.invalidatePattern(`dashboard_`);
 
       setCurrentYear(updatedYear);

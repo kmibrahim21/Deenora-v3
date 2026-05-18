@@ -1,50 +1,67 @@
 
 import { supabase } from 'lib/supabase';
+import { offlineDb, type CachedResponse } from './offlineDb';
 
-// Simple in-memory cache to prevent redundant requests within a short timeframe
-// Especially useful for dashboard components that all mount at once
+// Centralized TTL Config
+export const CACHE_TTLS = {
+  SHORT: 5 * 60 * 1000,     // 5 mins (Stats, Recent Fees)
+  MEDIUM: 15 * 60 * 1000,   // 15 mins (Accounting history)
+  LONG: 60 * 60 * 1000,     // 1 hr (Students, Classes, Settings)
+  ETERNAL: 24 * 60 * 60 * 1000 // 24 hrs
+};
+
 class RequestManager {
   private cache: Map<string, { data: any; timestamp: number; count?: number }> = new Map();
   private pending: Map<string, Promise<any>> = new Map();
   private listeners: Map<string, Set<(data: any) => void>> = new Map();
-  private CACHE_TTL = 30000; // 30 seconds
-
-  private PERSIST_KEY = 'deenora_request_cache';
+  private lastInvalidation: Map<string, number> = new Map();
+  private isOnline = navigator.onLine;
+  
+  // Metrics for dashboard
+  public metrics = {
+    hits: 0,
+    misses: 0,
+    refetches: 0,
+    throttled: 0
+  };
 
   constructor() {
-    this.loadPersistence();
+    this.init();
+    window.addEventListener('online', () => { this.isOnline = true; });
+    window.addEventListener('offline', () => { this.isOnline = false; });
   }
 
-  private loadPersistence() {
+  private async init() {
+    await this.loadPersistence();
+  }
+
+  private async loadPersistence() {
     try {
-      const saved = localStorage.getItem(this.PERSIST_KEY);
-      if (saved) {
-        const data = JSON.parse(saved);
-        const ONE_HOUR = 3600000;
-        const now = Date.now();
-        Object.entries(data).forEach(([key, val]: [string, any]) => {
-          if (now - val.timestamp < ONE_HOUR) {
-            this.cache.set(key, val);
-          }
-        });
-      }
+      const records = await offlineDb.response_cache.toArray();
+      const now = Date.now();
+      const ONE_DAY = 24 * 60 * 60 * 1000;
+      
+      records.forEach(val => {
+        // Only load into memory if it's less than a day old
+        if (now - val.timestamp < ONE_DAY) {
+          this.cache.set(val.key, { data: val.data, timestamp: val.timestamp, count: val.count });
+        }
+      });
     } catch (e) {
-      console.warn("Failed to load cache persistence:", e);
+      console.warn("Failed to load IndexedDB cache:", e);
     }
   }
 
-  private savePersistence() {
+  private async savePersistence(key: string, data: any, count?: number) {
     try {
-      const obj: Record<string, any> = {};
-      const sortedEntries = Array.from(this.cache.entries())
-        .sort((a, b) => b[1].timestamp - a[1].timestamp)
-        .slice(0, 50);
-      sortedEntries.forEach(([key, val]) => {
-        obj[key] = val;
+      await offlineDb.response_cache.put({
+        key,
+        data,
+        timestamp: Date.now(),
+        count
       });
-      localStorage.setItem(this.PERSIST_KEY, JSON.stringify(obj));
     } catch (e) {
-      console.warn("Failed to save cache persistence:", e);
+      console.warn("Failed to save IndexedDB cache:", e);
     }
   }
 
@@ -66,22 +83,38 @@ class RequestManager {
     this.listeners.get(key)?.forEach(cb => cb(data));
   }
 
-  async cachedRpc(method: string, params: any = {}, ttl = 30000) {
+  async cachedRpc(method: string, params: any = {}, ttl = CACHE_TTLS.SHORT) {
     const key = this.getCacheKey('rpc', method, params);
     
     // Check cache
     const cached = this.cache.get(key);
-    const isStale = cached && Date.now() - cached.timestamp > ttl;
+    const now = Date.now();
+    const isStale = cached && now - cached.timestamp > ttl;
 
-    // Serve from cache if not stale
-    if (cached && !isStale) {
+    // Handle offline
+    if (!this.isOnline && cached) {
+      this.metrics.hits++;
       return { data: cached.data, error: null, count: cached.count };
     }
 
-    // Serve from cache while revalidating (SWR)
+    // Serve from cache if not stale
+    if (cached && !isStale) {
+      this.metrics.hits++;
+      return { data: cached.data, error: null, count: cached.count };
+    }
+
+    // Serve from cache while revalidating (SWR) with COOLDOWN Protection
     if (cached && isStale) {
+      const lastInval = this.lastInvalidation.get(key) || 0;
+      const cooldownPeriod = 30000; // 30 seconds cooldown after invalidation to prevent storms
+      
+      if (now - lastInval < cooldownPeriod) {
+        this.metrics.throttled++;
+        return { data: cached.data, error: null, count: cached.count };
+      }
+
       if (!this.pending.has(key)) {
-        console.log(`[RequestManager] Serving stale RPC, revalidating: ${method}`);
+        this.metrics.refetches++;
         const promise = this.revalidateRpc(key, method, params);
         this.pending.set(key, promise);
       }
@@ -93,6 +126,7 @@ class RequestManager {
       return this.pending.get(key);
     }
 
+    this.metrics.misses++;
     const promise = this.revalidateRpc(key, method, params);
     this.pending.set(key, promise);
     return promise;
@@ -100,6 +134,8 @@ class RequestManager {
 
   private async revalidateRpc(key: string, method: string, params: any) {
     try {
+      if (!this.isOnline) throw new Error('Offline');
+
       const { data, error, count } = await supabase.rpc(method, params);
       if (error) throw error;
       
@@ -107,27 +143,45 @@ class RequestManager {
       this.pending.delete(key);
       const result = { data, error: null, count };
       this.notify(key, result);
-      this.savePersistence();
+      this.savePersistence(key, data, count);
       return result;
     } catch (error) {
       this.pending.delete(key);
+      const cached = this.cache.get(key);
+      if (cached) return { data: cached.data, error: null, count: cached.count };
       return { data: null, error };
     }
   }
 
-  async cachedFetch(table: string, queryBuilder: (q: any) => any, cacheKey: string, ttl = 30000) {
+  async cachedFetch(table: string, queryBuilder: (q: any) => any, cacheKey: string, ttl = CACHE_TTLS.SHORT) {
     const key = `fetch:${table}:${cacheKey}`;
     
     const cached = this.cache.get(key);
-    const isStale = cached && Date.now() - cached.timestamp > ttl;
+    const now = Date.now();
+    const isStale = cached && now - cached.timestamp > ttl;
+
+    // Handle offline
+    if (!this.isOnline && cached) {
+      this.metrics.hits++;
+      return { data: cached.data, error: null, count: cached.count };
+    }
 
     if (cached && !isStale) {
+      this.metrics.hits++;
       return { data: cached.data, error: null, count: cached.count };
     }
 
     if (cached && isStale) {
+      const lastInval = this.lastInvalidation.get(key) || 0;
+      const cooldownPeriod = 30000; // 30s cooldown
+      
+      if (now - lastInval < cooldownPeriod) {
+        this.metrics.throttled++;
+        return { data: cached.data, error: null, count: cached.count };
+      }
+
       if (!this.pending.has(key)) {
-        console.log(`[RequestManager] Serving stale fetch, revalidating: ${table}:${cacheKey}`);
+        this.metrics.refetches++;
         const promise = this.revalidateFetch(key, table, queryBuilder);
         this.pending.set(key, promise);
       }
@@ -138,19 +192,29 @@ class RequestManager {
       return this.pending.get(key);
     }
 
+    this.metrics.misses++;
     const promise = this.revalidateFetch(key, table, queryBuilder);
     this.pending.set(key, promise);
     return promise;
   }
 
   private async revalidateFetch(key: string, table: string, queryBuilder: (q: any) => any) {
+    const timeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Request Timeout')), 15000)
+    );
+
     try {
+      if (!this.isOnline) throw new Error('Offline');
+
       const builder = supabase.from(table);
-      const result = await queryBuilder(builder);
+      const result = await Promise.race([
+        Promise.resolve(queryBuilder(builder)),
+        timeout
+      ]) as any;
       
       const data = result.data;
       const error = result.error;
-      const count = result.count;
+      const count = typeof result.count === 'number' ? result.count : (Array.isArray(data) ? data.length : 0);
       
       if (error) throw error;
       
@@ -158,35 +222,55 @@ class RequestManager {
       this.pending.delete(key);
       const output = { data, error: null, count };
       this.notify(key, output);
-      this.savePersistence();
+      this.savePersistence(key, data, count);
       return output;
     } catch (error) {
       this.pending.delete(key);
-      return { data: null, error };
+      console.warn(`[RequestManager] Fetch failed for ${key} in table ${table}:`, error);
+      const cached = this.cache.get(key);
+      if (cached) return { data: cached.data, error: null, count: cached.count };
+      return { data: null, error: error as any, count: 0 };
     }
   }
 
-  invalidate(keyPrefix?: string) {
+  async invalidate(keyPrefix?: string) {
+    const now = Date.now();
     if (!keyPrefix) {
       this.cache.clear();
+      await offlineDb.response_cache.clear();
     } else {
+      const keysToDelete: string[] = [];
       for (const key of this.cache.keys()) {
         if (key.startsWith(keyPrefix)) {
           this.cache.delete(key);
+          this.lastInvalidation.set(key, now); // Mark as invalidated to trigger cooldown
+          keysToDelete.push(key);
         }
+      }
+      if (keysToDelete.length > 0) {
+        await offlineDb.response_cache.bulkDelete(keysToDelete);
       }
     }
   }
 
-  invalidatePattern(pattern: string | RegExp) {
+  async invalidatePattern(pattern: string | RegExp) {
+    const now = Date.now();
+    const keysToDelete: string[] = [];
     for (const key of this.cache.keys()) {
       if (typeof pattern === 'string') {
         if (key.includes(pattern)) {
           this.cache.delete(key);
+          this.lastInvalidation.set(key, now);
+          keysToDelete.push(key);
         }
       } else if (pattern.test(key)) {
         this.cache.delete(key);
+        this.lastInvalidation.set(key, now);
+        keysToDelete.push(key);
       }
+    }
+    if (keysToDelete.length > 0) {
+      await offlineDb.response_cache.bulkDelete(keysToDelete);
     }
   }
 }

@@ -259,8 +259,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           });
           
           if (madrasah?.id) {
-            requestManager.invalidatePattern(`students:${madrasah.id}`);
-            requestManager.invalidatePattern(`classes:${madrasah.id}`);
+            requestManager.invalidatePattern('fetch:students:');
+            requestManager.invalidatePattern('fetch:classes:');
             requestManager.invalidatePattern('dashboard_');
           }
           

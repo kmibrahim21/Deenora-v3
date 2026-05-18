@@ -59,7 +59,8 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       const { data: classesData, error } = await requestManager.cachedFetch(
         'classes',
         (q) => q.select('*').eq('institution_id', madrasah.id),
-        `classes:${madrasah.id}`
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000
       );
       if (error) throw error;
       
@@ -75,7 +76,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           'students',
           (q) => q.select('class_id').eq('institution_id', madrasah.id),
           `student_counts:${madrasah.id}`,
-          60000 // 1 minute TTL for counts
+          30 * 60 * 1000 // 30 mins
         );
         
         const counts: Record<string, number> = {};

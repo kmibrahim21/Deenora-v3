@@ -107,7 +107,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     } else if (isValidUUID(institutionId)) {
       requestManager.cachedFetch(
         'classes',
-        (q) => q.select('*').eq('institution_id', institutionId).order('class_name'),
+        (q) => q.select('id, class_name').eq('institution_id', institutionId).order('class_name'),
         `classes:${institutionId}`
       ).then(({ data }) => {
         if (data) {
@@ -141,7 +141,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     if (!isValidUUID(institutionId)) return;
     const { data } = await requestManager.cachedFetch(
       'sms_templates',
-      (q) => q.select('*').eq('institution_id', institutionId).order('created_at', { ascending: false }),
+      (q) => q.select('id, body, title, created_at, type').eq('institution_id', institutionId).order('created_at', { ascending: false }),
       `templates:${institutionId}`
     );
     if (data) setTemplates(data);
@@ -172,10 +172,10 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
       // Use requestManager for cached data fetches
       const [structuresRes, studentsRes, settingsRes, ledgerRes] = await Promise.all([
-        requestManager.cachedFetch('fee_structures', (q) => q.select('*').eq('institution_id', institutionId), `fee_structs:${institutionId}`),
-        requestManager.cachedFetch('students', (q) => q.select('*').eq('institution_id', institutionId), `students:${institutionId}`),
-        requestManager.cachedFetch('student_fee_settings', (q) => q.select('*').eq('institution_id', institutionId), `fee_settings:${institutionId}`),
-        requestManager.cachedFetch('ledger', (q) => q.select('*').eq('institution_id', institutionId), `ledger:${institutionId}`)
+        requestManager.cachedFetch('fee_structures', (q) => q.select('id, fee_name, amount, class_id, start_date, due_date').eq('institution_id', institutionId), `fee_structs:${institutionId}`),
+        requestManager.cachedFetch('students', (q) => q.select('id, student_name, class_id, academic_year_id, guardian_phone, roll').eq('institution_id', institutionId), `students:${institutionId}`),
+        requestManager.cachedFetch('student_fee_settings', (q) => q.select('student_id, fee_structure_id, is_enabled, custom_amount').eq('institution_id', institutionId), `fee_settings:${institutionId}`),
+        requestManager.cachedFetch('ledger', (q) => q.select('id, transaction_date, amount, type, category, description').eq('institution_id', institutionId), `ledger:${institutionId}`)
       ]);
 
       const structures = structuresRes.data;
@@ -382,7 +382,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
       const { data: localVoices } = await supabase
         .from('voice_templates')
-        .select('*')
+        .select('id, provider_voice_name, title')
         .eq('institution_id', institutionId)
         .eq('provider_status', 'approved');
       

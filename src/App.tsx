@@ -21,6 +21,8 @@ import { createPortal } from "react-dom";
 
 import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
 import { useGlobalUpdate } from "hooks/useGlobalUpdate";
+import { requestManager } from "services/RequestManager";
+import { PerformanceDashboard } from "components/PerformanceDashboard";
 
 const Auth = React.lazy(() => import("pages/Auth"));
 const Home = React.lazy(() => import("pages/Home"));
@@ -101,6 +103,7 @@ const App: React.FC = () => {
   const { config: globalUpdate, showPopup: showUpdatePopup, dismissPopup: dismissUpdatePopup } = useGlobalUpdate();
 
   const triggerRefresh = () => {
+    requestManager.invalidate();
     setDataVersion((prev) => prev + 1);
     refreshMadrasah();
   };
@@ -758,6 +761,7 @@ const App: React.FC = () => {
       madrasah={madrasah}
       profile={profile}
     >
+      <PerformanceDashboard />
       <OfflineIndicator />
       <Suspense
         fallback={

@@ -4,6 +4,7 @@ import { Institution, Class } from 'types';
 import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, HandHeart, Bell, Edit3, Trash2, Calendar, Phone } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
+import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 
 interface QawmiFeeEngineProps {
   activeTab: 'fees' | 'structures';
@@ -118,7 +119,12 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       
       if (activeYearId) {
-          const { data: yearData } = await supabase.from('academic_years').select('end_date').eq('id', activeYearId).single();
+          const { data: yearData } = await requestManager.cachedFetch(
+            'academic_years',
+            (q) => q.select('end_date').eq('id', activeYearId).single(),
+            `academic_year_end:${activeYearId}`,
+            CACHE_TTLS.LONG
+          );
           if (yearData) {
               setActiveYearEndDate(yearData.end_date);
           }
@@ -133,41 +139,54 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
         const classId = selectedClass;
         
-        const { data: feeStructures } = await supabase.from('fee_structures')
-            .select('*')
-            .eq('institution_id', madrasah.id);
+        const { data: feeStructures } = await requestManager.cachedFetch(
+          'fee_structures',
+          (q) => q.select('*').eq('institution_id', madrasah.id),
+          `structures:${madrasah.id}`,
+          CACHE_TTLS.MEDIUM
+        );
 
         const yearStart = madrasah.config_json?.academic_year_start;
 
-        let feesQuery = supabase.from('fees')
-            .select('student_id, amount_paid, discount')
-            .eq('institution_id', madrasah.id)
-            .eq('month', selectedMonth);
-        
-        if (activeYearId) {
-            feesQuery = feesQuery.eq('academic_year_id', activeYearId);
-        }
-        const { data: feesData } = await feesQuery;
+        const { data: feesData } = await requestManager.cachedFetch(
+          'fees',
+          (q) => {
+            let query = q.select('student_id, amount_paid, discount')
+              .eq('institution_id', madrasah.id)
+              .eq('month', selectedMonth);
+            if (activeYearId) {
+              query = query.eq('academic_year_id', activeYearId);
+            }
+            return query;
+          },
+          `fees:${madrasah.id}_${selectedMonth}`,
+          CACHE_TTLS.SHORT
+        );
 
         // Fetch student fee settings for the whole institution
-        const { data: allSettings } = await supabase.from('student_fee_settings')
-            .select('*')
-            .eq('institution_id', madrasah.id);
+        const { data: allSettings } = await requestManager.cachedFetch(
+          'student_fee_settings',
+          (q) => q.select('*').eq('institution_id', madrasah.id),
+          `settings:${madrasah.id}`,
+          CACHE_TTLS.MEDIUM
+        );
 
-        // For Qawmi, we might use a different report or the same one but interpret it differently
-        let studentQuery = supabase.from('students')
-          .select('id, student_name, roll, class_id, classes(class_name), guardian_phone')
-          .eq('institution_id', madrasah.id);
-          
-        if (classId) {
-          studentQuery = studentQuery.eq('class_id', classId);
-        }
-        
-        if (activeYearId) {
-          studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-        }
-
-        const { data: studentsData, error } = await studentQuery;
+        const { data: studentsData, error } = await requestManager.cachedFetch(
+          'students',
+          (q) => {
+            let query = q.select('id, student_name, roll, class_id, classes(class_name), guardian_phone')
+              .eq('institution_id', madrasah.id);
+            if (classId) {
+              query = query.eq('class_id', classId);
+            }
+            if (activeYearId) {
+              query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+            }
+            return query;
+          },
+          `students_report_qawmi:${madrasah.id}_${selectedClass}_${activeYearId || 'current'}`,
+          CACHE_TTLS.LONG
+        );
         
         if (error) throw error;
         
@@ -250,7 +269,12 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       }
 
       if (activeTab === 'structures') {
-        const { data } = await supabase.from('fee_structures').select('*, classes(class_name)').eq('institution_id', madrasah.id);
+        const { data } = await requestManager.cachedFetch(
+          'fee_structures',
+          (q) => q.select('*, classes(class_name)').eq('institution_id', madrasah.id),
+          `structures_full:${madrasah.id}`,
+          CACHE_TTLS.MEDIUM
+        );
         if (data) {
            setStructures(data || []);
            globalQawmiStructures[madrasah.id] = data || [];
@@ -419,6 +443,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       setCollectAmount('');
       setDiscount('');
       setSelectedStudent(null);
+      
+      requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      requestManager.invalidatePattern(`stats:${madrasah.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
+      
       fetchData();
     } catch (err: any) { 
       if (err.message?.includes('row-level security policy')) {

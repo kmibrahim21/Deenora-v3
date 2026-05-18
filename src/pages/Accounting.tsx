@@ -10,7 +10,7 @@ import StudentAccountingDetail from 'components/finance/StudentAccountingDetail'
 import { sortMadrasahClasses } from 'pages/Classes';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
-import { requestManager } from 'services/RequestManager';
+import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 
 interface AccountingProps {
   lang: Language;
@@ -42,7 +42,6 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, ids: string[]}>({show: false, ids: []});
   const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>('student_history');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
-  const [refreshKey, setRefreshKey] = useState(0);
   const isDark = madrasah?.theme === 'dark';
   const isOnline = useOfflineStatus();
   const feeEngine = madrasah?.config_json?.fee_engine || 'school';
@@ -51,9 +50,25 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [desc, setDesc] = useState('');
 
   useEffect(() => {
-    if (madrasah) {
+    if (madrasah?.id) {
       fetchData();
       fetchClasses();
+      
+      const unsubscribeLedger = requestManager.subscribe(`fetch:ledger:`, (result) => {
+        if (result.data) setLedger(result.data);
+      });
+      
+      const unsubscribeClasses = requestManager.subscribe(`fetch:classes:`, (result) => {
+        if (result.data) {
+          const sorted = sortMadrasahClasses(result.data);
+          setClasses(sorted);
+        }
+      });
+
+      return () => {
+        unsubscribeLedger();
+        unsubscribeClasses();
+      };
     }
   }, [madrasah?.id, activeTab]);
 
@@ -62,8 +77,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     try {
       const { data } = await requestManager.cachedFetch(
         'classes',
-        (q) => q.eq('institution_id', madrasah.id),
-        `classes:${madrasah.id}`
+        (q) => q.select().eq('institution_id', madrasah.id),
+        `classes:${madrasah.id}`,
+        CACHE_TTLS.LONG
       );
       
       if (data) {
@@ -108,7 +124,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             return query.order('transaction_date', { ascending: false }).limit(2000);
           },
           cacheKey,
-          60000 // Cache for 1 minute
+          CACHE_TTLS.MEDIUM
         );
 
         if (data) {
@@ -131,7 +147,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     setIsSaving(true);
     
     // Invalidate RequestManager pattern-based caches
-    requestManager.invalidatePattern(`ledger:${madrasah.id}`);
+    requestManager.invalidatePattern('fetch:ledger:');
     requestManager.invalidatePattern(`stats:${madrasah.id}`);
     requestManager.invalidatePattern(`fees:${madrasah.id}`);
     requestManager.invalidatePattern(`dashboard_`);
@@ -226,7 +242,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     setIsSaving(true);
     
     // Invalidate RequestManager pattern-based caches
-    requestManager.invalidatePattern(`ledger:${madrasah.id}`);
+    requestManager.invalidatePattern('fetch:ledger:');
     requestManager.invalidatePattern(`stats:${madrasah.id}`);
     requestManager.invalidatePattern(`dashboard_`);
 
@@ -283,6 +299,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       }
       fetchData(); // Revert on failure
     } finally { setIsSaving(false); }
+  };
+
+  const handleTriggerRefresh = () => {
+    fetchData();
+    if (triggerRefresh) triggerRefresh();
   };
 
   return (
@@ -364,17 +385,18 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           <div className={(activeTab === 'fees' || activeTab === 'structures') && madrasah ? 'block' : 'hidden'}>
             <>
               {feeEngine === 'school' && (
-                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} refreshKey={refreshKey} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} />
               )}
               {feeEngine === 'qawmi' && (
-                <QawmiFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} refreshKey={refreshKey} />
+                <QawmiFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} />
               )}
               {/* Default to School Engine for others for now */}
               {feeEngine !== 'school' && feeEngine !== 'qawmi' && (
-                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} refreshKey={refreshKey} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} />
               )}
             </>
           </div>
+
           
           <div className={activeTab === 'summary' ? 'block' : 'hidden'}>
         <div className="space-y-6 animate-in slide-in-from-bottom-5">
@@ -384,7 +406,6 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 institutionId={madrasah.id} 
                 lang={lang} 
                 month={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : new Date().toISOString().slice(0, 7)} 
-                refreshKey={refreshKey}
                 classes={classes}
                 madrasah={madrasah}
                 role={role}

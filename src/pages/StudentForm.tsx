@@ -145,7 +145,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
       
       // Cache Invalidation
       if (madrasah) {
-        requestManager.invalidatePattern(`students:${classId}`);
+        requestManager.invalidatePattern('fetch:students:');
         requestManager.invalidatePattern(`stats:${madrasah.id}`);
         requestManager.invalidatePattern(`fees:${madrasah.id}`);
         requestManager.invalidatePattern(`dashboard_`);

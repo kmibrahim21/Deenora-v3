@@ -84,6 +84,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); 
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [dayEvents, setDayEvents] = useState<any[]>([]);
+  const [existingAttRecords, setExistingAttRecords] = useState<any[]>([]);
   const [isHoliday, setIsHoliday] = useState(false);
   const [showShortcodes, setShowShortcodes] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -318,6 +319,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         // If it's a column missing error, we still want to proceed with empty attendance
       }
 
+      setExistingAttRecords(attData || []);
+
       if (finalStdData) {
         setStudents(finalStdData);
         const initial: Record<string, 'present' | 'absent' | 'late' | 'half_day'> = {};
@@ -486,35 +489,72 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
-      // Clean delete for sync - now including session
-      let delQuery = supabase.from('attendance')
-        .delete()
-        .eq('class_id', selectedClass.id)
-        .eq('date', date)
-        .eq('session', selectedSession);
-      const { error: delError } = await delQuery;
-      if (delError) throw delError;
+      
+      const inserts = [];
+      const updates = [];
+      const payload: any[] = [];
+      
+      const existingMap = new Map(existingAttRecords.map(r => [r.student_id, r]));
 
-      const payload = Object.entries(attendance).map(([sid, status]) => ({
-        institution_id: madrasah.id,
-        class_id: selectedClass.id,
-        student_id: sid,
-        status: status,
-        date: date,
-        session: selectedSession,
-        arrival_time: status === 'late' ? arrivalTime[sid] : null,
-        late_minutes: status === 'late' ? computeLateMins(arrivalTime[sid]) : null,
-        recorded_by: userId,
-        academic_year_id: activeYearId || null
-      }));
+      for (const [sid, status] of Object.entries(attendance)) {
+        const arrTime = status === 'late' ? arrivalTime[sid] : null;
+        const mins = status === 'late' ? computeLateMins(arrivalTime[sid]) : null;
+        
+        const record = {
+          institution_id: madrasah.id,
+          class_id: selectedClass.id,
+          student_id: sid,
+          status: status,
+          date: date,
+          session: selectedSession,
+          arrival_time: arrTime,
+          late_minutes: mins,
+          recorded_by: userId,
+          academic_year_id: activeYearId || null
+        };
+        
+        payload.push(record);
 
-      const { error } = await supabase.from('attendance').insert(payload);
-      if (error) {
-        if (error.message.includes('class_id') || error.message.includes('cache')) {
-          throw new Error('ডাটাবেস কলাম (class_id) খুঁজে পাওয়া যাচ্ছে না। দয়া করে SQL এডিটর থেকে নতুন মাইগ্রেশন কোডটি রান করুন।');
+        const existing = existingMap.get(sid);
+        if (existing) {
+          // Check if changed
+          if (
+            existing.status !== status ||
+            existing.arrival_time !== arrTime ||
+            existing.late_minutes !== mins ||
+            existing.session !== selectedSession
+          ) {
+            updates.push({ ...record, id: existing.id });
+          }
+        } else {
+          inserts.push(record);
         }
-        throw error;
       }
+
+      // Execute updates
+      for (const chunk of Array.from({ length: Math.ceil(updates.length / 50) }, (_, i) => updates.slice(i * 50, i * 50 + 50))) {
+        const { error } = await supabase.from('attendance').upsert(chunk);
+        if (error) throw error;
+      }
+
+      // Execute inserts
+      for (const chunk of Array.from({ length: Math.ceil(inserts.length / 50) }, (_, i) => inserts.slice(i * 50, i * 50 + 50))) {
+        const { error } = await supabase.from('attendance').insert(chunk);
+        if (error) {
+          if (error.message.includes('class_id') || error.message.includes('cache')) {
+            throw new Error('ডাটাবেস কলাম (class_id) খুঁজে পাওয়া যাচ্ছে না। দয়া করে SQL এডিটর থেকে নতুন মাইগ্রেশন কোডটি রান করুন।');
+          }
+          throw error;
+        }
+      }
+
+      // Refresh existing records mapping 
+      setExistingAttRecords(prev => {
+        const newMap = new Map(prev.map(r => [r.student_id, r]));
+        inserts.forEach(i => newMap.set(i.student_id, i)); // IDs won't be matching but for update delta it prevents insert again
+        updates.forEach(u => newMap.set(u.student_id, u));
+        return Array.from(newMap.values());
+      });
 
       // Update Local Cache for offline consistency
       const currentAttendanceData = payload.filter(p => p.status === 'absent').map(p => {

@@ -8,7 +8,7 @@ import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { openWhatsAppChooser } from '../utils/whatsapp';
-import { requestManager } from 'services/RequestManager';
+import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 
 interface StudentsProps {
   selectedClass: Class;
@@ -105,7 +105,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           return query;
         },
         cacheKey,
-        30000 // 30 second TTL for student list pages
+        CACHE_TTLS.LONG // 1 hour TTL for student list pages
       );
       
       if (error) {
