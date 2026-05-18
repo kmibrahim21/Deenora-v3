@@ -11,38 +11,52 @@ interface Props {
   madrasah: Institution | null;
 }
 
+import { requestManager } from 'services/RequestManager';
+
+interface AttendanceReportEntry {
+  student_id: string;
+  student_name: string;
+  roll: string;
+  present_days: number;
+  absent_days: number;
+  late_days: number;
+  half_days: number;
+  total_days: number;
+}
+
 const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, madrasah }) => {
   const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [reportData, setReportData] = useState<AttendanceReportEntry[]>([]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
-  const [showClassDropdown, setShowClassDropdown] = useState(false);
-  
   const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  
-  const [reportData, setReportData] = useState<any[]>([]);
   const [selectedSession, setSelectedSession] = useState<string>('all');
-  const [loading, setLoading] = useState(false);
+  const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (institutionId) {
-      fetchClasses();
-    }
-  }, [institutionId]);
+    fetchClasses();
+  }, []);
 
   useEffect(() => {
     if (selectedClass) {
       fetchReport(selectedClass.id);
     }
-  }, [selectedClass?.id, reportType, selectedMonth, selectedYear, selectedSession]);
+  }, [selectedClass, reportType, selectedMonth, selectedYear, selectedSession]);
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', institutionId);
+    // Cache class list as it doesn't change often
+    const { data } = await requestManager.cachedFetch(
+      'classes', 
+      (q) => q.select('*').eq('institution_id', institutionId),
+      `classes:${institutionId}`
+    );
     if (data) {
       const sorted = sortMadrasahClasses(data);
       setClasses(sorted);
-      if (sorted.length > 0) {
+      if (sorted.length > 0 && !selectedClass) {
         setSelectedClass(sorted[0]);
       }
     }
@@ -53,32 +67,40 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
     setFetchError(null);
     try {
       let startDate, endDate;
-
       if (reportType === 'monthly') {
-          startDate = `${selectedMonth}-01`;
-          const [year, month] = selectedMonth.split('-');
-          endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0];
+        startDate = `${selectedMonth}-01`;
+        const date = new Date(selectedMonth + '-01');
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+        endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
       } else {
-          startDate = `${selectedYear}-01-01`;
-          endDate = `${selectedYear}-12-31`;
+        startDate = `${selectedYear}-01-01`;
+        endDate = `${selectedYear}-12-31`;
       }
 
       let finalData: any[] = [];
 
       if (cid === 'all') {
-        const promises = classes.map((c: any) => supabase.rpc('get_attendance_report', {
-          p_class_id: c.id,
-          p_start_date: startDate,
-          p_end_date: endDate,
-          p_session: selectedSession === 'all' ? null : selectedSession
-        }));
-        const results = await Promise.all(promises);
+        const results = [];
+        // Sequential/Throttled fetch for "all" to prevent DB spike
+        for (const c of classes) {
+          const { data, error } = await requestManager.cachedRpc('get_attendance_report', {
+            p_class_id: c.id,
+            p_start_date: startDate,
+            p_end_date: endDate,
+            p_session: selectedSession === 'all' ? null : selectedSession
+          });
+          results.push({ data, error });
+          
+          // Tiny delay 
+          if (classes.length > 5) await new Promise(r => setTimeout(r, 20));
+        }
+        
         results.forEach(res => {
           if (res.error) console.error("Error fetching class report:", res.error);
           if (res.data) finalData = [...finalData, ...res.data];
         });
       } else {
-        const { data, error } = await supabase.rpc('get_attendance_report', {
+        const { data, error } = await requestManager.cachedRpc('get_attendance_report', {
           p_class_id: cid,
           p_start_date: startDate,
           p_end_date: endDate,

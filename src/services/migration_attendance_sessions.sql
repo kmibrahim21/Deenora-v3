@@ -2,6 +2,9 @@
 ALTER TABLE attendance ADD COLUMN IF NOT EXISTS session TEXT DEFAULT 'morning';
 
 -- Update get_attendance_report to handle sessions
+-- Drop first to avoid return type mismatch error
+DROP FUNCTION IF EXISTS get_attendance_report(UUID, DATE, DATE, TEXT);
+
 CREATE OR REPLACE FUNCTION get_attendance_report(
     p_class_id UUID,
     p_start_date DATE,
@@ -15,9 +18,11 @@ RETURNS TABLE (
     present_days BIGINT,
     absent_days BIGINT,
     late_days BIGINT,
+    half_days BIGINT,
     total_days BIGINT
 ) 
 LANGUAGE plpgsql
+SECURITY DEFINER
 AS $$
 BEGIN
     RETURN QUERY
@@ -28,6 +33,7 @@ BEGIN
         COUNT(DISTINCT CASE WHEN a.status = 'present' THEN a.date END) as present_days,
         COUNT(DISTINCT CASE WHEN a.status = 'absent' THEN a.date END) as absent_days,
         COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.date END) as late_days,
+        COUNT(DISTINCT CASE WHEN a.status = 'half_day' THEN a.date END) as half_days,
         COUNT(DISTINCT a.date) as total_days
     FROM students s
     LEFT JOIN attendance a ON s.id = a.student_id 

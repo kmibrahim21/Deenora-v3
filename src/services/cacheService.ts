@@ -42,4 +42,30 @@ export class CacheService {
       console.error(`[CacheService] Error clearing cache in ${storeName}:`, error);
     }
   }
+
+  static async updateCacheItem(storeName: 'students' | 'teachers', institutionId: string, itemId: string, data: any) {
+    try {
+      const table = offlineDb[storeName];
+      // Note: we use bulkPut or update if we have the primary key correctly defined
+      // Based on offlineDb.ts (likely institution_id + id)
+      await table.put({
+        id: itemId,
+        institution_id: institutionId,
+        data,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      console.error(`[CacheService] Error updating cache item in ${storeName}:`, error);
+    }
+  }
+
+  static async removeCacheItem(storeName: 'students' | 'teachers', institutionId: string, itemId: string) {
+    try {
+      const table = offlineDb[storeName];
+      // Dexie delete works on primary key
+      await table.delete(itemId); 
+    } catch (error) {
+      console.error(`[CacheService] Error removing cache item in ${storeName}:`, error);
+    }
+  }
 }

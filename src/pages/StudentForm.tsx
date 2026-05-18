@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { ArrowLeft, Save, User as UserIcon, Phone, List, Hash, Loader2, ChevronDown, Camera, X, Check, UserCheck, AlertCircle, BookOpen } from 'lucide-react';
 import { supabase, offlineApi } from 'supabase';
 import { OfflineService } from 'services/OfflineService';
+import { CacheService } from 'services/cacheService';
+import { requestManager } from 'services/RequestManager';
 import { Student, Class, Language, Institution } from 'types';
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
@@ -138,6 +140,26 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
           }
         } else {
           throw innerErr;
+        }
+      }
+      
+      // Cache Invalidation
+      if (madrasah) {
+        requestManager.invalidatePattern(`students:${classId}`);
+        requestManager.invalidatePattern(`stats:${madrasah.id}`);
+        requestManager.invalidatePattern(`fees:${madrasah.id}`);
+        requestManager.invalidatePattern(`dashboard_`);
+        
+        // Update IndexedDB Cache if online
+        if (navigator.onLine) {
+          const { data: updatedStudents } = await supabase
+            .from('students')
+            .select('*')
+            .eq('institution_id', madrasah.id)
+            .eq('class_id', classId);
+          if (updatedStudents) {
+            await CacheService.cacheData('students', madrasah.id, updatedStudents);
+          }
         }
       }
       

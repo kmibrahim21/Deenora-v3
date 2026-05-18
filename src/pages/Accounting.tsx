@@ -10,6 +10,7 @@ import StudentAccountingDetail from 'components/finance/StudentAccountingDetail'
 import { sortMadrasahClasses } from 'pages/Classes';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
+import { requestManager } from 'services/RequestManager';
 
 interface AccountingProps {
   lang: Language;
@@ -21,66 +22,33 @@ interface AccountingProps {
   triggerRefresh?: () => void;
 }
 
-// Global cache for instant tab switching
-let globalLedgerCache: Record<string, LedgerEntry[]> = {};
-let globalClassesCache: Record<string, Class[]> = {};
-
 const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear, triggerRefresh }) => {
-  const isTeacher = role === 'teacher';
-  const canManageAccounting = !isTeacher || profile?.permissions?.can_manage_accounting;
-
-  const isDark = madrasah?.theme === 'dark';
-
-  if (!canManageAccounting) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6">
-        <AlertCircle size={60} className="text-red-500 mb-4" />
-        <h2 className={`text-xl font-black mb-2 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-          {lang === 'bn' ? 'আপনার অনুমতি নেই' : 'Access Denied'}
-        </h2>
-        <p className={`${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'} mb-6`}>
-          {lang === 'bn' 
-            ? 'আপনার এই মডিউলটি ব্যবহার করার অনুমতি নেই। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।' 
-            : 'You do not have permission to access this module. Please contact your administrator.'}
-        </p>
-        <button onClick={onBack} className={`px-8 py-3 rounded-full font-black ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-white hover:bg-slate-600' : 'bg-slate-800 text-white'}`}>
-          {lang === 'bn' ? 'ফিরে যান' : 'Go Back'}
-        </button>
-      </div>
-    );
-  }
-
-  const isOnline = useOfflineStatus();
-  const [activeTab, setActiveTab] = useState<'summary' | 'ledger' | 'fees' | 'structures' | 'add-ledger'>(() => {
-    return (localStorage.getItem('accounting_active_tab') as any) || 'fees';
-  });
-  
-  useEffect(() => {
-    localStorage.setItem('accounting_active_tab', activeTab);
-  }, [activeTab]);
-
-  const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<any>(null);
-  const [ledger, setLedger] = useState<LedgerEntry[]>(() => (madrasah ? globalLedgerCache[madrasah.id] || [] : []));
-  const [classes, setClasses] = useState<Class[]>(() => (madrasah ? globalClassesCache[madrasah.id] || [] : []));
-  const [loading, setLoading] = useState(() => madrasah && !globalLedgerCache[madrasah.id]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
-  const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>('student_history');
-  const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
-  const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, ids: string[]}>({show: false, ids: []});
-
-  // Ledger State
-  const [type, setType] = useState<'income' | 'expense'>('income');
+  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'automation' | 'fees' | 'sms' | 'summary' | 'structures' | 'add-ledger'>('fees');
+  const [isAdding, setIsAdding] = useState(false);
+  const [entryType, setEntryType] = useState<'income' | 'expense'>('income');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
-  const [desc, setDesc] = useState('');
-  const [transactionDate, setTransactionDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
+  const [description, setDescription] = useState('');
+  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeFeeTab, setActiveFeeTab] = useState<'settings' | 'reminders' | 'stats'>('settings');
 
+  const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<any>(null);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, ids: string[]}>({show: false, ids: []});
+  const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>('student_history');
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const isDark = madrasah?.theme === 'dark';
+  const isOnline = useOfflineStatus();
   const feeEngine = madrasah?.config_json?.fee_engine || 'school';
+
+  const [type, setType] = useState<'income' | 'expense'>('income');
+  const [desc, setDesc] = useState('');
 
   useEffect(() => {
     if (madrasah) {
@@ -91,15 +59,23 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
   const fetchClasses = async () => {
     if (!madrasah?.id) return;
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
-    if (data) {
-      let filteredClasses = data;
-      if (role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+    try {
+      const { data } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.eq('institution_id', madrasah.id),
+        `classes:${madrasah.id}`
+      );
+      
+      if (data) {
+        let filteredClasses = data;
+        if (role === 'teacher' && profile?.permissions?.allowed_classes) {
+          filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+        }
+        const sorted = sortMadrasahClasses(filteredClasses);
+        setClasses(sorted);
       }
-      const sorted = sortMadrasahClasses(filteredClasses);
-      setClasses(sorted);
-      if (madrasah.id) globalClassesCache[madrasah.id] = sorted;
+    } catch (err) {
+      console.error('Fetch Classes Error:', err);
     }
   };
 
@@ -107,9 +83,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     if (!madrasah?.id) return;
     
     if (activeTab === 'summary' || activeTab === 'ledger') {
-      if (ledger.length === 0) {
-        setLoading(true);
-      }
+      setLoading(true);
       try {
         if (!isOnline) {
           const cachedLedger = await CacheService.getCachedData('fees', madrasah.id);
@@ -119,24 +93,28 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         }
 
         const activeYearId = madrasah.config_json?.active_academic_year_id;
-        let query = supabase.from('ledger').select('*').eq('institution_id', madrasah.id);
-        
-        if (activeYearId) {
-          query = query.eq('academic_year_id', activeYearId);
-        } else {
-          const yearStart = madrasah.config_json?.academic_year_start;
-          if (yearStart) {
-            query = query.gte('transaction_date', yearStart);
-          }
-        }
+        const cacheKey = `ledger:${madrasah.id}:${activeYearId || 'current'}`;
 
-        const { data } = await query.order('transaction_date', { ascending: false }).limit(2000);
+        const { data } = await requestManager.cachedFetch(
+          'ledger',
+          (q) => {
+            let query = q.select('*').eq('institution_id', madrasah.id);
+            if (activeYearId) {
+              query = query.eq('academic_year_id', activeYearId);
+            } else {
+              const yearStart = madrasah.config_json?.academic_year_start;
+              if (yearStart) query = query.gte('transaction_date', yearStart);
+            }
+            return query.order('transaction_date', { ascending: false }).limit(2000);
+          },
+          cacheKey,
+          60000 // Cache for 1 minute
+        );
+
         if (data) {
           setLedger(data);
-          if (madrasah.id) globalLedgerCache[madrasah.id] = data;
           await CacheService.cacheData('fees', madrasah.id, data);
         }
-        setRefreshKey(prev => prev + 1);
       } catch (e: any) { 
         console.error("Accounting Fetch Error:", e);
       } finally { setLoading(false); }
@@ -151,7 +129,18 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     }
     
     setIsSaving(true);
+    
+    // Invalidate RequestManager pattern-based caches
+    requestManager.invalidatePattern(`ledger:${madrasah.id}`);
+    requestManager.invalidatePattern(`stats:${madrasah.id}`);
+    requestManager.invalidatePattern(`fees:${madrasah.id}`);
+    requestManager.invalidatePattern(`dashboard_`);
+
     try {
+      // Optimistic Update
+      const oldLedger = [...ledger];
+      setLedger(prev => prev.filter(item => !deleteConfirm.ids.includes(item.id)));
+      
       // First find if there are any associated fees by grabbing the descriptions
       const { data: recordsToDelete } = await supabase.from('ledger').select('description, category').in('id', deleteConfirm.ids);
 
@@ -218,9 +207,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       }
       
       if (triggerRefresh) triggerRefresh();
+      // Background fetchData is still good to sync fully
       fetchData();
     } catch (err: any) {
       alert(err.message);
+      fetchData(); // Revert on failure
     } finally {
       setIsSaving(false);
     }
@@ -233,18 +224,47 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       return;
     }
     setIsSaving(true);
+    
+    // Invalidate RequestManager pattern-based caches
+    requestManager.invalidatePattern(`ledger:${madrasah.id}`);
+    requestManager.invalidatePattern(`stats:${madrasah.id}`);
+    requestManager.invalidatePattern(`dashboard_`);
+
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
-      const { error } = await supabase.from('ledger').insert({
+      const amountNum = parseFloat(amount);
+      const tempId = crypto.randomUUID();
+      
+      const newEntry: LedgerEntry = {
+        id: tempId,
         institution_id: madrasah.id,
         academic_year_id: activeYearId,
         type: type,
-        amount: parseFloat(amount),
+        amount: amountNum,
+        category: category.trim(),
+        description: desc.trim(),
+        transaction_date: transactionDate || new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString()
+      };
+
+      // Optimistic Update
+      setLedger(prev => [newEntry, ...prev]);
+
+      const { data, error } = await supabase.from('ledger').insert({
+        institution_id: madrasah.id,
+        academic_year_id: activeYearId,
+        type: type,
+        amount: amountNum,
         category: category.trim(),
         description: desc.trim(),
         transaction_date: transactionDate || new Date().toISOString().split('T')[0]
-      });
+      }).select().single();
+
       if (error) throw error;
+      if (data) {
+        setLedger(prev => prev.map(e => e.id === tempId ? data : e));
+      }
+
       setAmount(''); setCategory(''); setDesc('');
       setTransactionDate(new Date().toISOString().split('T')[0]);
       setActiveTab('ledger');
@@ -255,13 +275,13 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       }
       
       if (triggerRefresh) triggerRefresh();
-      fetchData();
     } catch (err: any) { 
       if (err.message?.includes('row-level security policy')) {
          alert("Database RLS Error: Please run the SQL migration script in Supabase SQL Editor to fix permissions for 'fees' and 'ledger' tables. You can find the script in 'src/services/migration_fees_and_ledger_rls.sql'.");
       } else {
          alert(err.message); 
       }
+      fetchData(); // Revert on failure
     } finally { setIsSaving(false); }
   };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
+import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
 import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw } from 'lucide-react';
 import { t } from 'translations';
@@ -544,6 +545,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           console.error('Error saving exam:', error);
           alert('Failed to save exam: ' + error.message);
       } else {
+        if (madrasah?.id) {
+          requestManager.invalidatePattern(`exams:${madrasah.id}`);
+          requestManager.invalidatePattern('dashboard_');
+        }
         setShowAddExam(false);
         setEditingExam(null);
         setExamName('');
@@ -580,6 +585,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         console.error('Error deleting exam:', error);
         alert('Failed to delete exam: ' + error.message);
       } else {
+        if (madrasah?.id) {
+          requestManager.invalidatePattern(`exams:${madrasah.id}`);
+          requestManager.invalidatePattern('dashboard_');
+        }
         fetchExams();
       }
     } catch (e) {
@@ -620,6 +629,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     }
 
     if (!error) {
+      if (madrasah?.id) {
+        requestManager.invalidatePattern(`exam_subjects:${selectedExam.id}`);
+        requestManager.invalidatePattern('dashboard_');
+      }
       setShowAddSubject(false);
       setEditingSubject(null);
       setSubName('');
@@ -653,6 +666,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setIsSaving(true);
     const { error } = await supabase.from('exam_subjects').delete().eq('id', subjectToDelete);
     if (!error && selectedExam) {
+      if (madrasah?.id) {
+        requestManager.invalidatePattern(`exam_subjects:${selectedExam.id}`);
+        requestManager.invalidatePattern('dashboard_');
+      }
       fetchSubjects(selectedExam.id);
     } else if (error) {
        console.error("Error deleting subject", error);
@@ -688,6 +705,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             return;
         }
     }
+    
+    if (madrasah?.id && selectedExam) {
+      requestManager.invalidatePattern(`exam_marks:${selectedExam.id}`);
+      requestManager.invalidatePattern('dashboard_');
+    }
+
     setShowSuccessModal(true);
     setIsSaving(false);
   };

@@ -48,87 +48,119 @@ const localT = {
   yearly: { en: 'Yearly', bn: 'বার্ষিক' },
 };
 
+import { requestManager } from 'services/RequestManager';
+
+interface LedgerHistoryEntry {
+  id: string;
+  transaction_date: string;
+  amount: number;
+  type: string;
+  category: string;
+  description: string;
+}
+
+interface BreakdownEntry {
+  name: string;
+  expected: number;
+  collected: number;
+  students: number;
+  transactions: number;
+}
+
+const availableShortcodes = [
+  { code: '{student_name}', label: 'Student Name' },
+  { code: '{month}', label: 'Fee Month' },
+  { code: '{due_amount}', label: 'Due Amount' },
+  { code: '{roll}', label: 'Roll Number' },
+  { code: '{class_name}', label: 'Class Name' },
+];
+
 const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, lang, month: initialMonth, refreshKey, classes = [], madrasah, role, profile, activeYear }) => {
-  const [stats, setStats] = useState<any>(null);
-  const [reminders, setReminders] = useState<any[]>([]);
-  const [breakdown, setBreakdown] = useState<any[]>([]);
-  const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const isSendingRef = useRef(false);
+  const [stats, setStats] = useState<any>(null);
+  const [breakdown, setBreakdown] = useState<BreakdownEntry[]>([]);
+  const [reminders, setReminders] = useState<any[]>([]);
+  const [ledgerHistory, setLedgerHistory] = useState<LedgerHistoryEntry[]>([]);
   const [templates, setTemplates] = useState<SMSTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<SMSTemplate | null>(null);
-  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
-  const [showShortcodes, setShowShortcodes] = useState(false);
-  
-  // Voice Call States
-  const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const [voices, setVoices] = useState<any[]>([]);
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
-  const [voiceRate, setVoiceRate] = useState<number>(1.00);
-  const [isFetchingVoices, setIsFetchingVoices] = useState(false);
-
-  const availableShortcodes = [
-    { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
-    { code: '{due_amount}', label: lang === 'bn' ? 'বকেয়া টাকা' : 'Due Amount' },
-    { code: '{month}', label: lang === 'bn' ? 'মাস' : 'Month' },
-    { code: '{institution_name}', label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name' },
-  ];
-
-  // Filters
-  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'yearly' | 'custom'>('daily');
-  const [selectedMonth, setSelectedMonth] = useState(initialMonth);
-  const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'yearly' | 'custom'>('monthly');
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth || new Date().toISOString().slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
-
-  const [localClasses, setLocalClasses] = useState<Class[]>([]);
+  const [localClasses, setLocalClasses] = useState<Class[]>(classes);
+  const [sending, setSending] = useState(false);
+  const isSendingRef = useRef(false);
+  const [showShortcodes, setShowShortcodes] = useState(false);
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+  
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [isFetchingVoices, setIsFetchingVoices] = useState(false);
+  const [voices, setVoices] = useState<any[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
+  const [voiceRate, setVoiceRate] = useState(0.85);
 
   useEffect(() => {
     if (classes.length > 0) {
       setLocalClasses(classes);
     } else if (isValidUUID(institutionId)) {
-      supabase.from('classes')
-        .select('*')
-        .eq('institution_id', institutionId)
-        .order('class_name')
-        .then(({ data }) => {
-          if (data) {
-            let filteredClasses = data;
-            if (role === 'teacher' && profile?.permissions?.allowed_classes) {
-              filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
-            }
-            setLocalClasses(filteredClasses);
+      requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', institutionId).order('class_name'),
+        `classes:${institutionId}`
+      ).then(({ data }) => {
+        if (data) {
+          let filteredClasses = data;
+          if (role === 'teacher' && profile?.permissions?.allowed_classes) {
+            filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
           }
-        });
+          setLocalClasses(filteredClasses);
+        }
+      });
     }
   }, [institutionId, classes, role, profile]);
+
+  const [isRevalidating, setIsRevalidating] = useState(false);
 
   useEffect(() => {
     fetchAnalytics();
     fetchTemplates();
+
+    const keys = [
+      `fee_structs:${institutionId}`,
+      `students:${institutionId}`,
+      `fee_settings:${institutionId}`,
+      `ledger:${institutionId}`
+    ];
+    const unsubs = keys.map(k => requestManager.subscribe(k, () => fetchAnalytics(true)));
+    return () => unsubs.forEach(u => u());
   }, [institutionId, selectedMonth, selectedYear, selectedDate, dateRange, viewMode, selectedClassId, refreshKey]);
 
   const fetchTemplates = async () => {
     if (!isValidUUID(institutionId)) return;
-    const { data } = await supabase.from('sms_templates')
-      .select('*')
-      .eq('institution_id', institutionId)
-      .order('created_at', { ascending: false });
+    const { data } = await requestManager.cachedFetch(
+      'sms_templates',
+      (q) => q.select('*').eq('institution_id', institutionId).order('created_at', { ascending: false }),
+      `templates:${institutionId}`
+    );
     if (data) setTemplates(data);
   };
 
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = async (isBackground = false) => {
     if (!isValidUUID(institutionId)) return;
-    if (!stats) setLoading(true); // Only show full loader on initial fetch
-    console.log("Fetching analytics for:", { institutionId, viewMode, selectedMonth, selectedYear, selectedClassId });
+    if (!isBackground) {
+      if (!stats) setLoading(true); 
+    } else {
+      setIsRevalidating(true);
+    }
+    
     try {
       const activeYearId = madrasah?.config_json?.active_academic_year_id;
       let dateFilter = selectedMonth;
       if (viewMode === 'daily') dateFilter = selectedDate;
       else if (viewMode === 'yearly') dateFilter = selectedYear;
-      else if (viewMode === 'custom') dateFilter = ''; // handle custom range separately
+      else if (viewMode === 'custom') dateFilter = '';
       
       const isDateInRange = (dateStr: string) => {
         if (viewMode === 'custom') {
@@ -138,31 +170,28 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         return dateStr.startsWith(dateFilter);
       };
 
-      // 1. Fetch Fee Structures
-      let structureQuery = supabase.from('fee_structures').select('*').eq('institution_id', institutionId);
-      if (selectedClassId !== 'all') {
-        structureQuery = structureQuery.or(`class_id.eq.${selectedClassId},class_id.is.null`);
-      }
-      const { data: structures, error: structError } = await structureQuery;
-      console.log("Structures:", structures, "Error:", structError);
+      // Use requestManager for cached data fetches
+      const [structuresRes, studentsRes, settingsRes, ledgerRes] = await Promise.all([
+        requestManager.cachedFetch('fee_structures', (q) => q.select('*').eq('institution_id', institutionId), `fee_structs:${institutionId}`),
+        requestManager.cachedFetch('students', (q) => q.select('*').eq('institution_id', institutionId), `students:${institutionId}`),
+        requestManager.cachedFetch('student_fee_settings', (q) => q.select('*').eq('institution_id', institutionId), `fee_settings:${institutionId}`),
+        requestManager.cachedFetch('ledger', (q) => q.select('*').eq('institution_id', institutionId), `ledger:${institutionId}`)
+      ]);
+
+      const structures = structuresRes.data;
       if (!structures) return;
 
-      // 2. Fetch Students for counts and class mapping
-      let studentQuery = supabase.from('students').select('id, student_name, class_id').eq('institution_id', institutionId);
-      if (selectedClassId !== 'all') {
-        studentQuery = studentQuery.eq('class_id', selectedClassId);
-      }
+      let students = studentsRes.data;
       if (activeYearId) {
-        studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        students = students?.filter(s => s.academic_year_id === activeYearId || !s.academic_year_id);
       }
-      const { data: students, error: studError } = await studentQuery;
-      console.log("Students:", students, "Error:", studError);
+      if (selectedClassId !== 'all') {
+        students = students?.filter(s => s.class_id === selectedClassId);
+      }
 
-      // Fetch student fee settings for the whole institution
-      const { data: allSettings } = await supabase.from('student_fee_settings')
-          .select('*')
-          .eq('institution_id', institutionId);
-      
+      const allSettings = settingsRes.data;
+      const ledger = ledgerRes.data;
+
       const studentCounts: Record<string, number> = {};
       const studentClassMap: Record<string, string> = {};
       
@@ -171,20 +200,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         studentClassMap[s.student_name] = s.class_id;
       });
 
-      // 3. Fetch Ledger for transaction counts (Income) AND Expenses
-      let ledgerQuery = supabase.from('ledger')
-        .select('description, amount, type, category, transaction_date')
-        .eq('institution_id', institutionId);
-      
-      if (activeYearId) {
-        ledgerQuery = ledgerQuery.eq('academic_year_id', activeYearId);
-      }
-
-      const { data: ledger, error: ledgerError } = await ledgerQuery;
-      console.log("Ledger:", ledger, "Error:", ledgerError);
-
       if (ledger) {
-        // Filter ledger by period and class (if applicable) for the report
         const filteredLedger = ledger.filter(l => isDateInRange(l.transaction_date));
         setLedgerHistory(filteredLedger);
       }
@@ -201,10 +217,12 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
           totalExpense += l.amount;
         }
       });
-      console.log("Total Expense calculated:", totalExpense);
 
       structures.forEach(s => {
-        // Evaluate active months based on year Start and fee start/due dates
+        // filter structures by selected class if needed
+        if (selectedClassId !== 'all' && s.class_id !== null && s.class_id !== selectedClassId) return;
+
+        // ... existing active months logic ...
         let activeMonthsCount = 0;
         const acStart = activeYear?.start_date ? new Date(activeYear.start_date) : new Date(new Date().getFullYear(), 0, 1);
         const startMonthIdx = acStart.getFullYear() === parseInt(selectedYear) ? acStart.getMonth() + 1 : 1;
@@ -217,22 +235,18 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 if (!isExpired && !isNotStarted) activeMonthsCount++;
             }
         } else {
-            // Use selectedMonth for daily, monthly and custom to get a baseline expected amount
             const evalMonth = selectedMonth; 
             const isExpired = s.due_date && s.due_date.slice(0, 7) < evalMonth;
             const isNotStarted = s.start_date && s.start_date.slice(0, 7) > evalMonth;
             if (!isExpired && !isNotStarted) activeMonthsCount = 1;
         }
-
         if (activeMonthsCount === 0) return;
 
-        // Calculate correct count and expected amount based on enabled settings
         let count = 0;
         let total = 0;
         const multiplier = activeMonthsCount;
 
         if (s.class_id === null) {
-          // Global fee: count students who have this fee enabled
           students?.forEach(st => {
             const setting = allSettings?.find(as => as.student_id === st.id && as.fee_structure_id === s.id);
             if (setting ? setting.is_enabled : true) {
@@ -242,7 +256,6 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             }
           });
         } else {
-          // Class fee: count students in this class who have this fee enabled
           students?.forEach(st => {
             if (st.class_id !== s.class_id) return;
             const setting = allSettings?.find(as => as.student_id === st.id && as.fee_structure_id === s.id);
@@ -262,54 +275,37 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         breakdownMap[feeName].students += count;
         totalExpected += total;
       });
-      console.log("Total Expected calculated:", totalExpected);
 
-        // Count transactions and calculate collected amount (Income)
+      // ... existing collection calculation logic ...
       ledger?.forEach(l => {
         if (l.type !== 'income' || l.category !== 'Student Fee') return;
-
-        // Ensure it's for the selected month/year
-        // Robust check: either transaction date matches or description contains month
         const isCorrectPeriod = l.transaction_date.startsWith(dateFilter) || l.description.includes(dateFilter);
         if (!isCorrectPeriod) return;
-
         const parts = l.description.split(' - ');
         if (parts.length < 2) return;
-
         const feePart = parts[0];
         const studentInfo = parts.slice(1).join(' - ');
         const studentName = studentInfo.split(' (')[0].trim();
-        
-        // Extract class name from description if possible
         const match = studentInfo.match(/\((.*?)\s*\|/);
         const classNameFromDesc = match ? match[1].trim() : null;
-        
         let classId = studentClassMap[studentName];
         if (!classId && classNameFromDesc && localClasses.length > 0) {
             classId = localClasses.find(c => c.class_name.trim() === classNameFromDesc)?.id;
         }
-
-        // If filtering by class, ensure student belongs to selected class
         if (selectedClassId !== 'all' && classId !== selectedClassId) return;
-
         const fees = feePart.split(',').map(f => f.trim());
         let totalStructureAmount = 0;
         const matchedStructures: any[] = [];
-        
         fees.forEach(f => {
             const normalizedF = (f || '').toLowerCase().trim();
-            // Find structure for this fee name and class
-            // Match either the student's class or a global fee (class_id is null)
             const structure = structures.find(s => 
                 (s.fee_name || '').toLowerCase().trim() === normalizedF && 
                 (s.class_id === null || (classId && s.class_id === classId))
             );
-            
             if (structure) {
                 totalStructureAmount += structure.amount;
                 matchedStructures.push(structure);
             } else {
-                // Try matching by name only if class match fails
                 const nameOnlyMatch = structures.find(s => (s.fee_name || '').toLowerCase().trim() === normalizedF);
                 if (nameOnlyMatch) {
                     totalStructureAmount += nameOnlyMatch.amount;
@@ -317,13 +313,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 }
             }
         });
-        
         if (matchedStructures.length > 0) {
             matchedStructures.forEach(structure => {
                 const feeName = structure.fee_name.trim();
                 if (breakdownMap[feeName]) {
                     breakdownMap[feeName].transactions += 1;
-                    // Allocate actual collected amount proportionally
                     const ratio = totalStructureAmount > 0 ? (structure.amount / totalStructureAmount) : (1 / matchedStructures.length);
                     const allocatedAmount = l.amount * ratio;
                     breakdownMap[feeName].collected += allocatedAmount;
@@ -331,10 +325,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             });
             totalCollected += l.amount;
         } else {
-            // Fallback if no structures matched
             fees.forEach(f => {
                 const normalizedF = (f || '').toLowerCase().trim();
-                // Find any breakdown item that matches the name
                 const breakdownKey = Object.keys(breakdownMap).find(k => (k || '').toLowerCase().trim() === normalizedF);
                 if (breakdownKey) {
                     breakdownMap[breakdownKey].transactions += 1;
@@ -344,12 +336,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             totalCollected += l.amount;
         }
       });
-      console.log("Total Collected calculated:", totalCollected);
+      // ... end processing ...
 
       const breakdownList = Object.entries(breakdownMap).map(([name, data]) => ({ name, ...data }));
       setBreakdown(breakdownList);
 
-      // Set Stats
       setStats({
         expected_income: totalExpected,
         prediction: totalCollected,
@@ -358,17 +349,13 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         collection_rate: totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : 0
       });
 
-      // Fetch reminders only for monthly view (current dues)
       if (viewMode === 'monthly') {
-        const { data: remindersData, error: remError } = await supabase.rpc('get_fee_reminder_list', { 
+        const { data: remindersData, error: remError } = await requestManager.cachedRpc('get_fee_reminder_list', { 
           p_institution_id: institutionId, 
           p_month: selectedMonth,
-          p_academic_year_id: null // Bypass RPC filter to handle null academic_year_id correctly
+          p_academic_year_id: null 
         });
-        console.log("Reminders:", remindersData, "Error:", remError);
-        
         if (remindersData) {
-            // Filter reminders by active students (which handles class and academic_year_id filters)
             const activeStudentIds = new Set(students?.map(s => s.id) || []);
             const filteredReminders = remindersData.filter((r: any) => activeStudentIds.has(r.student_id));
             setReminders(filteredReminders || []);
@@ -383,6 +370,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       console.error('Smart Fee Analytics Error:', err);
     } finally {
       setLoading(false);
+      setIsRevalidating(false);
     }
   };
 
@@ -835,9 +823,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         </div>
       </div>
 
-      {/* Reminders Section - Only show for Monthly View */}
-      {viewMode === 'monthly' && (
-        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-100 text-[#1E293B]'} p-8 rounded-[2.5rem] shadow-bubble border space-y-6`}>
+      {/* Reminders Section */}
+      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-100 text-[#1E293B]'} p-8 rounded-[2.5rem] shadow-bubble border space-y-6`}>
             <div className="flex items-center justify-between">
             <div>
                 <h3 className="text-xl font-black font-noto">{t('reminders', lang)}</h3>
@@ -968,7 +955,6 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             )}
             </div>
         </div>
-      )}
       {/* Voice Selection Modal */}
       {showVoiceModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

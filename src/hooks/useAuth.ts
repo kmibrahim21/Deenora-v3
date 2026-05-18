@@ -5,6 +5,7 @@ import { OfflineService } from 'services/OfflineService';
 import { Profile, Institution, AcademicYear } from 'types';
 import { isValidUUID } from '../utils/validation';
 import { hardReload } from '../utils/reloadUtils';
+import { requestManager } from 'services/RequestManager';
 
 export const useAuth = () => {
   const [session, setSession] = useState<any>(null);
@@ -17,15 +18,16 @@ export const useAuth = () => {
   const fetchActiveYear = async (institutionId: string) => {
     if (!isValidUUID(institutionId)) return;
     try {
-      const { data: year } = await supabase
-        .from('academic_years')
-        .select('*')
-        .eq('institution_id', institutionId)
-        .eq('status', 'active')
-        .maybeSingle();
+      const { data: year } = await requestManager.cachedFetch(
+        'academic_years',
+        (q) => q.eq('institution_id', institutionId).eq('status', 'active'),
+        `active_year:${institutionId}`
+      );
       
       if (year) {
-        setActiveYear(year);
+        // Handle maybeSingle logic
+        const singleYear = Array.isArray(year) ? year[0] : year;
+        if (singleYear) setActiveYear(singleYear);
       }
     } catch (err) {
       console.error("Error fetching active year:", err);
@@ -47,60 +49,63 @@ export const useAuth = () => {
     ];
     const isSuperAdminEmail = superAdminEmails.includes(userEmail || '');
 
-    console.log("Auth Debug:", { userId, userEmail, isSuperAdminEmail, retryCount });
-
     try {
-      // First, get the profile
-      console.log(`Fetching profile for user: ${userId} (Attempt ${retryCount + 1}/5)`);
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      // Try to load from cache immediately for instant UI
+      const cachedProfile = OfflineService.getCache('user_profile');
+      const cachedMadrasah = OfflineService.getCache('profile');
       
-      if (profileError) {
-        throw profileError;
+      if (cachedProfile && (cachedProfile.id === userId || isSuperAdminEmail)) {
+        setProfile(cachedProfile);
+        if (cachedMadrasah) {
+          setMadrasah(cachedMadrasah);
+          setLoading(false); // Hide splash if we have cached data
+        }
       }
 
-      console.log("Profile data response:", profileData);
+      // 1. Get the profile (Cached with Revalidation)
+      const { data: profileData, error: profileError } = await requestManager.cachedFetch(
+        'profiles',
+        (q) => q.eq('id', userId),
+        `profile:${userId}`
+      );
+      
+      if (profileError) throw profileError;
 
-      if (profileData) {
-        console.log("Profile loaded:", { id: profileData.id, role: profileData.role, institution_id: profileData.institution_id });
-        // Force super_admin role for the designated email
+      // Handle maybeSingle
+      const singleProfileData = Array.isArray(profileData) ? profileData[0] : profileData;
+
+      if (singleProfileData) {
         const finalProfile = isSuperAdminEmail 
-          ? { ...profileData, role: 'super_admin' as const } 
-          : profileData;
+          ? { ...singleProfileData, role: 'super_admin' as const } 
+          : singleProfileData;
           
         setProfile(finalProfile);
         OfflineService.setCache('user_profile', finalProfile);
         
-        // Then get the institution if institution_id exists and is valid
+        // 2. Get the institution (Cached)
         if (isValidUUID(finalProfile.institution_id)) {
-          console.log("Fetching institution for ID:", finalProfile.institution_id);
-          const { data: institutionData, error: mError } = await supabase
-            .from('institutions')
-            .select('*')
-            .eq('id', finalProfile.institution_id)
-            .maybeSingle();
+          const { data: institutionData, error: mError } = await requestManager.cachedFetch(
+            'institutions',
+            (q) => q.eq('id', finalProfile.institution_id),
+            `institution:${finalProfile.institution_id}`
+          );
 
-          if (mError) {
-            console.error("Institution fetch error:", mError);
-            throw mError;
-          }
+          if (mError) throw mError;
           
-          if (institutionData) {
-            console.log("Institution loaded:", { id: institutionData.id, name: institutionData.name });
+          const singleInstitution = Array.isArray(institutionData) ? institutionData[0] : institutionData;
+
+          if (singleInstitution) {
             if (finalProfile.role === 'super_admin') {
-              institutionData.theme = localStorage.getItem('super_admin_theme') || 'default';
+              singleInstitution.theme = localStorage.getItem('super_admin_theme') || 'default';
             }
-            setMadrasah(institutionData);
-            OfflineService.setCache('profile', institutionData);
-            await fetchActiveYear(institutionData.id);
+            setMadrasah(singleInstitution);
+            OfflineService.setCache('profile', singleInstitution);
+            await fetchActiveYear(singleInstitution.id);
           } else {
             setMadrasah(null);
           }
         } else if (finalProfile.role === 'super_admin') {
-          // Super admins might not have a institution_id
+          // ... existing super admin fallback ...
           const localTheme = localStorage.getItem('super_admin_theme') || 'default';
           setMadrasah({
             id: 'super_admin',
@@ -117,36 +122,17 @@ export const useAuth = () => {
           } as Institution);
         }
       } else {
-        // If profile doesn't exist yet, it might be the trigger lagging or 
-        // a manual auth user without SQL data.
+        // ... existing bootstrap logic ...
         if (isSuperAdminEmail) {
           console.log("Super admin profile missing, bootstrapping...");
           await supabase.rpc('bootstrap_super_admin', { 
             p_uid: userId, 
             p_email: userEmail 
           });
-          // Retry fetch once
-          const { data: retryProfile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-          if (retryProfile) {
-            setProfile({ ...retryProfile, role: 'super_admin' });
-            const localTheme = localStorage.getItem('super_admin_theme') || 'default';
-            setMadrasah({
-              id: 'super_admin',
-              name: 'Super Admin',
-              institution_type: 'system',
-              theme: localTheme,
-              config_json: { modules: {} },
-              is_active: true,
-              status: 'active',
-              balance: 0,
-              sms_balance: 0,
-              is_super_admin: true,
-              created_at: new Date().toISOString()
-            } as Institution);
-            return;
-          }
+          // Clear request manager cache so it fetches the new profile
+          requestManager.invalidate(`profile:${userId}`);
+          return fetchUserProfile(userId, email, retryCount);
         }
-        
         setAuthError("Profile not found in database. Please check if SQL triggers are running.");
       }
     } catch (err: any) {

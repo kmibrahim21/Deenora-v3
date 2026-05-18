@@ -12,17 +12,15 @@ const localT = {
   showAll: { en: 'Show All', bn: 'সব দেখান' },
 };
 
+import { requestManager } from 'services/RequestManager';
+
 interface RiskData {
   student_id: string;
   student_name: string;
-  class_name: string;
-  roll: number;
-  attendance_pct: number;
-  late_count: number;
-  latest_avg: number;
-  dropout_risk: 'safe' | 'warning' | 'high';
-  late_risk: 'safe' | 'warning' | 'high';
-  result_risk: 'safe' | 'warning' | 'high';
+  roll: string;
+  dropout_risk: 'high' | 'warning' | 'safe';
+  late_risk: 'high' | 'warning' | 'safe';
+  result_risk: 'high' | 'warning' | 'safe';
 }
 
 interface RiskAnalysisProps {
@@ -45,7 +43,7 @@ const StudentRiskAnalysis: React.FC<RiskAnalysisProps> = ({ institutionId, lang,
     if (!isValidUUID(institutionId)) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_student_risk_analysis', { p_madrasah_id: institutionId });
+      const { data, error } = await requestManager.cachedRpc('get_student_risk_analysis', { p_madrasah_id: institutionId });
       if (error) throw error;
       if (data) setRisks(data);
     } catch (err) {

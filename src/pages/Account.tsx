@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
+import { requestManager } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
@@ -151,6 +152,11 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     const newTheme = madrasah.theme === 'dark' ? 'default' : 'dark';
     
     try {
+      if (madrasah?.id) {
+        requestManager.invalidatePattern(`institution:${madrasah.id}`);
+        // Profile/Institution updates might affect dashboard context/branding
+        requestManager.invalidatePattern('dashboard_');
+      }
       const { error } = await supabase.from('institutions').update({ theme: newTheme }).eq('id', madrasah.id);
       if (error) throw error;
       setMadrasah({ ...madrasah, theme: newTheme });
@@ -279,6 +285,11 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       const currentConfig = (madrasah.config_json as any) || {};
       const updatedConfig = { ...currentConfig, user_pin: newPin.trim() };
       
+      if (madrasah?.id) {
+        requestManager.invalidatePattern(`institution:${madrasah.id}`);
+        requestManager.invalidatePattern('dashboard_');
+      }
+
       const { error } = await supabase.from('institutions').update({ 
         name: newName.trim(), 
         address: newAddress.trim() || null,
@@ -335,6 +346,11 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       
       // If both failed due to bucket issues, we might need to inform the user or use a different strategy
       if (!publicUrl) throw new Error('Could not upload logo. Please ensure storage buckets are configured.');
+
+      if (madrasah?.id) {
+        requestManager.invalidatePattern(`institution:${madrasah.id}`);
+        requestManager.invalidatePattern('dashboard_');
+      }
 
       const { error: updateErr } = await supabase.from('institutions').update({ logo_url: publicUrl }).eq('id', madrasah.id);
       if (updateErr) throw updateErr;

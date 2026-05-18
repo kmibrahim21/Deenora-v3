@@ -17,13 +17,11 @@ if (typeof window !== 'undefined') {
   const isBenignError = (message: any) => {
     const msg = String(message);
     return (
-      msg.includes('[vite] failed to connect to websocket') ||
-      msg.includes('WebSocket connection to') ||
-      msg.includes('WebSocket closed without opened') ||
+      msg.includes('[vite]') ||
+      msg.includes('WebSocket') ||
       msg.includes('HMR') ||
       msg.includes('connection refused') ||
-      msg.includes('The operation is insecure') ||
-      msg.includes('WebSocket not available')
+      msg.includes('The operation is insecure')
     );
   };
 

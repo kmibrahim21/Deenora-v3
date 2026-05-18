@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangle, FileUp, FileSpreadsheet } from 'lucide-react';
 import { supabase } from 'supabase';
+import { requestManager } from 'services/RequestManager';
 import { Institution, Language } from 'types';
 import * as XLSX from 'xlsx';
 
@@ -256,6 +257,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             type: 'success', 
             message: msg
           });
+          
+          if (madrasah?.id) {
+            requestManager.invalidatePattern(`students:${madrasah.id}`);
+            requestManager.invalidatePattern(`classes:${madrasah.id}`);
+            requestManager.invalidatePattern('dashboard_');
+          }
+          
           triggerRefresh();
         } catch (err: any) {
           setStatus({ type: 'error', message: err.message });

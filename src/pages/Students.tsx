@@ -8,7 +8,7 @@ import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { openWhatsAppChooser } from '../utils/whatsapp';
-
+import { requestManager } from 'services/RequestManager';
 
 interface StudentsProps {
   selectedClass: Class;
@@ -30,29 +30,30 @@ interface StudentsProps {
 const PAGE_SIZE = 50;
 
 const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
-  const isOnline = useOfflineStatus();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const isOnline = useOfflineStatus();
   const [sending, setSending] = useState(false);
   const isSendingRef = useRef(false);
-  
-  const [statusModal, setStatusModal] = useState<{show: boolean, type: 'success' | 'error' | 'balance', title: string, message: string}>({
-    show: false, type: 'success', title: '', message: ''
-  });
+  const [statusModal, setStatusModal] = useState<{ show: boolean; type: 'success' | 'error' | 'balance'; title: string; message: string }>({ show: false, type: 'success', title: '', message: '' });
 
   // Fetch Templates (Cached)
   const fetchTemplates = useCallback(async () => {
     if (!institutionId) return;
-    const { data } = await supabase.from('sms_templates').select('id, title, body').eq('institution_id', institutionId);
+    const { data } = await requestManager.cachedFetch(
+      'sms_templates', 
+      (q) => q.select('id, title, body').eq('institution_id', institutionId),
+      `templates:${institutionId}`
+    );
     if (data) setTemplates(data);
   }, [institutionId]);
 
@@ -67,52 +68,50 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
     try {
       if (!isOnline) {
-        const cachedStudents = await CacheService.getCachedData('students', institutionId);
-        let filtered = cachedStudents.filter(s => s.class_id === selectedClass.id);
-        if (searchQuery.trim()) {
-          filtered = filtered.filter(s => s.student_name.toLowerCase().includes(searchQuery.toLowerCase()));
+        const cached = await CacheService.getCachedData('students', institutionId);
+        if (cached) {
+          const filtered = cached.filter((s: any) => s.class_id === selectedClass.id);
+          setStudents(filtered);
         }
-        filtered.sort((a, b) => {
-          if ((a.roll || 0) === (b.roll || 0)) return a.id.localeCompare(b.id);
-          return (a.roll || 0) - (b.roll || 0);
-        });
-        
-        const paginated = filtered.slice(from, to + 1);
-        setStudents(prev => reset ? paginated : [...prev, ...paginated]);
-        setHasMore(filtered.length > to + 1);
-        setPage(currentPage + 1);
+        setLoading(false);
         return;
       }
 
-      // Try to include mother_name if we haven't confirmed it's missing
+      // 1. Prepare fields
       const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, classes(class_name)';
       const selectFields = (window as any)._hasMotherName === false ? baseFields : `${baseFields}, mother_name`;
 
-      let query = supabase
-        .from('students')
-        .select(selectFields)
-        .eq('institution_id', institutionId)
-        .eq('class_id', selectedClass.id)
-        .order('roll', { ascending: true, nullsFirst: false })
-        .order('id', { ascending: true })
-        .range(from, to);
+      // 2. Fetch via RequestManager (Cache key includes page and class)
+      const cacheKey = `students:${selectedClass.id}:p${currentPage}:${searchQuery || 'all'}`;
+      
+      const { data, error } = await requestManager.cachedFetch(
+        'students',
+        (q) => {
+          let query = q.select(selectFields)
+            .eq('institution_id', institutionId)
+            .eq('class_id', selectedClass.id)
+            .order('roll', { ascending: true, nullsFirst: false })
+            .order('id', { ascending: true })
+            .range(from, to);
 
-      const activeYearId = madrasah?.config_json?.active_academic_year_id;
-      if (activeYearId) {
-        query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-      }
+          const activeYearId = madrasah?.config_json?.active_academic_year_id;
+          if (activeYearId) {
+            query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          }
 
-      if (searchQuery.trim()) {
-        query = query.ilike('student_name', `%${searchQuery}%`);
-      }
-
-      const { data, error } = await query;
+          if (searchQuery.trim()) {
+            query = query.ilike('student_name', `%${searchQuery}%`);
+          }
+          return query;
+        },
+        cacheKey,
+        30000 // 30 second TTL for student list pages
+      );
       
       if (error) {
-        // If mother_name is missing, retry without it and remember for this session
+        // ... existing error handling for mother_name ...
         if ((window as any)._hasMotherName === undefined && (error.code === 'PGRST204' || error.message?.includes('mother_name'))) {
           (window as any)._hasMotherName = false;
-          console.warn('mother_name column missing, retrying query...');
           return fetchStudents(reset);
         }
         throw error;
@@ -132,36 +131,18 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         setHasMore(data.length === PAGE_SIZE);
         setPage(currentPage + 1);
 
-        // Update cache if this is the first page and no search query
+        // Update offline cache if this is the first page of the class
         if (reset && !searchQuery.trim()) {
            await CacheService.cacheData('students', institutionId, formattedData);
         }
       }
     } catch (err: any) {
-      console.error(err);
-      // Fallback to cache if network fails
-      if (err.message?.includes('fetch') || err.name === 'TypeError' || !navigator.onLine) {
-        console.log("Network error in fetchStudents, falling back to cache...");
-        const cachedStudents = await CacheService.getCachedData('students', institutionId);
-        let filtered = cachedStudents.filter(s => s.class_id === selectedClass.id);
-        if (searchQuery.trim()) {
-          filtered = filtered.filter(s => s.student_name.toLowerCase().includes(searchQuery.toLowerCase()));
-        }
-        filtered.sort((a, b) => {
-          if ((a.roll || 0) === (b.roll || 0)) return a.id.localeCompare(b.id);
-          return (a.roll || 0) - (b.roll || 0);
-        });
-        
-        const paginated = filtered.slice(from, to + 1);
-        setStudents(prev => reset ? paginated : [...prev, ...paginated]);
-        setHasMore(filtered.length > to + 1);
-        setPage(currentPage + 1);
-      }
+      console.error("fetchStudents error:", err);
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [institutionId, selectedClass.id, page, searchQuery]);
+  }, [institutionId, selectedClass.id, page, searchQuery, madrasah?.config_json?.active_academic_year_id]);
 
   useEffect(() => {
     const timer = setTimeout(() => fetchStudents(true), 400);

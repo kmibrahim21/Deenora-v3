@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
+import { requestManager } from 'services/RequestManager';
+import { CacheService } from 'services/cacheService';
 import { t } from 'translations';
 
 interface StudentDetailsProps {
@@ -59,6 +61,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
       } else {
          student.notes = editedNotes;
          setIsEditingNotes(false);
+         // Invalidate Pattern
+         if (madrasah) {
+           requestManager.invalidatePattern(`students:${student.class_id}`);
+         }
          if (triggerRefresh) triggerRefresh();
       }
     } catch (err: any) {
@@ -85,6 +91,21 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         .eq('id', student.id);
       
       if (error) throw error;
+      
+      // Invalidate Patterns
+      if (madrasah) {
+        requestManager.invalidatePattern(`students:${student.class_id}`);
+        requestManager.invalidatePattern(`stats:${madrasah.id}`);
+        requestManager.invalidatePattern(`fees:${madrasah.id}`);
+        requestManager.invalidatePattern(`dashboard_`);
+        
+        // Remove from local IndexedDB cache
+        const cached = await CacheService.getCachedData('students', madrasah.id);
+        if (Array.isArray(cached)) {
+          const updated = cached.filter((s: any) => s.id !== student.id);
+          await CacheService.cacheData('students', madrasah.id, updated);
+        }
+      }
       
       if (triggerRefresh) triggerRefresh();
       onBack();

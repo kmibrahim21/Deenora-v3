@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { supabase } from "lib/supabase";
+import { requestManager } from "services/RequestManager";
 import { hardReload } from "utils/reloadUtils";
 import { Institution, Class, Exam, Student, AcademicYear } from "types";
 import {
@@ -206,6 +207,11 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
       if (error) throw error;
 
+      // Invalidate Pattern-based caches
+      requestManager.invalidatePattern(`academic_years:${institution.id}`);
+      requestManager.invalidatePattern(`stats:${institution.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
+
       if (isFirstYear) {
         // Update institution config if it's the first year
         const updatedConfig = {
@@ -282,6 +288,14 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
         .update({ config_json: updatedConfig })
         .eq("id", institution.id);
 
+      // Invalidate ALL caches as active year affects everything
+      requestManager.invalidatePattern(`academic_years:${institution.id}`);
+      requestManager.invalidatePattern(`students:${institution.id}`);
+      requestManager.invalidatePattern(`fees:${institution.id}`);
+      requestManager.invalidatePattern(`stats:${institution.id}`);
+      requestManager.invalidatePattern(`ledger:${institution.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
+
       setCurrentYear(updatedYear);
       setAcademicYears(
         academicYears.map((y) =>
@@ -329,6 +343,10 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
       if (error) throw error;
 
+      // Invalidate caches
+      requestManager.invalidatePattern(`academic_years:${institution.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
+
       setAcademicYears(
         academicYears.map((y) => (y.id === yearId ? updatedYear : y)),
       );
@@ -371,6 +389,10 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
         .eq("id", yearId);
 
       if (error) throw error;
+
+      // Invalidate caches
+      requestManager.invalidatePattern(`academic_years:${institution.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
 
       setAcademicYears(academicYears.filter((y) => y.id !== yearId));
       if (currentYear?.id === yearId) setCurrentYear(null);
@@ -557,6 +579,13 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
         .eq("id", institution.id);
 
       if (configError) throw configError;
+
+      // Invalidate everything after promotion
+      requestManager.invalidatePattern(`academic_years:${institution.id}`);
+      requestManager.invalidatePattern(`students:${institution.id}`);
+      requestManager.invalidatePattern(`fees:${institution.id}`);
+      requestManager.invalidatePattern(`stats:${institution.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
 
       setExecutingLog((prev) => [
         ...prev,

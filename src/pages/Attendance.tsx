@@ -8,6 +8,7 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
+import { requestManager } from 'services/RequestManager';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
 import jsPDF from 'jspdf';
@@ -477,6 +478,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const handleSave = async () => {
     if (!madrasah || !selectedClass) return;
     setSaving(true);
+    
+    // Invalidate RequestManager pattern-based caches
+    requestManager.invalidatePattern(`attendance:${madrasah.id}`);
+    requestManager.invalidatePattern(`stats:${madrasah.id}`);
+    requestManager.invalidatePattern(`dashboard_`);
+
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       // Clean delete for sync - now including session
@@ -508,9 +515,32 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
         throw error;
       }
+
+      // Update Local Cache for offline consistency
+      const currentAttendanceData = payload.filter(p => p.status === 'absent').map(p => {
+        const student = students.find(s => s.id === p.student_id);
+        const cls = classes.find(c => c.id === p.class_id);
+        return {
+          ...p,
+          students: { 
+            student_name: student?.student_name, 
+            roll: student?.roll, 
+            guardian_phone: student?.guardian_phone 
+          },
+          classes: { class_name: cls?.class_name }
+        };
+      });
+      
+      if (date === reportDate) {
+        setDailyAbsentees(currentAttendanceData as any);
+        await CacheService.cacheData('attendance_daily', madrasah.id, currentAttendanceData);
+      }
+
       setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
       setSuccessMessage(lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.');
       setShowSuccessModal(true);
+      
+      if (triggerRefresh) triggerRefresh();
     } catch (err: any) { 
       setErrorTitle(lang === 'bn' ? 'হাজিরা সংরক্ষণ ব্যর্থ' : 'Save Failed');
       setErrorDetails(err.message);
@@ -773,6 +803,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         .eq('id', madrasah.id);
         
       if (error) throw error;
+      
+      // Invalidate Pattern on settings change as it affects attendance logic
+      requestManager.invalidatePattern(`attendance:${madrasah.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
       
       if (triggerRefresh) triggerRefresh();
       

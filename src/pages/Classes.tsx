@@ -5,6 +5,7 @@ import { Plus, ChevronRight, BookOpen, Users, Edit3, Trash2, X, Check, Loader2, 
 import { supabase, offlineApi } from 'supabase';
 import { Class, Language, Institution, Profile } from 'types';
 import { t } from 'translations';
+import { requestManager } from 'services/RequestManager';
 
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
@@ -32,10 +33,10 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [classes, setClasses] = useState<(Class & { student_count?: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [modalLoading, setModalLoading] = useState(false);
   const [newClassName, setNewClassName] = useState('');
-  const [newSortOrder, setNewSortOrder] = useState<string>('');
+  const [newSortOrder, setNewSortOrder] = useState('');
   const [editingClass, setEditingClass] = useState<Class | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Class | null>(null);
   const isDark = madrasah?.theme === 'dark';
 
@@ -46,55 +47,74 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   }, [dataVersion, madrasah?.id]);
 
   const fetchClasses = async () => {
+    if (!madrasah?.id) return;
     setLoading(true);
+    
+    // First, show whatever is in offline cache immediately
     const cached = offlineApi.getCache('classes');
     if (cached) setClasses(sortMadrasahClasses(cached));
 
-    if (navigator.onLine && madrasah) {
-      try {
-        const { data: classesData, error } = await supabase
-          .from('classes')
-          .select('*')
-          .eq('institution_id', madrasah.id);
-        if (error) throw error;
-        if (classesData) {
-          let filteredClasses = classesData;
-          if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
-            filteredClasses = classesData.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
-          }
-
-          const { data: studentData, error: statsError } = await supabase
-            .from('students')
-            .select('class_id')
-            .eq('institution_id', madrasah.id);
-          
-          const counts: Record<string, number> = {};
-          if (studentData) {
-            studentData.forEach(s => {
-              if (s.class_id) {
-                counts[s.class_id] = (counts[s.class_id] || 0) + 1;
-              }
-            });
-          }
-
-          const withCounts = filteredClasses.map(cls => ({
-            ...cls,
-            student_count: counts[cls.id] || 0
-          }));
-          const sorted = sortMadrasahClasses(withCounts);
-          setClasses(sorted);
-          offlineApi.setCache('classes', sorted);
+    try {
+      // 1. Fetch Classes (Cached)
+      const { data: classesData, error } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', madrasah.id),
+        `classes:${madrasah.id}`
+      );
+      if (error) throw error;
+      
+      if (classesData) {
+        let filteredClasses = classesData;
+        if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+          filteredClasses = classesData.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
         }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    } else { setLoading(false); }
+
+        // 2. Fetch Student Class Counts (Only class_id to reduce payload)
+        // Cache this for 1 minute as it's just for display counts
+        const { data: studentData } = await requestManager.cachedFetch(
+          'students',
+          (q) => q.select('class_id').eq('institution_id', madrasah.id),
+          `student_counts:${madrasah.id}`,
+          60000 // 1 minute TTL for counts
+        );
+        
+        const counts: Record<string, number> = {};
+        if (studentData) {
+          studentData.forEach(s => {
+            if (s.class_id) {
+              counts[s.class_id] = (counts[s.class_id] || 0) + 1;
+            }
+          });
+        }
+
+        const withCounts = filteredClasses.map(cls => ({
+          ...cls,
+          student_count: counts[cls.id] || 0
+        }));
+        const sorted = sortMadrasahClasses(withCounts);
+        setClasses(sorted);
+        offlineApi.setCache('classes', sorted);
+      }
+    } catch (err) { 
+      console.error('Fetch Classes Error:', err); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSaveClass = async () => {
     if (!newClassName.trim() || !madrasah) return;
     setModalLoading(true);
     const order = newSortOrder ? parseInt(newSortOrder) : null;
+    
+    // Invalidate RequestManager cache immediately
+    requestManager.invalidatePattern(`classes:${madrasah.id}`);
+
     try {
       if (editingClass) {
+        // Optimistic Update
+        setClasses(prev => prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c));
+        
         if (navigator.onLine) {
           const { error } = await supabase.from('classes').update({ 
             class_name: newClassName.trim(),
@@ -109,14 +129,29 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           });
         }
       } else {
+        const tempId = crypto.randomUUID();
         const payload = { 
+          id: tempId,
           class_name: newClassName.trim(), 
           institution_id: madrasah.id,
           sort_order: order
         };
+        
+        // Optimistic Update
+        setClasses(prev => sortMadrasahClasses([...prev, { ...payload, student_count: 0 }]));
+
         if (navigator.onLine) {
-          const { error } = await supabase.from('classes').insert(payload);
+          const { data, error } = await supabase.from('classes').insert({
+            class_name: payload.class_name,
+            institution_id: payload.institution_id,
+            sort_order: payload.sort_order
+          }).select().single();
           if (error) throw error;
+          
+          // Replace temp item with real data if needed (though next refresh will handle it)
+          if (data) {
+             setClasses(prev => prev.map(c => c.id === tempId ? { ...data, student_count: 0 } : c));
+          }
         } else {
           offlineApi.queueAction('classes', 'INSERT', payload);
         }
@@ -128,13 +163,22 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       triggerRefresh();
     } catch (err: any) {
       alert(lang === 'bn' ? `ব্যর্থ হয়েছে: ${err.message}` : `Failed: ${err.message}`);
+      // On error, we really should revert the optimistic state but for now fetchClasses will correct it
+      fetchClasses();
     } finally { setModalLoading(false); }
   };
 
   const handleDeleteClass = async () => {
-    if (!showDeleteConfirm) return;
+    if (!showDeleteConfirm || !madrasah) return;
     setModalLoading(true);
+    
+    // Invalidate
+    requestManager.invalidatePattern(`classes:${madrasah.id}`);
+
     try {
+      // Optimistic Delete
+      setClasses(prev => prev.filter(c => c.id !== showDeleteConfirm.id));
+
       if (navigator.onLine) {
         const { error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
         if (error) {
@@ -152,7 +196,10 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       }
       setShowDeleteConfirm(null);
       triggerRefresh();
-    } catch (err: any) { alert(err.message); } finally { setModalLoading(false); }
+    } catch (err: any) { 
+      alert(err.message); 
+      fetchClasses(); // Revert on failure
+    } finally { setModalLoading(false); }
   };
 
   return (

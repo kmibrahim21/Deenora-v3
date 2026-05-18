@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Clock, User as UserIcon, RefreshCw, PhoneCall, X, MessageCircle, Phone, AlertCircle, Trash2, AlertTriangle, Loader2, Users, BookOpen, GraduationCap, Wallet, TrendingUp, DollarSign, CheckCircle2, Banknote, ClipboardList, ChevronRight, Trophy, Zap, Mic } from 'lucide-react';
+import { Search, Clock, User as UserIcon, PhoneCall, X, MessageCircle, Phone, AlertCircle, Trash2, AlertTriangle, Loader2, Users, BookOpen, GraduationCap, Wallet, TrendingUp, DollarSign, CheckCircle2, Banknote, ClipboardList, ChevronRight, Trophy, Zap, Mic } from 'lucide-react';
 import { supabase, offlineApi } from 'supabase';
 import { Student, Language, Institution } from 'types';
 import { t } from 'translations';
@@ -11,6 +11,7 @@ import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import SmartResultAnalytics from 'components/SmartResultAnalytics';
 import { isValidUUID } from 'utils/validation';
 import { CacheService } from 'services/cacheService';
+import { requestManager } from 'services/RequestManager';
 
 interface HomeProps {
   onStudentClick: (student: Student) => void;
@@ -91,15 +92,15 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     } as any;
   }, [madrasah]) as any;
 
-  const fetchDashboardStats = async () => {
-    console.log("Fetching dashboard stats for institution:", institutionId);
-    if (!isValidUUID(institutionId)) {
-      console.warn("Invalid institutionId for dashboard stats:", institutionId);
-      return;
-    }
-    setLoadingStats(true);
+  const [isRevalidating, setIsRevalidating] = useState(false);
+
+  const fetchDashboardStats = async (isBackground = false) => {
+    if (!isValidUUID(institutionId)) return;
+    if (!isBackground) setLoadingStats(true);
+    else setIsRevalidating(true);
+
     try {
-      if (!navigator.onLine) {
+      if (!navigator.onLine && !isBackground) {
         const cachedStats = await CacheService.getCachedData('stats', institutionId);
         if (cachedStats && cachedStats.length > 0) {
           setStats(cachedStats[0]);
@@ -107,86 +108,141 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           return;
         }
       }
+// ...
+// (rest of the function stays same, I'll just apply these changes)
 
       const today = new Date().toISOString().split('T')[0];
       const allowedClasses = profile?.permissions?.allowed_classes;
       const isTeacher = role === 'teacher';
       const activeYearId = madrasah?.config_json?.active_academic_year_id;
 
-      let studentQuery = supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
-      let classQuery = supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
-      let attendanceQuery = supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId).eq('date', today).eq('status', 'present');
+      // 1. Students Count (Cached)
+      const stdProm = requestManager.cachedFetch(
+        'students',
+        (q) => {
+          let query = q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
+          if (activeYearId) query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          if (isTeacher && allowedClasses?.length) query = query.in('class_id', allowedClasses);
+          return query;
+        },
+        `dashboard_students:${institutionId}:${activeYearId || 'all'}`,
+        120000 // 2 min TTL
+      );
 
-      if (activeYearId) {
-        studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-        attendanceQuery = attendanceQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-      }
+      // 2. Classes Count (Cached)
+      const clsProm = requestManager.cachedFetch(
+        'classes',
+        (q) => {
+          let query = q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
+          if (isTeacher && allowedClasses?.length) query = query.in('id', allowedClasses);
+          return query;
+        },
+        `dashboard_classes:${institutionId}`,
+        120000 // 2 min TTL
+      );
 
-      if (isTeacher && allowedClasses && allowedClasses.length > 0) {
-        studentQuery = studentQuery.in('class_id', allowedClasses);
-        classQuery = classQuery.in('id', allowedClasses);
-        attendanceQuery = attendanceQuery.in('class_id', allowedClasses);
-      }
+      // 3. Teachers Count (Cached)
+      const teacherProm = requestManager.cachedFetch(
+        'teachers',
+        (q) => q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId),
+        `dashboard_teachers:${institutionId}`,
+        300000 // 5 min TTL
+      );
 
-      let ledgerQuery = supabase.from('ledger').select('type, amount').eq('institution_id', institutionId).gte('transaction_date', new Date().toISOString().slice(0, 7) + '-01');
-      if (activeYearId) {
-        ledgerQuery = ledgerQuery.eq('academic_year_id', activeYearId);
-      }
+      // 4. Institution Balance (Shorter TTL for precision)
+      const instProm = requestManager.cachedFetch(
+        'institutions',
+        (q) => q.select('sms_balance, balance').eq('id', institutionId),
+        `dashboard_balance:${institutionId}`,
+        30000 // 30s TTL
+      );
 
-      const promises: any[] = [
-        studentQuery,
-        classQuery,
-        supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('institution_id', institutionId),
-        supabase.from('institutions').select('sms_balance, balance').eq('id', institutionId).maybeSingle(),
-        ledgerQuery
-      ];
+      // 5. Ledger (Current Month)
+      const ledgerProm = requestManager.cachedFetch(
+        'ledger',
+        (q) => {
+          let query = q.select('type, amount').eq('institution_id', institutionId).gte('transaction_date', new Date().toISOString().slice(0, 7) + '-01');
+          if (activeYearId) query = query.eq('academic_year_id', activeYearId);
+          return query;
+        },
+        `dashboard_ledger:${institutionId}:${activeYearId || 'all'}`,
+        60000 // 1 min TTL
+      );
 
-      if (modules.modules.attendance) {
-        promises.push(attendanceQuery);
-      } else {
-        promises.push(Promise.resolve({ count: 0 }));
-      }
+      // 6. Attendance Today
+      const attProm = modules.modules.attendance 
+        ? requestManager.cachedFetch(
+            'attendance',
+            (q) => {
+              let query = q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId).eq('date', today).eq('status', 'present');
+              if (activeYearId) query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+              if (isTeacher && allowedClasses?.length) query = query.in('class_id', allowedClasses);
+              return query;
+            },
+            `dashboard_attendance:${institutionId}:${today}`,
+            60000 // 1 min TTL
+          )
+        : Promise.resolve({ count: 0 });
 
-      const [stdRes, clsRes, teacherRes, mRes, ledgerRes, attRes] = await Promise.all(promises);
+      const [stdRes, clsRes, teacherRes, mRes, ledgerRes, attRes] = await Promise.all([
+        stdProm, clsProm, teacherProm, instProm, ledgerProm, attProm
+      ]);
 
-      const income = ledgerRes.data?.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0) || 0;
-      const expense = ledgerRes.data?.filter((e: any) => e.type === 'expense').reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0) || 0;
+      const income = Array.isArray(ledgerRes.data) 
+        ? ledgerRes.data.filter((e: any) => e.type === 'income').reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0) 
+        : 0;
+      const expense = Array.isArray(ledgerRes.data) 
+        ? ledgerRes.data.filter((e: any) => e.type === 'expense').reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0) 
+        : 0;
+
+      const singleInst = Array.isArray(mRes.data) ? mRes.data[0] : mRes.data;
 
       const newStats = {
         totalStudents: stdRes.count || 0,
         totalClasses: clsRes.count || 0,
         totalTeachers: teacherRes.count || 0,
-        smsBalance: mRes.data?.sms_balance || 0,
-        voiceBalance: mRes.data?.balance || 0,
+        smsBalance: singleInst?.sms_balance || 0,
+        voiceBalance: singleInst?.balance || 0,
         attendanceToday: attRes.count || 0,
         totalIncome: income,
         totalExpense: expense
       };
 
       setStats(newStats);
-      
-      // Cache stats
       await CacheService.cacheData('stats', institutionId, newStats);
     } catch (e: any) {
       console.error("Dashboard Stats Error:", e);
-      // Fallback to cache if network fails
-      if (e.message?.includes('fetch') || e.name === 'TypeError' || !navigator.onLine) {
-        const cachedStats = await CacheService.getCachedData('stats', institutionId);
-        if (cachedStats && cachedStats.length > 0) {
-          setStats(cachedStats[0]);
-        }
-      }
     } finally {
       setLoadingStats(false);
+      setIsRevalidating(false);
     }
   };
 
   useEffect(() => { 
-    fetchDashboardStats();
-  }, [dataVersion, institutionId, modules.modules.attendance]);
+    if (institutionId && madrasah) {
+      fetchDashboardStats();
+
+      // Subscribe to any potential background updates for dashboard keys
+      const keysToWatch = [
+        `dashboard_students:${institutionId}`,
+        `dashboard_classes:${institutionId}`,
+        `dashboard_teachers:${institutionId}`,
+        `dashboard_balance:${institutionId}`,
+        `dashboard_ledger:${institutionId}`,
+        `dashboard_attendance:${institutionId}`
+      ];
+
+      const unsubscribers = keysToWatch.map(key => 
+        requestManager.subscribe(key, () => fetchDashboardStats(true))
+      );
+
+      return () => unsubscribers.forEach(unsub => unsub());
+    }
+  }, [dataVersion, institutionId, madrasah?.id, madrasah?.config_json?.active_academic_year_id]);
 
   return (
     <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500 pb-20 lg:pb-8">
+
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 lg:gap-6 px-1">
 
         {canManageStudents && (

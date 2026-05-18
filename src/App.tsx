@@ -127,7 +127,8 @@ const App: React.FC = () => {
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     const isAuth = !session && !madrasah;
     const isDark = madrasah?.theme === 'dark';
-    const bgColor = (loading || isAuth || isDark) ? "#0F172A" : "#EBF5FF"; // Match Layout.tsx bg-[#EBF5FF]
+    const isSplash = loading || (session && !madrasah);
+    const bgColor = (isSplash || isAuth || isDark) ? "#0F172A" : "#EBF5FF"; // Match Layout.tsx bg-[#EBF5FF]
     
     if (themeColorMeta) {
       themeColorMeta.setAttribute("content", bgColor);
@@ -150,7 +151,7 @@ const App: React.FC = () => {
     };
   }, []);
 
-  if (loading)
+  if (loading || (session && !madrasah))
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] relative overflow-hidden">
         {/* Decorative Background */}

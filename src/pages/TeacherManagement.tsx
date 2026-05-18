@@ -50,6 +50,7 @@ import {
 } from "types";
 import { t } from "translations";
 import { supabase } from "supabase";
+import { requestManager } from "services/RequestManager";
 import { useOfflineStatus } from "hooks/useOffline";
 import { CacheService } from "services/cacheService";
 import { generateAttendanceReportPDF } from "../utils/pdfGenerator";
@@ -388,6 +389,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
 
     setPayingId(teacher.id);
+
+    // Invalidate dashboard stats & ledger Pattern-based caches
+    requestManager.invalidatePattern(`stats:${madrasah.id}`);
+    requestManager.invalidatePattern(`ledger:${madrasah.id}`);
+    requestManager.invalidatePattern(`dashboard_`);
+
     try {
       const description = `Salary paid for ${salaryMonth} to ${teacher.name} [ID:${teacher.id}]`;
       
@@ -509,6 +516,17 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         permissions,
       });
 
+      // Optimistic Update
+      const tempId = crypto.randomUUID();
+      const optimisticTeacher: any = {
+        id: tempId,
+        institution_id: madrasah.id,
+        ...formData,
+        permissions,
+        created_at: new Date().toISOString()
+      };
+      setTeachers(prev => [optimisticTeacher, ...prev]);
+
       const response = await fetch("/api/teachers/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -525,6 +543,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       if (!response.ok) {
         throw new Error(data.error || data.message || "Failed to add teacher");
       }
+
+      // Invalidate caches
+      requestManager.invalidatePattern(`teachers:${madrasah.id}`);
+      requestManager.invalidatePattern(`stats:${madrasah.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
 
       await fetchTeachers();
       setShowAddModal(false);
@@ -550,6 +573,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         permissions,
       });
 
+      // Optimistic Update
+      setTeachers(prev => prev.map(t => t.id === selectedTeacher.id ? { 
+        ...t, 
+        ...formData, 
+        basic_salary: Number(formData.basic_salary),
+        permissions 
+      } : t));
+
       const response = await fetch("/api/teachers/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -569,6 +600,10 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         );
       }
 
+      // Invalidate caches
+      requestManager.invalidatePattern(`teachers:${madrasah?.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
+
       await fetchTeachers();
       setShowEditModal(false);
       setSelectedTeacher(null);
@@ -583,6 +618,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const handleDeleteTeacher = async (id: string) => {
     try {
+      // Optimistic Update
+      setTeachers(prev => prev.filter(t => t.id !== id));
+
       const response = await fetch(`/api/teachers/delete?id=${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -592,10 +630,17 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         const data = await response.json();
         throw new Error(data.error || "Failed to delete teacher");
       }
+
+      // Invalidate caches
+      requestManager.invalidatePattern(`teachers:${madrasah?.id}`);
+      requestManager.invalidatePattern(`stats:${madrasah?.id}`);
+      requestManager.invalidatePattern(`dashboard_`);
+
       await fetchTeachers();
       setDeleteModal({ show: false, teacherId: null });
     } catch (err: any) {
       alert(err.message);
+      fetchTeachers(); // Revert on failure
     }
   };
 
@@ -1214,6 +1259,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                             if (due <= 0) return;
                             
                             setPayingId(teacher.id);
+
+                            // Invalidate caches
+                            requestManager.invalidatePattern(`stats:${madrasah?.id}`);
+                            requestManager.invalidatePattern(`ledger:${madrasah?.id}`);
+                            requestManager.invalidatePattern(`dashboard_`);
+
                             try {
                               const description = `Salary paid for ${salaryMonth} to ${teacher.name} [ID:${teacher.id}]`;
                               const payload: any = {
