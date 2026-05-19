@@ -22,7 +22,6 @@ import { createPortal } from "react-dom";
 import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
 import { useGlobalUpdate } from "hooks/useGlobalUpdate";
 import { requestManager } from "services/RequestManager";
-import { PerformanceDashboard } from "components/PerformanceDashboard";
 
 const Auth = React.lazy(() => import("pages/Auth"));
 const Home = React.lazy(() => import("pages/Home"));
@@ -761,7 +760,6 @@ const App: React.FC = () => {
       madrasah={madrasah}
       profile={profile}
     >
-      <PerformanceDashboard />
       <OfflineIndicator />
       <Suspense
         fallback={

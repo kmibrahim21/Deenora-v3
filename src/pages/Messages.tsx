@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { MessageSquare, Calendar, Send, List, Trash2, CalendarDays, BookOpen, Clock, FileText, Plus, Bell, Users, CheckCircle2, Circle } from 'lucide-react';
 import { Institution, Language } from '../types';
+import { OfflineService } from '../services/OfflineService';
 
 export default function Messages({ 
   lang = 'bn',
@@ -105,8 +106,7 @@ export default function Messages({
   const handleDelete = async (id: string) => {
     if (!confirm('আপনি কি নিশ্চিত যে এটি মুছে ফেলতে চান?')) return;
     try {
-      const { error } = await supabase.from('messages').delete().eq('id', id);
-      if (error) throw error;
+      await OfflineService.safeDelete('messages', id);
       fetchData();
     } catch (err) {
       console.error(err);
@@ -119,10 +119,9 @@ export default function Messages({
     try {
       const newStatus = msg.parsedMessage.status === 'completed' ? 'pending' : 'completed';
       const newPayload = { ...msg.parsedMessage, status: newStatus };
-      const { error } = await supabase.from('messages').update({
+      await OfflineService.safeUpdate('messages', msg.id, {
         message: JSON.stringify(newPayload)
-      }).eq('id', msg.id);
-      if (error) throw error;
+      });
       fetchData();
     } catch (err) {
       console.error(err);
@@ -141,7 +140,7 @@ export default function Messages({
         note: msgNote,
         status: isDraft ? 'draft' : 'published'
       };
-      await supabase.from('messages').insert({
+      await OfflineService.safeInsert('messages', {
         institution_id: madrasah?.id,
         class_name: selectedClass,
         title,
@@ -159,7 +158,7 @@ export default function Messages({
     if (!noticeTitle) return alert('সব তথ্য দিন');
     setIsSubmitting(true);
     try {
-      await supabase.from('messages').insert({
+      await OfflineService.safeInsert('messages', {
         institution_id: madrasah?.id,
         class_name: noticeType,
         title: noticeTitle,
@@ -177,7 +176,7 @@ export default function Messages({
     if (!routineClass) return alert('সব তথ্য দিন');
     setIsSubmitting(true);
     try {
-      await supabase.from('messages').insert({
+      await OfflineService.safeInsert('messages', {
         institution_id: madrasah?.id,
         class_name: `APP_ROUTINE_${routineClass}`,
         title: "Class Routine",
@@ -199,7 +198,7 @@ export default function Messages({
     if (!syllabusClass) return alert('সব তথ্য দিন');
     setIsSubmitting(true);
     try {
-      await supabase.from('messages').insert({
+      await OfflineService.safeInsert('messages', {
         institution_id: madrasah?.id,
         class_name: `APP_SYLLABUS_${syllabusClass}`,
         title: `Syllabus ${syllabusSession}`,

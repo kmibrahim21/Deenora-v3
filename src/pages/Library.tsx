@@ -3,6 +3,7 @@ import { BookMarked, BookType, BookOpenCheck, Settings2, Trash2, Edit, Plus, Sea
 import { supabase } from '../supabase';
 import { t } from '../translations';
 import { Language, Institution, Profile } from '../types';
+import { OfflineService } from '../services/OfflineService';
 
 interface LibraryBook {
   id: string;
@@ -138,8 +139,7 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
     };
 
     try {
-      const { error } = await supabase.from('library_books').insert(newBook);
-      if (error) throw error;
+      await OfflineService.safeInsert('library_books', newBook);
       fetchData();
       setShowAddBook(false);
     } catch (error: any) {
@@ -169,8 +169,7 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
     };
 
     try {
-      const { error } = await supabase.from('library_books').update(updates).eq('id', editBook.id);
-      if (error) throw error;
+      await OfflineService.safeUpdate('library_books', editBook.id, updates);
       fetchData();
       setEditBook(null);
     } catch (error: any) {
@@ -181,8 +180,7 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
   const handleDeleteBook = async (id: string) => {
     if (!confirm(lang === 'bn' ? "বইটি মুছে ফেলতে চান?" : "Delete this book?")) return;
     try {
-      const { error } = await supabase.from('library_books').delete().eq('id', id);
-      if (error) throw error;
+      await OfflineService.safeDelete('library_books', id);
       fetchData();
     } catch (error: any) {
       alert("Error deleting book: " + error.message);
@@ -219,16 +217,11 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
 
     try {
       // Create issue
-      const { error: issueErr } = await supabase.from('library_issues').insert(payload);
-      if (issueErr) throw issueErr;
+      await OfflineService.safeInsert('library_issues', payload);
 
       // Update book qty
-      const { error: bookErr } = await supabase.from('library_books')
-        .update({ available_quantity: book.available_quantity - 1 })
-        .eq('id', book_id);
+      await OfflineService.safeUpdate('library_books', book_id, { available_quantity: book.available_quantity - 1 });
       
-      if (bookErr) throw bookErr;
-
       fetchData();
       setShowIssueModal(false);
     } catch (error: any) {
@@ -239,17 +232,12 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
   const handleReturnBook = async (issue: LibraryIssue) => {
     if (!confirm(lang === 'bn' ? "বইটি ফেরত নেওয়া হয়েছে?" : "Mark as returned?")) return;
     try {
-      const { error: issueErr } = await supabase.from('library_issues')
-        .update({ status: 'returned', return_date: new Date().toISOString() })
-        .eq('id', issue.id);
-      if (issueErr) throw issueErr;
+      await OfflineService.safeUpdate('library_issues', issue.id, { status: 'returned', return_date: new Date().toISOString() });
 
       // Ensure we have current book
       const book = books.find(b => b.id === issue.book_id);
       if (book) {
-        await supabase.from('library_books')
-          .update({ available_quantity: book.available_quantity + 1 })
-          .eq('id', book.id);
+        await OfflineService.safeUpdate('library_books', book.id, { available_quantity: book.available_quantity + 1 });
       }
 
       fetchData();

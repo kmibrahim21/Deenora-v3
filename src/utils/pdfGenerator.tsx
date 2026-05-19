@@ -215,7 +215,7 @@ export const generateResultPDF = async (
     student: any,
     exam: any,
     marks: any[],
-    madrasah: { name: string; logo_url?: string; address?: string },
+    madrasah: any,
     lang: 'en' | 'bn' = 'en'
 ) => {
     const container = document.createElement('div');
@@ -226,12 +226,12 @@ export const generateResultPDF = async (
     
     await new Promise<void>((resolve) => {
         root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
-        setTimeout(resolve, 800);
+        setTimeout(resolve, 1500); // Increased timeout for font loading
     });
 
     const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
-        pixelRatio: 1.5,
-        quality: 0.8,
+        pixelRatio: 2, // Higher quality
+        quality: 0.95,
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
@@ -328,7 +328,7 @@ export const generateClassResultPDF = async (
         let gpa = '0.00';
         let grade = 'F';
 
-        if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+        if (numMainSubjects > 0) {
             if (!hasFailed) {
                 let avgGp = pointsSum / numMainSubjects;
                 if (avgGp > 5.0) avgGp = 5.0;
@@ -339,15 +339,6 @@ export const generateClassResultPDF = async (
                 else if (avgGp >= 3.0) grade = 'B';
                 else if (avgGp >= 2.0) grade = 'C';
                 else if (avgGp >= 1.0) grade = 'D';
-            }
-        } else if (totalPossible > 0) {
-            if (!hasFailed) {
-                if (avgPercentage >= 80) { gpa = '5.00'; grade = 'A+'; }
-                else if (avgPercentage >= 70) { gpa = '4.00'; grade = 'A'; }
-                else if (avgPercentage >= 60) { gpa = '3.50'; grade = 'A-'; }
-                else if (avgPercentage >= 50) { gpa = '3.00'; grade = 'B'; }
-                else if (avgPercentage >= 40) { gpa = '2.00'; grade = 'C'; }
-                else if (avgPercentage >= 33) { gpa = '1.00'; grade = 'D'; }
             }
         }
 

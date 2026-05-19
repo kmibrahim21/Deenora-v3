@@ -8,7 +8,8 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
-import { requestManager } from 'services/RequestManager';
+import { requestManager, CACHE_TTLS } from 'services/RequestManager';
+import { SupabaseWrapper } from 'services/supabaseWrapper';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
 import jsPDF from 'jspdf';
@@ -244,13 +245,19 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   };
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah?.id);
+    if (!madrasah?.id) return;
+    const { data } = await requestManager.cachedFetch(
+      'classes',
+      (q) => q.select('*').eq('institution_id', madrasah.id),
+      `classes:${madrasah.id}`,
+      CACHE_TTLS.LONG
+    );
     if (data) {
       let filteredClasses = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+        filteredClasses = data.filter((cls: any) => profile.permissions?.allowed_classes?.includes(cls.id));
       }
-      setClasses(sortMadrasahClasses(filteredClasses));
+      setClasses(sortMadrasahClasses(filteredClasses as Class[]));
     }
   };
 
@@ -277,43 +284,45 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       
-      // Use exact same query structure as Students.tsx
-      let studentQuery = supabase.from('students')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .eq('class_id', cid)
-        .order('roll', { ascending: true });
+      // Use cachedFetch for offline support
+      const { data: stdData, error: stdError } = await requestManager.cachedFetch(
+        'students',
+        (q) => {
+          let query = q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).order('roll', { ascending: true });
+          if (activeYearId) {
+            query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          }
+          return query;
+        },
+        `students:${madrasah.id}:${cid}:${activeYearId || 'all'}`,
+        CACHE_TTLS.LONG
+      );
       
-      if (activeYearId) {
-        studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-      }
-      
-      const { data: stdData, error: stdError } = await studentQuery;
-      if (stdError) throw stdError;
+      if (stdError && isOnline) throw stdError;
       
       let finalStdData = stdData || [];
       
-      // Fallback: if no students found with activeYearId, try fetching without it
+      // Fallback: if no students found with activeYearId, try fetching without it (caching the fallback too)
       if (finalStdData.length === 0 && activeYearId) {
-        const { data: fallbackData } = await supabase.from('students')
-          .select('*')
-          .eq('institution_id', madrasah.id)
-          .eq('class_id', cid)
-          .order('roll', { ascending: true });
+        const { data: fallbackData } = await requestManager.cachedFetch(
+          'students',
+          (q) => q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).order('roll', { ascending: true }),
+          `students:${madrasah.id}:${cid}:all`,
+          CACHE_TTLS.LONG
+        );
         if (fallbackData && fallbackData.length > 0) {
           finalStdData = fallbackData;
         }
       }
       
       // Also fetch attendance with institution_id and session
-      let attQuery = supabase.from('attendance')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .eq('class_id', cid)
-        .eq('date', date)
-        .eq('session', selectedSession);
+      const { data: attData, error: attError } = await requestManager.cachedFetch(
+        'attendance',
+        (q) => q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).eq('date', date).eq('session', selectedSession),
+        `attendance:${madrasah.id}:${cid}:${date}:${selectedSession}`,
+        CACHE_TTLS.SHORT
+      );
         
-      const { data: attData, error: attError } = await attQuery;
       if (attError) {
         console.error('Attendance fetch error (skipping academic_year_id):', attError);
         // If it's a column missing error, we still want to proceed with empty attendance
@@ -533,15 +542,15 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
       // Execute updates
       for (const chunk of Array.from({ length: Math.ceil(updates.length / 50) }, (_, i) => updates.slice(i * 50, i * 50 + 50))) {
-        const { error } = await supabase.from('attendance').upsert(chunk);
-        if (error) throw error;
+        await SupabaseWrapper.safeUpsert('attendance', chunk);
       }
 
       // Execute inserts
       for (const chunk of Array.from({ length: Math.ceil(inserts.length / 50) }, (_, i) => inserts.slice(i * 50, i * 50 + 50))) {
-        const { error } = await supabase.from('attendance').insert(chunk);
-        if (error) {
-          if (error.message.includes('class_id') || error.message.includes('cache')) {
+        try {
+          await SupabaseWrapper.safeInsert('attendance', chunk);
+        } catch (error: any) {
+          if (error.message && (error.message.includes('class_id') || error.message.includes('cache'))) {
             throw new Error('ডাটাবেস কলাম (class_id) খুঁজে পাওয়া যাচ্ছে না। দয়া করে SQL এডিটর থেকে নতুন মাইগ্রেশন কোডটি রান করুন।');
           }
           throw error;

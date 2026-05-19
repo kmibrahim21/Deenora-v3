@@ -25,16 +25,21 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     discount: isBangla ? 'ডিসকাউন্ট' : 'Discount Applied',
     totalPaid: isBangla ? 'মোট জমা (এই মাসে)' : 'Total Paid (This Month)',
     balanceDue: isBangla ? 'বকেয়া' : 'Balance Due',
-    studentSignature: isBangla ? 'শিক্ষার্থী/অভিভাবকের স্বাক্ষর' : 'Student/Guardian Signature',
-    authSignature: isBangla ? 'কর্তৃপক্ষের স্বাক্ষর' : 'Authorized Signature',
+    authSignature: isBangla ? 'হিসাব রক্ষক' : 'Accounts Officer',
+    principalSignature: isBangla ? 'অধ্যক্ষ/পরিচালক' : 'Principal',
     computerGenerated: isBangla ? 'এটি একটি কম্পিউটার জেনারেটেড রিসিট।' : 'This is a computer-generated receipt.',
     currency: isBangla ? '৳' : 'BDT',
     officeCopy: isBangla ? 'অফিস কপি' : 'Office Copy',
     studentCopy: isBangla ? 'শিক্ষার্থী কপি' : 'Student Copy'
   };
 
-  const ReceiptContent = ({ copyType }: { copyType: string }) => (
-    <div className="flex-1 p-6 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between">
+  const ReceiptContent = ({ copyType }: { copyType: string }) => {
+    const feeItems = student.fee_items || [
+      { name: t.monthlyFees, amount: Number(student.total_payable) }
+    ];
+
+    return (
+    <div className="flex-1 p-4 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between">
       {/* Watermark */}
       <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none -rotate-[30deg]">
          {madrasah.logo_url ? (
@@ -45,93 +50,94 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
       </div>
 
       {/* Copy Indicator */}
-      <div className="absolute top-4 right-4 px-4 py-1.5 bg-[#1E3A8A] rounded text-[10px] font-black uppercase tracking-widest text-white shadow-md">
+      <div className="absolute top-3 right-3 px-3 py-1 bg-[#1E3A8A] rounded text-[9px] font-black uppercase tracking-widest text-white shadow-md">
         {copyType}
       </div>
 
       <div>
         {/* Header */}
-        <div className="flex items-center gap-4 mb-4 border-b-2 border-slate-100 pb-3">
-          <div className="w-16 h-16 bg-blue-50 border border-blue-100 rounded-full flex flex-col items-center justify-center overflow-hidden shrink-0 shadow-sm relative z-10">
+        <div className="flex items-center gap-3 mb-1 border-b border-slate-100 pb-1.5">
+          <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded flex flex-col items-center justify-center overflow-hidden shrink-0 relative z-10">
             {madrasah.logo_url ? (
-               <img src={madrasah.logo_url} alt="Logo" className="max-w-[80%] max-h-[80%] object-contain drop-shadow-sm" crossOrigin="anonymous" />
+               <img src={madrasah.logo_url} alt="Logo" className="max-w-[90%] max-h-[90%] object-contain" crossOrigin="anonymous" />
             ) : (
-               <span className="text-3xl font-black text-[#1E3A8A]">{madrasah.name.charAt(0)}</span>
+               <span className="text-xl font-black text-[#1E3A8A]">{madrasah.name.charAt(0)}</span>
             )}
           </div>
-          <div className="min-w-0 pr-24 relative z-10">
-            <h1 className={`text-2xl font-black text-[#1E3A8A] truncate leading-tight ${isBangla ? 'font-tiro' : ''}`}>{madrasah.name}</h1>
-            {madrasah.address && <p className="text-[11px] font-bold text-slate-500 uppercase truncate mt-0.5">{madrasah.address}</p>}
-            {madrasah.phone && <p className="text-[10px] font-bold text-slate-500 uppercase">Phone: {madrasah.phone}</p>}
+          <div className="min-w-0 pr-16 relative z-10">
+            <h1 className={`text-lg font-black text-[#1E3A8A] truncate leading-none ${isBangla ? 'font-tiro' : ''}`}>{madrasah.name}</h1>
+            {madrasah.address && <p className="text-[9px] font-bold text-slate-500 uppercase truncate leading-none mt-1">{madrasah.address}</p>}
           </div>
         </div>
 
-        <div className="flex justify-center mb-3 relative z-10">
-           <h2 className="px-6 py-1.5 bg-slate-100 border border-slate-200 rounded-full text-sm font-black text-slate-700 tracking-[0.2em] shadow-sm">{t.title}</h2>
+        <div className="flex justify-center mb-1.5 relative z-10">
+           <h2 className="px-4 py-0.5 bg-slate-50 border border-slate-200 rounded-full text-[11px] font-black text-slate-600 tracking-[0.1em] shadow-sm uppercase">{t.title}</h2>
         </div>
 
-        <div className="flex justify-between items-center mb-4 px-1 relative z-10">
-          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t.receiptNo}:</span>
-            <span className="text-[11px] font-black text-[#1E3A8A]">#REC-{Date.now().toString().slice(-6)}</span>
+        <div className="flex justify-between items-center mb-1.5 px-0.5 relative z-10">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{t.receiptNo}:</span>
+            <span className="text-[10px] font-black text-[#1E3A8A]">#REC-{Date.now().toString().slice(-6)}</span>
           </div>
-          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t.date}:</span>
-            <span className="text-[11px] font-black text-slate-700">{new Date().toLocaleDateString(isBangla ? 'bn-BD' : 'en-US')}</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-4 bg-slate-50/80 p-3 rounded-xl border border-slate-200 relative z-10">
-          <div className="flex items-center border-b border-slate-200/60 pb-1.5">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-16">{t.name}:</span>
-            <span className={`text-sm font-bold text-slate-800 ${isBangla ? 'font-tiro' : ''}`}>{student.student_name}</span>
-          </div>
-          <div className="flex items-center border-b border-slate-200/60 pb-1.5">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-16">{t.class}:</span>
-            <span className="text-sm font-bold text-slate-800">{student.class_name || student.classes?.class_name || '-'}</span>
-          </div>
-          <div className="flex items-center border-b border-slate-200/60 pb-1.5">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-16">{t.roll}:</span>
-            <span className="text-sm font-bold text-slate-800">{student.roll || '-'}</span>
-          </div>
-          <div className="flex items-center border-b border-slate-200/60 pb-1.5">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest w-16">{t.section}:</span>
-            <span className="text-sm font-bold text-slate-800">{student.section || '-'}</span>
-          </div>
-          <div className="col-span-2 flex items-center pt-1">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-2 whitespace-nowrap">{t.month}:</span>
-            <span className="text-[13px] px-3 py-0.5 bg-white border border-slate-200 rounded font-bold text-[#1E3A8A] shadow-sm whitespace-nowrap">{month}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{t.date}:</span>
+            <span className="text-[10px] font-black text-slate-700">{new Date().toLocaleDateString(isBangla ? 'bn-BD' : 'en-US')}</span>
           </div>
         </div>
 
-        <div className="border border-slate-300 rounded-lg overflow-hidden relative z-10">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-1 mb-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100 relative z-10">
+          <div className="col-span-2 border-r border-slate-200 pr-3 space-y-1">
+            <div className="flex items-center">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest w-10">{t.name}:</span>
+                <span className={`text-[11px] font-bold text-slate-800 truncate ${isBangla ? 'font-tiro' : ''}`}>{student.student_name}</span>
+            </div>
+            <div className="flex items-center">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest w-10">{t.class}:</span>
+                <span className="text-[11px] font-bold text-slate-800">{student.class_name || student.classes?.class_name || '-'}</span>
+            </div>
+          </div>
+          <div className="space-y-1 pl-1">
+             <div className="flex items-center">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest w-8">{t.roll}:</span>
+                <span className="text-[11px] font-bold text-slate-800">{student.roll || '-'}</span>
+            </div>
+            <div className="flex items-center">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest w-8">{t.month}:</span>
+                <span className="text-[10px] font-black text-[#1E3A8A] leading-none">{month}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-slate-200 rounded overflow-hidden relative z-10">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-slate-100 border-b border-slate-300">
-                <th className="py-2.5 px-4 text-left text-[11px] font-black uppercase tracking-widest text-[#1E3A8A]">{t.description}</th>
-                <th className="py-2.5 px-4 text-right text-[11px] font-black uppercase tracking-widest text-[#1E3A8A]">{t.amount}</th>
+              <tr className="bg-slate-100 border-b border-slate-200">
+                <th className="py-1 px-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-500">{t.description}</th>
+                <th className="py-1 px-3 text-right text-[9px] font-black uppercase tracking-widest text-slate-500">{t.amount}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
-              <tr className="bg-white">
-                <td className="py-2.5 px-4 text-[13px] font-bold text-slate-700">{t.monthlyFees}</td>
-                <td className="py-2.5 px-4 text-right text-[13px] font-bold text-slate-900">{t.currency}{Number(student.total_payable).toLocaleString()}</td>
-              </tr>
+            <tbody className="divide-y divide-slate-100">
+              {feeItems.map((item: any, idx: number) => (
+                <tr key={idx} className="bg-white">
+                  <td className="py-1 px-3 text-[11px] font-bold text-slate-700">{item.name}</td>
+                  <td className="py-1 px-3 text-right text-[11px] font-bold text-slate-900">{t.currency}{Number(item.amount).toLocaleString()}</td>
+                </tr>
+              ))}
               {Number(student.discount) > 0 && (
                 <tr className="bg-white">
-                  <td className="py-2.5 px-4 text-[13px] font-bold text-orange-600 italic">{t.discount}</td>
-                  <td className="py-2.5 px-4 text-right text-[13px] font-bold text-orange-600">-{t.currency}{Number(student.discount).toLocaleString()}</td>
+                  <td className="py-0.5 px-3 text-[10px] font-bold text-orange-600 italic leading-none">{t.discount}</td>
+                  <td className="py-0.5 px-3 text-right text-[10px] font-bold text-orange-600 leading-none">-{t.currency}{Number(student.discount).toLocaleString()}</td>
                 </tr>
               )}
-              <tr className="bg-emerald-50/80">
-                <td className="py-2.5 px-4 text-[13px] font-black text-emerald-800">{t.totalPaid}</td>
-                <td className="py-2.5 px-4 text-right text-[13px] font-black text-emerald-800">{t.currency}{Number(student.total_paid).toLocaleString()}</td>
+              <tr className="bg-emerald-50/50">
+                <td className="py-1 px-3 text-[11px] font-black text-emerald-800">{t.totalPaid}</td>
+                <td className="py-1 px-3 text-right text-[11px] font-black text-emerald-800">{t.currency}{Number(student.total_paid).toLocaleString()}</td>
               </tr>
             </tbody>
             <tfoot>
-              <tr className="bg-red-50/50 border-t-2 border-red-200">
-                <td className="py-2.5 px-4 text-right text-[11px] font-black uppercase tracking-widest text-red-800">{t.balanceDue}:</td>
-                <td className="py-2.5 px-4 text-right text-[14px] font-black text-red-600">{t.currency}{Math.max(0, Number(student.balance_due)).toLocaleString()}</td>
+              <tr className="bg-red-50/30 border-t border-red-100">
+                <td className="py-1 px-3 text-right text-[9px] font-black uppercase tracking-widest text-red-700">{t.balanceDue}:</td>
+                <td className="py-1 px-3 text-right text-[12px] font-black text-red-600 font-mono">{t.currency}{Math.max(0, Number(student.balance_due)).toLocaleString()}</td>
               </tr>
             </tfoot>
           </table>
@@ -139,21 +145,36 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
       </div>
 
       <div className="relative z-10">
-        <div className="flex justify-between mt-6 pt-4">
-          <div className="text-center px-4">
-            <div className="w-36 h-px bg-slate-400 mb-1.5" />
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t.studentSignature}</p>
+        <div className="flex justify-between items-end mb-4">
+          <div className="text-center w-32">
+            <div className="h-6 mb-1 flex items-end justify-center">
+                <span className="text-[10px] font-noto opacity-5 select-none uppercase font-black text-slate-400">Officer</span>
+            </div>
+            <div className="border-t border-slate-900 pt-1">
+              <p className="text-[8px] font-black text-slate-700 uppercase tracking-[0.15em]">{t.authSignature}</p>
+            </div>
           </div>
-          <div className="text-center px-4">
-            <div className="w-36 h-px bg-slate-400 mb-1.5" />
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{t.authSignature}</p>
+
+          <div className="text-center w-32">
+            <div className="h-6 mb-1 flex items-center justify-center relative">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                    <div className="w-8 h-8 border border-slate-400 rounded-full flex items-center justify-center -rotate-12">
+                        <span className="text-[4px] font-black uppercase text-slate-400">Seal</span>
+                    </div>
+                </div>
+            </div>
+            <div className="border-t border-slate-900 pt-1">
+              <p className="text-[8px] font-black text-slate-700 uppercase tracking-[0.15em]">{t.principalSignature}</p>
+            </div>
           </div>
         </div>
 
-        <p className="text-center text-slate-400 text-[8px] font-bold mt-3 uppercase tracking-[0.2em]">{t.computerGenerated} - {madrasah.name}</p>
+        <p className="text-center text-slate-300 text-[7px] font-bold uppercase tracking-[0.25em] pb-1 border-t border-slate-50 mt-2 pt-1">{t.computerGenerated} - {madrasah.name}</p>
       </div>
     </div>
-  );
+    );
+  };
+
 
   return (
     <div className={`w-[794px] h-[1123px] box-border p-6 bg-white flex flex-col gap-6 ${isBangla ? 'font-noto' : 'font-hind'}`}>

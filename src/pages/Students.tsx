@@ -67,16 +67,6 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     const to = from + PAGE_SIZE - 1;
 
     try {
-      if (!isOnline) {
-        const cached = await CacheService.getCachedData('students', institutionId);
-        if (cached) {
-          const filtered = cached.filter((s: any) => s.class_id === selectedClass.id);
-          setStudents(filtered);
-        }
-        setLoading(false);
-        return;
-      }
-
       // 1. Prepare fields
       const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, classes(class_name)';
       const selectFields = (window as any)._hasMotherName === false ? baseFields : `${baseFields}, mother_name`;
@@ -108,7 +98,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         CACHE_TTLS.LONG // 1 hour TTL for student list pages
       );
       
-      if (error) {
+      if (error && isOnline) {
         // ... existing error handling for mother_name ...
         if ((window as any)._hasMotherName === undefined && (error.code === 'PGRST204' || error.message?.includes('mother_name'))) {
           (window as any)._hasMotherName = false;
@@ -130,11 +120,8 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         setStudents(prev => reset ? formattedData : [...prev, ...formattedData]);
         setHasMore(data.length === PAGE_SIZE);
         setPage(currentPage + 1);
-
-        // Update offline cache if this is the first page of the class
-        if (reset && !searchQuery.trim()) {
-           await CacheService.cacheData('students', institutionId, formattedData);
-        }
+      } else if (!isOnline && reset) {
+         setStudents([]);
       }
     } catch (err: any) {
       console.error("fetchStudents error:", err);

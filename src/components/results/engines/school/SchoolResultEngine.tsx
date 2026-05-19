@@ -730,7 +730,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           subjects,
           students,
           marksData,
-          { name: madrasah.name },
+          madrasah,
           downloadLang
       );
     } catch (error) {

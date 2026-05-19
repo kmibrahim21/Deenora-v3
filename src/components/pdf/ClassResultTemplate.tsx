@@ -58,6 +58,10 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                     <span>{t.exam}: {exam.exam_name}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-purple-400 rounded-full"></span>
+                    <span>{isBangla ? 'শ্রেণি' : 'Class'}: {exam.classes?.class_name || exam.class_id || ''}</span>
+                </div>
+                <div className="flex items-center gap-2">
                     <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
                     <span>{t.date}: {new Date().toLocaleDateString(isBangla ? 'bn-BD' : 'en-US')}</span>
                 </div>
@@ -97,7 +101,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                     return (
                       <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
                         <td className="px-2 py-1 font-mono font-black text-slate-400 border-r border-slate-100 text-[14px]">{student.roll}</td>
-                        <td className="px-2 py-1 font-black text-slate-700 border-r border-slate-100 uppercase tracking-tight truncate max-w-[120px] text-[13px]">{student.student_name}</td>
+                        <td className="px-2 py-1 font-black text-slate-700 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[13px] leading-tight">{student.student_name}</td>
                         {subjects.map(s => (
                           <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-600 border-r border-slate-100 text-[14px]">
                             {studentMarks[s.id] || '0'}

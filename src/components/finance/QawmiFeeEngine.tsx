@@ -5,6 +5,7 @@ import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown,
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
+import { OfflineService } from '../../services/OfflineService';
 
 interface QawmiFeeEngineProps {
   activeTab: 'fees' | 'structures';
@@ -16,6 +17,7 @@ interface QawmiFeeEngineProps {
   profile?: any;
   activeYear?: any;
   refreshKey?: number;
+  triggerRefresh?: () => void;
 }
 
 // Global cache to prevent re-fetching on tab switch
@@ -27,7 +29,7 @@ export const clearGlobalQawmiFeeCache = () => {
     globalQawmiStructures = {};
 };
 
-export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey }) => {
+export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey, triggerRefresh }) => {
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
   
   const selectedClassInitial = () => localStorage.getItem('qawmi_fee_selectedClass') || '';
@@ -86,10 +88,6 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
-    fetchClasses();
-  }, [madrasah.id]);
-
-  useEffect(() => {
     fetchData();
   }, [madrasah.id, activeTab, selectedMonth, selectedClass, refreshKey]);
 
@@ -99,16 +97,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     }
   }, [selectedStudent]);
 
-  const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
-    if (data) {
-      let filteredClasses = data;
-      if (role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredClasses = data.filter((cls: any) => profile.permissions?.allowed_classes?.includes(cls.id));
-      }
-      setClasses(sortMadrasahClasses(filteredClasses));
+  useEffect(() => {
+    if (initialClasses) {
+      setClasses(initialClasses);
     }
-  };
+  }, [initialClasses]);
 
   const fetchData = async () => {
     if (feesReport.length === 0 && structures.length === 0) {
@@ -249,7 +242,14 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                 total_payable: totalPayable,
                 total_paid: totalPaid,
                 balance_due: balanceDue,
-                status: status
+                status: status,
+                fee_items: studentFeeStructures.map(fs => {
+                    const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
+                    return {
+                        name: fs.fee_name,
+                        amount: setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(fs.amount)
+                    };
+                })
             };
         });
 
@@ -292,19 +292,24 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     setDiscount('');
     
     // 1. Fetch structures
-    const { data: structures } = await supabase.from('fee_structures')
-      .select('*')
-      .eq('institution_id', madrasah.id)
-      .or(`class_id.eq.${student.class_id},class_id.is.null`);
+    const { data: structures } = await requestManager.cachedFetch(
+      'fee_structures',
+      (q) => q.select('*').eq('institution_id', madrasah.id).or(`class_id.eq.${student.class_id},class_id.is.null`),
+      `structures:${madrasah.id}:${student.class_id}`,
+      CACHE_TTLS.LONG
+    );
     if (!structures) {
         setAvailableFeeItems([]);
         return;
     }
     
     // Fetch student fee settings
-    const { data: settings } = await supabase.from('student_fee_settings')
-      .select('*')
-      .eq('student_id', student.student_id);
+    const { data: settings } = await requestManager.cachedFetch(
+      'student_fee_settings',
+      (q) => q.select('*').eq('student_id', student.student_id),
+      `student_settings:${student.student_id}`,
+      CACHE_TTLS.LONG
+    );
     
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -336,23 +341,23 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     setAvailableFeeItems(enabledStructures);
 
     // 2. Fetch ledger entries for this student/month to see what's paid
-    let ledgerQuery = supabase.from('ledger')
-      .select('description')
-      .eq('institution_id', madrasah.id)
-      .eq('type', 'income')
-      .eq('category', 'Student Fee')
-      .ilike('description', `%${student.student_name} (%Month: ${selectedMonth})%`);
-
     const yearStart = madrasah.config_json?.academic_year_start;
     const activeYearId = madrasah.config_json?.active_academic_year_id;
 
-    if (activeYearId) {
-      ledgerQuery = ledgerQuery.eq('academic_year_id', activeYearId);
-    } else if (yearStart) {
-      ledgerQuery = ledgerQuery.gte('created_at', yearStart);
-    }
-
-    const { data: ledgerData } = await ledgerQuery;
+    const { data: ledgerData } = await requestManager.cachedFetch(
+      'ledger',
+      (q) => {
+        let qry = q.select('description').eq('institution_id', madrasah.id).eq('type', 'income').eq('category', 'Student Fee').ilike('description', `%${student.student_name} (%Month: ${selectedMonth})%`);
+        if (activeYearId) {
+          qry = qry.eq('academic_year_id', activeYearId);
+        } else if (yearStart) {
+          qry = qry.gte('created_at', yearStart);
+        }
+        return qry;
+      },
+      `ledger_paid:${madrasah.id}:${student.student_name}:${selectedMonth}`,
+      CACHE_TTLS.SHORT
+    );
 
     const paidItems: string[] = [];
     ledgerData?.forEach(l => {
@@ -403,33 +408,37 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
       // Try inserting with discount first
       let feeIdToSave = '';
-      let { data: feeRes, error: feeErr } = await supabase.from('fees').insert({
-        ...feeData,
-        discount: totalDiscount
-      }).select('id');
-      
-      // If error is about missing column, retry without discount
-      if (feeErr && (feeErr.message.includes('column') || feeErr.code === '42703')) {
-          const { data: retryRes, error: retryErr } = await supabase.from('fees').insert(feeData).select('id');
-          feeErr = retryErr;
-          if (retryRes && retryRes.length > 0) feeIdToSave = retryRes[0].id;
-      } else if (feeRes && feeRes.length > 0) {
-          feeIdToSave = feeRes[0].id;
+      if (navigator.onLine) {
+        let { data: feeRes, error: feeErr } = await supabase.from('fees').insert({
+          ...feeData,
+          discount: totalDiscount
+        }).select('id');
+        
+        // If error is about missing column, retry without discount
+        if (feeErr && (feeErr.message.includes('column') || feeErr.code === '42703')) {
+            const { data: retryRes, error: retryErr } = await supabase.from('fees').insert(feeData).select('id');
+            feeErr = retryErr;
+            if (retryRes && retryRes.length > 0) feeIdToSave = retryRes[0].id;
+        } else if (feeRes && feeRes.length > 0) {
+            feeIdToSave = feeRes[0].id;
+        }
+        
+        if (feeErr) throw feeErr;
+      } else {
+        await OfflineService.safeInsert('fees', { ...feeData, discount: totalDiscount });
       }
-      
-      if (feeErr) throw feeErr;
 
       // Add to Ledger
       const feeDescription = selectedFeeCategories.join(', ');
       const className = classes.find(c => c.id === selectedStudent.class_id)?.class_name || '';
       const roll = selectedStudent.roll || '-';
       
-      let finalDescription = `${feeDescription} - ${selectedStudent.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})${totalDiscount > 0 ? ` (ছাড়: ৳${totalDiscount})` : ''}`;
+      let finalDescription = `${feeDescription} - ${selectedStudent.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})${totalDiscount > 0 ? " (ছাড়: ৳" + totalDiscount + ")" : ""}`;
       if (feeIdToSave) {
           finalDescription += ` || FEE_ID: ${feeIdToSave}`;
       }
 
-      await supabase.from('ledger').insert({
+      await OfflineService.safeInsert('ledger', {
         institution_id: madrasah.id,
         type: 'income',
         amount: totalAmt,
@@ -447,7 +456,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       requestManager.invalidatePattern(`fees:${madrasah.id}`);
       requestManager.invalidatePattern(`stats:${madrasah.id}`);
       requestManager.invalidatePattern(`dashboard_`);
+      requestManager.invalidatePattern(`accounting-fees-${selectedStudent.student_id}`);
+      requestManager.invalidatePattern(`accounting-history-${selectedStudent.student_id}`);
+      requestManager.invalidatePattern(`fetch:ledger:`);
       
+      if (triggerRefresh) triggerRefresh();
       fetchData();
     } catch (err: any) { 
       if (err.message?.includes('row-level security policy')) {
@@ -1005,6 +1018,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                          console.error("Delete Error:", error);
                                          setActionError("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
                                      } else {
+                                         requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                                         requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                                         clearGlobalQawmiFeeCache();
+                                         if (triggerRefresh) triggerRefresh();
                                          fetchData();
                                      }
                                      setDeleteConfirmId(null);
@@ -1124,6 +1141,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                            }
                            setShowAddStructure(false);
                            setCategory(''); setAmount(''); setSelectedClass(''); setDueDate(''); setStartDate(''); setEditingStructureId(null);
+                           requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                           requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                           clearGlobalQawmiFeeCache();
+                           if (triggerRefresh) triggerRefresh();
                            fetchData();
                        } catch (e: any) { setActionError(e.message); } finally { setIsSaving(false); }
                     }} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all text-base">

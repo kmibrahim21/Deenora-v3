@@ -159,7 +159,21 @@ export class SyncEngine {
       query = supabase.from(table).upsert([payload]);
     } else if (type === 'UPDATE') {
       const { id, ...updateData } = payload;
-      query = supabase.from(table).update({ ...updateData, updated_at: new Date().toISOString() }).eq('id', id);
+      try {
+        const { error } = await supabase.from(table).update({ ...updateData, updated_at: new Date().toISOString() }).eq('id', id);
+        if (error) {
+          if (error.message?.includes('column "updated_at" of relation') || error.code === '42703') {
+             // Retry without updated_at
+             const { error: retryError } = await supabase.from(table).update(updateData).eq('id', id);
+             if (retryError) throw retryError;
+          } else {
+            throw error;
+          }
+        }
+        return true;
+      } catch (err) {
+        throw err;
+      }
     } else if (type === 'DELETE') {
       query = supabase.from(table).delete().eq('id', payload.id);
     }
@@ -207,6 +221,16 @@ export class SyncEngine {
         isCircuitOpen: false,
         error: "Stats unavailable"
       };
+    }
+  }
+
+  // Debug API to get recent/pending logs
+  static async getPendingList(limit = 20) {
+    try {
+      const all = await OfflineQueue.getPendingActions();
+      return all.slice(0, limit);
+    } catch (err) {
+      return [];
     }
   }
 }

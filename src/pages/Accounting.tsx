@@ -95,16 +95,16 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (force = false) => {
     if (!madrasah?.id) return;
     
-    if (activeTab === 'summary' || activeTab === 'ledger') {
-      setLoading(true);
+    if (force || activeTab === 'summary' || activeTab === 'ledger') {
+      if (ledger.length === 0) setLoading(true);
       try {
         if (!isOnline) {
           const cachedLedger = await CacheService.getCachedData('fees', madrasah.id);
           setLedger(cachedLedger);
-          setLoading(false);
+          if (ledger.length === 0) setLoading(false);
           return;
         }
 
@@ -302,7 +302,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   };
 
   const handleTriggerRefresh = () => {
-    fetchData();
+    fetchData(true);
     if (triggerRefresh) triggerRefresh();
   };
 

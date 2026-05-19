@@ -81,6 +81,13 @@ class RequestManager {
 
   private notify(key: string, data: any) {
     this.listeners.get(key)?.forEach(cb => cb(data));
+    
+    // Pattern-based notification for partial matches
+    this.listeners.forEach((callbacks, listenerKey) => {
+      if (key !== listenerKey && key.includes(listenerKey)) {
+        callbacks.forEach(cb => cb(data));
+      }
+    });
   }
 
   async cachedRpc(method: string, params: any = {}, ttl = CACHE_TTLS.SHORT) {
@@ -237,6 +244,7 @@ class RequestManager {
     const now = Date.now();
     if (!keyPrefix) {
       this.cache.clear();
+      this.pending.clear();
       await offlineDb.response_cache.clear();
     } else {
       const keysToDelete: string[] = [];
@@ -245,6 +253,12 @@ class RequestManager {
           this.cache.delete(key);
           this.lastInvalidation.set(key, now); // Mark as invalidated to trigger cooldown
           keysToDelete.push(key);
+        }
+      }
+      // Also clear pending matches
+      for (const key of this.pending.keys()) {
+        if (key.startsWith(keyPrefix)) {
+          this.pending.delete(key);
         }
       }
       if (keysToDelete.length > 0) {
@@ -267,6 +281,14 @@ class RequestManager {
         this.cache.delete(key);
         this.lastInvalidation.set(key, now);
         keysToDelete.push(key);
+      }
+    }
+    // Also clear pending matches
+    for (const key of this.pending.keys()) {
+      if (typeof pattern === 'string') {
+        if (key.includes(pattern)) this.pending.delete(key);
+      } else if (pattern.test(key)) {
+        this.pending.delete(key);
       }
     }
     if (keysToDelete.length > 0) {
