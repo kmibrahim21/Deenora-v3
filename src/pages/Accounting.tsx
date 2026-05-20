@@ -85,7 +85,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       if (data) {
         let filteredClasses = data;
         if (role === 'teacher' && profile?.permissions?.allowed_classes) {
-          filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+          filteredClasses = data.filter(cls => (profile.permissions.allowed_classes || []).includes(cls.id));
         }
         const sorted = sortMadrasahClasses(filteredClasses);
         setClasses(sorted);

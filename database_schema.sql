@@ -85,6 +85,7 @@ CREATE TABLE students (
     department TEXT,
     sponsor_id UUID,
     academic_year_id UUID REFERENCES academic_years(id),
+    registration_number TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 

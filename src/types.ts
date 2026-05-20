@@ -192,6 +192,7 @@ export interface Student {
   department?: 'hifz' | 'nazera' | 'kitab' | 'other';
   sponsor_id?: string | null;
   academic_year_id?: string;
+  registration_number?: string;
   created_at?: string;
   classes?: Class;
 }

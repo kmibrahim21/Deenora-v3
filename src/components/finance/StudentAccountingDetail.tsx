@@ -147,6 +147,22 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         if (error) throw error;
       }
       
+      // Optimistic Update
+      setStudentFeeSettings(prev => {
+        const exists = prev.find(s => s.fee_structure_id === feeStructureId);
+        if (exists) {
+          return prev.map(s => s.fee_structure_id === feeStructureId ? { ...s, is_enabled: newEnabledState } : s);
+        } else {
+          return [...prev, { 
+            id: 'temp-' + Date.now(),
+            institution_id: madrasah.id, 
+            student_id: student.student_id, 
+            fee_structure_id: feeStructureId, 
+            is_enabled: newEnabledState 
+          }];
+        }
+      });
+      
       // Invalidate cache patterns
       requestManager.invalidatePattern(`settings:${madrasah.id}`);
       requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);

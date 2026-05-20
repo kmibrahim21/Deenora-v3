@@ -196,7 +196,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
         let filteredData = data || [];
         if (role === 'teacher' && profile?.permissions?.allowed_classes && !classId) {
-          filteredData = data.filter((student: any) => profile.permissions?.allowed_classes?.includes(student.class_id));
+          filteredData = data.filter((student: any) => (profile.permissions.allowed_classes || []).includes(student.class_id));
         }
 
         const now = new Date();
@@ -367,7 +367,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     setPaidFeeCategories(paidItems);
 
     // 3. Select unpaid items (only from available/non-expired items)
-    const unpaid = enabledStructures.filter(s => !paidItems.includes(s.fee_name));
+    const unpaid = enabledStructures.filter(s => !(paidItems || []).includes(s.fee_name));
     const unpaidNames = unpaid.map(s => s.fee_name);
     setSelectedFeeCategories(unpaidNames);
     
@@ -378,7 +378,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
   const calculateTotal = (categories: string[], discountVal: string, items = availableFeeItems, monthsCount = 1) => {
     const gross = items
-        .filter(item => categories.includes(item.fee_name))
+        .filter(item => (categories || []).includes(item.fee_name))
         .reduce((sum, item) => sum + item.amount, 0) * monthsCount;
     
     const disc = parseFloat(discountVal) || 0;
@@ -823,8 +823,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 <div className="space-y-2">
                                     {availableFeeItems.length > 0 ? (
                                         availableFeeItems.map(item => {
-                                            const isPaid = paidFeeCategories.includes(item.fee_name);
-                                            const isSelected = selectedFeeCategories.includes(item.fee_name);
+              const isPaid = (paidFeeCategories || []).includes(item.fee_name);
+              const isSelected = (selectedFeeCategories || []).includes(item.fee_name);
                                             
                                             return (
                                                 <div key={item.id} className={`flex flex-col gap-2 p-3 rounded-xl transition-colors ${isPaid ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50') : (isDark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-100')}`}>

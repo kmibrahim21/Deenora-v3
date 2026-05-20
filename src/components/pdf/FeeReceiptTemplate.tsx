@@ -39,7 +39,7 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     ];
 
     return (
-    <div className="flex-1 p-4 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between">
+    <div className="flex-1 p-3 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between">
       {/* Watermark */}
       <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none -rotate-[30deg]">
          {madrasah.logo_url ? (
@@ -56,7 +56,7 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
 
       <div>
         {/* Header */}
-        <div className="flex items-center gap-3 mb-1 border-b border-slate-100 pb-1.5">
+        <div className="flex items-center gap-3 mb-0.5 border-b border-slate-100 pb-1">
           <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded flex flex-col items-center justify-center overflow-hidden shrink-0 relative z-10">
             {madrasah.logo_url ? (
                <img src={madrasah.logo_url} alt="Logo" className="max-w-[90%] max-h-[90%] object-contain" crossOrigin="anonymous" />
@@ -70,11 +70,11 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
           </div>
         </div>
 
-        <div className="flex justify-center mb-1.5 relative z-10">
+        <div className="flex justify-center mb-1 relative z-10">
            <h2 className="px-4 py-0.5 bg-slate-50 border border-slate-200 rounded-full text-[11px] font-black text-slate-600 tracking-[0.1em] shadow-sm uppercase">{t.title}</h2>
         </div>
 
-        <div className="flex justify-between items-center mb-1.5 px-0.5 relative z-10">
+        <div className="flex justify-between items-center mb-1 px-0.5 relative z-10">
           <div className="flex items-center gap-1.5">
             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{t.receiptNo}:</span>
             <span className="text-[10px] font-black text-[#1E3A8A]">#REC-{Date.now().toString().slice(-6)}</span>
@@ -85,7 +85,7 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-x-3 gap-y-1 mb-2 bg-slate-50/50 p-2 rounded-lg border border-slate-100 relative z-10">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-1 mb-1 bg-slate-50/50 p-2 rounded-lg border border-slate-100 relative z-10">
           <div className="col-span-2 border-r border-slate-200 pr-3 space-y-1">
             <div className="flex items-center">
                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest w-10">{t.name}:</span>
@@ -177,7 +177,7 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
 
 
   return (
-    <div className={`w-[794px] h-[1123px] box-border p-6 bg-white flex flex-col gap-6 ${isBangla ? 'font-noto' : 'font-hind'}`}>
+    <div className={`w-[794px] h-[1123px] box-border p-4 bg-white flex flex-col gap-4 ${isBangla ? 'font-noto' : 'font-hind'}`}>
       <ReceiptContent copyType={t.officeCopy} />
       <div className="flex items-center relative">
         <div className="w-full h-[2px] border-t-2 border-dashed border-slate-300"></div>

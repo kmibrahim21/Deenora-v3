@@ -141,7 +141,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     if (!isValidUUID(institutionId)) return;
     const { data } = await requestManager.cachedFetch(
       'sms_templates',
-      (q) => q.select('id, body, title, created_at, type').eq('institution_id', institutionId).order('created_at', { ascending: false }),
+      (q) => q.select('id, body, title, created_at').eq('institution_id', institutionId).order('created_at', { ascending: false }),
       `templates:${institutionId}`
     );
     if (data) setTemplates(data);
