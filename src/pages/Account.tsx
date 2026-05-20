@@ -94,6 +94,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       messages: configObj.modules?.messages ?? true,
       class_routine: configObj.modules?.class_routine ?? false,
       certificates: configObj.modules?.certificates ?? true,
+      id_cards: configObj.modules?.id_cards ?? false,
     };
   }, [madrasah]);
 
@@ -532,6 +533,18 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
             subtitle={lang === 'bn' ? 'বার্তা' : 'Messages'}
             colorClass="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
             onClick={() => setView('messages')}
+            dark={madrasah?.theme === 'dark'}
+          />
+        )}
+
+        {/* ID Cards Card */}
+        {modules.id_cards && (
+          <ActionCard
+            icon={ShieldCheck}
+            title={lang === 'bn' ? 'স্টুডেন্ট আইডি কার্ড' : 'Student ID Card'}
+            subtitle={lang === 'bn' ? 'জেনারেটর' : 'Generator'}
+            colorClass="bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400"
+            onClick={() => setView('id-cards')}
             dark={madrasah?.theme === 'dark'}
           />
         )}

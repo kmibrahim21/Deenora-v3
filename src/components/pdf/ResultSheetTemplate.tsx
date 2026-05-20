@@ -122,11 +122,11 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
           </div>
 
           {/* School Name & Transcript Title */}
-          <div className="flex-1 text-center px-4">
-            <h1 className="text-[30px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1 uppercase drop-shadow-sm">
+          <div className="flex-1 text-center px-2">
+            <h1 className="text-[28px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1 uppercase drop-shadow-sm">
               {madrasah.name}
             </h1>
-            <p className="text-[13px] font-bold text-slate-700 mb-1 max-w-[500px] mx-auto">
+            <p className="text-[14px] font-bold text-slate-700 mb-2 leading-snug">
               {madrasah.address}
             </p>
             {madrasah.institute_code && (
@@ -162,23 +162,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
         </div>
 
         {/* Student Information */}
-        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-200 mb-3 grid grid-cols-3 gap-x-4 text-[12px]">
+        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-200 mb-3 grid grid-cols-3 gap-x-4 text-[14px]">
           {/* First Column: Personal Info */}
           <div className="space-y-1.5 border-r border-slate-200 pr-4">
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[9px]">{t.name}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.student_name}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[9px]">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight text-[11px]">: {student.guardian_name || '-'}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[9px]">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight text-[11px]">: {student.mother_name || '-'}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.name}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.student_name}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.guardian_name || '-'}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.mother_name || '-'}</span></div>
           </div>
           {/* Middle Column: Academic Info */}
           <div className="space-y-1.5 border-r border-slate-200 pr-4">
-            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[9px]">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[9px]">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
-            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[9px]">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[10px]">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[10px]">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[10px]">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
           </div>
           {/* Last Column: Other Info */}
           <div className="space-y-1.5 pl-2">
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[9px]">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[9px]">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
           </div>
         </div>
 
@@ -244,19 +244,19 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
           <div className="flex gap-4 h-[80px]">
             <div className="flex-1 grid grid-cols-4 gap-3">
               <div className="p-2 border-2 border-blue-900 rounded-2xl bg-blue-50/20 text-center flex flex-col justify-center">
-                <p className="text-[9px] font-black uppercase text-blue-900/40 mb-0.5 leading-none">{t.gpa}</p>
+                <p className="text-[10px] font-black uppercase text-blue-900/40 mb-0.5 leading-none">{t.gpa}</p>
                 <h4 className="text-[22px] font-black font-mono text-blue-900 leading-tight">{averageGpa}</h4>
               </div>
               <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
-                <p className="text-[9px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.status}</p>
+                <p className="text-[10px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.status}</p>
                 <h4 className={`text-[14px] font-black ${isPassed ? 'text-emerald-600' : 'text-red-500'} leading-tight uppercase`}>{isPassed ? t.passed : t.failed}</h4>
               </div>
               <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
-                <p className="text-[9px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.rank}</p>
+                <p className="text-[10px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.rank}</p>
                 <h4 className="text-[16px] font-black font-mono text-slate-700 leading-tight">#{student.merit_position || 'N/A'}</h4>
               </div>
               <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
-                <p className="text-[9px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.attendance}</p>
+                <p className="text-[10px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.attendance}</p>
                 <h4 className="text-[16px] font-black font-mono text-slate-700 leading-tight">{student.attendance ? `${student.attendance}%` : 'N/A'}</h4>
               </div>
             </div>

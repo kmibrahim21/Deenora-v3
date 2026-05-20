@@ -50,6 +50,7 @@ const AcademicCalendarPage = React.lazy(
 const Tutorials = React.lazy(() => import("pages/Tutorials"));
 const ClassRoutine = React.lazy(() => import("pages/ClassRoutine"));
 const Certificates = React.lazy(() => import("pages/Certificates"));
+const IdCards = React.lazy(() => import("pages/IdCards"));
 const VoiceServiceDashboard = React.lazy(() =>
   import("components/VoiceServiceDashboard").then((module) => ({
     default: module.VoiceServiceDashboard,
@@ -710,6 +711,15 @@ const App: React.FC = () => {
       case "certificates":
         return (
           <Certificates
+            lang={lang}
+            madrasah={madrasah}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            profile={profile}
+          />
+        );
+      case "id-cards":
+        return (
+          <IdCards
             lang={lang}
             madrasah={madrasah}
             onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}

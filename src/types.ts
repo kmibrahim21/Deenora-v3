@@ -28,6 +28,7 @@ export interface Institution {
       sms?: boolean;
       messages?: boolean;
       certificates?: boolean;
+      id_cards?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional';
@@ -436,6 +437,7 @@ export type View =
   | 'library'
   | 'class-routine'
   | 'certificates'
+  | 'id-cards'
   | 'super-account';
 
 export interface Tutorial {

@@ -1254,6 +1254,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       grade: subGradeInfo(pct, hasFailedSub).grade,
                                                       grade_point: subGradeInfo(pct, hasFailedSub).gpa,
                                                       full_marks: s.full_marks || 100,
+                                                      pass_marks: s.pass_marks || 33,
                                                       is_optional: s.is_optional
                                                   };
                                               });
