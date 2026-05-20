@@ -15,7 +15,7 @@ interface StudentFormProps {
   madrasah: Institution | null;
   defaultClassId?: string;
   isEditing: boolean;
-  onSuccess: () => void;
+  onSuccess: (student?: Student) => void;
   onCancel: () => void;
   lang: Language;
   title?: string;
@@ -106,11 +106,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null
       };
 
+      let finalStudent = null;
       try {
         if (isEditing && student) {
-          await OfflineService.safeUpdate('students', student.id, payload);
+          finalStudent = await OfflineService.safeUpdate('students', student.id, payload);
         } else {
-          await OfflineService.safeInsert('students', payload);
+          finalStudent = await OfflineService.safeInsert('students', payload);
         }
       } catch (innerErr: any) {
         // If mother_name is missing, retry without it
@@ -124,9 +125,9 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
           delete retryPayload.mother_name;
           
           if (isEditing && student) {
-            await OfflineService.safeUpdate('students', student.id, retryPayload);
+            finalStudent = await OfflineService.safeUpdate('students', student.id, retryPayload);
           } else {
-            await OfflineService.safeInsert('students', retryPayload);
+            finalStudent = await OfflineService.safeInsert('students', retryPayload);
           }
           
           // Alert user that mother_name was skipped (optional, but good for UX)
@@ -165,7 +166,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         }
       }
       
-      onSuccess();
+      onSuccess(Array.isArray(finalStudent) ? finalStudent[0] : (finalStudent || undefined));
     } catch (err: any) { 
       let msg = err.message;
       if (err.code === '23505') {

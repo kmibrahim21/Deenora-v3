@@ -452,7 +452,10 @@ const App: React.FC = () => {
             madrasah={madrasah}
             defaultClassId={selectedClass?.id}
             isEditing={isEditing}
-            onSuccess={() => {
+            onSuccess={(updatedStudent) => {
+              if (updatedStudent) {
+                setSelectedStudent(updatedStudent);
+              }
               triggerRefresh();
               setView("students");
             }}

@@ -175,8 +175,15 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
             <div className={`relative w-24 h-24 rounded-[1rem] flex items-center justify-center text-[#2563EB] border-[2px] shadow-xl overflow-hidden transform group-hover:scale-105 transition-transform duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'}`}>
               <UserIcon size={48} strokeWidth={2.5} />
             </div>
-            <div className={`absolute -bottom-0.5 -right-0.5 min-w-[1.75rem] h-6 px-1 bg-[#2563EB] text-white rounded-[0.6rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`}>
-              <span className="text-xs font-black tracking-tighter">{student.admission_number || '#'}</span>
+            <div className="absolute -bottom-0.5 -right-0.5 flex flex-col gap-1 items-end">
+              <div className={`min-w-[1.75rem] h-6 px-1 bg-[#2563EB] text-white rounded-[0.6rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`} title="Admission Number">
+                <span className="text-[10px] font-black tracking-tighter">A: {student.admission_number || '#'}</span>
+              </div>
+              {student.registration_number && (
+                <div className={`min-w-[1.75rem] h-6 px-1 bg-indigo-600 text-white rounded-[0.6rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`} title="Registration Number">
+                  <span className="text-[10px] font-black tracking-tighter">R: {student.registration_number}</span>
+                </div>
+              )}
             </div>
           </div>
           
