@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS students (
     admission_number TEXT,
     roll INTEGER,
     date_of_birth DATE,
+    blood_group TEXT,
     guardian_name TEXT,
+    mother_name TEXT,
     guardian_phone TEXT NOT NULL,
     guardian_phone_2 TEXT,
     address TEXT,
@@ -85,6 +87,7 @@ CREATE TABLE IF NOT EXISTS students (
     department TEXT CHECK (department IN ('hifz', 'nazera', 'kitab', 'other')) DEFAULT 'kitab',
     sponsor_id UUID,
     academic_year_id UUID REFERENCES academic_years(id) ON DELETE SET NULL,
+    registration_number TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
