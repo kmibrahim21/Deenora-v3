@@ -162,20 +162,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
         </div>
 
         {/* Student Information */}
-        <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-200 mb-3 grid grid-cols-3 gap-4 text-[12px]">
-          <div className="col-span-2 grid grid-cols-2 gap-y-1 border-r border-slate-200 pr-4">
+        <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-200 mb-3 grid grid-cols-3 gap-x-4 text-[12px]">
+          {/* First Column: Personal Info */}
+          <div className="space-y-1 border-r border-slate-200 pr-4">
             <div className="flex"><span className="w-24 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.name}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.student_name}</span></div>
-            <div className="flex"><span className="w-24 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
             <div className="flex"><span className="w-24 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight text-[11px] leading-tight">: {student.guardian_name || '-'}</span></div>
-            <div className="flex"><span className="w-24 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.admission_number || '-'}</span></div>
             <div className="flex"><span className="w-24 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight text-[11px] leading-tight">: {student.mother_name || '-'}</span></div>
-            <div className="flex"><span className="w-24 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
           </div>
-          <div className="space-y-1">
+          {/* Middle Column: Academic Info */}
+          <div className="space-y-1 border-r border-slate-200 pr-4">
             <div className="flex"><span className="w-16 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-            <div className="flex"><span className="w-16 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.group}</span><span className="flex-1 font-black text-slate-800">: {student.department || (isBangla ? 'সাধারণ' : 'General')}</span></div>
-            <div className="flex"><span className="w-16 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.section}</span><span className="flex-1 font-black text-slate-800">: {student.section || (isBangla ? 'প্রযোজ্য নয়' : 'N/A')}</span></div>
-            <div className="flex"><span className="w-16 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
+            <div className="flex"><span className="w-16 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
+            <div className="flex"><span className="w-16 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || student.admission_number || '-'}</span></div>
+          </div>
+          {/* Last Column: Other Info */}
+          <div className="space-y-1">
+            <div className="flex"><span className="w-20 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
+            <div className="flex"><span className="w-20 text-slate-500 font-bold uppercase text-[9px] mt-0.5">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
           </div>
         </div>
 

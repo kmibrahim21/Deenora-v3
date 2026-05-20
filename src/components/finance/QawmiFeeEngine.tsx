@@ -361,7 +361,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
     const paidItems: string[] = [];
     ledgerData?.forEach(l => {
-        const desc = l.description.split(' - ')[0];
+        const desc = (l.description || '').split(' - ')[0];
         if (desc) {
             desc.split(', ').forEach(item => paidItems.push(item));
         }

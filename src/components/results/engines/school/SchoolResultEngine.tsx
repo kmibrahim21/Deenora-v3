@@ -1262,14 +1262,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                 const resultInfo = calculateStudentResult(item.student_id, subjects);
                                                 generateResultPDF(
                                                     { 
-                                                      id: item.student_id, 
+                                                      ...studentObj,
                                                       student_name: item.student_name, 
                                                       roll: item.roll, 
                                                       classes: { class_name: selectedExam.classes?.class_name }, 
                                                       photo_url: studentObj?.photo_url, 
                                                       attendance: '95', 
                                                       merit_position: item.rank, 
-                                                      section: madrasah?.theme === 'dark' ? 'None' : 'N/A',
                                                       gpa: resultInfo.gpa,
                                                       grade: resultInfo.grade
                                                     },

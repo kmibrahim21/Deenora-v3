@@ -359,7 +359,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
     const paidItems: string[] = [];
     ledgerData?.forEach(l => {
-        const desc = l.description.split(' - ')[0];
+        const desc = (l.description || '').split(' - ')[0];
         if (desc) {
             desc.split(', ').forEach(item => paidItems.push(item));
         }

@@ -169,20 +169,20 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
          const fallbackDeletions = [];
 
          for (const record of recordsToDelete) {
-            if (record.description.includes('FEE_ID: ')) {
+            if (record.description?.includes('FEE_ID: ')) {
                const regex = /FEE_ID:\s*([a-f0-9\-]+)/g;
                let match;
                while ((match = regex.exec(record.description)) !== null) {
                   feeIdsToDelete.push(match[1]);
                }
             }
-            if (record.category === 'Student Fee' || record.category.includes('Fee') || record.category.includes('ফি')) {
+            if (record.category === 'Student Fee' || record.category?.includes('Fee') || record.category?.includes('ফি')) {
                // Fallback mechanism for older records before FEE_ID injection
-               const monthMatch = record.description.match(/(Month|মাস):\s*([\d]{4}-[\d]{2})/);
+               const monthMatch = record.description?.match(/(Month|মাস):\s*([\d]{4}-[\d]{2})/);
                const month = monthMatch ? monthMatch[2] : null;
                
                let name = null;
-               if (record.description.includes(' - ')) {
+               if (record.description?.includes(' - ')) {
                   const parts = record.description.split(' - ');
                   const namePart = parts.slice(1).join(' - ').split(' (')[0];
                   if (namePart) name = namePart.trim();
@@ -498,7 +498,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           ) : ledger.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {ledger.filter(e => {
-                const isStudent = e.category === 'Student Fee' || e.category.includes('Fee') || e.category.includes('ফি');
+                const isStudent = e.category === 'Student Fee' || e.category?.includes('Fee') || e.category?.includes('ফি');
                 if (historyTab === 'student_history') return isStudent;
                 if (historyTab === 'income_expense') {
                    if (isStudent) return false;
@@ -510,11 +510,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 let displayName = entry.category;
                 let details = '';
                 let feeType = '';
+                const cleanDescription = (entry.description || '').split(' || FEE_ID: ')[0];
 
-                // Remove hidden payload securely
-                const cleanDescription = entry.description.split(' || FEE_ID: ')[0];
-
-                if (entry.category === 'Student Fee' || entry.category.includes('Fee') || entry.category.includes('ফি')) {
+                if (entry.category === 'Student Fee' || entry.category?.includes('Fee') || entry.category?.includes('ফি')) {
                   // Try to find Fee Type and Details in description
                   // Expected format often: "Monthly Fee - Student Name (Details)" or similar
                   const parts = cleanDescription.split(' - ');

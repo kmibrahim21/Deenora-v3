@@ -68,7 +68,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
              const feesToDelete: string[] = [];
              for (const fee of feesData) {
                 const hasLedger = ledgerData.some(l => 
-                   l.description.includes(`FEE_ID: ${fee.id}`)
+                   (l.description || '').includes(`FEE_ID: ${fee.id}`)
                 );
                 if (!hasLedger) {
                    feesToDelete.push(fee.id);
@@ -461,7 +461,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium leading-relaxed whitespace-pre-wrap">
-                          {entry.description.split(' || FEE_ID: ')[0].split(' | Month: ')[0].split(' | মাস: ')[0]}
+                          {(entry.description || '').split(' || FEE_ID: ')[0].split(' | Month: ')[0].split(' | মাস: ')[0]}
                         </p>
                       </div>
                     </div>
