@@ -135,16 +135,25 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       const newEnabledState = !isCurrentlyEnabled;
 
       if (setting) {
-        await supabase.from('student_fee_settings').update({ is_enabled: newEnabledState }).eq('id', setting.id);
+        const { error } = await supabase.from('student_fee_settings').update({ is_enabled: newEnabledState }).eq('id', setting.id);
+        if (error) throw error;
       } else {
-        await supabase.from('student_fee_settings').insert({
+        const { error } = await supabase.from('student_fee_settings').insert({
           institution_id: madrasah.id,
           student_id: student.student_id,
           fee_structure_id: feeStructureId,
           is_enabled: newEnabledState
         });
+        if (error) throw error;
       }
       
+      // Invalidate cache patterns
+      requestManager.invalidatePattern(`settings:${madrasah.id}`);
+      requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
+      requestManager.invalidatePattern(`student_settings:${student.student_id}`);
+      clearGlobalSchoolFeeCache();
+      clearGlobalQawmiFeeCache();
+
       // Refresh settings
       const { data: settingsData } = await supabase
         .from('student_fee_settings')
@@ -177,6 +186,13 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         });
         if (error) throw error;
       }
+      
+      // Invalidate cache patterns
+      requestManager.invalidatePattern(`settings:${madrasah.id}`);
+      requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
+      requestManager.invalidatePattern(`student_settings:${student.student_id}`);
+      clearGlobalSchoolFeeCache();
+      clearGlobalQawmiFeeCache();
       
       // Refresh settings state locally to avoid full refetch delay
       setStudentFeeSettings(prev => {
