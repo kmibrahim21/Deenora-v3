@@ -17,14 +17,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function runMigration() {
   try {
-    // We can't directly run ALTER TABLE from the client unless we have a function.
-    // Let's check if we can just create a function and execute it.
-    console.log("Checking if we can execute SQL...");
-    
-    // We can use the REST API to execute SQL if we have the service role key, but usually it's not exposed.
-    // Let's check if there's an existing RPC for executing SQL.
-    const { data, error } = await supabase.rpc('exec_sql', { sql: 'SELECT 1;' });
-    console.log("exec_sql result:", data, error);
+    console.log("Process Env Keys:", Object.keys(process.env).filter(key => 
+      key.includes('DB') || key.includes('POSTGRES') || key.includes('DATABASE') || key.includes('SUPABASE') || key.includes('URL') || key.includes('KEY')
+    ));
   } catch (e) {
     console.error(e);
   }

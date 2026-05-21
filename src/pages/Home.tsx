@@ -177,22 +177,19 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         CACHE_TTLS.MEDIUM
       );
 
-      // 6. Attendance Today
+      // 6. Attendance Today (Optimized with RPC to count unique students)
       const attProm = modules.modules.attendance 
-        ? requestManager.cachedFetch(
-            'attendance',
-            (q) => {
-              let query = q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId).eq('date', today).eq('status', 'present');
-              if (activeYearId) {
-                query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-              }
-              if (isTeacher && allowedClasses?.length) query = query.in('class_id', allowedClasses);
-              return query;
+        ? requestManager.cachedRpc(
+            'get_today_attendance_count',
+            {
+              p_institution_id: institutionId,
+              p_date: today,
+              p_academic_year_id: activeYearId,
+              p_allowed_classes: isTeacher && allowedClasses?.length ? allowedClasses : null
             },
-            `dashboard_attendance:${institutionId}:${today}`,
             CACHE_TTLS.SHORT
           )
-        : Promise.resolve({ count: 0 });
+        : Promise.resolve({ data: 0 });
 
       const [stdRes, clsRes, teacherRes, mRes, ledgerRes, attRes] = await Promise.all([
         stdProm, clsProm, teacherProm, instProm, ledgerProm, attProm
@@ -213,7 +210,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         totalTeachers: teacherRes.count || 0,
         smsBalance: singleInst?.sms_balance || 0,
         voiceBalance: singleInst?.balance || 0,
-        attendanceToday: attRes.count || 0,
+        attendanceToday: Number(attRes.data) || 0,
         totalIncome: income,
         totalExpense: expense
       };

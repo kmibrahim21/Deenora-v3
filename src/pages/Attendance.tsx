@@ -10,6 +10,7 @@ import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { SupabaseWrapper } from 'services/supabaseWrapper';
+import { SyncEngine } from 'services/syncEngine';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
 import jsPDF from 'jspdf';
@@ -388,27 +389,24 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
            setAttendanceNotTaken(true);
         } else {
            setAttendanceNotTaken(false);
-           let query = supabase.from('attendance')
-              .select(`
-                *,
-                students(id, student_name, roll, guardian_phone),
-                classes(class_name)
-              `)
-              .eq('institution_id', madrasah?.id)
-              .eq('date', reportDate)
-              .eq('status', 'absent');
-              
-           if (cid && cid !== 'all') {
-              query = query.eq('class_id', cid);
-           }
-           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
-              query = query.eq('session', selectedSession);
-           }
+           const { data, error } = await supabase.rpc('get_daily_attendance_details', {
+              p_institution_id: madrasah?.id,
+              p_date: reportDate,
+              p_class_id: cid === 'all' ? null : cid,
+              p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
+           });
 
-           const { data, error } = await query;
            if (error) throw error;
-           setDailyAbsentees(data || []);
-           await CacheService.cacheData('attendance_daily', madrasah?.id || '', data || []);
+           
+           // Filter for absents only for the "Absentees List"
+           const absents = (data || []).filter((r: any) => r.final_status === 'absent').map((r: any) => ({
+             ...r,
+             students: { student_name: r.student_name, roll: r.roll, guardian_phone: r.guardian_phone },
+             classes: { class_name: r.class_name }
+           }));
+           
+           setDailyAbsentees(absents);
+           await CacheService.cacheData('attendance_daily', madrasah?.id || '', absents);
         }
       } else {
         let startDate, endDate;
@@ -492,9 +490,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setSaving(true);
     
     // Invalidate RequestManager pattern-based caches
-    requestManager.invalidatePattern(`attendance:${madrasah.id}`);
-    requestManager.invalidatePattern(`stats:${madrasah.id}`);
-    requestManager.invalidatePattern(`dashboard_`);
+    await requestManager.invalidatePattern(`attendance:${madrasah.id}`);
+    await requestManager.invalidatePattern(`stats:${madrasah.id}`);
+    await requestManager.invalidatePattern(`dashboard_`);
+    await requestManager.invalidatePattern('get_today_attendance_count');
+    await requestManager.invalidatePattern('get_daily_attendance_details');
+    await requestManager.invalidatePattern('get_attendance_report');
+    await CacheService.clearCache('stats', madrasah.id);
 
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
@@ -557,13 +559,26 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
       }
 
-      // Refresh existing records mapping 
-      setExistingAttRecords(prev => {
-        const newMap = new Map(prev.map(r => [r.student_id, r]));
-        inserts.forEach(i => newMap.set(i.student_id, i)); // IDs won't be matching but for update delta it prevents insert again
-        updates.forEach(u => newMap.set(u.student_id, u));
-        return Array.from(newMap.values());
-      });
+      // Sync and reload to get persistent IDs / records from the server if online
+      if (isOnline) {
+        try {
+          await SyncEngine.sync();
+          await fetchStudents(selectedClass.id);
+        } catch (syncErr) {
+          console.error("Immediate sync error:", syncErr);
+        }
+      } else {
+        // Refresh existing records mapping 
+        setExistingAttRecords(prev => {
+          const newMap = new Map(prev.map(r => [r.student_id, r]));
+          inserts.forEach(i => {
+            const tempId = i.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString());
+            newMap.set(i.student_id, { ...i, id: tempId });
+          });
+          updates.forEach(u => newMap.set(u.student_id, u));
+          return Array.from(newMap.values());
+        });
+      }
 
       // Update Local Cache for offline consistency
       const currentAttendanceData = payload.filter(p => p.status === 'absent').map(p => {

@@ -4,9 +4,11 @@ import { supabase, smsApi } from 'supabase';
 import { Language, Class, SMSTemplate, Institution, UserRole, Profile } from 'types';
 import { t } from 'translations';
 import { ShortcodeService } from 'services/ShortcodeService';
-import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall, Download } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall, Download, X } from 'lucide-react';
 import { isValidUUID } from 'utils/validation';
 import { generateAccountingReportPDF } from 'utils/pdfGenerator';
+
+import { createPortal } from 'react-dom';
 
 interface SmartFeeAnalyticsProps {
   institutionId: string;
@@ -427,7 +429,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             const sData = await sRes.json();
             const sList = Array.isArray(sData) ? sData : (sData.senders || sData.data || []);
             if (sList.length > 0) {
-              sNumber = (sList[0].callingNumber || sList[0].caller_id || sList[0].id).toString();
+              sNumber = (sList[0].callingNumber || sList[0].caller_id || sList[0].id || '').toString();
             }
           }
         } catch (sErr) {
@@ -986,21 +988,26 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             </div>
         </div>
 
-      {/* Voice Selection Modal */}
-      {showVoiceModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[1000] flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-white'} w-full max-w-md rounded-[2.5rem] border-4 shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300`}>
+      {/* Voice Selection Modal - PORTALED */}
+      {showVoiceModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-white'} w-full max-w-md rounded-[3rem] border-4 shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300`}>
             <div className={`p-8 border-b ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-800/20' : 'border-slate-50 bg-slate-50/50'}`}>
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
-                  <PhoneCall size={24} />
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-500'}`}>
+                    <PhoneCall size={24} />
+                  </div>
+                  <div>
+                    <h3 className={`text-xl font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('voice_call', lang)}</h3>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mt-0.5 opacity-60`}>
+                      {lang === 'bn' ? 'পেমেন্ট রিমাইন্ডার ভয়েস কল' : 'Payment Reminder Voice Call'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className={`text-xl font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('voice_call', lang)}</h3>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mt-0.5 opacity-60`}>
-                    {lang === 'bn' ? 'পেমেন্ট রিমাইন্ডার ভয়েস কল' : 'Payment Reminder Voice Call'}
-                  </p>
-                </div>
+                <button onClick={() => setShowVoiceModal(false)} className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'} active:scale-95 transition-all`}>
+                  <X size={20} />
+                </button>
               </div>
             </div>
             
@@ -1072,44 +1079,36 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Status Modal */}
-      {statusModal.show && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
-          <div className={`w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border-4 animate-in zoom-in-95 duration-300 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-white'}`}>
-            <div className="flex flex-col items-center text-center">
-              <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-inner animate-bounce ${
-                statusModal.type === 'success' 
-                  ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500')
-                  : statusModal.type === 'error'
-                  ? (madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-500')
-                  : (madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-500')
-              }`}>
-                {statusModal.type === 'success' ? <CheckCircle2 size={40} /> : statusModal.type === 'error' ? <AlertCircle size={40} /> : <Info size={40} />}
-              </div>
-              
-              <h3 className={`text-2xl font-black mb-2 font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                {statusModal.title || (statusModal.type === 'success' ? (lang === 'bn' ? 'সফল হয়েছে' : 'Success') : (lang === 'bn' ? 'সতর্কবার্তা' : 'Notice'))}
-              </h3>
-              <p className={`text-sm font-bold leading-relaxed mb-8 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {statusModal.message}
-              </p>
-              
-              <button 
-                onClick={() => setStatusModal({ ...statusModal, show: false })}
-                className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95 ${
-                  statusModal.type === 'success' ? 'bg-emerald-500 text-white hover:bg-emerald-600' :
-                  statusModal.type === 'error' ? 'bg-red-500 text-white hover:bg-red-600' :
-                  'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                {lang === 'bn' ? 'ঠিক আছে' : 'Got it'}
-              </button>
+      {/* Status Modal - PORTALED */}
+      {statusModal.show && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className={`${madrasah?.theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-50" } w-full max-w-sm rounded-[3.5rem] p-10 text-center shadow-2xl border animate-in zoom-in-95 duration-500 relative overflow-hidden`} >
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform duration-700 ${ statusModal.type === "success" ? "bg-emerald-50 text-emerald-500 border-emerald-100" : "bg-red-50 text-red-500 border-red-100" } border-4 shadow-inner`} >
+              {statusModal.type === "success" ? (
+                <CheckCircle2 size={40} strokeWidth={2.5} className="animate-in zoom-in duration-500" />
+              ) : (
+                <AlertCircle size={40} strokeWidth={2.5} className="animate-in zoom-in duration-500" />
+              )}
             </div>
+            <h3 className={`text-[22px] font-black font-noto leading-tight tracking-tight ${ madrasah?.theme === "dark" ? "text-white" : "text-[#1E3A8A]" }`} >
+              {statusModal.title || (statusModal.type === 'success' ? (lang === 'bn' ? 'সফল হয়েছে' : 'Success') : (lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Failed'))}
+            </h3>
+            <p className="text-[13px] font-bold text-slate-400 mt-3 font-noto px-4 leading-relaxed whitespace-pre-wrap">
+              {statusModal.message}
+            </p>
+            <button
+              onClick={() => setStatusModal({ ...statusModal, show: false })}
+              className={`w-full mt-8 py-4 font-black rounded-full text-xs uppercase tracking-[0.2em] transition-all shadow-premium active:scale-95 ${ statusModal.type === "success" ? "bg-[#2563EB] text-white" : "bg-red-500 text-white" }`}
+            >
+              {lang === "bn" ? "ঠিক আছে" : "Continue"}
+            </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
