@@ -25,6 +25,157 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const [loadingFees, setLoadingFees] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
+  const [showMultiCollect, setShowMultiCollect] = useState(false);
+  const [selectedMonthsToPay, setSelectedMonthsToPay] = useState<string[]>([]);
+  const [multiPaidAmount, setMultiPaidAmount] = useState<string>('');
+  const [multiDiscount, setMultiDiscount] = useState<string>('');
+  const [isSavingMulti, setIsSavingMulti] = useState(false);
+  const [errorMulti, setErrorMulti] = useState<string>('');
+
+  const getDueForMonth = (monthStr: string) => {
+      const monthFees = fees.filter(f => f.month === monthStr);
+      const paidAmt = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+      
+      const monthPayable = structures.reduce((sum, s) => {
+        const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+        const isEnabled = setting ? setting.is_enabled : true;
+        const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
+        const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
+        const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+        return (isEnabled && !isMonthExpired && !isMonthNotStarted) ? sum + amountToCharge : sum;
+      }, 0);
+      
+      return Math.max(0, monthPayable - paidAmt);
+  };
+
+  const toggleMonthSelection = (monthStr: string) => {
+      setSelectedMonthsToPay(prev => 
+          prev.includes(monthStr) 
+              ? prev.filter(m => m !== monthStr)
+              : [...prev, monthStr]
+      );
+  };
+
+  useEffect(() => {
+      if (!showMultiCollect) {
+          setSelectedMonthsToPay([]);
+          setMultiPaidAmount('');
+          setMultiDiscount('');
+          setErrorMulti('');
+      }
+  }, [showMultiCollect]);
+
+  useEffect(() => {
+      const totalSelectedDue = selectedMonthsToPay.reduce((sum, m) => sum + getDueForMonth(m), 0);
+      const net = Math.max(0, totalSelectedDue - (parseFloat(multiDiscount) || 0));
+      if (net > 0) {
+          setMultiPaidAmount(net.toString());
+      } else {
+          setMultiPaidAmount('');
+      }
+  }, [selectedMonthsToPay, multiDiscount]);
+
+  const handleMultiCollectFee = async () => {
+    if (selectedMonthsToPay.length === 0 || !multiPaidAmount) return;
+    setIsSavingMulti(true);
+    setErrorMulti('');
+    try {
+        const activeYearId = madrasah.config_json?.active_academic_year_id;
+        let remainingPaid = parseFloat(multiPaidAmount) || 0;
+        let remainingDiscount = parseFloat(multiDiscount) || 0;
+
+        const sortedMonths = [...selectedMonthsToPay].sort();
+
+        let totalCategories = structures.filter(s => {
+            const set = studentFeeSettings.find(se => se.fee_structure_id === s.id);
+            return set ? set.is_enabled : true;
+        }).map(s => s.fee_name).join(', ');
+
+        for (const monthStr of sortedMonths) {
+            const due = getDueForMonth(monthStr);
+            if (due <= 0) continue;
+
+            const discountForMonth = Math.min(remainingDiscount, due);
+            remainingDiscount -= discountForMonth;
+
+            const payableAfterDiscount = due - discountForMonth;
+            const paidForMonth = Math.min(remainingPaid, payableAfterDiscount);
+            remainingPaid -= paidForMonth;
+
+            if (paidForMonth > 0 || discountForMonth > 0) {
+                const feeData = {
+                    institution_id: madrasah.id,
+                    student_id: student.student_id,
+                    class_id: student.class_id,
+                    amount_paid: paidForMonth,
+                    discount: discountForMonth,
+                    month: monthStr,
+                    academic_year_id: activeYearId,
+                    status: (paidForMonth + discountForMonth >= due) ? 'paid' : 'partial'
+                };
+
+                const { error } = await supabase.from('fees').insert(feeData);
+                if (error) {
+                    if (error.message.includes('column') || error.code === '42703') {
+                       const { error: retryErr } = await supabase.from('fees').insert({
+                          institution_id: madrasah.id,
+                          student_id: student.student_id,
+                          class_id: student.class_id,
+                          amount_paid: paidForMonth,
+                          month: monthStr,
+                          academic_year_id: activeYearId,
+                          status: paidForMonth >= due ? 'paid' : 'partial'
+                       });
+                       if (retryErr) throw retryErr;
+                    } else {
+                       throw error;
+                    }
+                }
+            }
+        }
+
+        const classNameToSave = classes.find(c => c.id === student.class_id)?.class_name || '';
+        const roll = student.roll || '-';
+        const monthsNames = sortedMonths.map(m => {
+             const [_, mm] = m.split('-');
+             return ['জানু', 'ফেব', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'][parseInt(mm)-1];
+        }).join(', ');
+        
+        const totalPaid = parseFloat(multiPaidAmount) || 0;
+        const totalDisc = parseFloat(multiDiscount) || 0;
+        
+        let finalDescription = `${totalCategories} - ${student.student_name} (${classNameToSave} | Roll: ${roll} | Months: ${monthsNames})${totalDisc > 0 ? " (ছাড়: ৳" + totalDisc + ")" : ""}`;
+
+        await bgInsertLedger(madrasah.id, totalPaid, finalDescription, activeYearId);
+
+        setShowMultiCollect(false);
+        requestManager.invalidatePattern(`fees:${madrasah.id}`);
+        requestManager.invalidatePattern(`stats:${madrasah.id}`);
+        requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
+        requestManager.invalidatePattern(`accounting-history-${student.student_id}`);
+        clearGlobalSchoolFeeCache();
+        clearGlobalQawmiFeeCache();
+        
+        fetchStudentAccountingData();
+    } catch (err: any) {
+        setErrorMulti(err.message);
+    } finally {
+        setIsSavingMulti(false);
+    }
+  };
+
+  const bgInsertLedger = async (instId: string, amt: number, desc: string, yId: any) => {
+      await supabase.from('ledger').insert({
+          institution_id: instId,
+          type: 'income',
+          amount: amt,
+          category: 'Student Fee',
+          description: desc,
+          transaction_date: new Date().toISOString().split('T')[0],
+          academic_year_id: yId
+      });
+  };
+
   useEffect(() => {
     fetchStudentAccountingData();
   }, [student.student_id, selectedYear]);
@@ -267,24 +418,32 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-1 sm:gap-4 pb-1">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
           <button 
             onClick={onBack}
-            className={`w-10 h-10 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'}`}
+            className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'}`}
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={16} className="sm:w-[18px] sm:h-[18px]" />
           </button>
           <div className="min-w-0">
-            <h2 className={`text-xl font-black font-noto truncate ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>{student.student_name}</h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{className} | রোল: {student.roll || '-'}</p>
+            <h2 className={`text-sm sm:text-xl font-black font-noto truncate ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>{student.student_name}</h2>
+            <p className="text-[8px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{className} | রোল: {student.roll || '-'}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <button 
+                onClick={() => setShowMultiCollect(true)}
+                className={`h-8 sm:h-10 px-2 sm:px-4 rounded-lg sm:rounded-xl flex items-center justify-center gap-1 sm:gap-2 text-[9px] sm:text-[11px] font-black uppercase tracking-widest transition-all shadow-sm ${isDark ? 'bg-[#2563EB] hover:bg-blue-600 text-white border border-blue-500/50 shadow-blue-500/20' : 'bg-[#2563EB] hover:bg-blue-600 text-white shadow-blue-500/20'}`}
+            >
+                <DollarSign size={12} className="sm:w-[14px] sm:h-[14px]" />
+                <span className="hidden sm:inline">একসাথে ফি</span>
+                <span className="inline sm:hidden">একাধিক মাস</span>
+            </button>
             <select 
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className={`h-10 px-4 rounded-xl border text-xs font-black outline-none transition-all shadow-sm ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600 focus:border-blue-300'}`}
+                className={`h-8 sm:h-10 px-2 sm:px-4 rounded-lg sm:rounded-xl border text-[10px] sm:text-xs font-black outline-none transition-all shadow-sm ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600 focus:border-blue-300'}`}
             >
                 {[0, 1, 2].map(offset => {
                     const year = (new Date().getFullYear() - offset).toString();
@@ -368,12 +527,10 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     const monthPayable = structures.reduce((sum, s) => {
                       const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
                       const isEnabled = setting ? setting.is_enabled : true;
-                      const isExpired = s.due_date && s.due_date < today;
-                      const isNotStarted = s.start_date && s.start_date > today;
                       const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
                       const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
                       const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
-                      return (isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted) ? sum + amountToCharge : sum;
+                      return (isEnabled && !isMonthExpired && !isMonthNotStarted) ? sum + amountToCharge : sum;
                     }, 0);
 
                     let status = 'unpaid';
@@ -509,6 +666,96 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {showMultiCollect && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMultiCollect(false)}></div>
+            <div className={`relative w-full max-w-lg rounded-[2.5rem] p-6 sm:p-8 animate-in zoom-in duration-300 border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center justify-between mb-8">
+                    <h2 className={`text-2xl font-black font-noto tracking-tight flex flex-col ${isDark ? 'text-white' : 'text-[#1E293B]'}`}>
+                        একাধিক মাসের ফি
+                        <span className={`text-[10px] font-black uppercase tracking-[0.2em] mt-1 ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`}>{student.student_name}</span>
+                    </h2>
+                    <button onClick={() => setShowMultiCollect(false)} className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="mb-6">
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>মাসের বকেয়া নির্বাচন করুন ({selectedYear})</p>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {Array.from({ length: 12 }).map((_, i) => {
+                            const monthStr = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
+                            const monthName = ['জানু', 'ফেব', 'মার্চ', 'এপ্রি', 'মে', 'জুন', 'জুল', 'আগ', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'][i];
+                            const due = getDueForMonth(monthStr);
+                            const isSelected = selectedMonthsToPay.includes(monthStr);
+                            
+                            return (
+                                <button 
+                                    key={monthStr}
+                                    type="button"
+                                    onClick={() => due > 0 && toggleMonthSelection(monthStr)}
+                                    disabled={due <= 0}
+                                    className={`relative p-2 rounded-xl flex flex-col items-center justify-center border-2 transition-all ${
+                                         due <= 0 
+                                            ? (isDark ? 'bg-slate-800/20 border-slate-800 text-slate-600 opacity-50 cursor-not-allowed' : 'bg-slate-50 border-slate-100 text-slate-400 opacity-50 cursor-not-allowed')
+                                            : isSelected 
+                                                ? (isDark ? 'bg-[#2563EB] border-[#2563EB] text-white' : 'bg-[#2563EB] border-[#2563EB] text-white')
+                                                : (isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50')
+                                    }`}
+                                >
+                                    <span className="text-xs font-black">{monthName}</span>
+                                    {due > 0 && <span className={`text-[9px] font-bold mt-1 ${isSelected ? 'text-blue-100' : isDark ? 'text-red-400' : 'text-red-500'}`}>৳{due}</span>}
+                                    {due <= 0 && <span className="text-[9px] font-bold mt-1 text-emerald-500">Paid</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                   <div className="flex-1">
+                      <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ছাড় (৳)</label>
+                      <input 
+                         type="number" 
+                         className={`w-full h-12 rounded-xl px-4 font-black transition-all outline-none border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-blue-500/50' : 'bg-slate-50 border-slate-200 text-[#1E293B] focus:border-[#2563EB]/50'}`}
+                         placeholder="0" 
+                         value={multiDiscount} 
+                         onChange={e => setMultiDiscount(e.target.value)} 
+                      />
+                   </div>
+                   <div className="flex-1">
+                      <label className={`block text-[10px] font-black uppercase tracking-widest mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>মোট গ্রহণ (৳)</label>
+                      <input 
+                         type="number" 
+                         className={`w-full h-12 rounded-xl px-4 font-black transition-all outline-none border focus:ring-0 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-blue-500/50' : 'bg-slate-50 border-slate-200 text-[#1E293B] focus:border-[#2563EB]/50'}`}
+                         placeholder="0.00" 
+                         value={multiPaidAmount} 
+                         onChange={e => setMultiPaidAmount(e.target.value)} 
+                      />
+                   </div>
+                </div>
+
+                {errorMulti && (
+                    <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold text-center">
+                        {errorMulti}
+                    </div>
+                )}
+
+                <button 
+                   onClick={handleMultiCollectFee}
+                   disabled={isSavingMulti || selectedMonthsToPay.length === 0 || !multiPaidAmount}
+                   className={`w-full h-14 rounded-2xl flex items-center justify-center gap-3 font-black text-sm uppercase tracking-widest transition-all ${
+                       selectedMonthsToPay.length === 0 || !multiPaidAmount || isSavingMulti
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#2563EB] hover:bg-blue-600 text-white active:scale-95 shadow-lg shadow-blue-500/25'
+                   }`}
+                >
+                   {isSavingMulti ? <Loader2 className="animate-spin" size={20} /> : 'নিশ্চিত করুন'}
+                </button>
+            </div>
         </div>
       )}
     </div>
