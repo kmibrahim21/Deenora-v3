@@ -96,6 +96,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   
   const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [statusModal, setStatusModal] = useState<{ show: boolean, type: 'success' | 'error' | 'info', title?: string, message: string }>({ show: false, type: 'success', message: '' });
   const [isFetchingVoices, setIsFetchingVoices] = useState(false);
   const [voices, setVoices] = useState<any[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
@@ -393,7 +394,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       setShowVoiceModal(true);
     } catch (err) {
       console.error('Error fetching voices:', err);
-      alert(lang === 'bn' ? 'ভয়েস লোড করতে সমস্যা হয়েছে।' : 'Failed to load voices.');
+      setStatusModal({ show: true, type: 'error', title: lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Failed', message: lang === 'bn' ? 'ভয়েস লোড করতে সমস্যা হয়েছে।' : 'Failed to load voices.' });
     } finally {
       setIsFetchingVoices(false);
     }
@@ -416,11 +417,39 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         throw new Error(lang === 'bn' ? `পর্যাপ্ত ব্যালেন্স নেই। প্রয়োজন: ${estimatedCost} ৳, আছে: ${instData?.balance || 0} ৳` : `Insufficient balance. Required: ${estimatedCost} ৳, Available: ${instData?.balance || 0} ৳`);
       }
 
-      const sNumber = instData.voice_sender_id;
-      if (!sNumber) throw new Error(lang === 'bn' ? 'কোনো সেন্ডার আইডি সেট করা নেই।' : 'No Sender ID configured.');
+      let sNumber = instData.voice_sender_id;
+      
+      if (!sNumber) {
+        try {
+          // Fallback: try to fetch first available sender from API
+          const sRes = await fetch('/api/awaj/senders');
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            const sList = Array.isArray(sData) ? sData : (sData.senders || sData.data || []);
+            if (sList.length > 0) {
+              sNumber = (sList[0].callingNumber || sList[0].caller_id || sList[0].id).toString();
+            }
+          }
+        } catch (sErr) {
+          console.warn('Failed to fetch fallback sender ID:', sErr);
+        }
+      }
+
+      if (!sNumber) throw new Error(lang === 'bn' ? 'কোনো সেন্ডার আইডি খুঁজে পাওয়া যায়নি। অনুগ্রহ করে সেটিংস থেকে সেট করুন।' : 'No Sender ID found. Please configure it in settings.');
+
+      // Ensure sender is in 8801... format
+      sNumber = sNumber.toString();
+      const sDigits = sNumber.replace(/[^0-9]/g, '');
+      if (sDigits.length === 11 && sDigits.startsWith('01')) {
+        sNumber = '88' + sDigits;
+      } else if (sDigits.length === 13 && sDigits.startsWith('8801')) {
+        sNumber = sDigits;
+      } else if (sDigits.length === 10 && sDigits.startsWith('1')) {
+        sNumber = '880' + sDigits;
+      }
 
       const voiceName = voice.provider_voice_name || voice.title;
-      const requestId = 'fee_' + Math.random().toString(36).substr(2, 9);
+      const requestId = crypto.randomUUID();
 
       // Normalize phone numbers: 11 digits (01...)
       const uniqueNormalizedPhoneNumbers = [...new Set(phoneNumbers
@@ -461,11 +490,12 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       });
 
       if (!response.ok) {
-        let errorMessage = 'Failed to send broadcast via Awaj API';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch (e) {}
+        const errorData = await response.json().catch(() => ({}));
+        let errorMessage = errorData.error || errorData.message || `Failed to send broadcast (API Error ${response.status})`;
+        if (errorData.details) {
+          const details = typeof errorData.details === 'string' ? errorData.details : JSON.stringify(errorData.details);
+          errorMessage += ` - ${details}`;
+        }
         throw new Error(errorMessage);
       }
 
@@ -489,10 +519,10 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         provider_campaign_id: campaignId.toString()
       });
 
-      alert(lang === 'bn' ? 'ভয়েস কল সফলভাবে পাঠানো হয়েছে' : 'Voice broadcast sent successfully');
+      setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'সফল হয়েছে' : 'Success', message: lang === 'bn' ? 'ভয়েস কল সফলভাবে পাঠানো হয়েছে' : 'Voice broadcast sent successfully' });
       setShowVoiceModal(false);
     } catch (err: any) {
-      alert(err.message || 'Failed to send voice broadcast');
+      setStatusModal({ show: true, type: 'error', title: lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Error', message: err.message || 'Failed to send voice broadcast' });
     } finally {
       setSending(false);
     }
@@ -550,9 +580,9 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         }
 
         await smsApi.sendBulk(institutionId, pseudoStudents, body);
-        alert(lang === 'bn' ? 'রিমাইন্ডার সফলভাবে পাঠানো হয়েছে' : 'Reminders sent successfully');
+        setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'সফল হয়েছে' : 'Success', message: lang === 'bn' ? 'রিমাইন্ডার সফলভাবে পাঠানো হয়েছে' : 'Reminders sent successfully' });
       } catch (err: any) {
-        alert(err.message || 'Failed to send SMS');
+        setStatusModal({ show: true, type: 'error', title: lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Error', message: err.message || 'Failed to send SMS' });
       } finally {
         isSendingRef.current = false;
         setSending(false);
@@ -577,7 +607,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       );
     } catch (err) {
       console.error("PDF Generation Error:", err);
-      alert(lang === 'bn' ? 'পিডিএফ তৈরি করতে সমস্যা হয়েছে' : 'Failed to generate PDF');
+      setStatusModal({ show: true, type: 'error', title: lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Error', message: lang === 'bn' ? 'পিডিএফ তৈরি করতে সমস্যা হয়েছে' : 'Failed to generate PDF' });
     }
   };
 
@@ -955,64 +985,127 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             )}
             </div>
         </div>
+
       {/* Voice Selection Modal */}
       {showVoiceModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-md rounded-[2rem] border shadow-2xl overflow-hidden flex flex-col`}>
-            <div className={`p-6 border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('voice_call', lang)}</h3>
-              <p className={`text-xs font-bold mt-1 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {lang === 'bn' ? 'ভয়েস ব্রডকাস্ট পাঠাতে একটি ভয়েস নির্বাচন করুন' : 'Select a voice to send broadcast'}
-              </p>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[1000] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-white'} w-full max-w-md rounded-[2.5rem] border-4 shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300`}>
+            <div className={`p-8 border-b ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-800/20' : 'border-slate-50 bg-slate-50/50'}`}>
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
+                  <PhoneCall size={24} />
+                </div>
+                <div>
+                  <h3 className={`text-xl font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('voice_call', lang)}</h3>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mt-0.5 opacity-60`}>
+                    {lang === 'bn' ? 'পেমেন্ট রিমাইন্ডার ভয়েস কল' : 'Payment Reminder Voice Call'}
+                  </p>
+                </div>
+              </div>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-8 space-y-6">
               {voices.length === 0 ? (
-                <div className={`p-4 rounded-xl text-center text-sm font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
-                  {lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস পাওয়া যায়নি। দয়া করে ভয়েস ব্রডকাস্ট মেনু থেকে ভয়েস আপলোড করুন।' : 'No approved voices found. Please upload a voice from Voice Broadcast menu.'}
+                <div className={`p-6 rounded-2xl text-center border-2 border-dashed ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                  <Info size={32} className="mx-auto mb-3 opacity-20" />
+                  <p className="text-xs font-bold leading-relaxed">
+                    {lang === 'bn' ? 'কোনো অনুমোদিত ভয়েস পাওয়া যায়নি। দয়া করে ভয়েস ব্রডকাস্ট মেনু থেকে ভয়েস আপলোড করুন।' : 'No approved voices found. Please upload a voice from Voice Broadcast menu.'}
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('select_voice', lang)}</label>
-                  <select
-                    value={selectedVoiceId}
-                    onChange={(e) => setSelectedVoiceId(e.target.value)}
-                    className={`w-full h-12 rounded-xl px-4 font-bold text-sm outline-none appearance-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-50 text-[#1E3A8A] border-slate-200'} border focus:border-[#2563EB]/50`}
-                  >
-                    {voices.map(v => (
-                      <option key={v.id} value={v.id}>{v.title || v.provider_voice_name || 'Unknown Voice'}</option>
-                    ))}
-                  </select>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">{t('select_voice', lang)}</label>
+                  <div className="relative group">
+                    <select
+                      value={selectedVoiceId}
+                      onChange={(e) => setSelectedVoiceId(e.target.value)}
+                      className={`w-full h-14 rounded-2xl px-5 font-black text-sm outline-none appearance-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-white border-slate-700 hover:border-blue-500/50' : 'bg-slate-50 text-[#1E3A8A] border-slate-200 hover:border-blue-500/50'} border-2 focus:border-[#2563EB] shadow-inner`}
+                    >
+                      {voices.map(v => (
+                        <option key={v.id} value={v.id}>{v.title || v.provider_voice_name || 'Unknown Voice'}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <ChevronDown size={20} />
+                    </div>
+                  </div>
                 </div>
               )}
 
               {voices.length > 0 && reminders.length > 0 && (
-                <div className={`p-4 rounded-xl flex items-center justify-between ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-900/50' : 'bg-blue-50 border-blue-100'} border`}>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">{lang === 'bn' ? 'মোট প্রাপক' : 'Total Recipients'}</p>
-                    <h4 className="text-lg font-black text-blue-600">{reminders.filter(r => r.guardian_phone).length}</h4>
+                <div className={`p-6 rounded-[2rem] border-2 shadow-inner group transition-all ${madrasah?.theme === 'dark' ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50/50 border-blue-100'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-blue-500/60 mb-1">{lang === 'bn' ? 'মোট প্রাপক' : 'Total Recipients'}</p>
+                      <div className="flex items-center gap-2">
+                        <Users size={16} className="text-blue-500" />
+                        <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{reminders.filter(r => r.guardian_phone).length.toLocaleString('bn-BD')}</h4>
+                        <span className="text-xs font-bold text-slate-400">{lang === 'bn' ? 'জন' : 'Students'}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-blue-500/60 mb-1">{lang === 'bn' ? 'আনুমানিক খরচ' : 'Estimated Cost'}</p>
+                      <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳{(reminders.filter(r => r.guardian_phone).length * voiceRate).toLocaleString('bn-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">{lang === 'bn' ? 'আনুমানিক খরচ' : 'Estimated Cost'}</p>
-                    <h4 className="text-lg font-black text-blue-600">{(reminders.filter(r => r.guardian_phone).length * voiceRate).toFixed(2)} ৳</h4>
+                  <div className={`h-1.5 w-full rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                    <div className="h-full bg-blue-500 rounded-full w-full animate-pulse opacity-50" />
                   </div>
                 </div>
               )}
             </div>
 
-            <div className={`p-4 border-t flex gap-3 ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+            <div className={`p-8 border-t flex gap-4 ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-800/10' : 'border-slate-50 bg-slate-50/30'}`}>
               <button
                 onClick={() => setShowVoiceModal(false)}
-                className={`flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
+                className={`flex-1 h-16 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-500 hover:bg-slate-100 border-2 border-slate-100 shadow-sm'}`}
               >
                 {lang === 'bn' ? 'বাতিল' : 'Cancel'}
               </button>
               <button
                 onClick={sendVoiceBroadcast}
                 disabled={sending || voices.length === 0}
-                className="flex-1 h-12 bg-[#2563EB] text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                className="flex-1 h-16 bg-[#2563EB] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100 group"
               >
-                {sending ? <Loader2 className="animate-spin" size={16} /> : <PhoneCall size={16} />} {lang === 'bn' ? 'কল করুন' : 'Call Now'}
+                {sending ? <Loader2 className="animate-spin" size={20} /> : <PhoneCall size={20} className="group-hover:animate-bounce" />} 
+                {lang === 'bn' ? 'কল করুন' : 'Call Now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Modal */}
+      {statusModal.show && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+          <div className={`w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl border-4 animate-in zoom-in-95 duration-300 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-white'}`}>
+            <div className="flex flex-col items-center text-center">
+              <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-inner animate-bounce ${
+                statusModal.type === 'success' 
+                  ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500')
+                  : statusModal.type === 'error'
+                  ? (madrasah?.theme === 'dark' ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-500')
+                  : (madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-500')
+              }`}>
+                {statusModal.type === 'success' ? <CheckCircle2 size={40} /> : statusModal.type === 'error' ? <AlertCircle size={40} /> : <Info size={40} />}
+              </div>
+              
+              <h3 className={`text-2xl font-black mb-2 font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                {statusModal.title || (statusModal.type === 'success' ? (lang === 'bn' ? 'সফল হয়েছে' : 'Success') : (lang === 'bn' ? 'সতর্কবার্তা' : 'Notice'))}
+              </h3>
+              <p className={`text-sm font-bold leading-relaxed mb-8 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                {statusModal.message}
+              </p>
+              
+              <button 
+                onClick={() => setStatusModal({ ...statusModal, show: false })}
+                className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95 ${
+                  statusModal.type === 'success' ? 'bg-emerald-500 text-white hover:bg-emerald-600' :
+                  statusModal.type === 'error' ? 'bg-red-500 text-white hover:bg-red-600' :
+                  'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                {lang === 'bn' ? 'ঠিক আছে' : 'Got it'}
               </button>
             </div>
           </div>

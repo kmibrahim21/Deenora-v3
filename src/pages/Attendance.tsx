@@ -735,13 +735,17 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             }
           }
 
-          if (!sNumber) throw new Error('No voice sender ID configured');
+          if (!sNumber) throw new Error(lang === 'bn' ? 'কোনো ভয়েস সেন্ডার আইডি খুঁজে পাওয়া যায়নি।' : 'No voice sender ID found.');
 
-          // Ensure sender is in 8801... format if it is a mobile number
+          // Ensure sender is in 8801... format
           sNumber = sNumber.toString();
           const sDigits = sNumber.replace(/[^0-9]/g, '');
           if (sDigits.length === 11 && sDigits.startsWith('01')) {
             sNumber = '88' + sDigits;
+          } else if (sDigits.length === 13 && sDigits.startsWith('8801')) {
+            sNumber = sDigits;
+          } else if (sDigits.length === 10 && sDigits.startsWith('1')) {
+            sNumber = '880' + sDigits;
           }
 
           const requestId = crypto.randomUUID();

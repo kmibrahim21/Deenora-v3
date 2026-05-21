@@ -400,7 +400,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           
           <div className={activeTab === 'summary' ? 'block' : 'hidden'}>
         <div className="space-y-6 animate-in slide-in-from-bottom-5">
-          <div className={`rounded-[2.5rem] p-1 border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white/40 border-white/20'} backdrop-blur-sm`}>
+          <div className={`rounded-[2.5rem] p-1 border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white/40 border-white/20'}`}>
             {madrasah && (
               <SmartFeeAnalytics 
                 institutionId={madrasah.id} 
