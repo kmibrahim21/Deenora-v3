@@ -905,7 +905,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setIsSendingBulk(true);
     try {
       if (bulkType === 'sms') {
-        const sendPromises = targets.map(phone => smsApi.sendDirect(phone, bulkMessage));
+        const sendPromises = targets.map(phone => smsApi.sendDirect(phone, bulkMessage, madrasah?.id));
         await Promise.all(sendPromises);
         setStatusModal({ show: true, type: 'success', title: 'সফল', message: `${targets.length} টি প্রতিষ্ঠানে এসএমএস পাঠানো হয়েছে` });
       } else {
@@ -961,7 +961,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         if (smsTarget === 'admin') {
           for (const inst of targets) {
             const personalizedMsg = commMessage.replace(/{{name}}/g, inst.name || '');
-            sendPromises.push(smsApi.sendDirect(inst.phone!, personalizedMsg));
+            sendPromises.push(smsApi.sendDirect(inst.phone!, personalizedMsg, madrasah?.id));
           }
         } else {
           // Chunked send to students
@@ -970,7 +970,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               const personalizedMsg = commMessage
                 .replace(/{{name}}/g, student.full_name || '')
                 .replace(/{{father}}/g, student.father_name || '');
-              sendPromises.push(smsApi.sendDirect(student.phone, personalizedMsg));
+              sendPromises.push(smsApi.sendDirect(student.phone, personalizedMsg, madrasah?.id));
             }
           }
         }
@@ -1334,7 +1334,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const { data: instData, error: instError } = await supabase.from('institutions').select('balance').eq('id', tr.institution_id).single();
         if (instError) throw instError;
         
-        const newBalance = (instData.balance || 0) + tr.amount;
+        const currentBalance = Number(instData.balance || 0);
+        const addAmount = Number(tr.amount || 0);
+        const newBalance = currentBalance + addAmount;
+        
         const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', tr.institution_id);
         if (balanceError) throw balanceError;
       } else if (isSubscription) {
@@ -1343,29 +1346,45 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         if (updateError) throw updateError;
       } else {
         // ৩. SMS রিচার্জ অনুমোদন (Manual implementation to fix Issue 2 - Avoid unintended voice balance increase)
+        console.log('ApproveTransaction: Approving SMS recharge for tr:', tr.id, 'sms count:', sms);
         
         // 1. Update Transaction
         const { error: trUpdateError } = await supabase.from('transactions').update({ 
           status: 'approved', 
           sms_count: sms 
         }).eq('id', tr.id);
-        if (trUpdateError) throw trUpdateError;
+        if (trUpdateError) {
+          console.error('ApproveTransaction: Transaction update error:', trUpdateError);
+          throw trUpdateError;
+        }
 
         // 2. Update Institution SMS Balance ONLY
+        console.log('ApproveTransaction: Fetching current balance for institution:', tr.institution_id);
         const { data: instData, error: instFetchError } = await supabase
           .from('institutions')
           .select('sms_balance')
           .eq('id', tr.institution_id)
           .single();
-        if (instFetchError) throw instFetchError;
+        if (instFetchError) {
+          console.error('ApproveTransaction: Institution fetch error:', instFetchError);
+          throw instFetchError;
+        }
+        
+        const currentSmsBalance = Number(instData.sms_balance || 0);
+        const newSmsBalance = currentSmsBalance + Number(sms);
+        console.log('ApproveTransaction: Current SMS balance:', currentSmsBalance, 'New balance will be:', newSmsBalance);
         
         const { error: instUpdateError } = await supabase
           .from('institutions')
           .update({ 
-            sms_balance: (instData.sms_balance || 0) + sms 
+            sms_balance: newSmsBalance 
           })
           .eq('id', tr.institution_id);
-        if (instUpdateError) throw instUpdateError;
+        if (instUpdateError) {
+          console.error('ApproveTransaction: Institution update error:', instUpdateError);
+          throw instUpdateError;
+        }
+        console.log('ApproveTransaction: Institution SMS balance updated successfully');
 
         // 3. Update Admin SMS Stock
         const { data: stockData, error: stockFetchError } = await supabase
@@ -1401,7 +1420,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             msg = `Assalamu Alaikum, Your payment has been approved. ${sms} SMS credits have been added to your account. Thank you.`;
           }
           // Fire and forget SMS to avoid blocking UI
-          smsApi.sendDirect(userPhone, msg).catch(err => console.error("SMS Send Error:", err));
+          smsApi.sendDirect(userPhone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
         }
       }
 
@@ -1441,7 +1460,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       const userPhone = rejectConfirm.institutions?.phone || rejectConfirm.sender_phone;
       if (userPhone) {
         const msg = `দুঃখিত, আপনার পেমেন্ট রিকোয়েস্টটি (${rejectConfirm.amount} ৳) বাতিল করা হয়েছে। বিস্তারিত জানতে যোগাযোগ করুন।`;
-        smsApi.sendDirect(userPhone, msg).catch(err => console.error("SMS Send Error:", err));
+        smsApi.sendDirect(userPhone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
       }
 
       setPendingTrans(prev => prev.filter(p => p.id !== rejectConfirm.id));
@@ -2761,8 +2780,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
                                  </div>
                                  <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">REVE Client ID</label>
-                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="Client ID" />
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Masking / Sender ID</label>
+                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="e.g. DEENORA" />
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">SMS Rate (BDT)</label>
@@ -3094,7 +3113,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                        const pkgName = getEnglishPkgName(editPackageName);
                                        const monthRange = formatMonthsRange(selectedMonthsForPayment);
                                        const msg = `Assalamu Alaikum, Your payment for '${pkgName}' subscription ${monthRange ? '(' + monthRange + ') ' : ''}(${amount}tk) has been received and approved. Thank you.`;
-                                       smsApi.sendDirect(selectedUser.phone, msg).catch(err => console.error("SMS Send Error:", err));
+                                       smsApi.sendDirect(selectedUser.phone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
                                      }
 
                                      setSelectedMonthsForPayment([]);

@@ -267,6 +267,12 @@ class RequestManager {
     }
   }
 
+  setManualCache(key: string, data: any, count?: number) {
+    this.cache.set(key, { data, timestamp: Date.now(), count: count ?? (Array.isArray(data) ? data.length : 1) });
+    this.savePersistence(key, data, count);
+    this.notify(key, { data, error: null, count });
+  }
+
   async invalidatePattern(pattern: string | RegExp) {
     const now = Date.now();
     const keysToDelete: string[] = [];

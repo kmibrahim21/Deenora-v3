@@ -262,6 +262,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       } else {
         setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'রিফান্ড সফল!' : 'Refund Successful!', message: lang === 'bn' ? `${result.refunded_calls} টি আনরিসিভ কলের জন্য ${result.refund_amount} ৳ আপনার ওয়ালেটে ফেরত দেওয়া হয়েছে।` : `${result.refund_amount} ৳ has been refunded to your wallet for ${result.refunded_calls} unreceived calls.` });
         fetchWalletBalance();
+        triggerRefresh();
         fetchUserTransactions();
       }
     } catch (err: any) {
@@ -300,6 +301,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         });
         // Automatically fetch wallet balance if a refund occurred in the background
         fetchWalletBalance();
+        triggerRefresh();
         fetchUserTransactions();
       }
     } catch (err: any) {
@@ -394,7 +396,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       fetchSystemSettings();
       fetchUserTransactions();
     }
-  }, [activeTab, madrasah?.id, dataVersion]);
+  }, [activeTab, madrasah?.id, madrasah?.balance, madrasah?.sms_balance, dataVersion]);
 
   const fetchSystemSettings = async () => {
     const { data } = await supabase.from('system_settings').select('bkash_number, voice_rate').single();
@@ -1236,6 +1238,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       setSelectedClassId('');
       setSelectedVoiceId('');
       fetchWalletBalance();
+      triggerRefresh();
       fetchHistory(); // Refresh history
     } catch (err: any) {
       setStatusModal({

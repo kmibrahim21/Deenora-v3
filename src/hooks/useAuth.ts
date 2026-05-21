@@ -390,6 +390,8 @@ export const useAuth = () => {
 
   useEffect(() => {
     let channel: any;
+    let pollInterval: any;
+
     if (profile?.institution_id && profile.institution_id !== 'super_admin') {
       try {
         channel = supabase
@@ -404,7 +406,20 @@ export const useAuth = () => {
             },
             (payload) => {
               console.log('useAuth: Received real-time update for institution:', payload.new);
-              setMadrasah(payload.new as Institution);
+              const updatedInst = payload.new as Institution;
+              setMadrasah(updatedInst);
+              
+              // Update RequestManager cache to prevent stale data on refresh
+              if (profile?.institution_id) {
+                const instId = profile.institution_id;
+                // Notify the main institution cache key
+                requestManager.setManualCache(`fetch:institutions:institution:${instId}`, updatedInst);
+                // Notify the dashboard balance cache key used in Home.tsx
+                requestManager.setManualCache(`fetch:institutions:dashboard_balance:${instId}`, updatedInst);
+                
+                // Update local persistence
+                OfflineService.setCache('profile', updatedInst);
+              }
             }
           )
           .subscribe((status, err) => {
@@ -415,6 +430,27 @@ export const useAuth = () => {
       } catch (e) {
         console.warn("Could not start realtime subscription:", e);
       }
+
+      // Fallback Polling (Every 15 Seconds) for Balance Updates
+      pollInterval = setInterval(async () => {
+         try {
+           const { data } = await supabase.from('institutions').select('balance, sms_balance').eq('id', profile.institution_id!).single();
+           if (data) {
+             setMadrasah(prev => {
+                if (!prev) return prev;
+                if (prev.balance !== data.balance || prev.sms_balance !== data.sms_balance) {
+                    const updatedInst = { ...prev, balance: data.balance, sms_balance: data.sms_balance };
+                    const instId = profile.institution_id!;
+                    requestManager.setManualCache(`fetch:institutions:institution:${instId}`, updatedInst);
+                    requestManager.setManualCache(`fetch:institutions:dashboard_balance:${instId}`, updatedInst);
+                    OfflineService.setCache('profile', updatedInst);
+                    return updatedInst;
+                }
+                return prev;
+             });
+           }
+         } catch (e) {}
+      }, 15000);
     }
 
     return () => {
@@ -425,6 +461,7 @@ export const useAuth = () => {
           console.warn("Error removing channel:", e);
         }
       }
+      if (pollInterval) clearInterval(pollInterval);
     };
   }, [profile?.institution_id]);
 

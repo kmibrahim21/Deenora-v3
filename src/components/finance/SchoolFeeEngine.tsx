@@ -210,17 +210,13 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 
                 const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
                 const isEnabled = setting ? setting.is_enabled : true;
-                const isExpired = fs.due_date && fs.due_date < today;
-                const isNotStarted = fs.start_date && fs.start_date > today;
-                
-                // Also check if the selected month is after the due date's month
                 const isMonthExpired = fs.due_date && selectedMonth > fs.due_date.slice(0, 7);
                 const isMonthNotStarted = fs.start_date && selectedMonth < fs.start_date.slice(0, 7);
 
                 // If yearStart exists, ensure selectedMonth >= yearStart
                 const isBeforeYearStart = yearStart && selectedMonth < yearStart.slice(0, 7);
 
-                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted && !isBeforeYearStart;
+                return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart;
             }) || [];
             
             const totalPayable = studentFeeStructures.reduce((sum, fs) => {
@@ -320,19 +316,13 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         const setting = settings?.find(set => set.fee_structure_id === s.id);
         const isEnabled = setting ? setting.is_enabled : true;
         
-        // If due_date exists and it's in the past, it's not available for collection
-        const isExpired = s.due_date && s.due_date < today;
-
-        // If start_date exists and it's in the future, it's not available for collection yet
-        const isNotStarted = s.start_date && s.start_date > today;
-
         // Also check if the selected month is after the due date's month
         const isMonthExpired = s.due_date && selectedMonth > s.due_date.slice(0, 7);
         
         // Check if the selected month is before the start date's month
         const isMonthNotStarted = s.start_date && selectedMonth < s.start_date.slice(0, 7);
         
-        return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted;
+        return isEnabled && !isMonthExpired && !isMonthNotStarted;
     }).map(s => {
         const setting = settings?.find(set => set.fee_structure_id === s.id);
         if (setting?.custom_amount !== undefined && setting?.custom_amount !== null) {
@@ -937,9 +927,6 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 
                                 const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
                                 const isEnabled = setting ? setting.is_enabled : true;
-                                const isExpired = fs.due_date && fs.due_date < today;
-                                const isNotStarted = fs.start_date && fs.start_date > today;
-                                
                                 const isMonthExpired = fs.due_date && monthStr > fs.due_date.slice(0, 7);
                                 const isMonthNotStarted = fs.start_date && monthStr < fs.start_date.slice(0, 7);
 
@@ -947,7 +934,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                 const yearStart = madrasah.config_json?.academic_year_start;
                                 const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
 
-                                return isEnabled && !isExpired && !isMonthExpired && !isNotStarted && !isMonthNotStarted && !isBeforeYearStart;
+                                return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart;
                             });
                             const totalPayable = studentFeeStructures.reduce((sum, fs) => sum + Number(fs.amount), 0);
 

@@ -24,6 +24,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const [isEditingBulkSMS, setIsEditingBulkSMS] = useState(false);
   const [isEditingGlobalUpdate, setIsEditingGlobalUpdate] = useState(false);
   const [isEditingPayment, setIsEditingPayment] = useState(false);
+  const [isEditingPersonalApi, setIsEditingPersonalApi] = useState(false);
   const [isEditingPackages, setIsEditingPackages] = useState(false);
   const [showPackageForm, setShowPackageForm] = useState(false);
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
@@ -34,6 +35,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     reve_api_key: '',
     reve_secret_key: '',
     reve_caller_id: '',
+    reve_client_id: '',
     bkash_number: '',
     sms_rate: 0.50,
     voice_rate: 1.00,
@@ -41,6 +43,30 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     global_update_message: '',
     global_update_version: 0
   });
+
+  const [personalApiSettings, setPersonalApiSettings] = useState({
+    reve_api_key: '',
+    reve_secret_key: '',
+    reve_client_id: '',
+    reve_caller_id: ''
+  });
+
+  useEffect(() => {
+    if (initialMadrasah) {
+      setMadrasah(initialMadrasah);
+    }
+  }, [initialMadrasah]);
+
+  useEffect(() => {
+    if (madrasah) {
+      setPersonalApiSettings({
+        reve_api_key: madrasah.reve_api_key || '',
+        reve_secret_key: madrasah.reve_secret_key || '',
+        reve_client_id: madrasah.reve_client_id || '',
+        reve_caller_id: madrasah.voice_sender_id || ''
+      });
+    }
+  }, [madrasah]);
 
   useEffect(() => {
     fetchGlobalSettings();
@@ -147,6 +173,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       reve_api_key: settings.reve_api_key || '',
       reve_secret_key: settings.reve_secret_key || '',
       reve_caller_id: settings.reve_caller_id || '',
+      reve_client_id: settings.reve_client_id || '',
       bkash_number: settings.bkash_number || '',
       sms_rate: settings.sms_rate || 0.50,
       voice_rate: settings.voice_rate || 1.00,
@@ -164,6 +191,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         reve_api_key: (globalSettings.reve_api_key || '').trim(),
         reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
         reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
+        reve_client_id: (globalSettings.reve_client_id || '').trim(),
         bkash_number: (globalSettings.bkash_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
         voice_rate: Number(globalSettings.voice_rate)
@@ -199,6 +227,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         reve_api_key: (globalSettings.reve_api_key || '').trim(),
         reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
         reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
+        reve_client_id: (globalSettings.reve_client_id || '').trim(),
         bkash_number: (globalSettings.bkash_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
         voice_rate: Number(globalSettings.voice_rate)
@@ -208,6 +237,36 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       setShowSuccessModal({ show: true, title: 'পেমেন্ট আপডেট', message: 'পেমেন্ট সেটিংস আপডেট হয়েছে।' });
       fetchGlobalSettings();
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
+  };
+
+  const handleSavePersonalApi = async () => {
+    if (!madrasah?.id) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('institutions').update({
+        reve_api_key: personalApiSettings.reve_api_key.trim(),
+        reve_secret_key: personalApiSettings.reve_secret_key.trim(),
+        reve_client_id: personalApiSettings.reve_client_id.trim(),
+        voice_sender_id: personalApiSettings.reve_caller_id.trim()
+      }).eq('id', madrasah.id);
+
+      if (error) throw error;
+      
+      setIsEditingPersonalApi(false);
+      setShowSuccessModal({ 
+        show: true, 
+        title: 'এপিআই আপডেট', 
+        message: 'আপনার ব্যক্তিগত এপিআই সেটিংস সফলভাবে আপডেট হয়েছে।' 
+      });
+      
+      if (onProfileUpdate) onProfileUpdate();
+      if (triggerRefresh) triggerRefresh();
+
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleTheme = async () => {
@@ -321,6 +380,19 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
           <div>
             <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'প্যাকেজসমূহ' : 'Packages'}</h5>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Subscription Plans</p>
+          </div>
+        </button>
+
+        <button 
+          onClick={() => setIsEditingPersonalApi(true)}
+          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+        >
+          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}</h5>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Personal Gateway</p>
           </div>
         </button>
 
@@ -480,6 +552,51 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         </div>,
         document.body
       )}
+      {isEditingPersonalApi && createPortal(
+        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className={`w-full max-w-sm rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[85vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className="p-5 shrink-0 relative overflow-hidden">
+                 <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-3">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50 text-amber-600 border-amber-100'}`}><ShieldCheck size={20} strokeWidth={2.5} /></div>
+                       <div><h3 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}</h3><p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em]">Personal Account</p></div>
+                    </div>
+                    <button onClick={() => setIsEditingPersonalApi(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500 border-slate-700' : 'bg-slate-50 text-slate-300 border-slate-100'}`}><X size={18} /></button>
+                 </div>
+              </div>
+              <div className="px-6 pb-8 space-y-5 overflow-y-auto custom-scrollbar flex-1 relative z-10">
+                 <div className="space-y-2.5">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Personal Gateway Settings</h4>
+                    <div className={`p-4 rounded-[2rem] border space-y-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">REVE API Key</label>
+                          <input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={personalApiSettings.reve_api_key} onChange={(e) => setPersonalApiSettings({...personalApiSettings, reve_api_key: e.target.value})} placeholder="Enter REVE API Key" />
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Secret Key</label>
+                          <input type="password" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={personalApiSettings.reve_secret_key} onChange={(e) => setPersonalApiSettings({...personalApiSettings, reve_secret_key: e.target.value})} placeholder="Enter Secret Key" />
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Masking / Sender ID</label>
+                          <input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={personalApiSettings.reve_client_id} onChange={(e) => setPersonalApiSettings({...personalApiSettings, reve_client_id: e.target.value})} placeholder="e.g. DEENORA" />
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Voice Sender ID</label>
+                          <input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={personalApiSettings.reve_caller_id} onChange={(e) => setPersonalApiSettings({...personalApiSettings, reve_caller_id: e.target.value})} placeholder="e.g. 8801..." />
+                       </div>
+                    </div>
+                 </div>
+                 <div className="pt-2">
+                    <button onClick={handleSavePersonalApi} disabled={saving} className="relative w-full h-16 bg-amber-500 text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/20 text-[13px] uppercase tracking-[0.25em]">
+                       {saving ? <Loader2 className="animate-spin" size={22} /> : <>Save API Keys</>}
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
+
       {isEditingBulkSMS && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
            <div className={`w-full max-w-sm rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[85vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
@@ -498,6 +615,8 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     <div className={`p-4 rounded-[2rem] border space-y-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                        <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Master API Key</label><input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_api_key} onChange={(e) => setGlobalSettings({...globalSettings, reve_api_key: e.target.value})} /></div>
                        <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Encryption Token</label><input type="password" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_secret_key} onChange={(e) => setGlobalSettings({...globalSettings, reve_secret_key: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Global Voice Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_caller_id} onChange={(e) => setGlobalSettings({...globalSettings, reve_caller_id: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Global Masking / Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_client_id} onChange={(e) => setGlobalSettings({...globalSettings, reve_client_id: e.target.value})} /></div>
                     </div>
                  </div>
                  <div className="space-y-2.5">

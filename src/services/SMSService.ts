@@ -25,10 +25,10 @@ export const SMSService = {
         .maybeSingle();
       
       const defaults = { 
-        reve_api_key: 'aa407e1c6629da8e', 
-        reve_secret_key: '91051e7e', 
+        reve_api_key: '1762419e515c6f28', 
+        reve_secret_key: '326edcba', 
         bkash_number: '০১৭৬৬-XXXXXX', 
-        reve_caller_id: '1234',
+        reve_caller_id: 'DEENORA',
         reve_client_id: '',
         sms_rate: 0.50,
         voice_rate: 1.00,
@@ -52,10 +52,10 @@ export const SMSService = {
       };
     } catch (e) {
       return { 
-        reve_api_key: 'aa407e1c6629da8e', 
-        reve_secret_key: '91051e7e', 
+        reve_api_key: '1762419e515c6f28', 
+        reve_secret_key: '326edcba', 
         bkash_number: '০১৭৬৬-XXXXXX', 
-        reve_caller_id: '1234', 
+        reve_caller_id: 'DEENORA', 
         reve_client_id: '',
         sms_rate: 0.50,
         voice_rate: 1.00,
@@ -68,7 +68,7 @@ export const SMSService = {
 
   sendBulk: async (institutionId: string, students: Student[], message: string) => {
     const [mRes, global] = await Promise.all([
-      supabase.from('institutions').select('sms_balance').eq('id', institutionId).single(),
+      supabase.from('institutions').select('sms_balance, reve_api_key, reve_secret_key, reve_client_id, voice_sender_id').eq('id', institutionId).single(),
       SMSService.getGlobalSettings()
     ]);
 
@@ -103,10 +103,6 @@ export const SMSService = {
       throw new Error(`এসএমএস ব্যালেন্স পর্যাপ্ত নয়। প্রয়োজন: ${totalSmsNeeded} টি, আছে: ${balance} টি`);
     }
 
-    // Log and deduct balance via RPC
-    // If personalized, we might need to call RPC multiple times or a more flexible RPC.
-    // For now, we'll use the existing RPC with the original message to deduct balance.
-    // We'll pass studentIds multiple times if parts > 1 to match totalSmsNeeded.
     const studentIdsForRpc: string[] = [];
     if (hasShortcodes) {
       personalizedMessages.forEach(m => {
@@ -131,10 +127,10 @@ export const SMSService = {
     }
     if (rpcData && rpcData.success === false) throw new Error(rpcData.error || "ট্রানজ্যাকশন সফল হয়নি।");
 
-    const apiKey = global.reve_api_key;
-    const secretKey = global.reve_secret_key;
-    const callerId = global.reve_caller_id;
-    const clientId = global.reve_client_id;
+    // Use institution-specific keys if set, otherwise global fallback
+    const apiKey = (mData.reve_api_key?.trim() || global.reve_api_key);
+    const secretKey = (mData.reve_secret_key?.trim() || global.reve_secret_key);
+    const maskingName = (mData.reve_client_id?.trim() || global.reve_client_id || global.reve_caller_id);
 
     if (hasShortcodes) {
       // Send personalized messages in batches
@@ -172,9 +168,7 @@ export const SMSService = {
 
         if (validMsgs.length > 0) {
           const apiUrls = validMsgs.map(m => {
-            let url = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${normalizePhone(m.phone)}&messageContent=${encodeURIComponent(m.text)}&type=3`;
-            if (clientId) url += `&clientid=${clientId}`;
-            return url;
+            return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(m.phone)}&messageContent=${encodeURIComponent(m.text)}&type=3`;
           });
 
           try { 
@@ -246,9 +240,7 @@ export const SMSService = {
 
         if (validMsgs.length > 0) {
           const apiUrls = validMsgs.map(s => {
-            let url = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${normalizePhone(s.guardian_phone)}&messageContent=${encodeURIComponent(message)}&type=3`;
-            if (clientId) url += `&clientid=${clientId}`;
-            return url;
+            return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(s.guardian_phone)}&messageContent=${encodeURIComponent(message)}&type=3`;
           });
           
           try { 
@@ -292,11 +284,25 @@ export const SMSService = {
     const global = await SMSService.getGlobalSettings();
     let apiKey = global.reve_api_key;
     let secretKey = global.reve_secret_key;
-    let callerId = global.reve_caller_id;
-    let clientId = global.reve_client_id;
+    let maskingName = global.reve_client_id || global.reve_caller_id;
 
     if (institutionId) {
-      // Removed institution-specific REVE keys as columns are missing
+      // Use institution-specific REVE keys if available
+      try {
+        const { data: inst } = await supabase
+          .from('institutions')
+          .select('reve_api_key, reve_secret_key, reve_client_id, voice_sender_id')
+          .eq('id', institutionId)
+          .maybeSingle();
+
+        if (inst) {
+          apiKey = (inst.reve_api_key?.trim() || global.reve_api_key);
+          secretKey = (inst.reve_secret_key?.trim() || global.reve_secret_key);
+          maskingName = (inst.reve_client_id?.trim() || global.reve_client_id || global.reve_caller_id);
+        }
+      } catch (err) {
+        console.error("Error fetching institution keys for direct SMS:", err);
+      }
     }
 
     const target = normalizePhone(phone);
@@ -305,8 +311,7 @@ export const SMSService = {
     if (!target) {
       finalStatus = 'failed';
     } else {
-      let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${callerId}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
-      if (clientId) apiUrl += `&clientid=${clientId}`;
+      let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${target}&messageContent=${encodeURIComponent(message)}&type=3`;
       try { 
         const res = await fetch('/api/sms', { 
           method: 'POST',

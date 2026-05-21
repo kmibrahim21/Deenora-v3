@@ -113,11 +113,22 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [smsRate, setSmsRate] = useState<number>(madrasah?.sms_rate || 0.50);
 
   const [voiceRate, setVoiceRate] = useState<number>(madrasah?.voice_rate || 0.50);
+  const [smsBalance, setSmsBalance] = useState<number>(0);
+
+  const fetchWalletBalance = async () => {
+    if (!madrasah) return;
+    try {
+      const { data } = await supabase.from('institutions').select('sms_balance').eq('id', madrasah.id).single();
+      if (data) setSmsBalance(data.sms_balance || 0);
+    } catch (e) {}
+  };
 
   useEffect(() => {
     if (madrasah) {
       setSmsRate(madrasah.sms_rate || 0.50);
       setVoiceRate(madrasah.voice_rate || 0.50);
+      setSmsBalance(madrasah.sms_balance || 0);
+      fetchWalletBalance();
     }
   }, [madrasah]);
 
@@ -126,6 +137,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     if (activeTab === 'bulk-sms') { fetchClasses(); fetchTemplates(); }
     if (activeTab === 'history') fetchSmsHistory();
     if (activeTab === 'recharge') { fetchSystemSettings(); fetchUserTransactions(); }
+    fetchWalletBalance();
   }, [activeTab, madrasah?.id, dataVersion]);
 
   useEffect(() => {
@@ -459,7 +471,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
             <div className="bg-[#2563EB] p-6 rounded-[2.2rem] shadow-premium border border-blue-100 flex items-center justify-between text-white relative">
                <div className="relative z-10">
                  <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">{t('available_sms', lang)}</p>
-                 <h3 className="text-4xl font-black flex items-baseline gap-2">{madrasah?.sms_balance || 0}</h3>
+                 <h3 className="text-4xl font-black flex items-baseline gap-2">{smsBalance}</h3>
                </div>
                <Zap size={40} className="text-white opacity-20" />
             </div>

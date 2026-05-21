@@ -122,11 +122,11 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
           </div>
 
           {/* School Name & Transcript Title */}
-          <div className="flex-1 text-center px-2">
-            <h1 className="text-[28px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1 uppercase drop-shadow-sm">
+          <div className="flex-1 text-center px-4 min-w-0">
+            <h1 className="text-[26px] font-black text-[#1E3A8A] font-noto-serif leading-[1.1] mb-1.5 uppercase drop-shadow-sm truncate">
               {madrasah.name}
             </h1>
-            <p className="text-[14px] font-bold text-slate-700 mb-2 leading-snug">
+            <p className="text-[12px] font-bold text-slate-600 mb-3 leading-relaxed max-w-[450px] mx-auto line-clamp-2">
               {madrasah.address}
             </p>
             {madrasah.institute_code && (
@@ -162,23 +162,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
         </div>
 
         {/* Student Information */}
-        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-200 mb-3 grid grid-cols-3 gap-x-4 text-[14px]">
+        <div className="bg-slate-50/50 p-5 rounded-[2rem] border border-slate-200 mb-4 grid grid-cols-3 gap-x-6 text-[15px] shadow-sm">
           {/* First Column: Personal Info */}
-          <div className="space-y-1.5 border-r border-slate-200 pr-4">
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.name}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.student_name}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.guardian_name || '-'}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.mother_name || '-'}</span></div>
+          <div className="space-y-2 border-r border-slate-200 pr-5">
+            <div className="flex items-center"><span className="w-28 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight">: {student.student_name}</span></div>
+            <div className="flex items-center"><span className="w-28 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.guardian_name || '-'}</span></div>
+            <div className="flex items-center"><span className="w-28 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.mother_name || '-'}</span></div>
           </div>
           {/* Middle Column: Academic Info */}
-          <div className="space-y-1.5 border-r border-slate-200 pr-4">
-            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[10px]">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[10px]">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
-            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[10px]">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
+          <div className="space-y-2 border-r border-slate-200 pr-5">
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
           </div>
           {/* Last Column: Other Info */}
-          <div className="space-y-1.5 pl-2">
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[10px]">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
+          <div className="space-y-2 pl-2">
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
+            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
           </div>
         </div>
 
@@ -319,6 +319,10 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
         <div className="mt-2 text-center border-t border-slate-50 pt-2 relative z-20">
           <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.5em]">Powered by Deenora SaaS • deenora.com</p>
         </div>
+
+        {/* Bottom Curve Design */}
+        <div className="absolute -bottom-8 -left-8 -right-8 h-24 bg-[#1E3A8A]/5 rounded-[100%] blur-xl pointer-events-none"></div>
+        <div className="absolute -bottom-1 -left-0 -right-0 h-1 bg-[#1E3A8A]/20 pointer-events-none"></div>
       </div>
     </div>
   );

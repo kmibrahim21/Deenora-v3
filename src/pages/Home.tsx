@@ -157,12 +157,12 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         CACHE_TTLS.LONG
       );
 
-      // 4. Institution Balance (Shorter TTL for precision)
+      // 4. Institution Balance (Always fetch fresh for UI responsiveness)
       const instProm = requestManager.cachedFetch(
         'institutions',
         (q) => q.select('sms_balance, balance').eq('id', institutionId),
         `dashboard_balance:${institutionId}`,
-        CACHE_TTLS.SHORT
+        0
       );
 
       // 5. Ledger (Current Month)
