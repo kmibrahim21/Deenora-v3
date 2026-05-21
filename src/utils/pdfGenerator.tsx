@@ -323,7 +323,7 @@ export const generateClassResultPDF = async (
             }
         });
         
-        const avgPercentage = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
+        const avgPercentage = subjects.length > 0 ? (total / subjects.length) : 0;
         
         let gpa = '0.00';
         let grade = 'F';

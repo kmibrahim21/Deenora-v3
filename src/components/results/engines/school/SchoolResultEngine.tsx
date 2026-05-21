@@ -1133,8 +1133,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                 <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
                                     {(() => {
                                         const total = (Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0);
-                                        const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
-                                        return totalPossible > 0 ? ((total / totalPossible) * 100).toFixed(1) + '%' : '0%';
+                                        const avgValue = subjects.length > 0 ? (total / subjects.length) : 0;
+                                        return avgValue.toFixed(2);
                                     })()}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
@@ -1220,8 +1220,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                       <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto truncate leading-none mb-1`}>{item.student_name}</h5>
                                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                                         Roll: {item.roll} | {t('total_marks', lang)}: {item.total_marks} | {t('average', lang)}: {(() => {
-                                            const totalPossible = subjects.reduce((sum, s) => sum + (s.full_marks || 100), 0);
-                                            return totalPossible > 0 ? ((item.total_marks / totalPossible) * 100).toFixed(1) + '%' : '0%';
+                                            const avgValue = subjects.length > 0 ? (item.total_marks / subjects.length) : 0;
+                                            return avgValue.toFixed(2);
                                         })()}
                                       </p>
                                   </div>

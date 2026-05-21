@@ -12,7 +12,7 @@ import MultiCalendar from 'components/MultiCalendar';
 const ActionCard = ({ icon: Icon, title, subtitle, colorClass, onClick, dark }: any) => (
   <button 
     onClick={onClick}
-    className={`w-full p-4 sm:p-5 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center justify-center text-center gap-2 sm:gap-3 active:scale-[0.98] ${dark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+    className={`w-full p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border shadow-bubble transition-all flex flex-col items-center justify-center text-center gap-2 sm:gap-3 active:scale-95 ${dark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'}`}
   >
     <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1rem] sm:rounded-2xl flex items-center justify-center shrink-0 ${colorClass}`}>
       <Icon className="w-6 h-6 sm:w-7 sm:h-7" strokeWidth={1.5} />
@@ -582,7 +582,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
         {/* Language Card */}
         {!isTeacher && (
-          <div className={`col-span-2 p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-2.5 sm:gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+          <div className={`col-span-2 p-3.5 sm:p-4 rounded-[1.5rem] sm:rounded-[2rem] border shadow-bubble flex items-center justify-between gap-2.5 sm:gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
             <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 rounded-[0.85rem] sm:rounded-[1rem] flex items-center justify-center shrink-0">
                 <Languages className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} />
@@ -611,7 +611,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
         {/* Theme Switcher Card */}
         {!isTeacher && (
-          <div className={`col-span-2 p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-3 sm:gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+          <div className={`col-span-2 p-3.5 sm:p-4 rounded-[1.5rem] sm:rounded-[2rem] border shadow-bubble flex items-center justify-between gap-3 sm:gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
             <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
               <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-[0.85rem] sm:rounded-[1rem] flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400'}`}>
                 {madrasah?.theme === 'dark' ? <Moon className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} /> : <Sun className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} />}
@@ -636,7 +636,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
         <button 
           onClick={onLogout} 
-          className={`col-span-2 p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-3 sm:gap-4 group active:scale-[0.98] transition-all min-w-0 ${madrasah?.theme === 'dark' ? 'bg-red-900/20 border-red-900/30' : 'bg-red-50/50 border-red-100'}`}
+          className={`col-span-2 p-3.5 sm:p-4 rounded-[1.5rem] sm:rounded-[2rem] border shadow-bubble flex items-center justify-between gap-3 sm:gap-4 group active:scale-[0.98] transition-all min-w-0 ${madrasah?.theme === 'dark' ? 'bg-red-900/20 border-red-900/30' : 'bg-red-50/50 border-red-100'}`}
         >
           <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
             <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-[0.85rem] sm:rounded-[1rem] flex items-center justify-center shrink-0 ${madrasah?.theme === 'dark' ? 'bg-red-900/40 text-red-400' : 'bg-red-100 text-red-600'}`}>
