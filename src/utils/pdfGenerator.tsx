@@ -330,15 +330,25 @@ export const generateClassResultPDF = async (
 
         if (numMainSubjects > 0) {
             if (!hasFailed) {
-                let avgGp = pointsSum / numMainSubjects;
-                if (avgGp > 5.0) avgGp = 5.0;
-                gpa = avgGp.toFixed(2);
-                if (avgGp >= 5.0) grade = 'A+';
-                else if (avgGp >= 4.0) grade = 'A';
-                else if (avgGp >= 3.5) grade = 'A-';
-                else if (avgGp >= 3.0) grade = 'B';
-                else if (avgGp >= 2.0) grade = 'C';
-                else if (avgGp >= 1.0) grade = 'D';
+                if (resultSystem === 'grading_optional') {
+                    let avgGp = pointsSum / numMainSubjects;
+                    if (avgGp > 5.0) avgGp = 5.0;
+                    gpa = avgGp.toFixed(2);
+                    if (avgGp >= 5.0) grade = 'A+';
+                    else if (avgGp >= 4.0) grade = 'A';
+                    else if (avgGp >= 3.5) grade = 'A-';
+                    else if (avgGp >= 3.0) grade = 'B';
+                    else if (avgGp >= 2.0) grade = 'C';
+                    else if (avgGp >= 1.0) grade = 'D';
+                } else {
+                    const overallPct = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
+                    if (overallPct >= 80) { gpa = '5.00'; grade = 'A+'; }
+                    else if (overallPct >= 70) { gpa = '4.00'; grade = 'A'; }
+                    else if (overallPct >= 60) { gpa = '3.50'; grade = 'A-'; }
+                    else if (overallPct >= 50) { gpa = '3.00'; grade = 'B'; }
+                    else if (overallPct >= 40) { gpa = '2.00'; grade = 'C'; }
+                    else if (overallPct >= 33) { gpa = '1.00'; grade = 'D'; }
+                }
             }
         }
 

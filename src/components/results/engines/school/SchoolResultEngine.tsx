@@ -345,18 +345,28 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
     if (numMainSubjects > 0) {
       if (hasFailedSub) return { total: totalMarks, average: pct, gpa: '0.00', grade: 'F', pass_status: false };
-      let avgGp = pointsSum / numMainSubjects;
-      if (avgGp > 5.0) avgGp = 5.0;
       
+      let finalGpa = '0.00';
       let finalGrade = 'F';
-      if (avgGp >= 5.0) finalGrade = 'A+';
-      else if (avgGp >= 4.0) finalGrade = 'A';
-      else if (avgGp >= 3.5) finalGrade = 'A-';
-      else if (avgGp >= 3.0) finalGrade = 'B';
-      else if (avgGp >= 2.0) finalGrade = 'C';
-      else if (avgGp >= 1.0) finalGrade = 'D';
 
-      return { total: totalMarks, average: pct, gpa: avgGp.toFixed(2), grade: finalGrade, pass_status: true };
+      if (resultSystem === 'grading_optional') {
+        let avgGp = pointsSum / numMainSubjects;
+        if (avgGp > 5.0) avgGp = 5.0;
+        finalGpa = avgGp.toFixed(2);
+        
+        if (avgGp >= 5.0) finalGrade = 'A+';
+        else if (avgGp >= 4.0) finalGrade = 'A';
+        else if (avgGp >= 3.5) finalGrade = 'A-';
+        else if (avgGp >= 3.0) finalGrade = 'B';
+        else if (avgGp >= 2.0) finalGrade = 'C';
+        else if (avgGp >= 1.0) finalGrade = 'D';
+      } else {
+        const gradeInfo = getGradeInfo(pct, !hasFailedSub);
+        finalGpa = gradeInfo.gpa;
+        finalGrade = gradeInfo.grade;
+      }
+
+      return { total: totalMarks, average: pct, gpa: finalGpa, grade: finalGrade, pass_status: true };
     }
 
     return { 
