@@ -289,7 +289,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
           if (subjectMaxMarks > 0) {
             const pct = (weightedSum / subjectMaxMarks) * 100;
-            const { gpa: gpStr } = getGradeInfo(pct, pct >= 33); // Individual subject grade
+            const { gpa: gpStr } = getGradeInfo(pct, pct < 33); // Individual subject grade
             const gp = parseFloat(gpStr);
             
             if (resultSystem === 'grading_optional') {
@@ -321,7 +321,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         let finalGpa = '0.00';
         let finalGradeStr = 'F';
 
-        if (resultSystem === 'grading_optional' && numMainSubjects > 0) {
+        if ((resultSystem === 'grading' || resultSystem === 'grading_optional') && numMainSubjects > 0) {
            if (hasFailedAny) {
              finalGpa = '0.00';
              finalGradeStr = 'F';
@@ -329,17 +329,29 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
              let avgGp = pointsSum / numMainSubjects;
              if (avgGp > 5.0) avgGp = 5.0;
              finalGpa = avgGp.toFixed(2);
-             if (avgGp >= 5.0) finalGradeStr = 'A+';
-             else if (avgGp >= 4.0) finalGradeStr = 'A';
-             else if (avgGp >= 3.5) finalGradeStr = 'A-';
-             else if (avgGp >= 3.0) finalGradeStr = 'B';
-             else if (avgGp >= 2.0) finalGradeStr = 'C';
-             else if (avgGp >= 1.0) finalGradeStr = 'D';
+             
+             // Dynamic Grade based on GPA
+             const gpaVal = parseFloat(finalGpa);
+             if (gpaVal >= 5.0) finalGradeStr = 'A+';
+             else if (gpaVal >= 4.0) finalGradeStr = 'A';
+             else if (gpaVal >= 3.5) finalGradeStr = 'A-';
+             else if (gpaVal >= 3.0) finalGradeStr = 'B';
+             else if (gpaVal >= 2.0) finalGradeStr = 'C';
+             else if (gpaVal >= 1.0) finalGradeStr = 'D';
+             else finalGradeStr = 'F';
            }
         } else {
-           const { gpa, grade } = getGradeInfo(finalPercentage, hasFailedAny);
-           finalGpa = gpa;
-           finalGradeStr = grade;
+           // Continuous GPA for other systems (Accurate GPA)
+           if (hasFailedAny) {
+             finalGpa = '0.00';
+             finalGradeStr = 'F';
+           } else {
+             const { gpa, grade } = getGradeInfo(finalPercentage, false);
+             // If the user wants "accurate" (continuous) GPA from percentage:
+             const accurateGpa = (finalPercentage / 20).toFixed(2);
+             finalGpa = accurateGpa;
+             finalGradeStr = grade;
+           }
         }
 
         return {

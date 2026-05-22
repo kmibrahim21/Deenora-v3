@@ -96,6 +96,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       class_routine: configObj.modules?.class_routine ?? false,
       certificates: configObj.modules?.certificates ?? true,
       id_cards: configObj.modules?.id_cards ?? false,
+      exam_routine: configObj.modules?.exam_routine ?? false,
     };
   }, [madrasah]);
 

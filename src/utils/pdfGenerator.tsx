@@ -14,6 +14,7 @@ import { AttendanceReportTemplate } from '../components/pdf/AttendanceReportTemp
 import { AccountingReportTemplate } from '../components/pdf/AccountingReportTemplate';
 import { RoutinePDFTemplate } from '../components/pdf/RoutinePDFTemplate';
 import { MasterRoutinePDFTemplate } from '../components/pdf/MasterRoutinePDFTemplate';
+import { ExamRoutinePDFTemplate } from '../components/pdf/ExamRoutinePDFTemplate';
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
@@ -330,7 +331,7 @@ export const generateClassResultPDF = async (
 
         if (numMainSubjects > 0) {
             if (!hasFailed) {
-                if (resultSystem === 'grading_optional') {
+                if (resultSystem === 'grading' || resultSystem === 'grading_optional') {
                     let avgGp = pointsSum / numMainSubjects;
                     if (avgGp > 5.0) avgGp = 5.0;
                     gpa = avgGp.toFixed(2);
@@ -340,6 +341,7 @@ export const generateClassResultPDF = async (
                     else if (avgGp >= 3.0) grade = 'B';
                     else if (avgGp >= 2.0) grade = 'C';
                     else if (avgGp >= 1.0) grade = 'D';
+                    else grade = 'F';
                 } else {
                     const overallPct = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
                     if (overallPct >= 80) { gpa = '5.00'; grade = 'A+'; }
@@ -744,6 +746,69 @@ export const generateMasterClassRoutinePDF = async (
     }
     
     doc.save(`${madrasah?.name || 'Madrasah'}_Master_Routine.pdf`);
+    root.unmount();
+    document.body.removeChild(container);
+};
+
+// --- EXAM ROUTINE GENERATOR ---
+export const generateExamRoutinePDF = async (
+    madrasah: Institution | null,
+    examName: string,
+    routineData: any[],
+    lang: 'en' | 'bn' = 'bn',
+    options?: {
+      routineSelectionMode?: 'all' | 'class';
+      selectedRoutineClassId?: string;
+      classesList?: any[];
+      routineMorningTime?: string;
+      routineAfternoonTime?: string;
+      routineInstructions?: string[];
+      routinePrincipalName?: string;
+      routinePrincipalMobile?: string;
+    }
+) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                <ExamRoutinePDFTemplate 
+                    madrasah={madrasah} 
+                    examName={examName} 
+                    routineData={routineData} 
+                    lang={lang} 
+                    {...options}
+                />
+            </div>
+        );
+        setTimeout(resolve, 1500); 
+    });
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper) {
+        const pageElement = wrapper.querySelector('.pdf-page-container') as HTMLElement;
+        if (pageElement) {
+            const imgData = await toJpeg(pageElement, {
+                pixelRatio: 2,
+                quality: 0.95,
+                backgroundColor: '#ffffff',
+                width: 794,
+                height: 1123,
+            });
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        }
+    }
+    
+    doc.save(`${madrasah?.name || 'Madrasah'}_Exam_Routine.pdf`);
     root.unmount();
     document.body.removeChild(container);
 };

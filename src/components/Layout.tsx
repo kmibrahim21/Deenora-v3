@@ -59,6 +59,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         messages: configObj.modules?.messages ?? true,
         class_routine: configObj.modules?.class_routine ?? false,
         certificates: configObj.modules?.certificates ?? true,
+        exam_routine: configObj.modules?.exam_routine ?? false,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',

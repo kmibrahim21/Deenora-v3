@@ -29,6 +29,7 @@ export interface Institution {
       messages?: boolean;
       certificates?: boolean;
       id_cards?: boolean;
+      exam_routine?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional';
