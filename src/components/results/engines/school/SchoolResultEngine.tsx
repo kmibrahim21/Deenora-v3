@@ -1860,13 +1860,6 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
               <ArrowLeft size={16} /> {lang === 'bn' ? 'শ্রেণিতে ফিরে যান' : 'Back to Classes'}
             </button>
             <div className="flex items-center gap-2">
-              <button 
-                onClick={handleDownloadExamRoutineMaster}
-                disabled={isDownloading}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-xs flex items-center gap-2 shadow-premium active:scale-95 transition-all disabled:opacity-50"
-              >
-                <Calendar size={16} /> {lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine'}
-              </button>
               {role === 'madrasah_admin' && (
               <button 
                 onClick={() => { setClassId(selectedClassId); setShowAddExam(true); }}

@@ -138,11 +138,11 @@ export const ShortcodeService = {
           .limit(1)
           .maybeSingle();
 
-        if (latestExam) {
+         if (latestExam) {
            // To calculate merit position, we need marks for ALL students in this class for this exam
            const { data: allMarksData } = await supabase
              .from('exam_marks')
-             .select('student_id, marks_obtained, exam_subjects(full_marks, subject_name)')
+             .select('student_id, marks_obtained, exam_subjects(full_marks, subject_name, pass_marks, is_optional)')
              .eq('exam_id', latestExam.id);
            
            if (allMarksData) {
@@ -168,18 +168,19 @@ export const ShortcodeService = {
 
              // Filter marks for requested students only to add to 'marks' array (for grade calculation later)
              const filteredMarks = allMarksData.filter(m => studentIds.includes(m.student_id));
-             const normalizedMarks = filteredMarks.map(m => ({
-               student_id: m.student_id,
-               marks_obtained: m.marks_obtained,
-               exam_subjects: { 
-                 full_marks: Array.isArray(m.exam_subjects) 
-                   ? (m.exam_subjects[0]?.full_marks || 100) 
-                   : ((m.exam_subjects as any)?.full_marks || 100),
-                 subject_name: Array.isArray(m.exam_subjects)
-                   ? (m.exam_subjects[0]?.subject_name || '')
-                   : ((m.exam_subjects as any)?.subject_name || '')
-               }
-             }));
+             const normalizedMarks = filteredMarks.map(m => {
+               const subjectObj: any = Array.isArray(m.exam_subjects) ? m.exam_subjects[0] : m.exam_subjects;
+               return {
+                 student_id: m.student_id,
+                 marks_obtained: m.marks_obtained,
+                 exam_subjects: { 
+                   full_marks: subjectObj?.full_marks || 100,
+                   subject_name: subjectObj?.subject_name || '',
+                   pass_marks: subjectObj?.pass_marks || 33,
+                   is_optional: subjectObj?.is_optional || false
+                 }
+               };
+             });
              marks.push(...normalizedMarks);
 
              const classStudentsInReq = students.filter(s => s.class_id === cid);
@@ -254,7 +255,6 @@ export const ShortcodeService = {
     const combinedData = students.map(s => {
       const balance = studentBalances[s.id] || { due: 0, paid: 0 };
       
-      // Calculate Grade (Simple logic: marks / total * 100)
       const studentMarks = marks.filter(m => m.student_id === s.id);
       let totalObtained = 0;
       let totalFull = 0;
@@ -266,14 +266,95 @@ export const ShortcodeService = {
       
       let grade = '-';
       let gpa = '-';
+
       if (totalFull > 0) {
-        if (percentage >= 80) { grade = 'A+'; gpa = '5.00'; }
-        else if (percentage >= 70) { grade = 'A'; gpa = '4.00'; }
-        else if (percentage >= 60) { grade = 'A-'; gpa = '3.50'; }
-        else if (percentage >= 50) { grade = 'B'; gpa = '3.00'; }
-        else if (percentage >= 40) { grade = 'C'; gpa = '2.00'; }
-        else if (percentage >= 33) { grade = 'D'; gpa = '1.00'; }
-        else { grade = 'F'; gpa = '0.00'; }
+        if (resultEngine === 'befaq' || resultEngine === 'qawmi_custom') {
+          if (percentage >= 80) grade = 'মুমতাজ';
+          else if (percentage >= 65) grade = 'জায়্যিদ জিদ্দান';
+          else if (percentage >= 50) grade = 'জায়্যিদ';
+          else if (percentage >= 40) grade = 'মকবুল';
+          else grade = 'রাসিব';
+        } else {
+          // School system logic
+          const resultSystem = inst?.config_json?.result_system || 'grading';
+          
+          if (resultSystem === 'hifz' || resultSystem === 'marks') {
+            const hasFailed = studentMarks.some(m => Number(m.marks_obtained) < Number(m.exam_subjects?.pass_marks || 33) && !m.exam_subjects?.is_optional);
+            
+            if (hasFailed) {
+              grade = 'F';
+              gpa = '0.00';
+            } else {
+              if (percentage >= 80) { grade = 'A+'; gpa = '5.00'; }
+              else if (percentage >= 70) { grade = 'A'; gpa = '4.00'; }
+              else if (percentage >= 60) { grade = 'A-'; gpa = '3.50'; }
+              else if (percentage >= 50) { grade = 'B'; gpa = '3.00'; }
+              else if (percentage >= 40) { grade = 'C'; gpa = '2.00'; }
+              else if (percentage >= 33) { grade = 'D'; gpa = '1.00'; }
+              else { grade = 'F'; gpa = '0.00'; }
+            }
+          } else { // grading or grading_optional
+            let pointsSum = 0;
+            let numMainSubjects = 0;
+            let hasFailedSub = false;
+
+            studentMarks.forEach(m => {
+              const obtained = Number(m.marks_obtained);
+              const full = Number(m.exam_subjects?.full_marks || 100);
+              const pass = Number(m.exam_subjects?.pass_marks || 33);
+              const isOptional = Boolean(m.exam_subjects?.is_optional);
+              const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+              
+              const pct = full > 0 ? (obtained / full) * 100 : 0;
+              const failed = obtained < pass;
+
+              if (!isOptionalEffectively && failed) {
+                hasFailedSub = true;
+              }
+
+              let gp = 0.00;
+              if (!failed) {
+                if (pct >= 80) gp = 5.00;
+                else if (pct >= 70) gp = 4.00;
+                else if (pct >= 60) gp = 3.50;
+                else if (pct >= 50) gp = 3.00;
+                else if (pct >= 40) gp = 2.00;
+                else if (pct >= 33) gp = 1.00;
+              }
+
+              if (resultSystem === 'grading_optional') {
+                if (!isOptional) {
+                  pointsSum += gp;
+                  numMainSubjects++;
+                } else {
+                  if (gp > 2) pointsSum += (gp - 2);
+                }
+              } else {
+                pointsSum += gp;
+                numMainSubjects++;
+              }
+            });
+
+            if (numMainSubjects > 0) {
+              if (hasFailedSub) {
+                grade = 'F';
+                gpa = '0.00';
+              } else {
+                let avgGp = pointsSum / numMainSubjects;
+                if (avgGp > 5.0) avgGp = 5.0;
+                gpa = avgGp.toFixed(2);
+                
+                if (avgGp >= 5.0) grade = 'A+';
+                else if (avgGp >= 4.0) grade = 'A';
+                else if (avgGp >= 3.5) grade = 'A-';
+                else if (avgGp >= 3.0) grade = 'B';
+                else if (avgGp >= 2.0) grade = 'C';
+                else if (avgGp >= 1.0) grade = 'D';
+                else grade = 'F';
+              }
+            }
+          }
+        }
       }
 
       // Calculate Subject-wise Marks String
