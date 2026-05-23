@@ -38,13 +38,13 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
         return (
           <div key={pageIndex} className="page-container" style={{ width: '1123px', height: '794px', padding: '40px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
             {/* Watermark */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.02] -rotate-12 select-none">
-              <h1 className="text-[12rem] font-black uppercase tracking-[0.2em]">{madrasah.name}</h1>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.02] -rotate-12 select-none px-20">
+              <h1 className="text-[8rem] font-black uppercase tracking-[0.2em] text-center leading-tight">{madrasah.name}</h1>
             </div>
 
             {/* Header */}
-            <div className="text-center mb-6 relative z-10">
-              <h1 className="text-4xl font-black text-slate-900 mb-2 uppercase tracking-tight leading-tight">{madrasah.name}</h1>
+            <div className="text-center mb-6 relative z-10 px-20">
+              <h1 className="text-3xl font-black text-slate-900 mb-2 uppercase tracking-tight leading-tight">{madrasah.name}</h1>
               <div className="inline-flex items-center gap-4 mb-2">
                   <div className="h-[1px] w-12 bg-slate-200"></div>
                   <div className="px-8 py-2 bg-blue-600 rounded-full text-sm font-black uppercase tracking-[0.3em] text-white shadow-lg shadow-blue-100">

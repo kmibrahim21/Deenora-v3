@@ -123,10 +123,10 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
           {/* School Name & Transcript Title */}
           <div className="flex-1 text-center px-4 min-w-0">
-            <h1 className="text-[26px] font-black text-[#1E3A8A] font-noto-serif leading-[1.1] mb-1.5 uppercase drop-shadow-sm truncate">
+            <h1 className="text-[24px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1.5 uppercase drop-shadow-sm">
               {madrasah.name}
             </h1>
-            <p className="text-[12px] font-bold text-slate-600 mb-3 leading-relaxed max-w-[450px] mx-auto line-clamp-2">
+            <p className="text-[11px] font-bold text-slate-600 mb-3 leading-tight max-w-[480px] mx-auto">
               {madrasah.address}
             </p>
             {madrasah.institute_code && (

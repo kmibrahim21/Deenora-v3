@@ -41,11 +41,11 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     return (
     <div className="flex-1 p-3 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between">
       {/* Watermark */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none -rotate-[30deg]">
+      <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none -rotate-[30deg] px-10">
          {madrasah.logo_url ? (
            <img src={madrasah.logo_url} alt="Watermark" className="max-w-[70%] max-h-[70%] object-contain grayscale" crossOrigin="anonymous" />
          ) : (
-           <h1 className="text-8xl font-black uppercase text-center text-slate-900 leading-none">{madrasah.name}</h1>
+           <h1 className="text-6xl font-black uppercase text-center text-slate-900 leading-tight">{madrasah.name}</h1>
          )}
       </div>
 
@@ -64,9 +64,9 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
                <span className="text-xl font-black text-[#1E3A8A]">{madrasah.name.charAt(0)}</span>
             )}
           </div>
-          <div className="min-w-0 pr-16 relative z-10">
-            <h1 className={`text-lg font-black text-[#1E3A8A] truncate leading-none ${isBangla ? 'font-tiro' : ''}`}>{madrasah.name}</h1>
-            {madrasah.address && <p className="text-[9px] font-bold text-slate-500 uppercase truncate leading-none mt-1">{madrasah.address}</p>}
+          <div className="flex-1 relative z-10 min-w-0 pr-12">
+            <h1 className={`text-lg font-black text-[#1E3A8A] leading-tight ${isBangla ? 'font-tiro' : ''}`}>{madrasah.name}</h1>
+            {madrasah.address && <p className="text-[9px] font-bold text-slate-500 uppercase leading-normal mt-0.5">{madrasah.address}</p>}
           </div>
         </div>
 

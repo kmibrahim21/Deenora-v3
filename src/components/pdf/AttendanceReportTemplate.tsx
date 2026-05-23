@@ -57,13 +57,13 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                     <img src={madrasah.logo_url} alt="Logo" style={{ width: '60px', height: '60px', objectFit: 'contain' }} crossOrigin="anonymous" />
                                 )}
                                 <h1 style={{ 
-                                    fontSize: (madrasah?.name?.length || 0) > 60 ? '14px' : (madrasah?.name?.length || 0) > 45 ? '18px' : (madrasah?.name?.length || 0) > 30 ? '22px' : '28px', 
+                                    fontSize: (madrasah?.name?.length || 0) > 60 ? '14px' : (madrasah?.name?.length || 0) > 45 ? '18px' : (madrasah?.name?.length || 0) > 30 ? '22px' : '26px', 
                                     fontWeight: 'bold', 
                                     margin: '0', 
                                     color: '#1e3a8a', 
                                     lineHeight: '1.2', 
-                                    whiteSpace: 'nowrap',
-                                    display: 'inline-block'
+                                    display: 'block',
+                                    flex: 1
                                 }}>{madrasah?.name || 'Madrasah Name'}</h1>
                             </div>
                             <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0', color: '#1e40af', marginTop: '10px' }}>
