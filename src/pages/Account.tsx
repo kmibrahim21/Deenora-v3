@@ -9,6 +9,62 @@ import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
 import MultiCalendar from 'components/MultiCalendar';
 
+const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get 2D context'));
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Canvas toBlob returned null'));
+            }
+          },
+          'image/webp',
+          0.8
+        );
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 const ActionCard = ({ icon: Icon, title, subtitle, colorClass, onClick, dark }: any) => (
   <button 
     onClick={onClick}
@@ -315,26 +371,51 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     if (!file || !madrasah) return;
     setSaving(true);
     try {
-      const fileName = `logo_${madrasah.id}_${Date.now()}`;
+      // Compress and resize the image (e.g., max 400x400 for a crisp logo)
+      const compressedBlob = await compressAndResizeImage(file, 400, 400);
+      const fileName = `logo_${madrasah.id}_${Date.now()}.webp`;
       
       // Try to create bucket if it doesn't exist
       try {
         await supabase.storage.createBucket('madrasah-assets', { public: true });
       } catch (bucketError) {}
 
+      // Try to delete old logo first if it exists, to optimize storage space
+      const oldLogoUrl = logoUrl || madrasah.logo_url;
+      if (oldLogoUrl) {
+        try {
+          const urlWithoutQuery = oldLogoUrl.split('?')[0];
+          const marker = 'logos/';
+          const markerIndex = urlWithoutQuery.indexOf(marker);
+          if (markerIndex !== -1) {
+            const storagePath = urlWithoutQuery.substring(markerIndex);
+            
+            // Delete from madrasah-assets
+            await supabase.storage.from('madrasah-assets').remove([storagePath]).catch(() => {});
+            
+            // Delete from voice-templates
+            await supabase.storage.from('voice-templates').remove([storagePath]).catch(() => {});
+          }
+        } catch (delErr) {
+          console.error('Failed to clean up old logo:', delErr);
+        }
+      }
+
       let uploadError;
       let publicUrl;
 
       // Try madrasah-assets first
-      const { error: err1 } = await supabase.storage.from('madrasah-assets').upload(`logos/${fileName}`, file, {
+      const { error: err1 } = await supabase.storage.from('madrasah-assets').upload(`logos/${fileName}`, compressedBlob, {
         cacheControl: '3600',
+        contentType: 'image/webp',
         upsert: false
       });
 
       if (err1) {
         // Fallback to voice-templates bucket which we know exists and is often pre-configured
-        const { error: err2 } = await supabase.storage.from('voice-templates').upload(`logos/${fileName}`, file, {
+        const { error: err2 } = await supabase.storage.from('voice-templates').upload(`logos/${fileName}`, compressedBlob, {
           cacheControl: '3600',
+          contentType: 'image/webp',
           upsert: false
         });
         uploadError = err2;
@@ -363,7 +444,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       setLogoUrl(publicUrl);
       setMadrasah(prev => prev ? { ...prev, logo_url: publicUrl } : null);
       if (onProfileUpdate) onProfileUpdate();
-      setShowSuccessModal({ show: true, title: 'সফল', message: 'লোগো আপডেট হয়েছে।' });
+      setShowSuccessModal({ show: true, title: 'সফল', message: 'লোগো সফলভাবে আপলোড এবং অপ্টিমাইজ করা হয়েছে।' });
     } catch (e: any) { 
       console.error('Upload error:', e);
       alert('Logo upload failed: ' + e.message); 
@@ -388,8 +469,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </div>
           <div className="absolute -top-12 sm:-top-16 left-1/2 -translate-x-1/2 z-20">
             <div className="relative group">
-              <div className={`w-32 h-32 sm:w-40 sm:h-40 p-3 sm:p-4 rounded-full shadow-bubble border-[8px] sm:border-[12px] flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-900' : 'bg-white border-slate-50'}`}>
-                {logoUrl ? <img src={logoUrl} className="w-full h-full object-contain" alt="Profile" /> : <div className={`w-full h-full rounded-full flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}><UserIcon size={50} className="sm:w-[70px] sm:h-[70px]" strokeWidth={1.5} /></div>}
+              <div className={`w-32 h-32 sm:w-40 sm:h-40 p-3 sm:p-4 rounded-full shadow-bubble border-[8px] sm:border-[12px] flex items-center justify-center overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-900' : 'bg-white border-slate-50'}`}>
+                {logoUrl ? <img src={logoUrl} className="w-full h-full object-cover rounded-full" alt="Profile" /> : <div className={`w-full h-full rounded-full flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}><UserIcon size={50} className="sm:w-[70px] sm:h-[70px]" strokeWidth={1.5} /></div>}
               </div>
               {madrasah && madrasah.id !== 'super_admin' && (
                 <button 

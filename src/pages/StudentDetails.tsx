@@ -166,6 +166,24 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         await supabase.storage.createBucket('madrasah-assets', { public: true });
       } catch (bucketError) {}
 
+      // Delete the old photo from storage if it exists to optimize storage space
+      const oldPhotoUrl = student.photo_url || currentPhotoUrl;
+      if (oldPhotoUrl) {
+        try {
+          const urlWithoutQuery = oldPhotoUrl.split('?')[0];
+          const marker = 'student_photos/';
+          const markerIndex = urlWithoutQuery.indexOf(marker);
+          if (markerIndex !== -1) {
+            const storagePath = urlWithoutQuery.substring(markerIndex);
+            await supabase.storage
+              .from('madrasah-assets')
+              .remove([storagePath]);
+          }
+        } catch (storageDelErr) {
+          console.error('Failed to clean up old image from storage:', storageDelErr);
+        }
+      }
+
       const { error: uploadErr } = await supabase.storage
         .from('madrasah-assets')
         .upload(`student_photos/${fileName}`, compressedBlob, {
@@ -238,12 +256,31 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
     setShowPhotoDeleteConfirm(false);
     setIsDeletingPhoto(true);
     try {
+      const existingPhotoUrl = student.photo_url || currentPhotoUrl;
+
       const { error: updateErr } = await supabase
         .from('students')
         .update({ photo_url: null })
         .eq('id', student.id);
 
       if (updateErr) throw updateErr;
+
+      // Delete the image file from Supabase Storage
+      if (existingPhotoUrl) {
+        try {
+          const urlWithoutQuery = existingPhotoUrl.split('?')[0];
+          const marker = 'student_photos/';
+          const markerIndex = urlWithoutQuery.indexOf(marker);
+          if (markerIndex !== -1) {
+            const storagePath = urlWithoutQuery.substring(markerIndex);
+            await supabase.storage
+              .from('madrasah-assets')
+              .remove([storagePath]);
+          }
+        } catch (storageDelErr) {
+          console.error('Failed to remove image from storage:', storageDelErr);
+        }
+      }
 
       setCurrentPhotoUrl('');
       if (onStudentUpdate) {
