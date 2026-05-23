@@ -138,7 +138,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     class_routine: false,
     certificates: false,
     id_cards: false,
-    exam_routine: false
+    exam_routine: true
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -1119,7 +1119,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       class_routine: false,
       certificates: true,
       id_cards: false,
-      exam_routine: false,
+      exam_routine: true,
       ...userModules
     });
 

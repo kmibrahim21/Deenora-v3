@@ -766,6 +766,8 @@ export const generateExamRoutinePDF = async (
       routinePrincipalName?: string;
       routinePrincipalMobile?: string;
       showRoutineAfternoon?: boolean;
+      examYear?: string;
+      themeColor?: string;
     }
 ) => {
     const container = document.createElement('div');

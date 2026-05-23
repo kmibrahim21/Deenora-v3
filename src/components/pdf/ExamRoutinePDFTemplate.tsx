@@ -28,6 +28,8 @@ interface ExamRoutinePDFTemplateProps {
   routinePrincipalName?: string;
   routinePrincipalMobile?: string;
   showRoutineAfternoon?: boolean;
+  examYear?: string;
+  themeColor?: string;
 }
 
 export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
@@ -43,8 +45,24 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
   routineInstructions = [],
   routinePrincipalName = '',
   routinePrincipalMobile = '',
-  showRoutineAfternoon = true
+  showRoutineAfternoon = true,
+  examYear = '২০২৬',
+  themeColor = '#013c28'
 }) => {
+  const themes: { [key: string]: { primary: string; secondary: string; light: string; accent: string } } = {
+    'emerald': { primary: '#013c28', secondary: '#023c28', light: '#E6F4EA', accent: '#EAF7EE' },
+    'blue': { primary: '#1e3a8a', secondary: '#1e40af', light: '#eff6ff', accent: '#f8fafc' },
+    'slate': { primary: '#334155', secondary: '#475569', light: '#f1f5f9', accent: '#f8fafc' },
+    'purple': { primary: '#581c87', secondary: '#6b21a8', light: '#faf5ff', accent: '#fdf4ff' },
+    'rose': { primary: '#881337', secondary: '#9f1239', light: '#fff1f2', accent: '#fff5f5' }
+  };
+
+  const currentTheme = themes[themeColor] || themes['emerald'];
+  const primary = currentTheme.primary;
+  const secondary = currentTheme.secondary;
+  const light = currentTheme.light;
+  const accent = currentTheme.accent;
+
   const getBanglaNumber = (str: string) => {
     const englishDigits: { [key: string]: string } = { '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪', '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯' };
     return str.replace(/[0-9]/g, d => englishDigits[d]);
@@ -91,20 +109,20 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
   ];
 
   const SingleRoutineContent = () => (
-    <div className="w-full h-full p-8 flex flex-col justify-between relative border-[8px] border-emerald-800/10 bg-white overflow-hidden">
+    <div className="w-full h-full p-8 flex flex-col justify-between relative border-[8px] bg-white overflow-hidden" style={{ borderColor: `${primary}1a` }}>
       {/* Frame Design corners */}
-      <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-emerald-800 rounded-tl-xl m-1.5 opacity-80"></div>
-      <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-emerald-800 rounded-tr-xl m-1.5 opacity-80"></div>
-      <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-emerald-800 rounded-bl-xl m-1.5 opacity-80"></div>
-      <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-emerald-800 rounded-br-xl m-1.5 opacity-80"></div>
+      <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 rounded-tl-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
+      <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 rounded-tr-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
+      <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 rounded-bl-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
+      <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 rounded-br-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
 
       <div className="flex-1 flex flex-col justify-between relative z-10 w-full h-full max-h-full">
         {/* Banner Container */}
-        <div className="flex justify-between items-center w-full px-2 py-2 bg-[#E6F4EA]/40 rounded-2xl border border-emerald-800/10 mb-3 relative" style={{ backgroundImage: 'linear-gradient(to right, #F4FBF7, #EBF8F1)' }}>
+        <div className="flex justify-between items-center w-full px-2 py-2 rounded-2xl border mb-3 relative" style={{ backgroundColor: `${light}66`, borderColor: `${primary}1a`, backgroundImage: `linear-gradient(to right, ${light}33, ${accent}66)` }}>
           
           {/* Left Column: Round Logo */}
           <div className="flex-shrink-0 flex items-center justify-center pl-2">
-            <div className="relative p-1 rounded-full border border-emerald-800 bg-white shadow-sm">
+            <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: primary }}>
               {madrasah?.logo_url ? (
                 <img src={madrasah.logo_url} className="w-[60px] h-[60px] object-contain rounded-full bg-white" alt="Logo" />
               ) : (
@@ -115,46 +133,46 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
 
           {/* Center Column */}
           <div className="flex-1 text-center px-2 leading-tight">
-            <h1 className="text-[20px] font-black text-[#013c28] tracking-tight leading-none mb-1 font-noto">
+            <h1 className="text-[22px] font-black tracking-tight leading-none mb-1 font-serif-bn italic" style={{ color: primary }}>
               {madrasah?.name || 'মাদরাসার নাম'}
             </h1>
             
-            <div className="flex items-center justify-center gap-1.5 text-[10px] font-black text-[#475569] leading-tight flex-wrap">
-              <span className="inline-flex items-center gap-0.5 text-emerald-900">
-                📍 {madrasah?.address || 'ঠিকানা'}
+            <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-[#475569] leading-tight flex-wrap font-noto">
+              <span className="inline-flex items-center gap-0.5 italic" style={{ color: primary }}>
+                {madrasah?.address || 'ঠিকানা'}
               </span>
               <span className="text-slate-300">|</span>
-              <span className="inline-flex items-center gap-0.5 text-emerald-950">
-                📞 {isBn ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
+              <span className="inline-flex items-center gap-0.5" style={{ color: primary }}>
+                {isBn ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
               </span>
             </div>
 
             {/* Central pill badge */}
             <div className="mt-1.5 inline-block">
-              <div className="bg-[#023c28] text-white px-4 py-1 rounded-full shadow-sm text-[10px] font-black tracking-wide border border-emerald-700/50">
+              <div className="text-white px-4 py-1 rounded-full shadow-sm text-[10px] font-black tracking-wide border" style={{ backgroundColor: secondary, borderColor: `${primary}80` }}>
                 {isBn 
-                  ? `${examName} সময়সূচি - ২০২৫` 
-                  : `${examName} Schedule - 2025`}
+                  ? `${examName} সময়সূচি - ${isBn ? getBanglaNumber(examYear) : examYear}` 
+                  : `${examName} Schedule - ${examYear}`}
               </div>
             </div>
           </div>
 
           {/* Right Column: Calendar Box */}
-          <div className="flex-shrink-0 w-[110px] h-[85px] bg-[#013c28] text-white rounded-xl flex flex-col justify-between p-2 border border-emerald-700 shadow mr-2">
+          <div className="flex-shrink-0 w-[110px] h-[85px] text-white rounded-xl flex flex-col justify-between p-2 border shadow mr-2" style={{ backgroundColor: primary, borderColor: `${primary}b3` }}>
             <div className="flex items-center justify-center">
-              <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[#013c28] font-black text-[10px]">
+              <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center font-black text-[10px]" style={{ color: primary }}>
                 📅
               </div>
             </div>
             <div className="text-center mt-1 leading-normal">
-              <p className="text-[9px] font-black text-[#E2F7E7] leading-none mb-0.5 whitespace-nowrap overflow-hidden">
+              <p className="text-[9px] font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden" style={{ color: accent }}>
                 {examName ? examName.replace(/পরীক্ষা|Exam/g, '').trim() : (isBn ? 'সাময়িক' : 'Term')}
               </p>
-              <p className="text-[9px] font-extrabold text-[#99F6E4] block mb-0.5">
+              <p className="text-[9px] font-extrabold block mb-0.5" style={{ color: `${accent}cc` }}>
                 পরীক্ষার সময়সূচি
               </p>
               <p className="text-[8px] font-semibold text-white/70 block">
-                ২০২৫ইং
+                {isBn ? getBanglaNumber(examYear) : examYear}ইং
               </p>
             </div>
           </div>
@@ -164,20 +182,20 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
         <div className="flex-1 overflow-hidden">
           {routineSelectionMode === 'all' ? (
             /* FORMAT A: ALL CLASSES TOGETHER GRID */
-            <table className="w-full border-collapse border-2 border-emerald-950 rounded-xl overflow-hidden shadow-sm text-center">
+            <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: primary }}>
               <thead>
                 {/* First row of Table Header: Days/Dates */}
-                <tr className="bg-[#013c28] text-white h-9 border-b border-emerald-950">
-                  <th className="border-r border-emerald-900 px-1 py-1 text-[10px] font-black w-20 bg-[#013c28]" rowSpan={2}>
+                <tr className="text-white h-9 border-b" style={{ backgroundColor: primary, borderColor: primary }}>
+                  <th className="border-r px-1 py-1 text-[10px] font-black w-20" rowSpan={2} style={{ borderColor: `${primary}b3`, backgroundColor: primary }}>
                     <div className="flex flex-col items-center justify-center">
-                      <span className="text-[10px] tracking-wider leading-none mb-0.5 border-b border-emerald-600 pb-0.5">{isBn ? 'বার' : 'DAY'}</span>
+                      <span className="text-[10px] tracking-wider leading-none mb-0.5 border-b pb-0.5" style={{ borderColor: `${primary}66` }}>{isBn ? 'বার' : 'DAY'}</span>
                       <span className="text-[9px] tracking-widest opacity-80 leading-none">{isBn ? 'তারিখ' : 'DATE'}</span>
                     </div>
                   </th>
                   {routineData.map((col, idx) => (
-                    <th key={idx} className="border-r border-emerald-900 p-1 text-[10px] font-black bg-[#013c28] min-w-[70px]" colSpan={showRoutineAfternoon ? 2 : 1}>
+                    <th key={idx} className="border-r p-1 text-[10px] font-black min-w-[70px]" colSpan={showRoutineAfternoon ? 2 : 1} style={{ borderColor: `${primary}b3`, backgroundColor: primary }}>
                       <p className="text-[10px] font-black leading-tight text-white">{col.day}</p>
-                      <p className="text-[8px] font-bold text-emerald-200 mt-0.5">
+                      <p className="text-[8px] font-bold mt-0.5" style={{ color: accent }}>
                         {isBn ? getBanglaNumber(col.date) : col.date}
                       </p>
                     </th>
@@ -185,17 +203,17 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                 </tr>
                 
                 {/* Second row of Table Header: Morning/Afternoon Shifts */}
-                <tr className="bg-emerald-50 text-emerald-950 h-8 border-b border-emerald-950">
+                <tr className="text-emerald-950 h-8 border-b" style={{ backgroundColor: accent, borderColor: primary }}>
                   {routineData.map((_, idx) => (
                     <React.Fragment key={idx}>
-                      <th className="border-r border-emerald-200 p-1 text-[8px] font-black font-noto tracking-tighter w-[40px] bg-[#EAF7EE] text-emerald-900">
+                      <th className="border-r p-1 text-[8px] font-black font-noto tracking-tighter w-[40px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
                         {isBn ? 'সকাল' : 'Morning'}
                         <span className="block text-[7px] font-bold text-[#475569] mt-0.5 leading-none">
                           {isBn ? getBanglaNumber(routineMorningTime.split(' ')[0]) : routineMorningTime.split(' ')[0]}
                         </span>
                       </th>
                       {showRoutineAfternoon && (
-                        <th className="border-r border-emerald-200 p-1 text-[8px] font-black font-noto tracking-tighter w-[40px] bg-[#EAF7EE] text-emerald-900">
+                        <th className="border-r p-1 text-[8px] font-black font-noto tracking-tighter w-[40px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
                           {isBn ? 'বিকাল' : 'Afternoon'}
                           <span className="block text-[7px] font-bold text-[#475569] mt-0.5 leading-none">
                             {isBn ? getBanglaNumber(routineAfternoonTime.split(' ')[0]) : routineAfternoonTime.split(' ')[0]}
@@ -210,23 +228,23 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
               <tbody>
                 {/* Classes display rows */}
                 {displayClasses.map((cls, idx) => (
-                  <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/10'} border-b border-emerald-950/20 h-10`}>
-                    <td className="border-r-2 border-emerald-950 p-1 font-black text-[10px] text-center bg-[#E6F4EA]/40 text-emerald-950">
-                      <span className="text-[10px] font-black text-emerald-950 tracking-tight">{cls.class_name}</span>
+                  <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : `${accent}1a`} border-b h-10`} style={{ borderColor: `${primary}33` }}>
+                    <td className="border-r-2 p-1 font-black text-[10px] text-center" style={{ borderColor: primary, backgroundColor: `${light}66`, color: primary }}>
+                      <span className="text-[10px] font-black tracking-tight">{cls.class_name}</span>
                     </td>
                     {routineData.map((_, dayIdx) => {
                       const mrnSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'morning');
                       const aftSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'afternoon');
                       return (
                         <React.Fragment key={dayIdx}>
-                          <td className="border-r border-emerald-200 p-1 align-middle text-center overflow-hidden">
-                            <span className={`text-[9px] font-black tracking-tight leading-[1] block max-h-full whitespace-normal break-words ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-950'}`}>
+                          <td className="border-r p-1 align-middle text-center overflow-hidden" style={{ borderColor: `${primary}33` }}>
+                            <span className={`text-[9px] font-black tracking-tight leading-[1] block max-h-full whitespace-normal break-words ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : ''}`} style={{ color: mrnSub === '*****' ? undefined : primary }}>
                               {mrnSub}
                             </span>
                           </td>
                           {showRoutineAfternoon && (
-                            <td className="border-r border-emerald-200 p-1 align-middle text-center overflow-hidden">
-                              <span className={`text-[9px] font-black tracking-tight leading-[1] block max-h-full whitespace-normal break-words ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-900'}`}>
+                            <td className="border-r p-1 align-middle text-center overflow-hidden" style={{ borderColor: `${primary}33` }}>
+                              <span className={`text-[9px] font-black tracking-tight leading-[1] block max-h-full whitespace-normal break-words ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : ''}`} style={{ color: aftSub === '*****' ? undefined : primary }}>
                                 {aftSub}
                               </span>
                             </td>
@@ -240,13 +258,13 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             </table>
           ) : (
             /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
-            <table className="w-full border-collapse border-2 border-emerald-950 rounded-xl overflow-hidden shadow-sm text-center">
+            <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: primary }}>
               <thead>
-                <tr className="bg-[#013c28] text-white h-10">
-                  <th className="border-r border-emerald-900 p-2 text-[10px] font-black w-24">
+                <tr className="text-white h-10" style={{ backgroundColor: primary }}>
+                  <th className="border-r p-2 text-[10px] font-black w-24" style={{ borderColor: `${primary}b3` }}>
                     {isBn ? 'বার / তারিখ' : 'Day / Date'}
                   </th>
-                  <th className="border-r border-emerald-900 p-2 text-[10px] font-black">
+                  <th className="border-r p-2 text-[10px] font-black" style={{ borderColor: `${primary}b3` }}>
                     {isBn ? `সকাল (${getBanglaNumber(routineMorningTime)})` : `Morning (${routineMorningTime})`}
                   </th>
                   {showRoutineAfternoon && (
@@ -258,15 +276,15 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
               </thead>
               <tbody>
                 {routineData.map((row, idx) => (
-                  <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/20'} border-b border-emerald-950/20 h-[38px]`}>
-                    <td className="border-r border-emerald-950/20 p-2 text-center bg-emerald-50/30">
-                      <p className="text-[10px] font-black text-emerald-950 mb-0">{row.day}</p>
+                  <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : `${light}33`} border-b h-[38px]`} style={{ borderColor: `${primary}33` }}>
+                    <td className="border-r p-2 text-center" style={{ borderColor: `${primary}33`, backgroundColor: `${light}4d` }}>
+                      <p className="text-[10px] font-black mb-0" style={{ color: primary }}>{row.day}</p>
                       <p className="text-[8px] font-bold text-slate-500">{isBn ? getBanglaNumber(row.date) : row.date}</p>
                     </td>
                     
                     {/* Morning subject for selected class */}
-                    <td className="border-r border-emerald-950/20 p-1.5 align-middle">
-                      <div className="text-center font-black text-[10px] text-emerald-950 whitespace-normal break-words leading-tight">
+                    <td className="border-r p-1.5 align-middle" style={{ borderColor: `${primary}33` }}>
+                      <div className="text-center font-black text-[10px] whitespace-normal break-words leading-tight" style={{ color: primary }}>
                         {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning')}
                       </div>
                     </td>
@@ -290,24 +308,24 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             {madrasah?.logo_url ? (
               <img src={madrasah.logo_url} className="w-[300px] h-[300px] object-contain" alt="" />
             ) : (
-              <div className="text-9xl font-black text-emerald-900">{madrasah?.name?.slice(0, 1) || 'ম'}</div>
+              <div className="text-9xl font-black" style={{ color: primary }}>{madrasah?.name?.slice(0, 1) || 'ম'}</div>
             )}
           </div>
         </div>
 
         {/* Footer Block */}
-        <div className="mt-2 flex justify-between items-end pt-2 border-t border-emerald-950/10">
+        <div className="mt-2 flex justify-between items-end pt-2 border-t" style={{ borderColor: `${primary}1a` }}>
           
           {/* Left Column: Special Instructions */}
           <div className="max-w-[320px] text-left leading-relaxed">
-            <div className="bg-[#013c28] text-white px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 text-[9px] font-black mb-1.5 shadow-sm uppercase font-noto">
+            <div className="text-white px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 text-[9px] font-black mb-1.5 shadow-sm uppercase font-noto" style={{ backgroundColor: primary }}>
               <span>📖</span>
               {isBn ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
             </div>
             <ul className="space-y-0.5 max-h-[140px] overflow-hidden pr-2">
               {instructionsToShow.map((inst, i) => (
                 <li key={i} className="flex gap-1.5 text-[8.5px] font-bold text-slate-600 leading-normal">
-                  <span className="text-emerald-800 font-extrabold">{isBn ? getBanglaNumber((i + 1).toString()) : i + 1} ।</span>
+                  <span className="font-extrabold" style={{ color: primary }}>{isBn ? getBanglaNumber((i + 1).toString()) : i + 1} ।</span>
                   <span>{inst}</span>
                 </li>
               ))}
@@ -316,26 +334,26 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
 
           {/* Right Column: Sign Box */}
           <div className="text-center min-w-[150px]">
-            <div className="border border-emerald-800/20 rounded-xl p-2.5 bg-emerald-50/15 relative">
-              <p className="text-[9px] font-black text-emerald-800/90 mb-4">{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
+            <div className="border rounded-xl p-2.5 relative" style={{ borderColor: `${primary}33`, backgroundColor: `${light}26` }}>
+              <p className="text-[9px] font-black mb-4" style={{ color: `${primary}e6` }}>{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
               <div className="h-px bg-slate-200 w-full mb-1"></div>
-              <p className="text-[9px] font-black text-emerald-950">
+              <p className="text-[9px] font-black" style={{ color: primary }}>
                 {routinePrincipalName || (isBn ? 'প্রতিষ্ঠাতা পরিচালক' : 'Founding Director')}
               </p>
               <p className="text-[8px] font-bold text-slate-400 mt-0.5">{madrasah?.name}</p>
               {routinePrincipalMobile && (
-                <p className="text-[8px] font-black text-emerald-700/80 mt-0.5 inline-flex items-center gap-0.5">
+                <p className="text-[8px] font-black mt-0.5 inline-flex items-center gap-0.5" style={{ color: `${primary}cc` }}>
                   📞 {routinePrincipalMobile}
                 </p>
               )}
-              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t border-r border-emerald-800 rounded-tr-md"></div>
+              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t border-r rounded-tr-md" style={{ borderColor: primary }}></div>
             </div>
           </div>
         </div>
 
         {/* Deenora Portal bottom tagline */}
         <div className="text-center mt-1.5 pt-1 text-[7px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
-          {isBn ? 'দ্বীনোরা শিক্ষাবর্ষ ২০২৬ • তৈরি করতে ভিজিট করুন deenora.com' : 'DEENORA PORTAL • POWERED BY DEENORA'}
+          {isBn ? `দ্বীনোরা শিক্ষাবর্ষ ${isBn ? getBanglaNumber(examYear) : examYear} • তৈরি করতে ভিজিট করুন deenora.com` : `DEENORA PORTAL • POWERED BY DEENORA ${examYear}`}
         </div>
       </div>
     </div>
