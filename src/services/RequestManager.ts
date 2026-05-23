@@ -4,9 +4,9 @@ import { offlineDb, type CachedResponse } from './offlineDb';
 
 // Centralized TTL Config
 export const CACHE_TTLS = {
-  SHORT: 5 * 60 * 1000,     // 5 mins (Stats, Recent Fees)
-  MEDIUM: 15 * 60 * 1000,   // 15 mins (Accounting history)
-  LONG: 60 * 60 * 1000,     // 1 hr (Students, Classes, Settings)
+  SHORT: 5 * 60 * 1000,     // 5 mins
+  MEDIUM: 10 * 60 * 1000,   // 10 mins
+  LONG: 10 * 60 * 1000,     // 10 mins (Settings, Students, Classes - reduced from 1hr for better responsiveness)
   ETERNAL: 24 * 60 * 60 * 1000 // 24 hrs
 };
 

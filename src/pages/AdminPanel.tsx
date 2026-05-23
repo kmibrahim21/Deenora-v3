@@ -10,6 +10,7 @@ import { toPng } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
+import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
 
 interface InstitutionWithStats extends Institution {
@@ -1255,6 +1256,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
 
       setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'মাদরাসা প্রোফাইল আপডেট হয়েছে।' });
+      
+      // Invalidate cache for this institution
+      if (selectedUser?.id) {
+          requestManager.invalidate(`institution:${selectedUser.id}`);
+      }
+
       setEditPassword('');
       initData(true);
       if (onProfileUpdate) onProfileUpdate();

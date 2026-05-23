@@ -1,6 +1,11 @@
+import { requestManager } from '../services/RequestManager';
+
 export const hardReload = async () => {
   try {
-    // Unregister all service workers to ensure new files are fetched
+    // 0. Invalidate RequestManager cache (IndexedDB)
+    await requestManager.invalidate();
+
+    // 1. Unregister all service workers to ensure new files are fetched
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {

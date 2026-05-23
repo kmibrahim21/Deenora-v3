@@ -59,6 +59,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         messages: configObj.modules?.messages ?? true,
         class_routine: configObj.modules?.class_routine ?? false,
         certificates: configObj.modules?.certificates ?? true,
+        id_cards: configObj.modules?.id_cards ?? false,
         exam_routine: configObj.modules?.exam_routine ?? true,
       },
       result_engine: configObj.result_engine || 'school',
@@ -312,11 +313,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
         {/* Mobile Bottom Nav */}
         <div className="fixed md:hidden bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md w-full z-[200]">
-        <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble ${
-            !isSuperAdmin && modules.modules.library
-              ? "overflow-x-auto scrollbar-hide flex items-center justify-start gap-4 px-4"
-              : "flex justify-around items-center px-2"
-          } ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+        <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble flex justify-around items-center px-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
 
           {isSuperAdmin ? (
             <>
@@ -349,18 +346,18 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             </>
           ) : (
             <>
-              <button onClick={() => setView('home')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('home') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
+              <button onClick={() => setView('home')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('home') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
                 <Home size={20} strokeWidth={isTabActive('home') ? 3 : 2} />
                 <span className="text-[9px] font-black font-noto opacity-80">{t('home', lang, madrasah?.institution_type)}</span>
               </button>
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && (
-                <button onClick={() => setView('classes')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('classes') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
+                <button onClick={() => setView('classes')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('classes') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
                   <BookOpen size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{t('menu_students', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_send_sms') || hasPermission('can_use_voice_call')) && (modules.modules.sms !== false || modules.modules.voice_broadcast) && (
-                <div className={`relative flex justify-center ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'}`}>
+                <div className={`relative flex justify-center flex-1`}>
                   <button 
                     onClick={() => {
                       if (modules.modules.sms !== false && modules.modules.voice_broadcast) {
@@ -381,25 +378,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 </div>
               )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_attendance')) && modules.modules.attendance && (
-                <button onClick={() => setView('attendance')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('attendance') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
+                <button onClick={() => setView('attendance')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('attendance') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
                   <ClipboardList size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{t('menu_attendance', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_accounting')) && modules.modules.accounting && (role === 'madrasah_admin' || role === 'accountant' || hasPermission('can_manage_accounting')) && (
-                <button onClick={() => setView('accounting')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('accounting') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
+                <button onClick={() => setView('accounting')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('accounting') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
                   <Banknote size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{t('menu_accounting', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
               {(isSuperAdmin || role === 'madrasah_admin') && modules.modules.library && (
-                <button onClick={() => setView('library')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('library') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
+                <button onClick={() => setView('library')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('library') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
                   <Library size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'লাইব্রেরী' : 'Library'}</span>
                 </button>
               )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_results') || hasPermission('can_manage_exams')) && modules.modules.results && (
-                <button onClick={() => setView('exams')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('exams') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
+                <button onClick={() => setView('exams')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('exams') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
                   <GraduationCap size={20} />
                   <span className="text-[9px] font-black font-noto opacity-80">{t('menu_exams', lang, madrasah?.institution_type)}</span>
                 </button>
@@ -407,7 +404,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             </>
           )}
           
-          <button onClick={() => setView(isSuperAdmin ? 'super-account' : 'account')} className={`relative flex flex-col items-center gap-1 transition-all ${!isSuperAdmin && modules.modules.library ? 'shrink-0 min-w-[50px]' : 'flex-1'} ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
+          <button onClick={() => setView(isSuperAdmin ? 'super-account' : 'account')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
             <User size={20} />
             <span className="text-[9px] font-black font-noto opacity-80">{t('account', lang, madrasah?.institution_type)}</span>
           </button>
