@@ -2535,6 +2535,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                   const pct = (obtained / full) * 100;
                                                   const hasFailedSub = obtained < pass;
                                                   
+                                                  // Calculate highest mark obtained in class for this subject
+                                                  const classHighest = Object.keys(marksData || {}).reduce((max, stdId) => {
+                                                      const markVal = parseFloat(marksData[stdId]?.[s.id] || '0');
+                                                      return markVal > max ? markVal : max;
+                                                  }, 0);
+                                                  
                                                   const subGradeInfo = (p: number, f: boolean) => {
                                                       if (f) return { gpa: '0.00', grade: 'F' };
                                                       if (p >= 80) return { gpa: '5.00', grade: 'A+' };
@@ -2552,6 +2558,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       grade_point: subGradeInfo(pct, hasFailedSub).gpa,
                                                       full_marks: s.full_marks || 100,
                                                       pass_marks: s.pass_marks || 33,
+                                                      class_highest: classHighest,
                                                       is_optional: s.is_optional
                                                   };
                                               });

@@ -60,6 +60,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     controllerSign: isBangla ? "পরীক্ষা নিয়ন্ত্রক" : "Controller of Exam",
     guardianSign: isBangla ? "অভিভাবকের স্বাক্ষর" : "Guardian's Signature",
     eiin: isBangla ? "ইআইআইএন" : "EIIN",
+    classHighest: isBangla ? "শ্রেণী সর্বোচ্চ" : "Class Highest",
   };
 
   const totalObtained = marks.reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
@@ -162,23 +163,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
         </div>
 
         {/* Student Information */}
-        <div className="bg-slate-50/50 p-5 rounded-[2rem] border border-slate-200 mb-4 grid grid-cols-3 gap-x-6 text-[15px] shadow-sm">
+        <div className="bg-slate-50/50 p-5 rounded-[2rem] border border-slate-200 mb-4 grid grid-cols-12 gap-x-6 text-[15px] shadow-sm">
           {/* First Column: Personal Info */}
-          <div className="space-y-2 border-r border-slate-200 pr-5">
-            <div className="flex items-center"><span className="w-28 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight">: {student.student_name}</span></div>
-            <div className="flex items-center"><span className="w-28 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.guardian_name || '-'}</span></div>
-            <div className="flex items-center"><span className="w-28 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.mother_name || '-'}</span></div>
+          <div className="space-y-2 border-r border-slate-200 pr-5 col-span-5">
+            <div className="flex items-start"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] mt-0.5 leading-none shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight line-clamp-2 leading-tight">: {student.student_name}</span></div>
+            <div className="flex items-start"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] mt-0.5 leading-none shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-2 leading-tight">: {student.guardian_name || '-'}</span></div>
+            <div className="flex items-start"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] mt-0.5 leading-none shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-2 leading-tight">: {student.mother_name || '-'}</span></div>
           </div>
           {/* Middle Column: Academic Info */}
-          <div className="space-y-2 border-r border-slate-200 pr-5">
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
+          <div className="space-y-2 border-r border-slate-200 pr-5 col-span-4">
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] leading-none shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] leading-none shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] leading-none shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
           </div>
           {/* Last Column: Other Info */}
-          <div className="space-y-2 pl-2">
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
-            <div className="flex items-center"><span className="w-24 text-slate-500 font-bold uppercase text-[11px] leading-none">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
+          <div className="space-y-2 pl-2 col-span-3">
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] leading-none shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
+            <div className="flex items-center"><span className="w-20 text-slate-500 font-bold uppercase text-[11px] leading-none shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
           </div>
         </div>
 
@@ -198,6 +199,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                 <th className="border border-slate-900/20 py-2 px-4 text-left">{t.subject}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[70px]">{t.fullMarks}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[70px]">{t.passMarks}</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[75px]">{t.classHighest}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[80px] bg-blue-900 shadow-inner">{t.obtainedMarks}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.grade}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.gp}</th>
@@ -212,6 +214,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                   </td>
                   <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-600">{m.full_marks || '100'}</td>
                   <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-600">{m.pass_marks || '33'}</td>
+                  <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-slate-600 text-[14px] bg-slate-50/30">{(m.class_highest !== undefined && m.class_highest !== null) ? m.class_highest.toString().padStart(2, '0') : '-'}</td>
                   <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-[#1E3A8A] bg-blue-50/20 text-[15px]">{(m.marks_obtained || 0).toString().padStart(2, '0')}</td>
                   <td className={`border border-slate-900 py-1 px-1 text-center font-black text-[15px] ${m.grade === 'F' ? 'text-red-500 bg-red-50/20' : 'text-[#1E3A8A]'}`}>{m.grade || '-'}</td>
                   <td className="border border-slate-900 py-1 px-1 text-center font-bold font-mono text-slate-700 text-[13px]">{m.grade_point || '0.00'}</td>
@@ -226,14 +229,16 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
+                   <td className="border border-slate-900 py-2.5">&nbsp;</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="bg-slate-100 text-[13px] font-black">
-                <td colSpan={2} className="border border-slate-900 py-2 px-4 text-right uppercase tracking-widest text-[11px] text-slate-500">{t.totalMarks}:</td>
+                <td colSpan={2} className="border border-slate-900 py-2 px-4 text-right uppercase tracking-[0.05em] text-[11px] text-slate-500">{t.totalMarks}:</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]">{totalFull}</td>
                 <td className="border border-slate-900 py-2 px-1 text-center">-</td>
+                <td className="border border-slate-900 py-2 px-1 text-center font-mono text-slate-600 text-[14px]">-</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[#1E3A8A] text-[18px] bg-blue-100/50">{totalObtained}</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-serif text-[20px] bg-blue-100/50 text-[#1E3A8A]" colSpan={2}>{finalGrade}</td>
               </tr>
