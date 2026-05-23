@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save, Camera } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
 import { requestManager } from 'services/RequestManager';
@@ -16,11 +16,70 @@ interface StudentDetailsProps {
   readOnly?: boolean;
   institutionId?: string;
   triggerRefresh?: () => void;
+  role?: string;
+  profile?: any;
+  onStudentUpdate?: (updatedStudent: Student) => void;
 }
 
 import { openWhatsAppChooser } from '../utils/whatsapp';
 
-const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEdit, onBack, lang, readOnly, institutionId, triggerRefresh }) => {
+const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get 2D context'));
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Canvas toBlob returned null'));
+            }
+          },
+          'image/webp',
+          0.6
+        );
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEdit, onBack, lang, readOnly, institutionId, triggerRefresh, role, profile, onStudentUpdate }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -28,7 +87,23 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [libraryIssues, setLibraryIssues] = useState<any[]>([]);
   
+  const [currentPhotoUrl, setCurrentPhotoUrl] = useState(student.photo_url || '');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPhotoDeleteConfirm, setShowPhotoDeleteConfirm] = useState(false);
+  const [photoAlert, setPhotoAlert] = useState<{ show: boolean; type: 'success' | 'error'; message: string } | null>(null);
+  
   const isDark = madrasah?.theme === 'dark';
+
+  useEffect(() => {
+    if (photoAlert && photoAlert.show) {
+      const timer = setTimeout(() => {
+        setPhotoAlert(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [photoAlert]);
 
   useEffect(() => {
     if (student?.id) {
@@ -43,6 +118,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
           });
     }
   }, [student?.id]);
+
+  useEffect(() => {
+    setCurrentPhotoUrl(student.photo_url || '');
+  }, [student?.photo_url, student?.id]);
 
   const handleSaveNotes = async () => {
     setIsSavingNotes(true);
@@ -71,6 +150,134 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
       alert(err.message);
     } finally {
       setIsSavingNotes(false);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !student.id) return;
+    
+    setIsUploadingImage(true);
+    try {
+      const compressedBlob = await compressAndResizeImage(file, 450, 450);
+      const fileName = `student_photo_${student.id}_${Date.now()}.webp`;
+      
+      try {
+        await supabase.storage.createBucket('madrasah-assets', { public: true });
+      } catch (bucketError) {}
+
+      const { error: uploadErr } = await supabase.storage
+        .from('madrasah-assets')
+        .upload(`student_photos/${fileName}`, compressedBlob, {
+          cacheControl: '2592000', // Cache for 30 days
+          contentType: 'image/webp',
+          upsert: true
+        });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('madrasah-assets')
+        .getPublicUrl(`student_photos/${fileName}`);
+
+      const publicUrl = publicUrlData.publicUrl;
+      if (!publicUrl) throw new Error('Could not retrieve public URL');
+
+      const { error: updateErr } = await supabase
+        .from('students')
+        .update({ photo_url: publicUrl })
+        .eq('id', student.id);
+
+      if (updateErr) throw updateErr;
+
+      // Force instant refresh with timestamp cache buster
+      const photoUrlWithBuster = publicUrl + '?t=' + Date.now();
+      setCurrentPhotoUrl(photoUrlWithBuster);
+      if (onStudentUpdate) {
+        onStudentUpdate({ ...student, photo_url: photoUrlWithBuster });
+      } else {
+        student.photo_url = photoUrlWithBuster;
+      }
+
+      requestManager.invalidatePattern('fetch:students:');
+      
+      if (institutionId) {
+        const cached = await CacheService.getCachedData('students', institutionId);
+        if (Array.isArray(cached)) {
+          const updated = cached.map((s: any) => s.id === student.id ? { ...s, photo_url: publicUrl } : s);
+          await CacheService.cacheData('students', institutionId, updated);
+        }
+      }
+
+      if (triggerRefresh) triggerRefresh();
+      
+      setPhotoAlert({
+        show: true,
+        type: 'success',
+        message: lang === 'bn' ? 'ছবি সফলভাবে আপলোড হয়েছে।' : 'Photo uploaded successfully.'
+      });
+    } catch (err: any) {
+      console.error('Photo upload error:', err);
+      setPhotoAlert({
+        show: true,
+        type: 'error',
+        message: (lang === 'bn' ? 'ছবি আপলোড ব্যর্থ হয়েছে: ' : 'Photo upload failed: ') + err.message
+      });
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeletePhoto = () => {
+    setShowPhotoDeleteConfirm(true);
+  };
+
+  const handleConfirmDeletePhoto = async () => {
+    if (!student.id) return;
+    setShowPhotoDeleteConfirm(false);
+    setIsDeletingPhoto(true);
+    try {
+      const { error: updateErr } = await supabase
+        .from('students')
+        .update({ photo_url: null })
+        .eq('id', student.id);
+
+      if (updateErr) throw updateErr;
+
+      setCurrentPhotoUrl('');
+      if (onStudentUpdate) {
+        onStudentUpdate({ ...student, photo_url: undefined });
+      } else {
+        student.photo_url = undefined;
+      }
+
+      requestManager.invalidatePattern('fetch:students:');
+
+      if (institutionId) {
+        const cached = await CacheService.getCachedData('students', institutionId);
+        if (Array.isArray(cached)) {
+          const updated = cached.map((s: any) => s.id === student.id ? { ...s, photo_url: null } : s);
+          await CacheService.cacheData('students', institutionId, updated);
+        }
+      }
+
+      if (triggerRefresh) triggerRefresh();
+
+      setPhotoAlert({
+        show: true,
+        type: 'success',
+        message: lang === 'bn' ? 'ছবি মুছে ফেলা হয়েছে।' : 'Photo deleted successfully.'
+      });
+    } catch (err: any) {
+      console.error('Delete photo error:', err);
+      setPhotoAlert({
+        show: true,
+        type: 'error',
+        message: (lang === 'bn' ? 'ছবি মুছতে ব্যর্থ হয়েছে: ' : 'Delete photo failed: ') + err.message
+      });
+    } finally {
+      setIsDeletingPhoto(false);
     }
   };
 
@@ -172,10 +379,42 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         <div className="relative flex flex-col items-center text-center">
           <div className="relative mb-2 group">
             <div className="absolute inset-0 bg-[#2563EB] blur-3xl opacity-20 group-hover:opacity-30 transition-opacity" />
-            <div className={`relative w-24 h-24 rounded-[1rem] flex items-center justify-center text-[#2563EB] border-[2px] shadow-xl overflow-hidden transform group-hover:scale-105 transition-transform duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'}`}>
-              <UserIcon size={48} strokeWidth={2.5} />
+            
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleImageUpload} 
+              accept="image/*" 
+              className="hidden" 
+            />
+
+            <div 
+              onClick={() => {
+                const canUploadPhoto = role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos;
+                if (canUploadPhoto && !isUploadingImage) fileInputRef.current?.click();
+              }}
+              className={`relative w-24 h-24 rounded-[1rem] flex items-center justify-center text-[#2563EB] border-[2px] shadow-xl overflow-hidden transform group-hover:scale-105 transition-all duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'} ${(role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos) ? 'cursor-pointer hover:border-[#2563EB]' : ''}`}
+            >
+              {isUploadingImage ? (
+                <div className="flex flex-col items-center justify-center text-slate-500">
+                  <Loader2 className="animate-spin text-blue-500 mb-1" size={24} />
+                  <span className="text-[8px] font-black uppercase tracking-widest">{lang === 'bn' ? 'আপলোড...' : 'Uploading'}</span>
+                </div>
+              ) : currentPhotoUrl ? (
+                <img src={currentPhotoUrl} className="w-full h-full object-cover" alt={student.student_name} referrerPolicy="no-referrer" />
+              ) : (
+                <UserIcon size={48} strokeWidth={2.5} />
+              )}
+
+              {/* Hover Camera icon overlay */}
+              {(role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos) && !isUploadingImage && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <Camera className="text-white" size={20} />
+                </div>
+              )}
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 flex flex-col gap-1 items-end">
+
+            <div className="absolute -bottom-0.5 -right-0.5 flex flex-col gap-1 items-end pointer-events-none">
               <div className={`min-w-[1.75rem] h-6 px-1 bg-[#2563EB] text-white rounded-[0.6rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`} title="Admission Number">
                 <span className="text-[10px] font-black tracking-tighter">A: {student.admission_number || '#'}</span>
               </div>
@@ -187,6 +426,21 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
             </div>
           </div>
           
+          {currentPhotoUrl && (role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos) && (
+            <button 
+              onClick={handleDeletePhoto}
+              disabled={isDeletingPhoto}
+              className={`mb-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-[0.5rem] text-[10px] font-black transition-all border ${isDark ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-100 text-red-600 hover:bg-red-100'}`}
+            >
+              {isDeletingPhoto ? (
+                <Loader2 className="animate-spin text-red-500" size={10} />
+              ) : (
+                <Trash2 size={10} />
+              )}
+              {lang === 'bn' ? 'ছবি মুছুন' : 'Delete Photo'}
+            </button>
+          )}
+
           <h2 className={`text-xl font-black font-noto tracking-tight leading-tight mb-0.5 drop-shadow-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h2>
           
           <div className="flex flex-wrap justify-center gap-1.5">
@@ -487,6 +741,65 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                   {t('cancel_btn', lang)}
                 </button>
              </div>
+          </div>
+        </div>
+      )}
+
+      {showPhotoDeleteConfirm && (
+        <div className="modal-overlay bg-[#080A12]/60 backdrop-blur-3xl animate-in fade-in duration-500 fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className={`w-full max-w-xs rounded-[3rem] p-8 shadow-[0_50px_120px_rgba(239,68,68,0.3)] border text-center space-y-6 animate-in zoom-in-95 duration-500 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-red-50'}`}>
+             <div className="relative">
+               <div className="absolute inset-0 bg-red-400 blur-3xl opacity-20 animate-pulse" />
+               <div className={`relative w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-inner border mb-4 ${isDark ? 'bg-red-950/30 text-red-400 border-red-800/50' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                  <Trash2 size={40} />
+               </div>
+             </div>
+             <div>
+                <h3 className={`text-xl font-black font-noto tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                  {lang === 'bn' ? 'ছবি মুছে ফেলবেন?' : 'Delete Photo?'}
+                </h3>
+                <p className="text-[12px] font-bold text-slate-400 mt-2 uppercase tracking-wider px-2 leading-relaxed">
+                  {lang === 'bn' ? 'আপনি কি নিশ্চিতভাবে এই শিক্ষার্থীর ছবি মুছে ফেলতে চান?' : 'Are you sure you want to delete this student\'s photo?'}
+                </p>
+             </div>
+             <div className="flex flex-col gap-3 pt-1">
+                <button 
+                  onClick={handleConfirmDeletePhoto} 
+                  disabled={isDeletingPhoto} 
+                  className="w-full py-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-black rounded-full shadow-2xl shadow-red-200 active:scale-95 transition-all flex items-center justify-center text-base gap-2 border border-white/10"
+                >
+                  {isDeletingPhoto ? <Loader2 className="animate-spin" size={20} /> : (
+                    <><Trash2 size={20} /> {lang === 'bn' ? 'হ্যাঁ, মুছুন' : 'Yes, Delete'}</>
+                  )}
+                </button>
+                <button 
+                  onClick={() => setShowPhotoDeleteConfirm(false)} 
+                  disabled={isDeletingPhoto}
+                  className={`w-full py-4 font-black rounded-full active:scale-95 transition-all text-xs uppercase tracking-widest border ${isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
+                >
+                  {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {photoAlert && photoAlert.show && (
+        <div className="fixed bottom-6 right-6 z-[1010] p-4 max-w-sm w-full animate-in slide-in-from-bottom duration-300">
+          <div className={`p-4 rounded-2xl shadow-2xl border flex items-center gap-3 ${isDark ? 'bg-slate-900/95 border-slate-800 text-slate-100' : 'bg-white/95 border-slate-100 text-slate-800'} backdrop-blur-md`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${photoAlert.type === 'success' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+              {photoAlert.type === 'success' ? <Check size={16} strokeWidth={3} /> : <AlertTriangle size={16} />}
+            </div>
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-400">{photoAlert.type === 'success' ? (lang === 'bn' ? 'সফল' : 'Success') : (lang === 'bn' ? 'ত্রুটি' : 'Error')}</p>
+              <p className="text-[13px] font-semibold text-slate-300 mt-0.5 font-noto break-words">{photoAlert.message}</p>
+            </div>
+            <button 
+              onClick={() => setPhotoAlert(null)}
+              className={`p-1 rounded-lg hover:bg-slate-800 transition-colors ${isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <X size={16} />
+            </button>
           </div>
         </div>
       )}

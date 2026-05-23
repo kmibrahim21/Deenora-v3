@@ -68,7 +68,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
     try {
       // 1. Prepare fields
-      const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, classes(class_name)';
+      const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, photo_url, classes(class_name)';
       const selectFields = (window as any)._hasMotherName === false ? baseFields.replace('mother_name, ', '') : baseFields;
 
       // 2. Fetch via RequestManager (Cache key includes page and class)

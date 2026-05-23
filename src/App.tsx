@@ -444,6 +444,9 @@ const App: React.FC = () => {
             }
             institutionId={madrasah?.id}
             triggerRefresh={triggerRefresh}
+            role={role}
+            profile={profile}
+            onStudentUpdate={(updated) => setSelectedStudent(updated)}
           />
         );
       case "student-form":

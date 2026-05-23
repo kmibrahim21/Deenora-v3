@@ -38,7 +38,8 @@ import {
   DollarSign,
   Download,
   CalendarOff,
-  AlertTriangle
+  AlertTriangle,
+  Camera
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -76,6 +77,7 @@ const initialPermissions: TeacherPermissions = {
   can_manage_settings: false,
   can_view_reports: false,
   can_manage_teachers: false,
+  can_upload_student_photos: false,
   allowed_classes: [],
 };
 
@@ -1531,6 +1533,15 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         key: "can_manage_students",
                         label: t("permissions_students", lang),
                         icon: <Users size={14} />,
+                      },
+                      {
+                        key: "can_upload_student_photos",
+                        label:
+                          lang === "bn"
+                            ? "শিক্ষার্থীর ছবি আপলোড"
+                            : "Upload Student Photos",
+                        icon: <Camera size={14} />,
+                        module: "student_photo",
                       },
                       {
                         key: "can_manage_attendance",

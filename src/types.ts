@@ -372,6 +372,7 @@ export interface TeacherPermissions {
   can_use_voice_call?: boolean;
   can_view_reports?: boolean;
   can_manage_teachers?: boolean;
+  can_upload_student_photos?: boolean;
   allowed_classes?: string[];
 }
 

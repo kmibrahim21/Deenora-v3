@@ -138,6 +138,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     messages: true,
     class_routine: false,
     certificates: false,
+    student_photo: false,
     id_cards: false,
     exam_routine: true
   });
@@ -1121,6 +1122,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       certificates: true,
       id_cards: false,
       exam_routine: true,
+      student_photo: false,
       ...userModules
     });
 
