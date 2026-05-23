@@ -765,6 +765,7 @@ export const generateExamRoutinePDF = async (
       routineInstructions?: string[];
       routinePrincipalName?: string;
       routinePrincipalMobile?: string;
+      showRoutineAfternoon?: boolean;
     }
 ) => {
     const container = document.createElement('div');
@@ -789,7 +790,9 @@ export const generateExamRoutinePDF = async (
         setTimeout(resolve, 1500); 
     });
 
-    const doc = new jsPDF('p', 'mm', 'a4');
+    const isLandscape = true;
+    
+    const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
@@ -801,8 +804,8 @@ export const generateExamRoutinePDF = async (
                 pixelRatio: 2,
                 quality: 0.95,
                 backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
+                width: 1123,
+                height: 794,
             });
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }

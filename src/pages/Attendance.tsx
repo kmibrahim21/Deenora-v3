@@ -1426,7 +1426,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   {!(selectedClass?.id === 'all') && (
                   <div className="flex flex-1 gap-2 min-w-[200px]">
                       <button onClick={() => setReportView('list')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>List View</button>
-                      <button onClick={() => setReportView('analytics')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Analytics</button>
+                      <button onClick={() => setReportView('analytics')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
+                        {lang === 'bn' ? 'অ্যানালিটিক্স' : 'Analytics'}
+                      </button>
                   </div>
                   )}
                   {reportData.length > 0 && selectedClass && (
@@ -1495,7 +1497,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   ) : (
                     <div className={`text-center py-20 rounded-[3rem] border-2 border-dashed mx-2 flex flex-col items-center ${isDark ? 'bg-slate-800/20 border-slate-700' : 'bg-white/10 border-white/20'}`}>
                       <BarChart3 size={40} className="text-slate-400/20 mb-4" />
-                      <p className="text-slate-400/40 uppercase text-xs font-black tracking-[0.2em]">No Data for Analytics</p>
+                      <p className="text-slate-400/40 uppercase text-xs font-black tracking-[0.2em]">{lang === 'bn' ? 'অ্যানালিটিক্স এর জন্য কোনো তথ্য নেই' : 'No Data for Analytics'}</p>
                     </div>
                   )}
                 </div>

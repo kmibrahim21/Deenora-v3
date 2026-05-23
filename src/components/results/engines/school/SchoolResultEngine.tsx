@@ -58,10 +58,19 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   // Exam Routine Feature States
   const [routineTermGroup, setRoutineTermGroup] = useState<string>('');
+  const [selectedRoutineExamId, setSelectedRoutineExamId] = useState<string>('');
+  const [selectedRoutineAllExamIds, setSelectedRoutineAllExamIds] = useState<string[]>([]);
+  const [customRoutineTitle, setCustomRoutineTitle] = useState<string>('');
   const [routineSelectionMode, setRoutineSelectionMode] = useState<'all' | 'class'>('all');
   const [selectedRoutineClassId, setSelectedRoutineClassId] = useState<string>('');
   const [routineMorningTime, setRoutineMorningTime] = useState<string>('09:00 AM - 12:00 PM');
   const [routineAfternoonTime, setRoutineAfternoonTime] = useState<string>('02:00 PM - 05:00 PM');
+  const [showRoutineAfternoon, setShowRoutineAfternoon] = useState<boolean>(true);
+  const [routineMorningStart, setRoutineMorningStart] = useState<string>('09:00');
+  const [routineMorningEnd, setRoutineMorningEnd] = useState<string>('12:00');
+  const [routineAfternoonStart, setRoutineAfternoonStart] = useState<string>('14:00');
+  const [routineAfternoonEnd, setRoutineAfternoonEnd] = useState<string>('17:00');
+  const [routineStartDate, setRoutineStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [routinePrincipalName, setRoutinePrincipalName] = useState<string>('');
   const [routinePrincipalMobile, setRoutinePrincipalMobile] = useState<string>('');
   const [routineInstructions, setRoutineInstructions] = useState<string[]>([
@@ -114,17 +123,43 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     }
   }, [examTermGroups, routineTermGroup]);
 
+  // Update routine times whenever start/end times change
+  React.useEffect(() => {
+    const formatTime = (time24: string) => {
+      const [h, m] = time24.split(':');
+      const hour = parseInt(h);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const h12 = hour % 12 || 12;
+      return `${h12.toString().padStart(2, '0')}:${m} ${ampm}`;
+    };
+    setRoutineMorningTime(`${formatTime(routineMorningStart)} - ${formatTime(routineMorningEnd)}`);
+    setRoutineAfternoonTime(`${formatTime(routineAfternoonStart)} - ${formatTime(routineAfternoonEnd)}`);
+  }, [routineMorningStart, routineMorningEnd, routineAfternoonStart, routineAfternoonEnd]);
+
   // Automatically fetch / prepare data when active tab is exam-routine or filters update
   React.useEffect(() => {
     const loadRoutineData = async () => {
-      if (!routineTermGroup) return;
-      
       try {
-        const targetTerm = routineTermGroup;
-        let relevantExams = exams.filter(e => e.exam_name.includes(targetTerm));
+        let relevantExams = [];
         
         if (routineSelectionMode === 'class' && selectedRoutineClassId) {
-          relevantExams = relevantExams.filter(e => e.class_id === selectedRoutineClassId);
+          if (selectedRoutineExamId) {
+            const pickedExam = exams.find(e => e.id === selectedRoutineExamId);
+            if (pickedExam) relevantExams = [pickedExam];
+          } else {
+            const classExams = exams.filter(e => e.class_id === selectedRoutineClassId);
+            if (classExams.length > 0) {
+              relevantExams = [classExams[0]];
+            }
+          }
+        } else {
+          if (selectedRoutineAllExamIds.length > 0) {
+            relevantExams = exams.filter(e => selectedRoutineAllExamIds.includes(e.id));
+          } else {
+            if (!routineTermGroup) return;
+            const targetTerm = routineTermGroup;
+            relevantExams = exams.filter(e => e.exam_name.includes(targetTerm));
+          }
         }
 
         if (relevantExams.length === 0) {
@@ -143,34 +178,39 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           return;
         }
 
-        const startDateVal = Math.min(...relevantExams.map(e => new Date(e.exam_date).getTime()));
-        const startDate = isNaN(startDateVal) ? new Date() : new Date(startDateVal);
+        const startDate = routineStartDate ? new Date(routineStartDate) : new Date();
 
-        const maxSlots = Math.max(...allSubs.map(s => s.sort_order || 0)) + 1;
+        // Get unique sort orders and sort them
+        const uniqueSortOrders = Array.from(new Set(allSubs.map(s => s.sort_order || 0))).sort((a, b) => a - b);
         const compiled: any[] = [];
         let currentDate = new Date(startDate);
 
-        for (let i = 0; i < maxSlots; i++) {
-          if (currentDate.getDay() === 5) {
+        for (const order of uniqueSortOrders) {
+          // Skip Friday (Day 5)
+          while (currentDate.getDay() === 5) {
             currentDate.setDate(currentDate.getDate() + 1);
           }
 
+          const isoDate = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${currentDate.getDate().toString().padStart(2, '0')}`;
           const dateStr = currentDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
           const dayStr = currentDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
 
-          const slotSubs = allSubs.filter(s => s.sort_order === i);
+          const slotSubs = allSubs.filter(s => s.sort_order === order);
           if (slotSubs.length === 0) continue;
 
           const morningSubjects = slotSubs.map(s => {
             const exam = relevantExams.find(e => e.id === s.exam_id);
             const cls = classes.find(c => c.id === exam?.class_id);
             return {
+              classId: cls?.id || '',
               className: cls?.class_name || 'Class',
               subject: s.subject_name
             };
           });
 
           compiled.push({
+            id: crypto.randomUUID(),
+            isoDate: isoDate,
             date: dateStr,
             day: dayStr,
             morning: {
@@ -194,61 +234,56 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     };
 
     const setDefaultSampleRoutine = () => {
-      const initialDate = new Date();
       const compiled: any[] = [];
-      
-      const selectedClass = classes.find(c => c.id === selectedRoutineClassId);
-      const selectedClassName = selectedClass ? selectedClass.class_name : '';
-
       const sampleDays = [
         { 
           dayName: lang === 'bn' ? 'শনিবার' : 'Saturday',
           subjects: [
-            { className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'আরবি' : 'Arabic' },
-            { className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'আরবি' : 'Arabic' },
-            { className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'কুরআন মজিদ' : 'Quran' },
-            { className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'কুরআন মজিদ' : 'Quran' },
-            { className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'তাজবীদ ও আকাইদ' : 'Tajweed' }
+            { classId: 'p', className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'আরবি' : 'Arabic' },
+            { classId: 'n', className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'আরবি' : 'Arabic' },
+            { classId: '1', className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'কুরআন মজিদ' : 'Quran' },
+            { classId: '2', className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'কুরআন মজিদ' : 'Quran' },
+            { classId: '3', className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'তাজবীদ ও আকাইদ' : 'Tajweed' }
           ]
         },
         { 
           dayName: lang === 'bn' ? 'রোববার' : 'Sunday',
           subjects: [
-            { className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'বাংলা' : 'Bangla' },
-            { className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'বাংলা' : 'Bangla' },
-            { className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'সহজ বাংলা' : 'Bangla' },
-            { className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'সহজ বাংলা' : 'Bangla' },
-            { className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'বাংলা সাহিত্য' : 'Bangla Literature' }
+            { classId: 'p', className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'বাংলা' : 'Bangla' },
+            { classId: 'n', className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'বাংলা' : 'Bangla' },
+            { classId: '1', className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'সহজ বাংলা' : 'Bangla' },
+            { classId: '2', className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'সহজ বাংলা' : 'Bangla' },
+            { classId: '3', className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'বাংলা সাহিত্য' : 'Bangla Literature' }
           ]
         },
         { 
           dayName: lang === 'bn' ? 'সোমবার' : 'Monday',
           subjects: [
-            { className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
-            { className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
-            { className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
-            { className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
-            { className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'ইংরেজী ব্যাকরণ' : 'Grammar' }
+            { classId: 'p', className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
+            { classId: 'n', className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
+            { classId: '1', className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
+            { classId: '2', className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'ইংরেজি' : 'English' },
+            { classId: '3', className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'ইংরেজী ব্যাকরণ' : 'Grammar' }
           ]
         },
         { 
           dayName: lang === 'bn' ? 'মঙ্গলবার' : 'Tuesday',
           subjects: [
-            { className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'গণিত' : 'Math' },
-            { className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'গণিত' : 'Math' },
-            { className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'এসো অংক শিখি' : 'Math' },
-            { className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'এসো অংক শিখি' : 'Math' },
-            { className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'গণিত ও বিজ্ঞান' : 'Math' }
+            { classId: 'p', className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'গণিত' : 'Math' },
+            { classId: 'n', className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'গণিত' : 'Math' },
+            { classId: '1', className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'এসো অংক শিখি' : 'Math' },
+            { classId: '2', className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'এসো অংক শিখি' : 'Math' },
+            { classId: '3', className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'গণিত ও বিজ্ঞান' : 'Math' }
           ]
         },
         { 
           dayName: lang === 'bn' ? 'বুধবার' : 'Wednesday',
           subjects: [
-            { className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'দ্বীনিয়্যাত' : 'Deeniyat' },
-            { className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'দ্বীনিয়্যাত' : 'Deeniyat' },
-            { className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'আকাঈদ ও ফিকাহ' : 'Aqaid' },
-            { className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'আকাঈদ ও ফিকাহ' : 'Aqaid' },
-            { className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'সীরাতুন্নবী' : 'Seerat' }
+            { classId: 'p', className: lang === 'bn' ? 'প্লে' : 'Play', subject: lang === 'bn' ? 'দ্বীনিয়্যাত' : 'Deeniyat' },
+            { classId: 'n', className: lang === 'bn' ? 'নার্সারি' : 'Nursery', subject: lang === 'bn' ? 'দ্বীনিয়্যাত' : 'Deeniyat' },
+            { classId: '1', className: lang === 'bn' ? 'প্রথম শ্রেণি' : 'Class 1', subject: lang === 'bn' ? 'আকাঈদ ও ফিকাহ' : 'Aqaid' },
+            { classId: '2', className: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2', subject: lang === 'bn' ? 'আকাঈদ ও ফিকাহ' : 'Aqaid' },
+            { classId: '3', className: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3', subject: lang === 'bn' ? 'সীরাতুন্নবী' : 'Seerat' }
           ]
         }
       ];
@@ -257,6 +292,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         if (routineSelectionMode === 'all') {
           return subs;
         }
+        const selectedClassName = classes.find(c => c.id === selectedRoutineClassId)?.class_name || '';
         const matched = subs.find(sub => 
           sub.className.includes(selectedClassName) || 
           selectedClassName.includes(sub.className)
@@ -268,15 +304,19 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         }
       };
 
+      let initialDate = routineStartDate ? new Date(routineStartDate) : new Date();
       let runDate = new Date(initialDate);
       sampleDays.forEach((sd) => {
-        if (runDate.getDay() === 5) {
+        while (runDate.getDay() === 5) {
           runDate.setDate(runDate.getDate() + 1);
         }
 
         const dateStr = runDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const isoDate = `${runDate.getFullYear()}-${(runDate.getMonth() + 1).toString().padStart(2, '0')}-${runDate.getDate().toString().padStart(2, '0')}`;
         
         compiled.push({
+          id: crypto.randomUUID(),
+          isoDate: isoDate,
           date: dateStr,
           day: sd.dayName,
           morning: {
@@ -296,11 +336,18 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     };
 
     loadRoutineData();
-  }, [routineTermGroup, exams, classes, routineMorningTime, routineAfternoonTime, lang, routineSelectionMode, selectedRoutineClassId]);
+  }, [routineTermGroup, exams, classes, routineMorningTime, routineAfternoonTime, lang, routineSelectionMode, selectedRoutineClassId, selectedRoutineExamId, selectedRoutineAllExamIds]);
 
   // Automated name of the active exam
   const activeExamName = React.useMemo(() => {
+    if (routineSelectionMode === 'all' && customRoutineTitle.trim() !== '') {
+      return customRoutineTitle;
+    }
     if (routineSelectionMode === 'class' && selectedRoutineClassId) {
+      if (selectedRoutineExamId) {
+        const pickedExam = exams.find(e => e.id === selectedRoutineExamId);
+        if (pickedExam) return pickedExam.exam_name;
+      }
       const classExams = exams.filter(e => e.class_id === selectedRoutineClassId);
       if (classExams.length > 0) {
         return classExams[0].exam_name;
@@ -326,7 +373,60 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       return exams[0].exam_name.replace(/Class\s*\d+|Class\s*[a-zA-Z]+|\d+\s*শ্রেণি|\d+\s*শ্রেণী|শ্রেণি\s*\d+|শ্রেণী\s*\d+|প্লে|নার্সারি|প্রথম|দ্বিতীয়|তৃতীয়|চতুর্থ|পঞ্চম|ষষ্ঠ|সপ্তম|অষ্টম|নবম|দশম/g, '').trim();
     }
     return lang === 'bn' ? 'বার্ষিক পরীক্ষা' : 'Annual Exam';
-  }, [routineSelectionMode, selectedRoutineClassId, exams, routineTermGroup, classes, lang]);
+  }, [routineSelectionMode, selectedRoutineClassId, exams, routineTermGroup, classes, lang, customRoutineTitle, selectedRoutineExamId]);
+
+  // Compute display classes for routine mode
+  const routineDisplayClasses = React.useMemo(() => {
+    if (classes.length === 0) return [];
+    if (routineSelectionMode === 'all' && selectedRoutineAllExamIds.length > 0) {
+      return classes.filter(c => selectedRoutineAllExamIds.some(examId => exams.find(e => e.id === examId)?.class_id === c.id));
+    }
+    return classes;
+  }, [classes, routineSelectionMode, selectedRoutineAllExamIds, exams]);
+
+  const handleAddRoutineDay = () => {
+    const lastDay = routineData[routineData.length - 1];
+    let nextDate = new Date();
+    if (lastDay && lastDay.isoDate) {
+      nextDate = new Date(lastDay.isoDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+    
+    while (nextDate.getDay() === 5) { // Skip Friday
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+    
+    const isoDate = `${nextDate.getFullYear()}-${(nextDate.getMonth() + 1).toString().padStart(2, '0')}-${nextDate.getDate().toString().padStart(2, '0')}`;
+    const dateStr = nextDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const dayStr = nextDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+    
+    const newRow = {
+      id: crypto.randomUUID(),
+      isoDate,
+      date: dateStr,
+      day: dayStr,
+      morning: { 
+        time: routineMorningTime || '09:00 AM - 12:00 PM', 
+        subjects: [] 
+      },
+      afternoon: { 
+        time: routineAfternoonTime || '02:00 PM - 05:00 PM', 
+        subjects: [] 
+      }
+    };
+    if (routineSelectionMode === 'class') {
+      newRow.morning.subjects = [{ 
+        classId: selectedRoutineClassId, 
+        className: classes.find(c => c.id === selectedRoutineClassId)?.class_name || 'Class', 
+        subject: '' 
+      }];
+    }
+    setRoutineData([...routineData, newRow]);
+  };
+
+  const handleRemoveRoutineDay = (id: string) => {
+    setRoutineData(prev => prev.filter(d => d.id !== id));
+  };
 
   const handleDownloadCustomExamRoutine = async () => {
     setIsDownloading(true);
@@ -348,12 +448,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         {
           routineSelectionMode,
           selectedRoutineClassId,
-          classesList: classes,
+          classesList: routineDisplayClasses,
           routineMorningTime,
           routineAfternoonTime,
           routineInstructions,
           routinePrincipalName,
-          routinePrincipalMobile
+          routinePrincipalMobile,
+          showRoutineAfternoon
         }
       );
     } catch (err) {
@@ -410,12 +511,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   }, [madrasah?.id]);
 
   useEffect(() => {
-    if (madrasah && selectedClassId) {
-      fetchExams();
+    if (madrasah) {
+      if (activeTab === 'exam-routine') {
+        fetchExams(routineSelectionMode === 'all' ? null : selectedRoutineClassId);
+      } else if (selectedClassId) {
+        fetchExams(selectedClassId);
+      }
     }
-  }, [madrasah?.id, selectedClassId, view]);
+  }, [madrasah?.id, selectedClassId, view, activeTab, selectedRoutineClassId, routineSelectionMode]);
 
-  const fetchExams = async () => {
+  const fetchExams = async (targetClassId?: string | null) => {
     const activeYearId = madrasah?.config_json?.active_academic_year_id;
     let query = supabase.from('exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
     
@@ -428,8 +533,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       }
     }
 
-    if (selectedClassId) {
-        query = query.eq('class_id', selectedClassId);
+    const classToFetch = targetClassId !== undefined ? targetClassId : selectedClassId;
+    if (classToFetch) {
+        query = query.eq('class_id', classToFetch);
     }
     const { data } = await query.order('created_at', { ascending: false });
     if (data) {
@@ -1208,7 +1314,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           </button>
         )}
         <button onClick={() => setActiveTab('analytics')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'analytics' ? 'bg-[#2563EB] text-white shadow-premium' : 'text-slate-400'}`}>
-            Analytics
+            {lang === 'bn' ? 'অ্যানালিটিক্স' : 'Analytics'}
         </button>
       </div>
       )}
@@ -1391,51 +1497,174 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
                 {/* Dropdown for class selection */}
                 {routineSelectionMode === 'class' && (
-                  <div className="space-y-1.5 pt-2 border-t border-dashed border-slate-200/50 animate-fadeIn">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'ক্লাস নির্বাচন করুন' : 'Select Class'}</label>
-                    <select
-                      value={selectedRoutineClassId}
-                      onChange={e => setSelectedRoutineClassId(e.target.value)}
-                      className={`w-full px-3.5 py-2.5 text-xs font-black rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-600 focus:border-blue-500'} outline-none`}
-                    >
-                      {classes.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.class_name}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-4 pt-2 border-t border-dashed border-slate-200/50 animate-fadeIn">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'ক্লাস নির্বাচন করুন' : 'Select Class'}</label>
+                      <select
+                        value={selectedRoutineClassId}
+                        onChange={e => setSelectedRoutineClassId(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 text-xs font-black rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-600 focus:border-blue-500'} outline-none`}
+                      >
+                        {classes.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.class_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Specific Exam Selection */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'পরীক্ষা নির্বাচন করুন' : 'Select Exam'}</label>
+                      <select
+                        value={selectedRoutineExamId}
+                        onChange={e => setSelectedRoutineExamId(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 text-xs font-black rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-600 focus:border-blue-500'} outline-none`}
+                      >
+                        <option value="">{lang === 'bn' ? '-- সর্বশেষ পরীক্ষা --' : '-- Latest Exam --'}</option>
+                        {exams.filter(e => e.class_id === selectedRoutineClassId).map(e => (
+                          <option key={e.id} value={e.id}>
+                            {e.exam_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Name override for all classes */}
+                {routineSelectionMode === 'all' && (
+                  <div className="space-y-4 pt-2 border-t border-dashed border-slate-200/50 animate-fadeIn">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'পরীক্ষার নাম' : 'Exam Title'}</label>
+                      <input 
+                        type="text" 
+                        value={customRoutineTitle} 
+                        onChange={e => setCustomRoutineTitle(e.target.value)} 
+                        className={`w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'} outline-none transition-all`} 
+                        placeholder={lang === 'bn' ? 'যেমন: প্রথম সাময়িক পরীক্ষা (ঐচ্ছিক)' : 'e.g., Half Yearly Exam (Optional)'}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'পরীক্ষা নির্বাচন করুন' : 'Select Exams'}</label>
+                      <div className={`max-h-60 overflow-y-auto w-full p-2 text-xs font-bold rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} space-y-2`}>
+                        {exams.sort((a, b) => b.created_at.localeCompare(a.created_at)).map((e) => {
+                          const cls = classes.find(c => c.id === e.class_id);
+                          return (
+                            <label key={e.id} className="flex items-start gap-2 cursor-pointer p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                              <input 
+                                type="checkbox" 
+                                className="rounded w-4 h-4 text-emerald-600 focus:ring-emerald-500 mt-0.5"
+                                checked={selectedRoutineAllExamIds.includes(e.id)}
+                                onChange={(evt) => {
+                                  if (evt.target.checked) {
+                                    setSelectedRoutineAllExamIds(prev => [...prev, e.id]);
+                                  } else {
+                                    setSelectedRoutineAllExamIds(prev => prev.filter(id => id !== e.id));
+                                  }
+                                }}
+                              />
+                              <span className="leading-tight">
+                                {e.exam_name} <span className="text-emerald-600 opacity-80 whitespace-nowrap ml-1">({cls?.class_name})</span>
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* Exam Times */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'সকালের সময়সূচি' : 'Morning Shift Time'}</label>
-                    <div className="relative">
-                      <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input 
-                        type="text" 
-                        value={routineMorningTime} 
-                        onChange={e => setRoutineMorningTime(e.target.value)} 
-                        className={`w-full py-2.5 pl-10 pr-4 text-xs font-bold rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-emerald-500'} outline-none transition-all`} 
-                        placeholder="09:00 AM - 12:00 PM"
-                      />
+                <div className="space-y-4">
+                  {/* Start Date */}
+                  <div className="space-y-1.5 p-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/10">
+                    <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                       <Calendar size={12} className="text-emerald-600" />
+                       {lang === 'bn' ? 'পরীক্ষা শুরুর তারিখ' : 'Exam Start Date'}
+                    </label>
+                    <input 
+                      type="date" 
+                      value={routineStartDate} 
+                      onChange={e => setRoutineStartDate(e.target.value)} 
+                      className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none focus:border-emerald-500 transition-all`}
+                    />
+                  </div>
+
+                  {/* Morning Shift */}
+                  <div className="space-y-2 p-3 rounded-xl border border-dashed border-slate-200">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                       <Clock size={12} className="text-emerald-600" />
+                       {lang === 'bn' ? 'সকালের সময়সূচি' : 'Morning Shift Time'}
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শুরু' : 'Start'}</span>
+                        <input 
+                          type="time" 
+                          value={routineMorningStart} 
+                          onChange={e => setRoutineMorningStart(e.target.value)} 
+                          className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-emerald-500`}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শেষ' : 'End'}</span>
+                        <input 
+                          type="time" 
+                          value={routineMorningEnd} 
+                          onChange={e => setRoutineMorningEnd(e.target.value)} 
+                          className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-emerald-500`}
+                        />
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'বিকালের সময়সূচি' : 'Afternoon Shift Time'}</label>
-                    <div className="relative">
-                      <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input 
-                        type="text" 
-                        value={routineAfternoonTime} 
-                        onChange={e => setRoutineAfternoonTime(e.target.value)} 
-                        className={`w-full py-2.5 pl-10 pr-4 text-xs font-bold rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-emerald-500'} outline-none transition-all`} 
-                        placeholder="02:00 PM - 05:00 PM"
-                      />
+
+                  {/* Afternoon Shift Toggle & Time */}
+                  <div className="space-y-3 p-3 rounded-xl border border-dashed border-slate-200">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                         <Clock size={12} className="text-blue-600" />
+                         {lang === 'bn' ? 'বিকালের সময়সূচি' : 'Afternoon Shift'}
+                      </label>
+                      <button 
+                        onClick={() => setShowRoutineAfternoon(!showRoutineAfternoon)}
+                        className={`w-8 h-4 rounded-full relative transition-colors ${showRoutineAfternoon ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                      >
+                        <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${showRoutineAfternoon ? 'left-4.5' : 'left-0.5'}`} />
+                      </button>
                     </div>
+
+                    {showRoutineAfternoon && (
+                      <div className="grid grid-cols-2 gap-2 pt-1 animate-fadeIn">
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শুরু' : 'Start'}</span>
+                          <input 
+                            type="time" 
+                            value={routineAfternoonStart} 
+                            onChange={e => setRoutineAfternoonStart(e.target.value)} 
+                            className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-blue-500`}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শেষ' : 'End'}</span>
+                          <input 
+                            type="time" 
+                            value={routineAfternoonEnd} 
+                            onChange={e => setRoutineAfternoonEnd(e.target.value)} 
+                            className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-blue-500`}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Add Row Button */}
+                  <button
+                    onClick={handleAddRoutineDay}
+                    className="w-full py-3 px-4 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} />
+                    {lang === 'bn' ? 'আরও একটি দিন যোগ করুন' : 'Add Another Exam Day'}
+                  </button>
                 </div>
 
 
@@ -1528,11 +1757,6 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                       <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-emerald-800 rounded-br-xl m-2"></div>
 
                       <div className="flex-1 flex flex-col justify-between">
-                        {/* Bisimi */}
-                        <div className="text-center mb-1">
-                          <p className="text-sm font-bold text-emerald-950" style={{ fontFamily: 'serif' }}>بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰনِ ٱلرَّحِيمِ</p>
-                        </div>
-
                         {/* Banner Block */}
                         <div className="flex justify-between items-center w-full px-2 py-3 bg-[#E6F4EA]/40 rounded-3xl border border-emerald-800/10 mb-4 relative" style={{ backgroundImage: 'linear-gradient(to right, #F4FBF7, #EBF8F1)' }}>
                           
@@ -1595,7 +1819,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         </div>
 
                         {/* Main Grid Table matching image perfectly */}
-                        <div className="flex-1 mt-2">
+                        <div className="flex-1 mt-2 overflow-x-auto pb-4 custom-scrollbar">
                           
                           {routineSelectionMode === 'all' ? (
                             /* FORMAT A: ALL CLASSES TOGETHER GRID */
@@ -1610,11 +1834,34 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     </div>
                                   </th>
                                   {routineData.map((col, idx) => (
-                                    <th key={idx} className="border-r border-emerald-900 p-1 text-xs font-black bg-[#013c28] min-w-[100px]" colSpan={2}>
-                                      <p className="text-[11px] font-black leading-tight text-white">{col.day}</p>
-                                      <p className="text-[9px] font-bold text-emerald-200 mt-0.5">
-                                        {lang === 'bn' ? col.date : col.date}
-                                      </p>
+                                    <th key={col.id || idx} className="border-r border-emerald-900 p-1 text-xs font-black bg-[#013c28] min-w-[100px] relative group" colSpan={showRoutineAfternoon ? 2 : 1}>
+                                      <button 
+                                        onClick={() => handleRemoveRoutineDay(col.id)}
+                                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
+                                        title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete Day'}
+                                      >
+                                        <X size={10} strokeWidth={4} />
+                                      </button>
+                                      <input 
+                                        type="text"
+                                        value={col.day}
+                                        onChange={(e) => {
+                                          const updated = [...routineData];
+                                          updated[idx].day = e.target.value;
+                                          setRoutineData(updated);
+                                        }}
+                                        className="bg-transparent text-[11px] font-black leading-tight text-white w-full text-center border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none"
+                                      />
+                                      <input 
+                                        type="text"
+                                        value={col.date}
+                                        onChange={(e) => {
+                                          const updated = [...routineData];
+                                          updated[idx].date = e.target.value;
+                                          setRoutineData(updated);
+                                        }}
+                                        className="bg-transparent text-[9px] font-bold text-emerald-200 mt-0.5 w-full text-center border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none"
+                                      />
                                     </th>
                                   ))}
                                 </tr>
@@ -1629,12 +1876,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                           {routineMorningTime.split(' ')[0]}
                                         </span>
                                       </th>
-                                      <th className="border-r border-emerald-200 p-1 text-[9px] font-black font-noto tracking-tighter w-[55px] bg-[#EAF7EE] text-emerald-900">
-                                        {lang === 'bn' ? 'বিকাল' : 'Afternoon'}
-                                        <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
-                                          {routineAfternoonTime.split(' ')[0]}
-                                        </span>
-                                      </th>
+                                      {showRoutineAfternoon && (
+                                        <th className="border-r border-emerald-200 p-1 text-[9px] font-black font-noto tracking-tighter w-[55px] bg-[#EAF7EE] text-emerald-900">
+                                          {lang === 'bn' ? 'বিকাল' : 'Afternoon'}
+                                          <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
+                                            {routineAfternoonTime.split(' ')[0]}
+                                          </span>
+                                        </th>
+                                      )}
                                     </React.Fragment>
                                   ))}
                                 </tr>
@@ -1650,7 +1899,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     { id: '2', class_name: lang === 'bn' ? 'দ্বিতীয় শ্রেণি' : 'Class 2' },
                                     { id: '3', class_name: lang === 'bn' ? 'তৃতীয় শ্রেণি' : 'Class 3' }
                                   ];
-                                  const displayClassesList = classes.length > 0 ? classes : defaultClassesList;
+                                  const displayClassesList = classes.length > 0 
+                                    ? (routineSelectionMode === 'all' && selectedRoutineAllExamIds.length > 0 
+                                        ? classes.filter(c => selectedRoutineAllExamIds.some(examId => exams.find(e => e.id === examId)?.class_id === c.id)) 
+                                        : classes) 
+                                    : defaultClassesList;
                                   
                                   const getSubjectForClassAndDayAndShift = (cls: any, dayIdx: number, shift: 'morning' | 'afternoon') => {
                                     const dayObj = routineData[dayIdx];
@@ -1681,17 +1934,55 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         return (
                                           <React.Fragment key={dayIdx}>
                                             {/* Morning Shift subject cell */}
-                                            <td className="border-r border-emerald-200 p-1.5 align-middle text-center">
-                                              <span className={`text-[11px] font-black tracking-tight leading-tight block ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-950'}`}>
-                                                {mrnSub}
-                                              </span>
+                                            <td className="border-r border-emerald-200 p-1 align-middle text-center">
+                                              <input 
+                                                type="text"
+                                                value={mrnSub === '*****' ? '' : mrnSub}
+                                                onChange={(e) => {
+                                                  const updated = [...routineData];
+                                                  const subjects = updated[dayIdx].morning.subjects;
+                                                  const foundIdx = subjects.findIndex((s: any) => s.classId === cls.id);
+                                                  if (foundIdx > -1) {
+                                                    subjects[foundIdx].subject = e.target.value;
+                                                  } else {
+                                                    subjects.push({
+                                                      classId: cls.id,
+                                                      className: cls.class_name,
+                                                      subject: e.target.value
+                                                    });
+                                                  }
+                                                  setRoutineData(updated);
+                                                }}
+                                                placeholder="-"
+                                                className="w-full bg-transparent text-center text-[10px] font-black text-emerald-950 border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-0.5"
+                                              />
                                             </td>
                                             {/* Afternoon Shift subject cell */}
-                                            <td className="border-r border-emerald-200 p-1.5 align-middle text-center">
-                                              <span className={`text-[11px] font-black tracking-tight leading-tight block ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-900'}`}>
-                                                {aftSub}
-                                              </span>
-                                            </td>
+                                            {showRoutineAfternoon && (
+                                              <td className="border-r border-emerald-200 p-1 align-middle text-center">
+                                                <input 
+                                                  type="text"
+                                                  value={aftSub === '*****' ? '' : aftSub}
+                                                  onChange={(e) => {
+                                                    const updated = [...routineData];
+                                                    const subjects = updated[dayIdx].afternoon.subjects;
+                                                    const foundIdx = subjects.findIndex((s: any) => s.classId === cls.id);
+                                                    if (foundIdx > -1) {
+                                                      subjects[foundIdx].subject = e.target.value;
+                                                    } else {
+                                                      subjects.push({
+                                                        classId: cls.id,
+                                                        className: cls.class_name,
+                                                        subject: e.target.value
+                                                      });
+                                                    }
+                                                    setRoutineData(updated);
+                                                  }}
+                                                  placeholder="-"
+                                                  className="w-full bg-transparent text-center text-[10px] font-black text-emerald-900 border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-0.5"
+                                                />
+                                              </td>
+                                            )}
                                           </React.Fragment>
                                         );
                                       })}
@@ -1709,10 +2000,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     {lang === 'bn' ? 'বার / তারিখ' : 'Day / Date'}
                                   </th>
                                   <th className="border-r border-emerald-900 p-2 text-xs font-black">
-                                    {lang === 'bn' ? `সকাল (${routineMorningTime})` : `Morning (${routineMorningTime})`}
+                                    {lang === 'bn' ? `সকাল (${routineMorningTime.split(' - ')[0]})` : `Morning (${routineMorningTime.split(' - ')[0]})`}
                                   </th>
                                   <th className="p-2 text-xs font-black w-48">
-                                    {lang === 'bn' ? `বিকাল (${routineAfternoonTime})` : `Afternoon (${routineAfternoonTime})`}
+                                    {lang === 'bn' ? `বিকাল (${routineAfternoonTime.split(' - ')[0]})` : `Afternoon (${routineAfternoonTime.split(' - ')[0]})`}
                                   </th>
                                 </tr>
                               </thead>
@@ -1732,25 +2023,98 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   };
 
                                   return routineData.map((row, idx) => (
-                                    <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/20'} border-b border-emerald-950/20 h-16`}>
+                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/20'} border-b border-emerald-950/20 h-16 relative group`}>
                                       <td className="border-r border-emerald-950/20 p-2 text-center bg-emerald-50/30">
-                                        <p className="text-xs font-black text-emerald-950 mb-0.5">{row.day}</p>
-                                        <p className="text-[10px] font-bold text-slate-500">{row.date}</p>
+                                        <button 
+                                          onClick={() => handleRemoveRoutineDay(row.id)}
+                                          className="absolute -left-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
+                                          title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete Row'}
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                        <div className="relative group/date border border-emerald-200/50 rounded-lg p-1 hover:bg-emerald-50 transition-colors">
+                                          <input 
+                                            type="date"
+                                            value={row.isoDate || ''}
+                                            onChange={(e) => {
+                                              const selectedDate = e.target.value;
+                                              if (!selectedDate) return;
+                                              
+                                              const d = new Date(selectedDate);
+                                              const formattedDate = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                              const formattedDay = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+                                              
+                                              const updated = [...routineData];
+                                              updated[idx].isoDate = selectedDate;
+                                              updated[idx].date = formattedDate;
+                                              updated[idx].day = formattedDay;
+                                              setRoutineData(updated);
+                                            }}
+                                            className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
+                                          />
+                                          <div className="flex flex-col items-center">
+                                            <p className="text-[10px] font-black text-emerald-950 leading-none mb-0.5">
+                                              {row.day}
+                                            </p>
+                                            <p className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
+                                              <Calendar size={8} />
+                                              {row.date}
+                                            </p>
+                                          </div>
+                                        </div>
                                       </td>
                                       
                                       {/* Morning subject for selected class */}
                                       <td className="border-r border-emerald-950/20 p-2 align-middle">
-                                        <div className="text-center font-black text-xs text-emerald-950">
-                                          {getSubjectForClassAndDayAndShift(activeClassObj, idx, 'morning')}
-                                        </div>
+                                        <input 
+                                          type="text"
+                                          value={getSubjectForClassAndDayAndShift(activeClassObj, idx, 'morning')}
+                                          onChange={(e) => {
+                                            const updated = [...routineData];
+                                            const subjects = updated[idx].morning.subjects;
+                                            const foundIdx = subjects.findIndex((s: any) => s.classId === activeClassObj?.id);
+                                            if (foundIdx > -1) {
+                                              subjects[foundIdx].subject = e.target.value;
+                                            } else {
+                                              subjects.push({
+                                                classId: activeClassObj?.id || '',
+                                                className: activeClassObj?.class_name || '',
+                                                subject: e.target.value
+                                              });
+                                            }
+                                            setRoutineData(updated);
+                                          }}
+                                          className="bg-transparent text-center font-black text-xs text-emerald-950 w-full border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-1"
+                                          placeholder={lang === 'bn' ? 'বিষয়ের নাম লেখুন' : 'Enter Topic'}
+                                        />
                                       </td>
 
                                       {/* Afternoon items */}
-                                      <td className="p-2 align-middle">
-                                        <div className="text-center font-black text-xs text-slate-800">
-                                          {getSubjectForClassAndDayAndShift(activeClassObj, idx, 'afternoon')}
-                                        </div>
-                                      </td>
+                                      {showRoutineAfternoon && (
+                                        <td className="p-2 align-middle">
+                                          <input 
+                                            type="text"
+                                            value={getSubjectForClassAndDayAndShift(activeClassObj, idx, 'afternoon')}
+                                            onChange={(e) => {
+                                              const updated = [...routineData];
+                                              const subjects = updated[idx].afternoon.subjects;
+                                              const foundIdx = subjects.findIndex((s: any) => s.classId === activeClassObj?.id);
+                                              if (foundIdx > -1) {
+                                                subjects[foundIdx].subject = e.target.value;
+                                              } else {
+                                                subjects.push({
+                                                  classId: activeClassObj?.id || '',
+                                                  className: activeClassObj?.class_name || '',
+                                                  subject: e.target.value
+                                                });
+                                              }
+                                              setRoutineData(updated);
+                                            }}
+                                            className="bg-transparent text-center font-black text-xs text-slate-800 w-full border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-1"
+                                            placeholder={lang === 'bn' ? 'বিষয়ের নাম লেখুন' : 'Enter Topic'}
+                                          />
+                                        </td>
+                                      )}
                                     </tr>
                                   ));
                                 })()}

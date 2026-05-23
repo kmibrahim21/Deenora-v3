@@ -27,6 +27,7 @@ interface ExamRoutinePDFTemplateProps {
   routineInstructions?: string[];
   routinePrincipalName?: string;
   routinePrincipalMobile?: string;
+  showRoutineAfternoon?: boolean;
 }
 
 export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
@@ -41,7 +42,8 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
   routineAfternoonTime = '02:00 PM - 05:00 PM',
   routineInstructions = [],
   routinePrincipalName = '',
-  routinePrincipalMobile = ''
+  routinePrincipalMobile = '',
+  showRoutineAfternoon = true
 }) => {
   const getBanglaNumber = (str: string) => {
     const englishDigits: { [key: string]: string } = { '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪', '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯' };
@@ -88,264 +90,276 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     isBn ? 'পরীক্ষা চলাকালীন সময় কোনো অভিভাবক পরীক্ষা হলে প্রবেশ করতে পারবেন না।' : 'Guardians are strictly forbidden from entering the halls.'
   ];
 
-  return (
-    <div className="bg-white font-noto">
-      <div className="pdf-page-container w-[794px] h-[1123px] p-10 bg-white mx-auto overflow-hidden flex flex-col justify-between relative border-[12px] border-emerald-800/10">
-        
-        {/* Frame Design corners */}
-        <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-emerald-800 rounded-tl-xl m-2"></div>
-        <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-emerald-800 rounded-tr-xl m-2"></div>
-        <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-emerald-800 rounded-bl-xl m-2"></div>
-        <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-emerald-800 rounded-br-xl m-2"></div>
+  const SingleRoutineContent = () => (
+    <div className="w-full h-full p-8 flex flex-col justify-between relative border-[8px] border-emerald-800/10 bg-white overflow-hidden">
+      {/* Frame Design corners */}
+      <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-emerald-800 rounded-tl-xl m-1.5 opacity-80"></div>
+      <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-emerald-800 rounded-tr-xl m-1.5 opacity-80"></div>
+      <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-emerald-800 rounded-bl-xl m-1.5 opacity-80"></div>
+      <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-emerald-800 rounded-br-xl m-1.5 opacity-80"></div>
 
-        <div className="flex-1 flex flex-col justify-between">
+      <div className="flex-1 flex flex-col justify-between relative z-10 w-full h-full max-h-full">
+        {/* Banner Container */}
+        <div className="flex justify-between items-center w-full px-2 py-2 bg-[#E6F4EA]/40 rounded-2xl border border-emerald-800/10 mb-3 relative" style={{ backgroundImage: 'linear-gradient(to right, #F4FBF7, #EBF8F1)' }}>
           
-          {/* Header Bismillah Line */}
-          <div className="text-center mb-1">
-            <p className="text-sm font-bold text-emerald-950" style={{ fontFamily: 'serif' }}>بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰনِ ٱلرَّحِيمِ</p>
-          </div>
-
-          {/* Banner Container: Logo, Center Title, Right Calendar Tag */}
-          <div className="flex justify-between items-center w-full px-2 py-3 bg-[#E6F4EA]/40 rounded-3xl border border-emerald-800/10 mb-4 relative" style={{ backgroundImage: 'linear-gradient(to right, #F4FBF7, #EBF8F1)' }}>
-            
-            {/* Left Column: Round Logo */}
-            <div className="flex-shrink-0 flex items-center justify-center pl-4">
-              <div className="relative p-1 rounded-full border border-emerald-800 bg-white shadow-sm">
-                {madrasah?.logo_url ? (
-                  <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain rounded-full bg-white" alt="Logo" />
-                ) : (
-                  <div className="w-[85px] h-[85px] bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[10px]">LOGO</div>
-                )}
-              </div>
-            </div>
-
-            {/* Center Column: Name and subtitle metadata */}
-            <div className="flex-1 text-center px-3 leading-normal">
-              <h1 className="text-[28px] font-black text-[#013c28] tracking-tight leading-none mb-1 font-noto">
-                {madrasah?.name || 'মাদরাসার নাম'}
-              </h1>
-              
-              <div className="flex items-center justify-center gap-1.5 text-[11px] font-black text-[#475569] leading-tight flex-wrap">
-                <span className="inline-flex items-center gap-0.5 text-emerald-900">
-                  📍 {madrasah?.address || 'ঠিকানা'}
-                </span>
-                <span className="text-slate-300">|</span>
-                <span className="inline-flex items-center gap-0.5 text-emerald-950">
-                  📞 {isBn ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
-                </span>
-              </div>
-
-              {/* Central pill badge matching bottom-center of image */}
-              <div className="mt-2 inline-block">
-                <div className="bg-[#023c28] text-white px-5 py-1.5 rounded-full shadow-sm text-[11px] font-black tracking-wide border border-emerald-700/50">
-                  {isBn 
-                    ? `${examName} সময়সূচি - ২০২৫` 
-                    : `${examName} Schedule - 2025`}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
-            <div className="flex-shrink-0 w-[160px] h-[120px] bg-[#013c28] text-white rounded-2xl flex flex-col justify-between p-3 border border-emerald-700 shadow mr-4 hover:scale-[1.02] transition-transform">
-              <div className="flex items-center justify-center">
-                <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center text-[#013c28] font-black text-sm">
-                  📅
-                </div>
-              </div>
-              <div className="text-center mt-1 leading-normal">
-                <p className="text-[11px] font-black text-[#E2F7E7] leading-none mb-0.5 whitespace-nowrap overflow-hidden">
-                  {examName ? examName.replace(/পরীক্ষা|Exam/g, '').trim() : (isBn ? 'সাময়িক' : 'Term')}
-                </p>
-                <p className="text-[11px] font-extrabold text-[#99F6E4] block mb-0.5">
-                  পরীক্ষার সময়সূচি
-                </p>
-                <p className="text-[10px] font-semibold text-white/70 block">
-                  ২০২৫ইং
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Grid Table matching image perfectly */}
-          <div className="flex-1 mt-2">
-            
-            {routineSelectionMode === 'all' ? (
-              /* FORMAT A: ALL CLASSES TOGETHER GRID */
-              <table className="w-full border-collapse border-2 border-emerald-950 rounded-xl overflow-hidden shadow-sm text-center">
-                <thead>
-                  {/* First row of Table Header: Days/Dates */}
-                  <tr className="bg-[#013c28] text-white h-11 border-b border-emerald-950">
-                    <th className="border-r border-emerald-900 px-2 py-1.5 text-xs font-black w-24 bg-[#013c28]" rowSpan={2}>
-                      <div className="flex flex-col items-center justify-center">
-                        <span className="text-[11px] tracking-wider leading-none mb-1 border-b border-emerald-600 pb-0.5">{isBn ? 'বার' : 'DAY'}</span>
-                        <span className="text-[10px] tracking-widest opacity-80 leading-none">{isBn ? 'তারিখ' : 'DATE'}</span>
-                      </div>
-                    </th>
-                    {routineData.map((col, idx) => (
-                      <th key={idx} className="border-r border-emerald-900 p-1 text-xs font-black bg-[#013c28] min-w-[100px]" colSpan={2}>
-                        <p className="text-[11px] font-black leading-tight text-white">{col.day}</p>
-                        <p className="text-[9px] font-bold text-emerald-200 mt-0.5">
-                          {isBn ? getBanglaNumber(col.date) : col.date}
-                        </p>
-                      </th>
-                    ))}
-                  </tr>
-                  
-                  {/* Second row of Table Header: Morning/Afternoon Shifts */}
-                  <tr className="bg-emerald-50 text-emerald-950 h-9 border-b border-emerald-950">
-                    {routineData.map((_, idx) => (
-                      <React.Fragment key={idx}>
-                        <th className="border-r border-emerald-200 p-1 text-[9px] font-black font-noto tracking-tighter w-[55px] bg-[#EAF7EE] text-emerald-900">
-                          {isBn ? 'সকাল' : 'Morning'}
-                          <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
-                            {isBn ? getBanglaNumber(routineMorningTime.split(' ')[0]) : routineMorningTime.split(' ')[0]}
-                          </span>
-                        </th>
-                        <th className="border-r border-emerald-200 p-1 text-[9px] font-black font-noto tracking-tighter w-[55px] bg-[#EAF7EE] text-emerald-900">
-                          {isBn ? 'বিকাল' : 'Afternoon'}
-                          <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
-                            {isBn ? getBanglaNumber(routineAfternoonTime.split(' ')[0]) : routineAfternoonTime.split(' ')[0]}
-                          </span>
-                        </th>
-                      </React.Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                
-                <tbody>
-                  {/* Classes display rows */}
-                  {displayClasses.map((cls, idx) => (
-                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/10'} hover:bg-emerald-50/30 transition-colors border-b border-emerald-950/20 h-13`}>
-                      {/* Leftmost column showing class label with cute small ribbon or text */}
-                      <td className="border-r-2 border-emerald-950 p-2 font-black text-xs text-center bg-[#E6F4EA]/40 text-emerald-950">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-[12px] font-black text-emerald-950 tracking-tight">{cls.class_name}</span>
-                        </div>
-                      </td>
-
-                      {/* Map days */}
-                      {routineData.map((_, dayIdx) => {
-                        const mrnSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'morning');
-                        const aftSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'afternoon');
-
-                        return (
-                          <React.Fragment key={dayIdx}>
-                            {/* Morning Shift subject cell */}
-                            <td className="border-r border-emerald-200 p-1.5 align-middle text-center">
-                              <span className={`text-[11px] font-black tracking-tight leading-tight block ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-950'}`}>
-                                {mrnSub}
-                              </span>
-                            </td>
-                            {/* Afternoon Shift subject cell */}
-                            <td className="border-r border-emerald-200 p-1.5 align-middle text-center">
-                              <span className={`text-[11px] font-black tracking-tight leading-tight block ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-900'}`}>
-                                {aftSub}
-                              </span>
-                            </td>
-                          </React.Fragment>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
-              <table className="w-full border-collapse border-2 border-emerald-950 rounded-xl overflow-hidden shadow-sm text-center">
-                <thead>
-                  <tr className="bg-[#013c28] text-white h-11">
-                    <th className="border-r border-emerald-900 p-2 text-xs font-black w-32">
-                      {isBn ? 'বার / তারিখ' : 'Day / Date'}
-                    </th>
-                    <th className="border-r border-emerald-900 p-2 text-xs font-black">
-                      {isBn ? `সকাল (${getBanglaNumber(routineMorningTime)})` : `Morning (${routineMorningTime})`}
-                    </th>
-                    <th className="p-2 text-xs font-black w-48">
-                      {isBn ? `বিকাল (${getBanglaNumber(routineAfternoonTime)})` : `Afternoon (${routineAfternoonTime})`}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {routineData.map((row, idx) => (
-                    <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/20'} border-b border-emerald-950/20 h-16`}>
-                      <td className="border-r border-emerald-950/20 p-2 text-center bg-emerald-50/30">
-                        <p className="text-xs font-black text-emerald-950 mb-0.5">{row.day}</p>
-                        <p className="text-[10px] font-bold text-slate-500">{isBn ? getBanglaNumber(row.date) : row.date}</p>
-                      </td>
-                      
-                      {/* Morning subject for selected class */}
-                      <td className="border-r border-emerald-950/20 p-2 align-middle">
-                        <div className="text-center font-black text-xs text-emerald-950">
-                          {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning')}
-                        </div>
-                      </td>
-
-                      {/* Afternoon items */}
-                      <td className="p-2 align-middle">
-                        <div className="text-center font-black text-xs text-slate-800">
-                          {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon')}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {/* Natural Watermark stamp */}
-            <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none -rotate-12 select-none">
+          {/* Left Column: Round Logo */}
+          <div className="flex-shrink-0 flex items-center justify-center pl-2">
+            <div className="relative p-1 rounded-full border border-emerald-800 bg-white shadow-sm">
               {madrasah?.logo_url ? (
-                <img src={madrasah.logo_url} className="w-[330px] h-[330px] object-contain" alt="" />
+                <img src={madrasah.logo_url} className="w-[60px] h-[60px] object-contain rounded-full bg-white" alt="Logo" />
               ) : (
-                <div className="text-9xl font-black text-emerald-900">{madrasah?.name?.slice(0, 1) || 'ম'}</div>
+                <div className="w-[60px] h-[60px] bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[10px]">LOGO</div>
               )}
             </div>
           </div>
 
-          {/* Footer Block matching image exactly */}
-          <div className="mt-4 flex justify-between items-end pt-4 border-t border-emerald-950/10">
+          {/* Center Column */}
+          <div className="flex-1 text-center px-2 leading-tight">
+            <h1 className="text-[20px] font-black text-[#013c28] tracking-tight leading-none mb-1 font-noto">
+              {madrasah?.name || 'মাদরাসার নাম'}
+            </h1>
             
-            {/* Left Column: Special Instructions list */}
-            <div className="max-w-[430px] text-left leading-relaxed">
-              <div className="bg-[#013c28] text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 text-[11px] font-black mb-2 shadow-sm uppercase font-noto">
-                <span>📖</span>
-                {isBn ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
-              </div>
-              <ul className="space-y-1 max-h-[160px] overflow-hidden pr-2">
-                {instructionsToShow.map((inst, i) => (
-                  <li key={i} className="flex gap-1.5 text-[10px] font-bold text-slate-600 leading-normal">
-                    <span className="text-emerald-800 font-extrabold">{isBn ? getBanglaNumber((i + 1).toString()) : i + 1} ।</span>
-                    <span>{inst}</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="flex items-center justify-center gap-1.5 text-[10px] font-black text-[#475569] leading-tight flex-wrap">
+              <span className="inline-flex items-center gap-0.5 text-emerald-900">
+                📍 {madrasah?.address || 'ঠিকানা'}
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="inline-flex items-center gap-0.5 text-emerald-950">
+                📞 {isBn ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
+              </span>
             </div>
 
-            {/* Right Column: Sign Box matching bottom-right of image */}
-            <div className="text-center min-w-[200px]">
-              <div className="border border-emerald-800/20 rounded-xl p-4 bg-emerald-50/15 relative">
-                <p className="text-[11px] font-black text-emerald-800/90 mb-6">{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
-                <div className="h-px bg-slate-200 w-full mb-1"></div>
-                <p className="text-[11px] font-black text-emerald-950">
-                  {routinePrincipalName || (isBn ? 'প্রতিষ্ঠাতা পরিচালক' : 'Founding Director')}
-                </p>
-                <p className="text-[9px] font-bold text-slate-400 mt-0.5">{madrasah?.name}</p>
-                {routinePrincipalMobile && (
-                  <p className="text-[9px] font-black text-emerald-700/80 mt-0.5 inline-flex items-center gap-0.5">
-                    📞 {routinePrincipalMobile}
-                  </p>
-                )}
-                
-                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t border-r border-emerald-800 rounded-tr-md"></div>
+            {/* Central pill badge */}
+            <div className="mt-1.5 inline-block">
+              <div className="bg-[#023c28] text-white px-4 py-1 rounded-full shadow-sm text-[10px] font-black tracking-wide border border-emerald-700/50">
+                {isBn 
+                  ? `${examName} সময়সূচি - ২০২৫` 
+                  : `${examName} Schedule - 2025`}
               </div>
             </div>
           </div>
 
-          {/* Deenora Portal bottom tagline */}
-          <div className="text-center mt-3 pt-1 text-[8px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
-            {isBn ? 'দ্বীনোরা শিক্ষাবর্ষ ২০২৬ • তৈরি করতে ভিজিট করুন deenora.com' : 'DEENORA PORTAL • POWERED BY DEENORA'}
+          {/* Right Column: Calendar Box */}
+          <div className="flex-shrink-0 w-[110px] h-[85px] bg-[#013c28] text-white rounded-xl flex flex-col justify-between p-2 border border-emerald-700 shadow mr-2">
+            <div className="flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[#013c28] font-black text-[10px]">
+                📅
+              </div>
+            </div>
+            <div className="text-center mt-1 leading-normal">
+              <p className="text-[9px] font-black text-[#E2F7E7] leading-none mb-0.5 whitespace-nowrap overflow-hidden">
+                {examName ? examName.replace(/পরীক্ষা|Exam/g, '').trim() : (isBn ? 'সাময়িক' : 'Term')}
+              </p>
+              <p className="text-[9px] font-extrabold text-[#99F6E4] block mb-0.5">
+                পরীক্ষার সময়সূচি
+              </p>
+              <p className="text-[8px] font-semibold text-white/70 block">
+                ২০২৫ইং
+              </p>
+            </div>
           </div>
         </div>
+
+        {/* Main Grid Table */}
+        <div className="flex-1 overflow-hidden">
+          {routineSelectionMode === 'all' ? (
+            /* FORMAT A: ALL CLASSES TOGETHER GRID */
+            <table className="w-full border-collapse border-2 border-emerald-950 rounded-xl overflow-hidden shadow-sm text-center">
+              <thead>
+                {/* First row of Table Header: Days/Dates */}
+                <tr className="bg-[#013c28] text-white h-9 border-b border-emerald-950">
+                  <th className="border-r border-emerald-900 px-1 py-1 text-[10px] font-black w-20 bg-[#013c28]" rowSpan={2}>
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[10px] tracking-wider leading-none mb-0.5 border-b border-emerald-600 pb-0.5">{isBn ? 'বার' : 'DAY'}</span>
+                      <span className="text-[9px] tracking-widest opacity-80 leading-none">{isBn ? 'তারিখ' : 'DATE'}</span>
+                    </div>
+                  </th>
+                  {routineData.map((col, idx) => (
+                    <th key={idx} className="border-r border-emerald-900 p-1 text-[10px] font-black bg-[#013c28] min-w-[70px]" colSpan={showRoutineAfternoon ? 2 : 1}>
+                      <p className="text-[10px] font-black leading-tight text-white">{col.day}</p>
+                      <p className="text-[8px] font-bold text-emerald-200 mt-0.5">
+                        {isBn ? getBanglaNumber(col.date) : col.date}
+                      </p>
+                    </th>
+                  ))}
+                </tr>
+                
+                {/* Second row of Table Header: Morning/Afternoon Shifts */}
+                <tr className="bg-emerald-50 text-emerald-950 h-8 border-b border-emerald-950">
+                  {routineData.map((_, idx) => (
+                    <React.Fragment key={idx}>
+                      <th className="border-r border-emerald-200 p-1 text-[8px] font-black font-noto tracking-tighter w-[40px] bg-[#EAF7EE] text-emerald-900">
+                        {isBn ? 'সকাল' : 'Morning'}
+                        <span className="block text-[7px] font-bold text-[#475569] mt-0.5 leading-none">
+                          {isBn ? getBanglaNumber(routineMorningTime.split(' ')[0]) : routineMorningTime.split(' ')[0]}
+                        </span>
+                      </th>
+                      {showRoutineAfternoon && (
+                        <th className="border-r border-emerald-200 p-1 text-[8px] font-black font-noto tracking-tighter w-[40px] bg-[#EAF7EE] text-emerald-900">
+                          {isBn ? 'বিকাল' : 'Afternoon'}
+                          <span className="block text-[7px] font-bold text-[#475569] mt-0.5 leading-none">
+                            {isBn ? getBanglaNumber(routineAfternoonTime.split(' ')[0]) : routineAfternoonTime.split(' ')[0]}
+                          </span>
+                        </th>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tr>
+              </thead>
+              
+              <tbody>
+                {/* Classes display rows */}
+                {displayClasses.map((cls, idx) => (
+                  <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/10'} border-b border-emerald-950/20 h-10`}>
+                    <td className="border-r-2 border-emerald-950 p-1 font-black text-[10px] text-center bg-[#E6F4EA]/40 text-emerald-950">
+                      <span className="text-[10px] font-black text-emerald-950 tracking-tight">{cls.class_name}</span>
+                    </td>
+                    {routineData.map((_, dayIdx) => {
+                      const mrnSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'morning');
+                      const aftSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'afternoon');
+                      return (
+                        <React.Fragment key={dayIdx}>
+                          <td className="border-r border-emerald-200 p-1 align-middle text-center overflow-hidden">
+                            <span className={`text-[9px] font-black tracking-tight leading-[1] block max-h-full whitespace-normal break-words ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-950'}`}>
+                              {mrnSub}
+                            </span>
+                          </td>
+                          {showRoutineAfternoon && (
+                            <td className="border-r border-emerald-200 p-1 align-middle text-center overflow-hidden">
+                              <span className={`text-[9px] font-black tracking-tight leading-[1] block max-h-full whitespace-normal break-words ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono' : 'text-emerald-900'}`}>
+                                {aftSub}
+                              </span>
+                            </td>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
+            <table className="w-full border-collapse border-2 border-emerald-950 rounded-xl overflow-hidden shadow-sm text-center">
+              <thead>
+                <tr className="bg-[#013c28] text-white h-10">
+                  <th className="border-r border-emerald-900 p-2 text-[10px] font-black w-24">
+                    {isBn ? 'বার / তারিখ' : 'Day / Date'}
+                  </th>
+                  <th className="border-r border-emerald-900 p-2 text-[10px] font-black">
+                    {isBn ? `সকাল (${getBanglaNumber(routineMorningTime)})` : `Morning (${routineMorningTime})`}
+                  </th>
+                  {showRoutineAfternoon && (
+                    <th className="p-2 text-[10px] font-black w-36">
+                      {isBn ? `বিকাল (${getBanglaNumber(routineAfternoonTime)})` : `Afternoon (${routineAfternoonTime})`}
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {routineData.map((row, idx) => (
+                  <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/20'} border-b border-emerald-950/20 h-[38px]`}>
+                    <td className="border-r border-emerald-950/20 p-2 text-center bg-emerald-50/30">
+                      <p className="text-[10px] font-black text-emerald-950 mb-0">{row.day}</p>
+                      <p className="text-[8px] font-bold text-slate-500">{isBn ? getBanglaNumber(row.date) : row.date}</p>
+                    </td>
+                    
+                    {/* Morning subject for selected class */}
+                    <td className="border-r border-emerald-950/20 p-1.5 align-middle">
+                      <div className="text-center font-black text-[10px] text-emerald-950 whitespace-normal break-words leading-tight">
+                        {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning')}
+                      </div>
+                    </td>
+                    
+                    {/* Afternoon items */}
+                    {showRoutineAfternoon && (
+                      <td className="p-1.5 align-middle">
+                        <div className="text-center font-black text-[10px] text-slate-800 whitespace-normal break-words leading-tight">
+                          {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon')}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Natural Watermark stamp */}
+          <div className="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none -rotate-12 select-none z-[-1]">
+            {madrasah?.logo_url ? (
+              <img src={madrasah.logo_url} className="w-[300px] h-[300px] object-contain" alt="" />
+            ) : (
+              <div className="text-9xl font-black text-emerald-900">{madrasah?.name?.slice(0, 1) || 'ম'}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Block */}
+        <div className="mt-2 flex justify-between items-end pt-2 border-t border-emerald-950/10">
+          
+          {/* Left Column: Special Instructions */}
+          <div className="max-w-[320px] text-left leading-relaxed">
+            <div className="bg-[#013c28] text-white px-2.5 py-1 rounded-md inline-flex items-center gap-1.5 text-[9px] font-black mb-1.5 shadow-sm uppercase font-noto">
+              <span>📖</span>
+              {isBn ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
+            </div>
+            <ul className="space-y-0.5 max-h-[140px] overflow-hidden pr-2">
+              {instructionsToShow.map((inst, i) => (
+                <li key={i} className="flex gap-1.5 text-[8.5px] font-bold text-slate-600 leading-normal">
+                  <span className="text-emerald-800 font-extrabold">{isBn ? getBanglaNumber((i + 1).toString()) : i + 1} ।</span>
+                  <span>{inst}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Right Column: Sign Box */}
+          <div className="text-center min-w-[150px]">
+            <div className="border border-emerald-800/20 rounded-xl p-2.5 bg-emerald-50/15 relative">
+              <p className="text-[9px] font-black text-emerald-800/90 mb-4">{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
+              <div className="h-px bg-slate-200 w-full mb-1"></div>
+              <p className="text-[9px] font-black text-emerald-950">
+                {routinePrincipalName || (isBn ? 'প্রতিষ্ঠাতা পরিচালক' : 'Founding Director')}
+              </p>
+              <p className="text-[8px] font-bold text-slate-400 mt-0.5">{madrasah?.name}</p>
+              {routinePrincipalMobile && (
+                <p className="text-[8px] font-black text-emerald-700/80 mt-0.5 inline-flex items-center gap-0.5">
+                  📞 {routinePrincipalMobile}
+                </p>
+              )}
+              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t border-r border-emerald-800 rounded-tr-md"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Deenora Portal bottom tagline */}
+        <div className="text-center mt-1.5 pt-1 text-[7px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
+          {isBn ? 'দ্বীনোরা শিক্ষাবর্ষ ২০২৬ • তৈরি করতে ভিজিট করুন deenora.com' : 'DEENORA PORTAL • POWERED BY DEENORA'}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-white font-noto">
+      <div className="pdf-page-container w-[1123px] h-[794px] bg-white mx-auto overflow-hidden flex relative flex-row">
+        {routineSelectionMode === 'all' ? (
+          <div className="w-full h-full p-2">
+            <SingleRoutineContent />
+          </div>
+        ) : (
+          <div className="w-full h-full flex flex-row">
+            {/* Left Copy */}
+            <div className="w-1/2 h-full border-r-2 border-dashed border-slate-300 p-2">
+              <SingleRoutineContent />
+            </div>
+            {/* Right Copy */}
+            <div className="w-1/2 h-full p-2">
+              <SingleRoutineContent />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

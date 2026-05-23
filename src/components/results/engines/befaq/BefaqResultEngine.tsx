@@ -512,8 +512,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
             {activeTab === 'exams' && view === 'list' ? (selectedClassId ? classes.find(c => c.id === selectedClassId)?.class_name : 'বেফাক পরীক্ষা') : 
              activeTab === 'exams' && selectedExam ? selectedExam.exam_name :
-             activeTab === 'seat-plan' ? 'Seat Plan' :
-             activeTab === 'analytics' ? 'Result Analytics' : 'বেফাক পরীক্ষা'}
+             activeTab === 'seat-plan' ? (lang === 'bn' ? 'আসন বিন্যাস' : 'Seat Plan') :
+             activeTab === 'analytics' ? (lang === 'bn' ? 'ফলাফল অ্যানালিটিক্স' : 'Result Analytics') : 'বেফাক পরীক্ষা'}
           </h1>
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
@@ -536,11 +536,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         </button>
         {modules.seat_plan && (
           <button onClick={() => setActiveTab('seat-plan')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'seat-plan' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
-              Seat Plan
+              {lang === 'bn' ? 'আসন বিন্যাস' : 'Seat Plan'}
           </button>
         )}
         <button onClick={() => setActiveTab('analytics')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'analytics' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
-            Analytics
+            {lang === 'bn' ? 'অ্যানালিটিক্স' : 'Analytics'}
         </button>
       </div>
       )}
