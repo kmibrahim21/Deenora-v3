@@ -26,9 +26,9 @@ const getBanglaNumber = (str: string) => {
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
-    // Primary sort by sort_order
-    const orderA = a.sort_order ?? 999999;
-    const orderB = b.sort_order ?? 999999;
+    // Primary sort by sort_order (coerce to Number dynamically for safety)
+    const orderA = a.sort_order !== null && a.sort_order !== undefined ? Number(a.sort_order) : 999999;
+    const orderB = b.sort_order !== null && b.sort_order !== undefined ? Number(b.sort_order) : 999999;
     if (orderA !== orderB) return orderA - orderB;
     // Fallback to alphabetical
     return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
@@ -126,9 +126,6 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     const cleanSortOrder = newSortOrder ? convertToEnglishNumber(newSortOrder.toString().trim()) : '';
     const parsedOrder = cleanSortOrder ? parseInt(cleanSortOrder, 10) : null;
     const order = isNaN(parsedOrder as any) ? null : parsedOrder;
-    
-    // Invalidate RequestManager cache immediately
-    requestManager.invalidatePattern(`classes:${madrasah.id}`);
 
     try {
       if (editingClass) {
@@ -176,6 +173,11 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           offlineApi.queueAction('classes', 'INSERT', payload);
         }
       }
+
+      // Ensure cache is completely invalidated before closing modal or refreshing
+      await requestManager.invalidatePattern(`classes:${madrasah.id}`);
+      offlineApi.removeCache('classes');
+
       setShowModal(false);
       setNewClassName('');
       setNewSortOrder('');
@@ -191,9 +193,6 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const handleDeleteClass = async () => {
     if (!showDeleteConfirm || !madrasah) return;
     setModalLoading(true);
-    
-    // Invalidate
-    requestManager.invalidatePattern(`classes:${madrasah.id}`);
 
     try {
       // Optimistic Delete
@@ -214,6 +213,11 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         // Offline check (limited)
         offlineApi.queueAction('classes', 'DELETE', { id: showDeleteConfirm.id });
       }
+
+      // Ensure cache is completely invalidated
+      await requestManager.invalidatePattern(`classes:${madrasah.id}`);
+      offlineApi.removeCache('classes');
+
       setShowDeleteConfirm(null);
       triggerRefresh();
     } catch (err: any) { 
