@@ -3,6 +3,7 @@ import { ChevronLeft, FileText, Download, ShieldCheck, Loader2 } from 'lucide-re
 import { Institution, Profile, Class, Student, Language } from '../types';
 import { supabase } from '../supabase';
 import { t } from '../translations';
+import { sortMadrasahClasses } from './Classes';
 import StudentIdCardGenerator from '../components/StudentIdCardGenerator';
 
 interface IdCardsProps {
@@ -44,11 +45,11 @@ const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile }) =>
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .eq('institution_id', madrasah.id)
-        .order('sort_order', { ascending: true });
+        .eq('institution_id', madrasah.id);
 
       if (error) throw error;
-      setClasses(data || []);
+      const sorted = sortMadrasahClasses(data || []);
+      setClasses(sorted);
       const map: Record<string, string> = {};
       data?.forEach(c => map[c.id] = c.class_name);
       setSelectedClassMap(map);

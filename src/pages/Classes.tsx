@@ -26,9 +26,14 @@ const getBanglaNumber = (str: string) => {
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
-    // Primary sort by sort_order (coerce to Number dynamically for safety)
-    const orderA = a.sort_order !== null && a.sort_order !== undefined ? Number(a.sort_order) : 999999;
-    const orderB = b.sort_order !== null && b.sort_order !== undefined ? Number(b.sort_order) : 999999;
+    // Coerce to number and treat null, undefined, or <= 0 as 999999 (lowest priority)
+    // So positive serial numbers like 1, 2, 3 come first.
+    const valA = a.sort_order !== null && a.sort_order !== undefined ? Number(a.sort_order) : null;
+    const valB = b.sort_order !== null && b.sort_order !== undefined ? Number(b.sort_order) : null;
+    
+    const orderA = valA !== null && !isNaN(valA) && valA > 0 ? valA : 999999;
+    const orderB = valB !== null && !isNaN(valB) && valB > 0 ? valB : 999999;
+    
     if (orderA !== orderB) return orderA - orderB;
     // Fallback to alphabetical
     return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });

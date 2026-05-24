@@ -3,6 +3,7 @@ import { ChevronLeft, Plus, Trash2, Loader2, Calendar, Clock, BookOpen, User, Bo
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Teacher, ClassRoutine as ClassRoutineType, Profile } from 'types';
 import { generateClassRoutinePDF, generateMasterClassRoutinePDF } from '../utils/pdfGenerator';
+import { sortMadrasahClasses } from './Classes';
 
 interface ClassRoutineProps {
   lang: Language;
@@ -59,12 +60,12 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
     setLoading(true);
     try {
       const [clsRes, teaRes, rouRes] = await Promise.all([
-        supabase.from('classes').select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        supabase.from('classes').select('*').eq('institution_id', madrasah.id),
         supabase.from('teachers').select('*').eq('institution_id', madrasah.id).eq('is_active', true),
         supabase.from('class_routines').select('*, classes(class_name), teachers(teacher_name)').eq('institution_id', madrasah.id).order('start_time', { ascending: true })
       ]);
 
-      if (clsRes.data) setClasses(clsRes.data);
+      if (clsRes.data) setClasses(sortMadrasahClasses(clsRes.data));
       if (teaRes.data) setTeachers(teaRes.data.map(t => ({ ...t, name: t.teacher_name, phone: t.mobile })));
       if (rouRes.data) setRoutines(rouRes.data);
     } catch (err) {

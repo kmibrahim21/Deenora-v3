@@ -51,6 +51,7 @@ const localT = {
 };
 
 import { requestManager } from 'services/RequestManager';
+import { sortMadrasahClasses } from 'pages/Classes';
 
 interface LedgerHistoryEntry {
   id: string;
@@ -106,11 +107,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
   useEffect(() => {
     if (classes.length > 0) {
-      setLocalClasses(classes);
+      setLocalClasses(sortMadrasahClasses(classes));
     } else if (isValidUUID(institutionId)) {
       requestManager.cachedFetch(
         'classes',
-        (q) => q.select('id, class_name').eq('institution_id', institutionId).order('class_name'),
+        (q) => q.select('*').eq('institution_id', institutionId),
         `classes:${institutionId}`
       ).then(({ data }) => {
         if (data) {
@@ -118,7 +119,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
           if (role === 'teacher' && profile?.permissions?.allowed_classes) {
             filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
           }
-          setLocalClasses(filteredClasses);
+          setLocalClasses(sortMadrasahClasses(filteredClasses));
         }
       });
     }

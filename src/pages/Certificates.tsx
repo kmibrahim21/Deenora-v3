@@ -3,6 +3,7 @@ import { ChevronLeft, FileText, Download, UserCheck, Loader2, Eye } from 'lucide
 import { Institution, Profile, Class, Student, Language } from '../types';
 import { supabase } from '../supabase';
 import { t } from '../translations';
+import { sortMadrasahClasses } from './Classes';
 import { createRoot } from 'react-dom/client';
 import jsPDF from 'jspdf';
 import { toJpeg } from 'html-to-image';
@@ -87,11 +88,11 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .eq('institution_id', madrasah.id)
-        .order('sort_order', { ascending: true });
+        .eq('institution_id', madrasah.id);
 
       if (error) throw error;
-      setClasses(data || []);
+      const sorted = sortMadrasahClasses(data || []);
+      setClasses(sorted);
       const map: Record<string, string> = {};
       data?.forEach(c => map[c.id] = c.class_name);
       setSelectedClassMap(map);

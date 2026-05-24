@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { sortMadrasahClasses } from './Classes';
 import { MessageSquare, Calendar, Send, List, Trash2, CalendarDays, BookOpen, Clock, FileText, Plus, Bell, Users, CheckCircle2, Circle } from 'lucide-react';
 import { Institution, Language } from '../types';
 import { OfflineService } from '../services/OfflineService';
@@ -81,8 +82,8 @@ export default function Messages({
           try { setMessages(JSON.parse(cached)); setIsLoading(false); } catch(e) {}
       }
 
-      const { data: cls } = await supabase.from('classes').select('id, class_name').eq('institution_id', madrasah.id).order('created_at');
-      if (cls) setClasses(cls);
+      const { data: cls } = await supabase.from('classes').select('id, class_name, sort_order').eq('institution_id', madrasah.id);
+      if (cls) setClasses(sortMadrasahClasses(cls));
 
       const { data: history } = await supabase.from('messages')
         .select('id, class_name, title, message, created_at, sender_name, type')
