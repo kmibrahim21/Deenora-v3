@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette } from 'lucide-react';
+import { GraduationCap, Plus, Minus, RotateCcw, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -92,6 +92,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   // Scaler Hook/Ref for responsive A4 Live Preview
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
   const [previewScale, setPreviewScale] = useState<number>(1);
+  const [routineZoom, setRoutineZoom] = useState<number>(1.0);
   const routineThemes = {
     'emerald': { primary: '#013c28', secondary: '#023c28', light: '#E6F4EA', accent: '#EAF7EE' },
     'blue': { primary: '#1e3a8a', secondary: '#1e40af', light: '#eff6ff', accent: '#f8fafc' },
@@ -1779,28 +1780,70 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             {/* Right Live Preview Column */}
             <div className="lg:col-span-2 space-y-4">
               <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2.5rem] border shadow-bubble`}>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className={`text-base font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
-                    {lang === 'bn' ? 'লাইভ প্রিন্ট প্রিভিউ' : 'Live Print Preview'}
-                  </h3>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg">
-                    {lang === 'bn' ? 'এ৪ সাইজ পেপার' : 'A4 Size Document'}
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-6 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-200/40">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <h3 className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
+                      {lang === 'bn' ? 'লাইভ প্রিন্ট প্রিভিউ' : 'Live Print Preview'}
+                    </h3>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-lg">
+                      {lang === 'bn' ? 'এ৪ সাইজ পেপার' : 'A4 Size Document'}
+                    </div>
+                  </div>
+
+                  {/* Zoom Controls targeting Mobile/Desktop */}
+                  <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider font-noto">
+                      {lang === 'bn' ? 'জুম পরিবর্তন:' : 'Zoom Preview:'}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        onClick={() => setRoutineZoom(prev => Math.max(0.4, Number((prev - 0.15).toFixed(2))))}
+                        className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-950/30 dark:hover:text-red-400 border border-slate-200 dark:border-slate-600 shadow-sm transition-all focus:outline-none"
+                        title={lang === 'bn' ? 'জুম কমান' : 'Zoom Out'}
+                      >
+                        <Minus size={13} strokeWidth={3} />
+                      </button>
+                      <span className="text-[12px] font-black px-2 text-slate-700 dark:text-white min-w-[50px] text-center font-mono">
+                        {Math.round(routineZoom * 100)}%
+                      </span>
+                      <button 
+                        onClick={() => setRoutineZoom(prev => Math.min(2.2, Number((prev + 0.15).toFixed(2))))}
+                        className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400 border border-slate-200 dark:border-slate-600 shadow-sm transition-all focus:outline-none"
+                        title={lang === 'bn' ? 'জুম বাড়ান' : 'Zoom In'}
+                      >
+                        <Plus size={13} strokeWidth={3} />
+                      </button>
+                      
+                      {routineZoom !== 1.0 && (
+                        <button 
+                          onClick={() => setRoutineZoom(1.0)}
+                          className="w-7 h-7 flex items-center justify-center rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all focus:outline-none ml-1 font-black"
+                          title={lang === 'bn' ? 'রিসেট' : 'Reset'}
+                        >
+                          <RotateCcw size={12} strokeWidth={3} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Scalable, responsive container for Live Preview page to prevent overflow/side-scrolling */}
                 <div 
                   ref={previewContainerRef}
-                  className="w-full py-8 bg-slate-100 rounded-[2.8rem] border border-slate-200/50 flex justify-center overflow-hidden"
-                  style={{ minHeight: `${794 * previewScale + 40}px` }}
+                  className="w-full py-8 bg-slate-100 rounded-[2.8rem] border border-slate-200/50 flex overflow-x-auto overflow-y-hidden select-none scrollbar-thin scroll-smooth px-4 justify-start"
+                  style={{ minHeight: `${794 * (previewScale * routineZoom) + 40}px` }}
                 >
                   <div 
-                    className="shadow-3xl origin-top transition-transform duration-200 shrink-0 select-none bg-white font-noto rounded-lg ml-2 mr-2"
+                    className="shadow-3xl origin-top transition-transform duration-200 shrink-0 select-none bg-white font-noto rounded-lg mx-auto"
                     style={{ 
-                      transform: `scale(${previewScale})`,
+                      transform: `scale(${previewScale * routineZoom})`,
                       width: '1123px',
                       height: '794px',
-                      marginBottom: `${(previewScale - 1) * 794}px`
+                      marginBottom: `${((previewScale * routineZoom) - 1) * 794}px`
                     }}
                   >
                     

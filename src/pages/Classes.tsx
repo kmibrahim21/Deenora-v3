@@ -7,6 +7,22 @@ import { Class, Language, Institution, Profile } from 'types';
 import { t } from 'translations';
 import { requestManager } from 'services/RequestManager';
 
+const convertToEnglishNumber = (input: string): string => {
+  const banglaDigits = {
+    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+  };
+  return input.toString().replace(/[০-৯]/g, (match) => banglaDigits[match as keyof typeof banglaDigits] || match);
+};
+
+const getBanglaNumber = (str: string) => {
+  const banglaDigits = {
+    '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪',
+    '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯'
+  };
+  return str.toString().replace(/[0-9]/g, (match) => banglaDigits[match as keyof typeof banglaDigits] || match);
+};
+
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
@@ -106,7 +122,10 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const handleSaveClass = async () => {
     if (!newClassName.trim() || !madrasah) return;
     setModalLoading(true);
-    const order = newSortOrder ? parseInt(newSortOrder) : null;
+    
+    const cleanSortOrder = newSortOrder ? convertToEnglishNumber(newSortOrder.toString().trim()) : '';
+    const parsedOrder = cleanSortOrder ? parseInt(cleanSortOrder, 10) : null;
+    const order = isNaN(parsedOrder as any) ? null : parsedOrder;
     
     // Invalidate RequestManager cache immediately
     requestManager.invalidatePattern(`classes:${madrasah.id}`);
@@ -224,11 +243,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                   <BookOpen size={20} className="sm:size-6" />
                 </div>
                 <div className="min-w-0 flex-1 pr-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} text-[16px] sm:text-[18px] font-noto line-clamp-2 leading-tight tracking-tight break-words`}>
-                      {cls.class_name}
-                    </h3>
-                  </div>
+                  <h3 className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} text-[16px] sm:text-[18px] font-noto line-clamp-2 leading-tight tracking-tight break-words`}>
+                    {cls.class_name}
+                  </h3>
                   <div className="flex items-center gap-1.5 mt-1">
                     <Users size={12} className={isDark ? 'text-blue-400/60' : 'text-[#2563EB]/60'} />
                     <p className={`text-[9px] font-black ${isDark ? 'text-slate-400' : 'text-slate-400'} uppercase tracking-[0.1em]`}>{cls.student_count || 0} {t('students_count', lang, madrasah?.institution_type)}</p>
@@ -291,7 +308,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                   <Hash size={12} /> সিরিয়াল নম্বর (Sorting)
                 </label>
                 <input 
-                  type="number" 
+                  type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
                   className={`w-full px-6 py-5 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border-2 rounded-[1.8rem] font-black text-lg outline-none focus:border-[#2563EB]/30 focus:bg-white transition-all shadow-inner`} 
                   value={newSortOrder} 
                   onChange={(e) => setNewSortOrder(e.target.value)}
