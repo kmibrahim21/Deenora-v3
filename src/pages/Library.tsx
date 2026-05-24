@@ -4,7 +4,6 @@ import { supabase } from '../supabase';
 import { t } from '../translations';
 import { Language, Institution, Profile } from '../types';
 import { OfflineService } from '../services/OfflineService';
-import { sortMadrasahClasses } from './Classes';
 
 interface LibraryBook {
   id: string;
@@ -109,11 +108,11 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
       const [stRes, tcRes, clRes] = await Promise.all([
         supabase.from('students').select('id, student_name, roll, class_id').eq('institution_id', madrasah.id),
         supabase.from('teachers').select('id, name:teacher_name').eq('institution_id', madrasah.id).eq('is_active', true),
-        supabase.from('classes').select('id, class_name, sort_order').eq('institution_id', madrasah.id)
+        supabase.from('classes').select('id, class_name').eq('institution_id', madrasah.id).order('sort_order', { ascending: true })
       ]);
       if (stRes.data) setStudents(stRes.data);
       if (tcRes.data) setTeachers(tcRes.data);
-      if (clRes.data) setClasses(sortMadrasahClasses(clRes.data));
+      if (clRes.data) setClasses(clRes.data);
     } catch (e) {}
   };
 

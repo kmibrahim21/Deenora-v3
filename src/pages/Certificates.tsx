@@ -3,7 +3,6 @@ import { ChevronLeft, FileText, Download, UserCheck, Loader2, Eye } from 'lucide
 import { Institution, Profile, Class, Student, Language } from '../types';
 import { supabase } from '../supabase';
 import { t } from '../translations';
-import { sortMadrasahClasses } from './Classes';
 import { createRoot } from 'react-dom/client';
 import jsPDF from 'jspdf';
 import { toJpeg } from 'html-to-image';
@@ -56,38 +55,27 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
   }, [selectedClassId]);
 
   useEffect(() => {
-    let timeoutId: number;
-    const updateScale = (forceWidth?: number) => {
+    const updateScale = () => {
       if (previewContainerRef.current) {
         // Find the actual container width instead of assuming offsetWidth
-        const parentWidth = forceWidth || previewContainerRef.current.parentElement?.clientWidth || window.innerWidth;
+        const parentWidth = previewContainerRef.current.parentElement?.clientWidth || window.innerWidth;
         const availableWidth = parentWidth - 48; // padding
         const scale = Math.min(1, availableWidth / 1122);
-        setPreviewScale(prev => Math.abs(prev - scale) > 0.005 ? scale : prev);
+        setPreviewScale(scale);
       }
     };
     
     updateScale();
-    
-    const handleResize = () => {
-        clearTimeout(timeoutId);
-        timeoutId = window.setTimeout(() => updateScale(), 100);
-    };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', updateScale);
     
     let observer: ResizeObserver;
     if (previewContainerRef.current) {
-      observer = new ResizeObserver((entries) => {
-         clearTimeout(timeoutId);
-         const width = entries[0]?.contentRect.width;
-         timeoutId = window.setTimeout(() => updateScale(width), 100);
-      });
+      observer = new ResizeObserver(updateScale);
       observer.observe(previewContainerRef.current.parentElement!);
     }
     
     return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timeoutId);
+      window.removeEventListener('resize', updateScale);
       if (observer) observer.disconnect();
     }
   }, [selectedStudentId, students, classes]);
@@ -99,11 +87,11 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .eq('institution_id', madrasah.id);
+        .eq('institution_id', madrasah.id)
+        .order('sort_order', { ascending: true });
 
       if (error) throw error;
-      const sorted = sortMadrasahClasses(data || []);
-      setClasses(sorted);
+      setClasses(data || []);
       const map: Record<string, string> = {};
       data?.forEach(c => map[c.id] = c.class_name);
       setSelectedClassMap(map);

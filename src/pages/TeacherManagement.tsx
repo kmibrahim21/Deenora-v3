@@ -52,7 +52,6 @@ import {
 import { t } from "translations";
 import { supabase } from "supabase";
 import { requestManager } from "services/RequestManager";
-import { sortMadrasahClasses } from "./Classes";
 import { useOfflineStatus } from "hooks/useOffline";
 import { CacheService } from "services/cacheService";
 import { generateAttendanceReportPDF } from "../utils/pdfGenerator";
@@ -450,9 +449,10 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       const { data, error } = await supabase
         .from("classes")
         .select("*")
-        .eq("institution_id", madrasah.id);
+        .eq("institution_id", madrasah.id)
+        .order("sort_order", { ascending: true });
       if (error) throw error;
-      setClasses(sortMadrasahClasses(data || []));
+      setClasses(data || []);
     } catch (err: any) {
       console.error("Fetch classes error:", err);
     }
