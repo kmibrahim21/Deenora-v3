@@ -800,16 +800,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       {activeTab === 'exams' && view === 'marks' && (
         <div className="space-y-4">
             <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border`}>
-                <div className="overflow-x-auto no-scrollbar">
+                <div className="overflow-auto max-h-[60vh] md:max-h-[70vh] no-scrollbar">
                 <table className="w-full text-left">
                     <thead>
                         <tr className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
-                            <th className={`py-4 px-2 text-[10px] font-black text-slate-400 uppercase border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'} sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] max-w-[100px] truncate`}>Roll/Name</th>
+                            <th className={`py-4 px-2 text-[10px] font-black text-slate-400 uppercase border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900 border-b border-b-slate-850' : 'border-slate-100 bg-white border-b border-b-slate-100'} sticky top-0 left-0 z-30 shadow-[2px_2px_5px_-2px_rgba(0,0,0,0.1)] max-w-[100px] truncate`}>Roll/Name</th>
                             {subjects.map(s => (
-                                <th key={s.id} className="py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4">{s.subject_name}</th>
+                                <th key={s.id} className={`py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4 sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{s.subject_name}</th>
                             ))}
-                            <th className="py-4 text-[10px] font-black text-emerald-400 uppercase text-center min-w-[60px]">মোট</th>
-                            <th className="py-4 text-[10px] font-black text-purple-400 uppercase text-center min-w-[60px]">বিভাগ</th>
+                            <th className={`py-4 text-[10px] font-black text-emerald-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>মোট</th>
+                            <th className={`py-4 text-[10px] font-black text-purple-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>বিভাগ</th>
                         </tr>
                     </thead>
                     <tbody>
