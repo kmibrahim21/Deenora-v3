@@ -2434,11 +2434,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       {activeTab === 'exams' && view === 'marks' && (
         <div className="space-y-4">
             <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border`}>
-                <div className="overflow-x-auto no-scrollbar">
-                    <table className="w-full text-left">
-                    <thead>
+                <div className="overflow-x-auto overflow-y-auto no-scrollbar max-h-[65vh]">
+                    <table className="w-full text-left relative">
+                    <thead className={`sticky top-0 z-30 ${madrasah?.theme === 'dark' ? 'bg-slate-900 shadow-slate-800' : 'bg-white shadow-slate-100'} shadow-sm`}>
                         <tr className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
-                            <th className={`py-4 px-2 text-[10px] font-black text-slate-400 uppercase border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'} sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] max-w-[100px] truncate`}>Roll/Name</th>
+                            <th className={`py-4 px-2 text-[10px] font-black text-slate-400 uppercase border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'} sticky left-0 z-40 max-w-[100px] truncate`}>Roll/Name</th>
                             {subjects.map(s => (
                                 <th key={s.id} className="py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4">{s.subject_name}</th>
                             ))}
