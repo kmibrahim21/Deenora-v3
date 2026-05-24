@@ -104,20 +104,28 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   React.useEffect(() => {
     if (!previewContainerRef.current) return;
+    
+    let timeoutId: number;
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const width = entry.contentRect.width;
-        // On mobile/narrow screens, allow a slightly larger scale even if it overflows slightly 
-        // to improve readability of the small text
-        const isMobile = window.innerWidth < 768;
-        const targetWidth = 1123; // Landscape width
-        // On mobile, try to fit the width more accurately with slight padding
-        const s = Math.min(1.2, isMobile ? (width / 1160) : (width / (targetWidth + 40)));
-        setPreviewScale(s);
-      }
+      clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        for (const entry of entries) {
+          const width = entry.contentRect.width;
+          // On mobile/narrow screens, allow a slightly larger scale even if it overflows slightly 
+          // to improve readability of the small text
+          const isMobile = window.innerWidth < 768;
+          const targetWidth = 1123; // Landscape width
+          // On mobile, try to fit the width more accurately with slight padding
+          const s = Math.min(1.2, isMobile ? (width / 1160) : (width / (targetWidth + 40)));
+          setPreviewScale(prev => Math.abs(prev - s) > 0.005 ? s : prev);
+        }
+      }, 100);
     });
     observer.observe(previewContainerRef.current);
-    return () => observer.disconnect();
+    return () => {
+      clearTimeout(timeoutId);
+      observer.disconnect();
+    };
   }, [activeTab]);
 
   // Set default Selected Class for Routine
@@ -1857,22 +1865,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
                       <div className="flex-1 flex flex-col justify-between">
                         {/* Banner Block */}
-                        <div className="flex justify-between items-center w-full px-2 py-3 rounded-3xl border mb-4 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
+                        <div className="flex justify-between items-center w-full px-2 py-3 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
                           
                           {/* Left Column: Logotype */}
                           <div className="flex-shrink-0 flex items-center justify-center pl-4">
                             <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
                               {madrasah?.logo_url ? (
-                                <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain rounded-full bg-white" alt="Logo" referrerPolicy="no-referrer" />
+                                <img src={madrasah.logo_url} className="w-[66px] h-[66px] object-contain rounded-full bg-white" alt="Logo" referrerPolicy="no-referrer" />
                               ) : (
-                                <div className="w-[85px] h-[85px] bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[10px]">LOGO</div>
+                                <div className="w-[66px] h-[66px] bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[12px]">LOGO</div>
                               )}
                             </div>
                           </div>
 
                           {/* Center Column: Madrasah Title, location, etc */}
                           <div className="flex-1 text-center px-3 leading-normal">
-                            <h1 className="text-[32px] font-black tracking-tight leading-none mb-1 font-serif-bn italic" style={{ color: rtTheme.primary }}>
+                            <h1 className="text-[26px] font-black tracking-tight leading-none mb-1.5 font-serif-bn italic" style={{ color: rtTheme.primary }}>
                               {madrasah?.name || 'মাদরাসার নাম'}
                             </h1>
                             
@@ -1897,9 +1905,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                           </div>
 
                           {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
-                          <div className="flex-shrink-0 w-[160px] h-[120px] text-white rounded-2xl flex flex-col justify-between p-3 border shadow mr-4" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
+                          <div className="flex-shrink-0 w-[125px] h-[95px] text-white rounded-xl flex flex-col justify-between p-2.5 border shadow mr-2" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
                             <div className="flex items-center justify-center">
-                              <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center font-black text-sm" style={{ color: rtTheme.primary }}>
+                              <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center font-black text-[12px]" style={{ color: rtTheme.primary }}>
                                 📅
                               </div>
                             </div>
@@ -1910,7 +1918,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                               <p className="text-[11px] font-extrabold block mb-0.5" style={{ color: `${rtTheme.accent}cc` }}>
                                 পরীক্ষার সময়সূচি
                               </p>
-                              <p className="text-[10px] font-semibold text-white/70 block">
+                              <p className="text-[9.5px] font-semibold text-white/70 block">
                                 {currentYearBn}ইং
                               </p>
                             </div>
@@ -1918,7 +1926,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         </div>
 
                         {/* Main Grid Table matching image perfectly */}
-                        <div className="flex-1 mt-2 overflow-x-auto pb-4 custom-scrollbar">
+                        <div className="flex-1 mt-2 overflow-x-auto custom-scrollbar">
                           
                           {routineSelectionMode === 'all' ? (
                             /* FORMAT A: ALL CLASSES TOGETHER GRID */
@@ -2018,7 +2026,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   };
 
                                   return displayClassesList.map((cls, idx) => (
-                                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : ''} hover:opacity-80 transition-opacity border-b h-13`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}4d`, borderColor: `${rtTheme.primary}26` }}>
+                                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : ''} hover:opacity-80 transition-opacity border-b h-11`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}4d`, borderColor: `${rtTheme.primary}26` }}>
                                       {/* Leftmost column showing class label with cute small ribbon or text */}
                                       <td className="border-r-2 p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
                                         <div className="flex items-center justify-center gap-1">
@@ -2125,7 +2133,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   };
 
                                   return routineData.map((row, idx) => (
-                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b h-16 relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
+                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b h-11 relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
                                       <td className="border-r p-2 text-center relative group" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: `${rtTheme.light}4d` }}>
                                         <button 
                                           onClick={() => handleRemoveRoutineDay(row.id)}
@@ -2237,15 +2245,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         </div>
 
                         {/* Footer Block matching image exactly */}
-                        <div className="mt-4 flex justify-between items-end pt-4 border-t" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                        <div className="mt-2 flex justify-between items-end pt-2 border-t" style={{ borderColor: `${rtTheme.primary}1a` }}>
                           
                           {/* Left Column: Special Instructions list */}
                           <div className="max-w-[430px] text-left leading-relaxed">
-                            <div className="text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 text-[11px] font-black mb-2 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary }}>
+                            <div className="text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 text-[10px] font-black mb-1.5 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary }}>
                               <span>📖</span>
                               {lang === 'bn' ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
                             </div>
-                            <ul className="space-y-1 max-h-[160px] overflow-hidden pr-2">
+                            <ul className="space-y-0.5 max-h-[160px] overflow-hidden pr-2">
                               {(() => {
                                 const previewInstructionsToShow = routineInstructions.length > 0 ? routineInstructions.filter(Boolean) : [
                                   lang === 'bn' ? 'পরীক্ষার ফি, রশিদ যোগ ও বকেয়ার রশিদ সংগ্রহে অনুরোধ রইল।' : 'Required exam fees and pending dues must be paid.',
@@ -2267,16 +2275,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                           </div>
 
                           {/* Right Column: Sign Box matching bottom-right of image */}
-                          <div className="text-center min-w-[200px]">
-                            <div className="border rounded-xl p-4 relative" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: `${rtTheme.light}26` }}>
-                              <p className="text-[11px] font-black mb-6" style={{ color: `${rtTheme.primary}e6` }}>{lang === 'bn' ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
+                          <div className="text-center min-w-[150px]">
+                            <div className="border rounded-xl p-2.5 relative" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: `${rtTheme.light}26` }}>
+                              <p className="text-[10px] font-black mb-4" style={{ color: `${rtTheme.primary}e6` }}>{lang === 'bn' ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
                               <div className="h-px bg-slate-200 w-full mb-1"></div>
                               <p className="text-[11px] font-black" style={{ color: rtTheme.primary }}>
                                 {routinePrincipalName || (lang === 'bn' ? 'প্রতিষ্ঠাতা পরিচালক' : 'Founding Director')}
                               </p>
                               <p className="text-[9px] font-bold text-slate-400 mt-0.5">{madrasah?.name}</p>
                               {routinePrincipalMobile && (
-                                <p className="text-[9px] font-black mt-0.5 inline-flex items-center gap-0.5" style={{ color: `${rtTheme.primary}cc` }}>
+                                <p className="text-[8px] font-black mt-0.5 inline-flex items-center gap-0.5" style={{ color: `${rtTheme.primary}cc` }}>
                                   📞 {routinePrincipalMobile}
                                 </p>
                               )}
@@ -2287,7 +2295,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         </div>
 
                         {/* Deenora Portal bottom tagline */}
-                        <div className="text-center mt-3 pt-1 text-[8px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
+                        <div className="text-center mt-2 pt-1 text-[8px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
                           {lang === 'bn' ? 'দ্বীনোরা শিক্ষাবর্ষ ২০২৬ • তৈরি করতে ভিজিট করুন deenora.com' : 'DEENORA PORTAL • POWERED BY DEENORA'}
                         </div>
                       </div>

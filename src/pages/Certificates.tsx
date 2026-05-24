@@ -56,27 +56,38 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
   }, [selectedClassId]);
 
   useEffect(() => {
-    const updateScale = () => {
+    let timeoutId: number;
+    const updateScale = (forceWidth?: number) => {
       if (previewContainerRef.current) {
         // Find the actual container width instead of assuming offsetWidth
-        const parentWidth = previewContainerRef.current.parentElement?.clientWidth || window.innerWidth;
+        const parentWidth = forceWidth || previewContainerRef.current.parentElement?.clientWidth || window.innerWidth;
         const availableWidth = parentWidth - 48; // padding
         const scale = Math.min(1, availableWidth / 1122);
-        setPreviewScale(scale);
+        setPreviewScale(prev => Math.abs(prev - scale) > 0.005 ? scale : prev);
       }
     };
     
     updateScale();
-    window.addEventListener('resize', updateScale);
+    
+    const handleResize = () => {
+        clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(() => updateScale(), 100);
+    };
+    window.addEventListener('resize', handleResize);
     
     let observer: ResizeObserver;
     if (previewContainerRef.current) {
-      observer = new ResizeObserver(updateScale);
+      observer = new ResizeObserver((entries) => {
+         clearTimeout(timeoutId);
+         const width = entries[0]?.contentRect.width;
+         timeoutId = window.setTimeout(() => updateScale(width), 100);
+      });
       observer.observe(previewContainerRef.current.parentElement!);
     }
     
     return () => {
-      window.removeEventListener('resize', updateScale);
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
       if (observer) observer.disconnect();
     }
   }, [selectedStudentId, students, classes]);
