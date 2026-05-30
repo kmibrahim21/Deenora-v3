@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -55,7 +55,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | 'half_day'>>({});
+  const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent' | 'late' | 'half_day' | 'leave'>>({});
   const [arrivalTime, setArrivalTime] = useState<Record<string, string>>({});
   const [reportData, setReportData] = useState<any[]>([]);
   const [reportType, setReportType] = useState<'daily' | 'monthly' | 'yearly'>('daily');
@@ -333,7 +333,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
       if (finalStdData) {
         setStudents(finalStdData);
-        const initial: Record<string, 'present' | 'absent' | 'late' | 'half_day'> = {};
+        const initial: Record<string, 'present' | 'absent' | 'late' | 'half_day' | 'leave'> = {};
         const initialArrival: Record<string, string> = {};
         
         finalStdData.forEach(s => {
@@ -471,7 +471,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     return mins > 0 ? mins : 0;
   };
 
-  const setStatus = (sid: string, status: 'present' | 'absent' | 'late' | 'half_day') => {
+  const setStatus = (sid: string, status: 'present' | 'absent' | 'late' | 'half_day' | 'leave') => {
     setAttendance(prev => ({ ...prev, [sid]: status }));
     if (status === 'late' && !arrivalTime[sid]) {
       const now = new Date();
@@ -1121,10 +1121,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           </div>
                         </div>
                         <div className="flex gap-2 shrink-0 items-start">
-                           <button onClick={() => setStatus(s.id, 'present')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={20}/></button>
-                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'present')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_present', lang, madrasah?.type)}><CheckCircle size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_absent', lang, madrasah?.type)}><XCircle size={20}/></button>
                            <div className="flex flex-col items-center">
-                             <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late">
+                             <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_late', lang, madrasah?.type)}>
                                 {attendance[s.id] === 'late' ? (
                                  <span className="text-base font-black">{computeLateMins(arrivalTime[s.id])}</span>
                                 ) : <Clock size={20}/>}
@@ -1135,6 +1135,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                </span>
                              )}
                            </div>
+                           <button onClick={() => setStatus(s.id, 'leave')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_leave', lang, madrasah?.type)}><CalendarOff size={20}/></button>
                         </div>
                      </div>
                    ))}
@@ -1425,7 +1426,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 <div className="flex flex-wrap items-center gap-2 mb-6">
                   {!(selectedClass?.id === 'all') && (
                   <div className="flex flex-1 gap-2 min-w-[200px]">
-                      <button onClick={() => setReportView('list')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>List View</button>
+                      <button onClick={() => setReportView('list')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
+                        {lang === 'bn' ? 'লিস্ট ভিউ' : 'List View'}
+                      </button>
                       <button onClick={() => setReportView('analytics')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
                         {lang === 'bn' ? 'অ্যানালিটিক্স' : 'Analytics'}
                       </button>
@@ -1450,19 +1453,20 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       <div className={`p-6 rounded-[2rem] border shadow-sm ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                         <h3 className={`text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
                           <BarChart3 className="text-[#2563EB]" size={18} />
-                          Attendance Overview
+                          {lang === 'bn' ? 'হাজিরা ওভারভিউ' : 'Attendance Overview'}
                         </h3>
                         <div className="h-64 w-full">
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0 }))}>
+                            <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), [lang === 'bn' ? 'উপস্থিত' : 'Present']: d.present_days, [lang === 'bn' ? 'অনুপস্থিত' : 'Absent']: d.absent_days, [lang === 'bn' ? 'বিলম্ব' : 'Late']: d.late_days || 0, [lang === 'bn' ? 'ছুটি' : 'Leave']: d.leave_days || 0 }))}>
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
                               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                               <Tooltip cursor={{ fill: isDark ? '#1e293b' : '#f8fafc' }} contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#f1f5f9' : '#1e293b' }} />
                               <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
-                              <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-                              <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
-                              <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey={lang === 'bn' ? 'উপস্থিত' : 'Present'} stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
+                              <Bar dataKey={lang === 'bn' ? 'ছুটি' : 'Leave'} stackId="a" fill="#6366f1" />
+                              <Bar dataKey={lang === 'bn' ? 'বিলম্ব' : 'Late'} stackId="a" fill="#f59e0b" />
+                              <Bar dataKey={lang === 'bn' ? 'অনুপস্থিত' : 'Absent'} stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1471,7 +1475,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       <div className={`p-6 rounded-[2rem] border shadow-sm ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                         <h3 className={`text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
                           <TrendingDown className="text-red-500" size={18} />
-                          Most Absent Students
+                          {lang === 'bn' ? 'সর্বাধিক অনুপস্থিত শিক্ষার্থী' : 'Most Absent Students'}
                         </h3>
                         <div className="space-y-3">
                           {[...reportData].sort((a, b) => b.absent_days - a.absent_days).slice(0, 5).map((student, idx) => (
@@ -1486,8 +1490,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className="font-black text-red-500">{student.absent_days} Days</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Absent</p>
+                                <p className="font-black text-red-500">{student.absent_days} {lang === 'bn' ? 'দিন' : 'Days'}</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">{lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}</p>
                               </div>
                             </div>
                           ))}
@@ -1522,13 +1526,17 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                 <div className={`w-full h-3 rounded-full overflow-hidden border flex shadow-inner ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                                     <div className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)]" style={{ width: `${pct}%` }}></div>
                                 </div>
-                                <div className="grid grid-cols-4 gap-2">
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}><p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Total</p><p className={`font-black text-sm ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.total_days}</p></div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-green-900/10 border-green-900/20' : 'bg-green-50/50 border-green-50'}`}><p className="text-[8px] font-black text-green-400 uppercase mb-0.5">Present</p><p className="font-black text-green-600 text-sm">{item.present_days}</p></div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[8px] font-black text-red-400 uppercase mb-0.5">Absent</p><p className="font-black text-red-600 text-sm">{item.absent_days}</p></div>
+                                <div className="grid grid-cols-5 gap-2">
+                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}><p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">{lang === 'bn' ? 'মোট' : 'Total'}</p><p className={`font-black text-sm ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.total_days}</p></div>
+                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-green-900/10 border-green-900/20' : 'bg-green-50/50 border-green-50'}`}><p className="text-[8px] font-black text-green-400 uppercase mb-0.5">{t('mark_present', lang, madrasah?.type)}</p><p className="font-black text-green-600 text-sm">{item.present_days}</p></div>
+                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[8px] font-black text-red-400 uppercase mb-0.5">{t('mark_absent', lang, madrasah?.type)}</p><p className="font-black text-red-600 text-sm">{item.absent_days}</p></div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-amber-900/10 border-amber-900/20' : 'bg-amber-50/50 border-amber-50'}`}>
-                                      <p className="text-[8px] font-black text-amber-400 uppercase mb-0.5">Late</p>
+                                      <p className="text-[8px] font-black text-amber-400 uppercase mb-0.5">{t('mark_late', lang, madrasah?.type)}</p>
                                       <p className="font-black text-amber-600 text-sm">{late}</p>
+                                   </div>
+                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-indigo-900/10 border-indigo-900/20' : 'bg-indigo-50/50 border-indigo-50'}`}>
+                                      <p className="text-[8px] font-black text-indigo-400 uppercase mb-0.5">{t('mark_leave', lang, madrasah?.type)}</p>
+                                      <p className="font-black text-indigo-600 text-sm">{item.leave_days || 0}</p>
                                    </div>
                                 </div>
                             </div>

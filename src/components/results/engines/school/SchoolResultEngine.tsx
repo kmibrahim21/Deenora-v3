@@ -3,12 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import FinalResults from './FinalResults';
-import { generateSeatPlanPDF, generateResultPDF, generateClassResultPDF, generateExamRoutinePDF } from '../../../../utils/pdfGenerator';
+import { generateSeatPlanPDF, generateResultPDF, generateClassResultPDF, generateExamRoutinePDF, generateMassMarksheetPDF } from '../../../../utils/pdfGenerator';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
 
 interface SchoolResultEngineProps {
@@ -92,6 +92,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   // Scaler Hook/Ref for responsive A4 Live Preview
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
   const [previewScale, setPreviewScale] = useState<number>(1);
+  const [userZoom, setUserZoom] = useState<number>(1);
   const routineThemes = {
     'emerald': { primary: '#013c28', secondary: '#023c28', light: '#E6F4EA', accent: '#EAF7EE' },
     'blue': { primary: '#1e3a8a', secondary: '#1e40af', light: '#eff6ff', accent: '#f8fafc' },
@@ -1261,6 +1262,88 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     }
   };
 
+  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang) => {
+    if (!selectedExam || !madrasah) return;
+    
+    setIsDownloading(true);
+    if (Object.keys(marksData).length === 0) {
+        await fetchMarkEntryData(selectedExam.id, selectedExam.class_id);
+    }
+    
+    // We already have rankingData if view === 'report'. 
+    // If not, fetchRanking should be called. 
+    const validStudents = rankingData.filter((item: any) => students.find(st => st.id === item.student_id));
+    
+    const preppedStudents = validStudents.map((item: any) => {
+        const studentObj = students.find(st => st.id === item.student_id);
+        const resultInfo = calculateStudentResult(item.student_id, subjects);
+        
+        const studentMarks = marksData[item.student_id] || {};
+        const preparedMarks = subjects.map(s => {
+            const obtained = parseFloat(studentMarks[s.id] || '0');
+            const full = s.full_marks || 100;
+            const pass = s.pass_marks || 33;
+            const pct = (obtained / full) * 100;
+            const hasFailedSub = obtained < pass;
+            
+            const classHighest = Object.keys(marksData || {}).reduce((max, stdId) => {
+                const markVal = parseFloat(marksData[stdId]?.[s.id] || '0');
+                return markVal > max ? markVal : max;
+            }, 0);
+            
+            const subGradeInfo = (p: number, f: boolean) => {
+                if (f) return { gpa: '0.00', grade: 'F' };
+                if (p >= 80) return { gpa: '5.00', grade: 'A+' };
+                if (p >= 70) return { gpa: '4.00', grade: 'A' };
+                if (p >= 60) return { gpa: '3.50', grade: 'A-' };
+                if (p >= 50) return { gpa: '3.00', grade: 'B' };
+                if (p >= 40) return { gpa: '2.00', grade: 'C' };
+                if (p >= 33) return { gpa: '1.00', grade: 'D' };
+                return { gpa: '0.00', grade: 'F' };
+            };
+            return {
+                subject_name: s.subject_name,
+                marks_obtained: obtained,
+                grade: subGradeInfo(pct, hasFailedSub).grade,
+                grade_point: subGradeInfo(pct, hasFailedSub).gpa,
+                full_marks: s.full_marks || 100,
+                pass_marks: s.pass_marks || 33,
+                class_highest: classHighest,
+                is_optional: s.is_optional
+            };
+        });
+        
+        return {
+           info: {
+               ...studentObj,
+               student_name: item.student_name, 
+               roll: item.roll, 
+               classes: { class_name: selectedExam.classes?.class_name }, 
+               photo_url: studentObj?.photo_url, 
+               attendance: '95', // You can replace with real attendance computation if needed
+               merit_position: item.rank, 
+               gpa: resultInfo.gpa,
+               grade: resultInfo.grade
+           },
+           marks: preparedMarks
+        };
+    });
+
+    try {
+      await generateMassMarksheetPDF(
+          preppedStudents,
+          selectedExam,
+          madrasah,
+          downloadLang
+      );
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Error downloading PDF');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20 relative">
       {/* Download Indicator */}
@@ -1303,12 +1386,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
              activeTab === 'analytics' ? t('prediction_system', lang) : t('exams', lang)}
           </h1>
           {activeTab === 'exams' && view === 'report' && (
-              <button onClick={() => {
-                  setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadClassResult(l));
-                  setShowDownloadLangModal(true);
-              }} className="w-10 h-10 bg-blue-50 text-[#2563EB] rounded-xl flex items-center justify-center border border-blue-100 hover:bg-blue-100 transition-colors">
-                  <Download size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => {
+                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadClassResult(l));
+                    setShowDownloadLangModal(true);
+                }} className="px-2.5 h-8 bg-blue-50 text-[#2563EB] rounded-lg flex items-center justify-center border border-blue-100 hover:bg-blue-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
+                    <Download size={14} />
+                    {lang === 'bn' ? 'ফলাফল' : 'Result'}
+                </button>
+                <button onClick={() => {
+                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadMassMarksheets(l));
+                    setShowDownloadLangModal(true);
+                }} className="px-2.5 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center border border-purple-100 hover:bg-purple-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
+                    <Printer size={14} />
+                    {lang === 'bn' ? 'মার্কশীট' : 'Marksheet'}
+                </button>
+              </div>
           )}
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
@@ -1779,33 +1872,48 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             {/* Right Live Preview Column */}
             <div className="lg:col-span-2 space-y-4">
               <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2.5rem] border shadow-bubble`}>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-4 gap-3">
                   <h3 className={`text-base font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
                     {lang === 'bn' ? 'লাইভ প্রিন্ট প্রিভিউ' : 'Live Print Preview'}
                   </h3>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg">
-                    {lang === 'bn' ? 'এ৪ সাইজ পেপার' : 'A4 Size Document'}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">
+                      <button onClick={() => setUserZoom(z => Math.max(0.5, z - 0.2))} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'জুম আউট' : 'Zoom Out'}><ZoomOut size={16} /></button>
+                      <span className="text-[11px] font-black text-slate-700 min-w-[44px] text-center">{Math.round(userZoom * 100)}%</span>
+                      <button onClick={() => setUserZoom(z => Math.min(3, z + 0.2))} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'জুম ইন' : 'Zoom In'}><ZoomIn size={16} /></button>
+                      <div className="w-[1px] h-4 bg-slate-300 mx-0.5"></div>
+                      <button onClick={() => setUserZoom(1)} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'রিসেট জুম' : 'Reset Zoom'}><Maximize size={14} /></button>
+                    </div>
+                    <div className="hidden sm:block text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-emerald-50/50 border border-emerald-100 text-emerald-800 px-2 py-1.5 rounded-lg whitespace-nowrap">
+                      {lang === 'bn' ? 'এ৪ সাইজ' : 'A4 Size'}
+                    </div>
                   </div>
                 </div>
 
                 {/* Scalable, responsive container for Live Preview page to prevent overflow/side-scrolling */}
                 <div 
                   ref={previewContainerRef}
-                  className="w-full py-8 bg-slate-100 rounded-[2.8rem] border border-slate-200/50 flex justify-center overflow-hidden"
-                  style={{ minHeight: `${794 * previewScale + 40}px` }}
+                  className="w-full py-8 px-2 sm:px-8 bg-slate-100/50 rounded-[2.8rem] border border-slate-200/50 overflow-auto custom-scrollbar text-center"
+                  style={{ minHeight: `${794 * previewScale * userZoom + 40}px`, maxHeight: '75vh' }}
                 >
                   <div 
-                    className="shadow-3xl origin-top transition-transform duration-200 shrink-0 select-none bg-white font-noto rounded-lg ml-2 mr-2"
+                    className="relative shrink-0 inline-flex items-start text-left mx-auto"
                     style={{ 
-                      transform: `scale(${previewScale})`,
-                      width: '1123px',
-                      height: '794px',
-                      marginBottom: `${(previewScale - 1) * 794}px`
+                      width: `${1123 * previewScale * userZoom}px`,
+                      height: `${794 * previewScale * userZoom}px`
                     }}
                   >
+                    <div 
+                      className="shadow-3xl origin-top-left transition-transform duration-200 bg-white font-noto rounded-lg absolute top-0 left-0"
+                      style={{ 
+                        transform: `scale(${previewScale * userZoom})`,
+                        width: '1123px',
+                        height: '794px'
+                      }}
+                    >
                     
                     {/* Render live mockup copy matching true output */}
-                    <div className="text-slate-800 w-[1123px] h-[794px] p-8 relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                    <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
                       {/* Frame Design corners */}
                       <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
                       <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 rounded-tr-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
@@ -1814,7 +1922,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
                       <div className="flex-1 flex flex-col justify-between">
                         {/* Banner Block */}
-                        <div className="flex justify-between items-center w-full px-2 py-3 rounded-3xl border mb-4 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
+                        <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
                           
                           {/* Left Column: Logotype */}
                           <div className="flex-shrink-0 flex items-center justify-center pl-4">
@@ -1854,7 +1962,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                           </div>
 
                           {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
-                          <div className="flex-shrink-0 w-[160px] h-[120px] text-white rounded-2xl flex flex-col justify-between p-3 border shadow mr-4" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
+                          <div className="flex-shrink-0 w-[160px] h-[105px] text-white rounded-2xl flex flex-col justify-between p-3 border shadow mr-4" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
                             <div className="flex items-center justify-center">
                               <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center font-black text-sm" style={{ color: rtTheme.primary }}>
                                 📅
@@ -1975,7 +2083,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   };
 
                                   return displayClassesList.map((cls, idx) => (
-                                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : ''} hover:opacity-80 transition-opacity border-b h-13`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}4d`, borderColor: `${rtTheme.primary}26` }}>
+                                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : ''} hover:opacity-80 transition-opacity border-b h-[2.75rem]`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}4d`, borderColor: `${rtTheme.primary}26` }}>
                                       {/* Leftmost column showing class label with cute small ribbon or text */}
                                       <td className="border-r-2 p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
                                         <div className="flex items-center justify-center gap-1">
@@ -2082,7 +2190,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   };
 
                                   return routineData.map((row, idx) => (
-                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b h-16 relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
+                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b h-[3.25rem] relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
                                       <td className="border-r p-2 text-center relative group" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: `${rtTheme.light}4d` }}>
                                         <button 
                                           onClick={() => handleRemoveRoutineDay(row.id)}
@@ -2194,15 +2302,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         </div>
 
                         {/* Footer Block matching image exactly */}
-                        <div className="mt-4 flex justify-between items-end pt-4 border-t" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                        <div className="mt-2 flex justify-between items-end pt-3 border-t" style={{ borderColor: `${rtTheme.primary}1a` }}>
                           
                           {/* Left Column: Special Instructions list */}
                           <div className="max-w-[430px] text-left leading-relaxed">
-                            <div className="text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 text-[11px] font-black mb-2 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary }}>
+                            <div className="text-white px-3 py-1 rounded-lg inline-flex items-center gap-1.5 text-[11px] font-black mb-1.5 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary }}>
                               <span>📖</span>
                               {lang === 'bn' ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
                             </div>
-                            <ul className="space-y-1 max-h-[160px] overflow-hidden pr-2">
+                            <ul className="space-y-0.5 max-h-[105px] overflow-hidden pr-2">
                               {(() => {
                                 const previewInstructionsToShow = routineInstructions.length > 0 ? routineInstructions.filter(Boolean) : [
                                   lang === 'bn' ? 'পরীক্ষার ফি, রশিদ যোগ ও বকেয়ার রশিদ সংগ্রহে অনুরোধ রইল।' : 'Required exam fees and pending dues must be paid.',
@@ -2252,12 +2360,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
                   </div>
                 </div>
-
               </div>
             </div>
-
           </div>
         </div>
+      </div>
       )}
 
       {activeTab === 'exams' && view === 'list' && !selectedClassId && (
@@ -2508,15 +2615,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                       <Trophy size={40} className="text-amber-300" />
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
                       {rankingData.map((item: any) => (
-                          <div key={item.student_id} className="bg-white p-5 rounded-[2.2rem] border border-slate-100 shadow-bubble flex items-center justify-between">
-                              <div className="flex items-center gap-4 min-w-0">
-                                  <div className="w-10 h-10 bg-blue-50 text-[#2563EB] rounded-xl flex items-center justify-center font-black shrink-0">{item.rank}</div>
+                          <div key={item.student_id} className="bg-white p-3 rounded-[1.5rem] border border-slate-100 shadow-sm flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-6 h-6 bg-blue-50 text-[#2563EB] rounded-md flex items-center justify-center text-[9px] font-black shrink-0">{item.rank}</div>
                                   <div className="min-w-0">
-                                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto truncate leading-none mb-1`}>{item.student_name}</h5>
-                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                        Roll: {item.roll} | {t('total_marks', lang)}: {item.total_marks} | {t('average', lang)}: {(() => {
+                                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto truncate leading-normal mb-0.5 text-[13px]`}>{item.student_name}</h5>
+                                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter truncate opacity-80">
+                                        Roll: {item.roll} | {item.total_marks} | {(() => {
                                             const avgValue = subjects.length > 0 ? (item.total_marks / subjects.length) : 0;
                                             return avgValue.toFixed(2);
                                         })()}
@@ -2524,7 +2631,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   </div>
                               </div>
                               <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                  <div className="flex gap-2 mb-1">
+                                  <div className="flex gap-1.5 mb-0.5">
                                       <button 
                                           onClick={() => {
                                               const studentMarks = marksData[item.student_id] || {};
@@ -2584,22 +2691,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                 );
                                               }
                                           }}
-                                          className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                                          className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase flex items-center gap-1 transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
                                       >
-                                          <Printer size={12}/> {lang === 'bn' ? 'মার্কশিট' : 'Marksheet'}
+                                          <Printer size={10}/> {lang === 'bn' ? 'মার্কশিট' : 'Marksheet'}
                                       </button>
-                                      <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border ${item.pass_status ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                                      <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase border ${item.pass_status ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'}`}>
                                           {item.pass_status ? (lang === 'bn' ? 'পাস' : 'Passed') : (lang === 'bn' ? 'ফেল' : 'Failed')}
                                       </div>
                                   </div>
                                   {item.pass_status && (
-                                    <div className="flex gap-1.5">
+                                    <div className="flex gap-1">
                                        {(() => {
                                            const info = calculateStudentResult(item.student_id, subjects);
                                            return (
                                                <>
-                                                  <span className="px-2 py-0.5 bg-blue-50 text-[#2563EB] rounded-lg text-[8px] font-black border border-blue-100">{t('gpa', lang)}: {info.gpa}</span>
-                                                  <span className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black border border-purple-100">{t('grade', lang)}: {info.grade}</span>
+                                                  <span className="px-1.5 py-0.5 bg-blue-50 text-[#2563EB] rounded-md text-[7px] font-black border border-blue-50">{t('gpa', lang)}: {info.gpa}</span>
+                                                  <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md text-[7px] font-black border border-purple-50">{t('grade', lang)}: {info.grade}</span>
                                                </>
                                            );
                                        })()}

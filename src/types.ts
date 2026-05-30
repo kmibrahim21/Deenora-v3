@@ -254,7 +254,7 @@ export interface Attendance {
   institution_id: string;
   student_id: string;
   class_id?: string;
-  status: 'present' | 'absent' | 'late' | 'half_day' | 'holiday';
+  status: 'present' | 'absent' | 'late' | 'half_day' | 'holiday' | 'leave';
   date: string;
   session?: string;
   late_minutes?: number;

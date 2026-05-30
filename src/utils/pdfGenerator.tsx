@@ -250,6 +250,76 @@ export const generateResultPDF = async (
     doc.save(`Result_${student.student_name}.pdf`);
 };
 
+export const generateMassMarksheetPDF = async (
+    preppedStudents: any[],
+    exam: any,
+    madrasah: any,
+    lang: 'en' | 'bn' = 'en'
+) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                {preppedStudents.map((std, idx) => (
+                    <div key={idx} className="pdf-page-container">
+                        <ResultSheetTemplate 
+                            student={std.info} 
+                            exam={exam} 
+                            marks={std.marks} 
+                            madrasah={madrasah} 
+                            lang={lang} 
+                        />
+                    </div>
+                ))}
+            </div>
+        );
+        setTimeout(resolve, 1500);
+    });
+
+    // We want 2 A4 portraits on 1 A4 landscape page.
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth(); // 297
+    const pageHeight = doc.internal.pageSize.getHeight(); // 210
+    
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper && wrapper.children.length > 0) {
+        const pages = Array.from(wrapper.children);
+        
+        for (let i = 0; i < pages.length; i++) {
+            const pageElement = pages[i] as HTMLElement;
+            
+            const imgData = await toJpeg(pageElement, {
+                pixelRatio: 2,
+                quality: 0.95,
+                backgroundColor: '#ffffff',
+                width: 794,
+                height: 1123,
+            });
+            
+            const isLeft = (i % 2 === 0);
+            
+            // Add a new page for every two students (except the first one)
+            if (i > 0 && isLeft) {
+                doc.addPage();
+            }
+            
+            // A4 landscape width is 297. Half of that is 148.5
+            const hw = pageWidth / 2;
+            doc.addImage(imgData, 'JPEG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'FAST');
+        }
+    }
+    
+    root.unmount();
+    document.body.removeChild(container);
+    
+    doc.save(`Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+};
+
 // --- CLASS RESULT GENERATOR ---
 export const generateClassResultPDF = async (
     exam: any,

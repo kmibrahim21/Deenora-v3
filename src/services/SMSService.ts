@@ -172,6 +172,7 @@ export const SMSService = {
             return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(m.phone)}&messageContent=${encodedContent}&type=3`;
           });
 
+          let batchErrorStr = '';
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
@@ -185,8 +186,18 @@ export const SMSService = {
               if (parsed.results) {
                 parsed.results.forEach((r: any, idx: number) => {
                   const log = logs.find(l => l.recipient === validMsgs[idx].phone);
-                  if (log && (!r.success || (typeof r.response === 'string' && r.response.toLowerCase().includes('error')))) {
+                  const resStr = String(r.response || '').trim();
+                  const isErrorCode = /^\d{4}$/.test(resStr);
+                  const isError = !r.success || resStr.toLowerCase().includes('error') || isErrorCode;
+
+                  if (log && isError) {
                     log.status = 'failed';
+                  }
+                  
+                  if (resStr === '1016') {
+                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (1016)';
+                  } else if (resStr === '1011' || resStr === '1012') {
+                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
                   }
                 });
               }
@@ -200,6 +211,10 @@ export const SMSService = {
         // Insert logs
         if (logs.length > 0) {
           await supabase.from('sms_logs').insert(logs);
+        }
+
+        if (batchErrorStr) {
+          throw new Error(batchErrorStr);
         }
       });
 
@@ -245,6 +260,7 @@ export const SMSService = {
             return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(s.guardian_phone)}&messageContent=${encodedContent}&type=3`;
           });
           
+          let batchErrorStr = '';
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
@@ -258,8 +274,18 @@ export const SMSService = {
               if (parsed.results) {
                 parsed.results.forEach((r: any, idx: number) => {
                   const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone);
-                  if (log && (!r.success || (typeof r.response === 'string' && r.response.toLowerCase().includes('error')))) {
+                  const resStr = String(r.response || '').trim();
+                  const isErrorCode = /^\d{4}$/.test(resStr);
+                  const isError = !r.success || resStr.toLowerCase().includes('error') || isErrorCode;
+
+                  if (log && isError) {
                     log.status = 'failed';
+                  }
+
+                  if (resStr === '1016') {
+                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (1016)';
+                  } else if (resStr === '1011' || resStr === '1012') {
+                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
                   }
                 });
               }
@@ -273,6 +299,10 @@ export const SMSService = {
         // Insert logs
         if (logs.length > 0) {
           await supabase.from('sms_logs').insert(logs);
+        }
+
+        if (batchErrorStr) {
+          throw new Error(batchErrorStr);
         }
       });
 
@@ -315,13 +345,28 @@ export const SMSService = {
     } else {
       const encodedContent = encodeURIComponent(message).replace(/%2B/g, '%252B');
       let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${target}&messageContent=${encodedContent}&type=3`;
+      let throwErrorMsg = '';
       try { 
         const res = await fetch('/api/sms', { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ apiUrl })
         }); 
-        if (!res.ok) finalStatus = 'failed';
+        if (!res.ok) {
+          finalStatus = 'failed';
+        } else {
+          const parsed = await res.json();
+          const resStr = String(parsed.response || '').trim();
+          const isErrorCode = /^\d{4}$/.test(resStr);
+          const isError = !parsed.success || resStr.toLowerCase().includes('error') || isErrorCode;
+          if (isError) finalStatus = 'failed';
+          
+          if (resStr === '1016') {
+             throwErrorMsg = 'এসএমএস গেটওয়ে এরর (1016)';
+          } else if (resStr === '1011' || resStr === '1012') {
+             throwErrorMsg = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
+          }
+        }
       } catch (e) { 
         console.warn("Direct SMS failed:", e);
         finalStatus = 'failed';
@@ -337,6 +382,10 @@ export const SMSService = {
         parts: parts,
         status: finalStatus
       });
+    }
+
+    if (throwErrorMsg) {
+      throw new Error(throwErrorMsg);
     }
   },
 
