@@ -17,8 +17,9 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
         const total = item.total_days || 0;
         const absent = item.absent_days || 0;
         const holiday = item.holiday_days || 0;
+        const leave = item.leave_days || 0;
         const pct = (total - holiday) > 0 ? Math.round(((present + late) / (total - holiday)) * 100) : 0;
-        return { ...item, late, present, absent, total, holiday, pct };
+        return { ...item, late, present, absent, total, holiday, leave, pct };
     });
 
     // Sort by percentage to calculate rank
@@ -40,7 +41,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
         return rollA - rollB;
     });
 
-    const ROWS_PER_PAGE = 20;
+    const ROWS_PER_PAGE = 22;
     const totalPages = Math.ceil(calculatedData.length / ROWS_PER_PAGE) || 1;
 
     return (
@@ -76,7 +77,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                         </div>
 
                         {/* Table */}
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                             <thead>
                                 <tr style={{ backgroundColor: '#f1f5f9' }}>
                                     <th style={thStyle}>{isBn ? 'রোল' : 'Roll'}</th>
@@ -85,7 +86,8 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                     <th style={thStyle}>{isBn ? 'উপস্থিত' : 'Present'}</th>
                                     <th style={thStyle}>{isBn ? 'অনুপস্থিত' : 'Absent'}</th>
                                     <th style={thStyle}>{isBn ? 'দেরি' : 'Late'}</th>
-                                    <th style={thStyle}>{isBn ? 'ছুটি' : 'Holiday'}</th>
+                                    <th style={thStyle}>{isBn ? 'ছুটি' : 'Leave'}</th>
+                                    <th style={thStyle}>{isBn ? 'বন্ধ' : 'Holiday'}</th>
                                     <th style={thStyle}>{isBn ? 'শতকরা' : 'Percentage'}</th>
                                     <th style={thStyle}>{isBn ? 'পজিশন' : 'Position'}</th>
                                 </tr>
@@ -97,10 +99,11 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                             <td style={tdStyle}>{item.roll || '-'}</td>
                                             <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 'bold' }}>{item.student_name}</td>
                                             <td style={tdStyle}>{item.total_days}</td>
-                                            <td style={{ ...tdStyle, color: '#16a34a' }}>{item.present_days}</td>
+                                            <td style={{ ...tdStyle, color: '#16a34a', fontWeight: 'bold' }}>{item.present_days}</td>
                                             <td style={{ ...tdStyle, color: '#dc2626' }}>{item.absent_days}</td>
                                             <td style={{ ...tdStyle, color: '#d97706' }}>{item.late}</td>
-                                            <td style={{ ...tdStyle, color: '#3b82f6' }}>{item.holiday}</td>
+                                            <td style={{ ...tdStyle, color: '#6366f1' }}>{item.leave}</td>
+                                            <td style={{ ...tdStyle, color: '#64748b' }}>{item.holiday}</td>
                                             <td style={{ ...tdStyle, fontWeight: 'bold' }}>{item.pct}%</td>
                                             <td style={{ ...tdStyle, fontWeight: 'bold', color: '#3b82f6' }}>{item.rank}</td>
                                         </tr>
@@ -127,7 +130,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
 };
 
 const thStyle: React.CSSProperties = {
-    padding: '10px 8px',
+    padding: '8px 4px',
     borderBottom: '2px solid #cbd5e1',
     fontWeight: 'bold',
     textAlign: 'center',
@@ -135,7 +138,7 @@ const thStyle: React.CSSProperties = {
 };
 
 const tdStyle: React.CSSProperties = {
-    padding: '8px',
+    padding: '6px 4px',
     borderBottom: '1px solid #e2e8f0',
     textAlign: 'center',
     color: '#334155'

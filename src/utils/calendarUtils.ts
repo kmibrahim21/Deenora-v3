@@ -136,6 +136,16 @@ export const ISLAMIC_HOLIDAYS = [
   { date: '2026-08-25', title: 'Milad-un-Nabi', type: 'islamic' },
 ];
 
+export const getTodayDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+export const getTodayMonthString = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export const getEventsForDate = (date: Date, customEvents: any[] = []) => {
   const dateStr = format(date, 'yyyy-MM-dd');
   

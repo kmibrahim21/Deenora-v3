@@ -8,6 +8,7 @@ import { SchoolFeeEngine, clearGlobalSchoolFeeCache } from 'components/finance/S
 import { QawmiFeeEngine, clearGlobalQawmiFeeCache } from 'components/finance/QawmiFeeEngine';
 import StudentAccountingDetail from 'components/finance/StudentAccountingDetail';
 import { sortMadrasahClasses } from 'pages/Classes';
+import { getTodayDateString } from '../utils/calendarUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
@@ -29,7 +30,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
-  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transactionDate, setTransactionDate] = useState(getTodayDateString());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeFeeTab, setActiveFeeTab] = useState<'settings' | 'reminders' | 'stats'>('settings');
 

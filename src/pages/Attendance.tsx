@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
 import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff } from 'lucide-react';
-import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
+import { getBengaliDate, getHijriDate, getEventsForDate, getTodayDateString, getTodayMonthString } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
 import { useOfflineStatus } from 'hooks/useOffline';
@@ -61,7 +61,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [reportType, setReportType] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   const [reportView, setReportView] = useState<'list' | 'analytics'>('list');
   const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportDate, setReportDate] = useState(getTodayDateString());
   const [dailyAbsentees, setDailyAbsentees] = useState<any[]>([]);
   const [attendanceNotTaken, setAttendanceNotTaken] = useState(false);
   
@@ -81,9 +81,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [halfDayTime, setHalfDayTime] = useState(madrasah?.config_json?.attendance_settings?.half_day_time || '12:00');
   const [fullDayTime, setFullDayTime] = useState(madrasah?.config_json?.attendance_settings?.full_day_time || '14:00');
   const [savingSettings, setSavingSettings] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getTodayDateString());
   const [selectedSession, setSelectedSession] = useState<string>('all');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); 
+  const [selectedMonth, setSelectedMonth] = useState(getTodayMonthString()); 
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [dayEvents, setDayEvents] = useState<any[]>([]);
   const [existingAttRecords, setExistingAttRecords] = useState<any[]>([]);
@@ -1121,10 +1121,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           </div>
                         </div>
                         <div className="flex gap-2 shrink-0 items-start">
-                           <button onClick={() => setStatus(s.id, 'present')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_present', lang, madrasah?.type)}><CheckCircle size={20}/></button>
-                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_absent', lang, madrasah?.type)}><XCircle size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'present')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_present', lang, madrasah?.institution_type)}><CheckCircle size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_absent', lang, madrasah?.institution_type)}><XCircle size={20}/></button>
                            <div className="flex flex-col items-center">
-                             <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_late', lang, madrasah?.type)}>
+                             <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_late', lang, madrasah?.institution_type)}>
                                 {attendance[s.id] === 'late' ? (
                                  <span className="text-base font-black">{computeLateMins(arrivalTime[s.id])}</span>
                                 ) : <Clock size={20}/>}
@@ -1135,7 +1135,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                </span>
                              )}
                            </div>
-                           <button onClick={() => setStatus(s.id, 'leave')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_leave', lang, madrasah?.type)}><CalendarOff size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'leave')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_leave', lang, madrasah?.institution_type)}><CalendarOff size={20}/></button>
                         </div>
                      </div>
                    ))}
@@ -1528,14 +1528,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                 </div>
                                 <div className="grid grid-cols-5 gap-2">
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}><p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">{lang === 'bn' ? 'মোট' : 'Total'}</p><p className={`font-black text-sm ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.total_days}</p></div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-green-900/10 border-green-900/20' : 'bg-green-50/50 border-green-50'}`}><p className="text-[8px] font-black text-green-400 uppercase mb-0.5">{t('mark_present', lang, madrasah?.type)}</p><p className="font-black text-green-600 text-sm">{item.present_days}</p></div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[8px] font-black text-red-400 uppercase mb-0.5">{t('mark_absent', lang, madrasah?.type)}</p><p className="font-black text-red-600 text-sm">{item.absent_days}</p></div>
+                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-green-900/10 border-green-900/20' : 'bg-green-50/50 border-green-50'}`}><p className="text-[8px] font-black text-green-400 uppercase mb-0.5">{t('mark_present', lang, madrasah?.institution_type)}</p><p className="font-black text-green-600 text-sm">{item.present_days}</p></div>
+                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[8px] font-black text-red-400 uppercase mb-0.5">{t('mark_absent', lang, madrasah?.institution_type)}</p><p className="font-black text-red-600 text-sm">{item.absent_days}</p></div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-amber-900/10 border-amber-900/20' : 'bg-amber-50/50 border-amber-50'}`}>
-                                      <p className="text-[8px] font-black text-amber-400 uppercase mb-0.5">{t('mark_late', lang, madrasah?.type)}</p>
+                                      <p className="text-[8px] font-black text-amber-400 uppercase mb-0.5">{t('mark_late', lang, madrasah?.institution_type)}</p>
                                       <p className="font-black text-amber-600 text-sm">{late}</p>
                                    </div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-indigo-900/10 border-indigo-900/20' : 'bg-indigo-50/50 border-indigo-50'}`}>
-                                      <p className="text-[8px] font-black text-indigo-400 uppercase mb-0.5">{t('mark_leave', lang, madrasah?.type)}</p>
+                                      <p className="text-[8px] font-black text-indigo-400 uppercase mb-0.5">{t('mark_leave', lang, madrasah?.institution_type)}</p>
                                       <p className="font-black text-indigo-600 text-sm">{item.leave_days || 0}</p>
                                    </div>
                                 </div>

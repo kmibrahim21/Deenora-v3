@@ -55,7 +55,7 @@ import { requestManager } from "services/RequestManager";
 import { useOfflineStatus } from "hooks/useOffline";
 import { CacheService } from "services/cacheService";
 import { generateAttendanceReportPDF } from "../utils/pdfGenerator";
-import { getEventsForDate } from "../utils/calendarUtils";
+import { getEventsForDate, getTodayDateString, getTodayMonthString } from "../utils/calendarUtils";
 
 interface TeacherManagementProps {
   lang: Language;
@@ -143,14 +143,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     useState<Partial<TeacherPermissions>>(initialPermissions);
   const [activeTab, setActiveTab] = useState<'teachers' | 'salary' | 'attendance'>('teachers');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'take' | 'report'>('take');
-  const [salaryMonth, setSalaryMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const [attendanceMonth, setAttendanceMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [salaryMonth, setSalaryMonth] = useState(() => getTodayMonthString());
+  const [attendanceMonth, setAttendanceMonth] = useState(() => getTodayMonthString());
   const [reportType, setReportType] = useState<'daily' | 'monthly' | 'yearly'>('monthly');
   const [reportYear, setReportYear] = useState(() => new Date().getFullYear().toString());
-  const [reportDate, setReportDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [reportDate, setReportDate] = useState(() => getTodayDateString());
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [reportData, setReportData] = useState<Record<string, Record<string, string>>>({});
-  const [attendanceDate, setAttendanceDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [attendanceDate, setAttendanceDate] = useState(() => getTodayDateString());
   const [isHoliday, setIsHoliday] = useState(false);
   const [dayEvents, setDayEvents] = useState<any[]>([]);
   const [teacherAttendance, setTeacherAttendance] = useState<Record<string, string>>({});

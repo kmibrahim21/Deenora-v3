@@ -1379,7 +1379,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           <button onClick={view === 'list' ? onBack : () => setView('list')} className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-blue-50 border-blue-100 text-[#2563EB]'}`}>
             <ArrowLeft size={20}/>
           </button>
-          <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
+          <h1 className={`text-lg sm:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto truncate max-w-[50vw]`}>
             {activeTab === 'exams' && view === 'list' ? t('exams', lang) : 
              activeTab === 'exams' && selectedExam ? selectedExam.exam_name :
              activeTab === 'seat-plan' ? 'Seat Plan' :
@@ -2607,21 +2607,21 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#2563EB]" size={40} /></div>
               ) : (
                 <>
-                  <div className="bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] p-6 rounded-[2.5rem] text-white flex items-center justify-between shadow-premium">
-                      <div>
-                          <p className="text-[10px] font-black uppercase opacity-60">সেরা ফলাফল</p>
-                          <h3 className="text-2xl font-black font-noto">{rankingData[0]?.student_name || 'N/A'}</h3>
+                  <div className="bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] text-white flex items-center justify-between shadow-premium">
+                      <div className="min-w-0">
+                          <p className="text-[9px] font-black uppercase opacity-60">সেরা ফলাফল</p>
+                          <h3 className="text-lg sm:text-2xl font-black font-noto truncate pt-1">{rankingData[0]?.student_name || 'N/A'}</h3>
                       </div>
                       <Trophy size={40} className="text-amber-300" />
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
                       {rankingData.map((item: any) => (
-                          <div key={item.student_id} className="bg-white p-3 rounded-[1.5rem] border border-slate-100 shadow-sm flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="w-6 h-6 bg-blue-50 text-[#2563EB] rounded-md flex items-center justify-center text-[9px] font-black shrink-0">{item.rank}</div>
+                          <div key={item.student_id} className="bg-white p-2.5 sm:p-3 rounded-[1.2rem] sm:rounded-[1.5rem] border border-slate-100 shadow-sm flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-50 text-[#2563EB] rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0">{item.rank}</div>
                                   <div className="min-w-0">
-                                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto truncate leading-normal mb-0.5 text-[13px]`}>{item.student_name}</h5>
+                                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto truncate leading-relaxed mb-0.5 text-[12px] sm:text-[13px] pt-0.5`}>{item.student_name}</h5>
                                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter truncate opacity-80">
                                         Roll: {item.roll} | {item.total_marks} | {(() => {
                                             const avgValue = subjects.length > 0 ? (item.total_marks / subjects.length) : 0;

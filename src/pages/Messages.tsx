@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { MessageSquare, Calendar, Send, List, Trash2, CalendarDays, BookOpen, Clock, FileText, Plus, Bell, Users, CheckCircle2, Circle } from 'lucide-react';
 import { Institution, Language } from '../types';
 import { OfflineService } from '../services/OfflineService';
+import { getTodayDateString } from '../utils/calendarUtils';
 
 export default function Messages({ 
   lang = 'bn',
@@ -31,7 +32,7 @@ export default function Messages({
   // Form states - Message
   const [selectedClass, setSelectedClass] = useState('');
   const [title, setTitle] = useState('');
-  const [msgDate, setMsgDate] = useState(new Date().toISOString().split('T')[0]);
+  const [msgDate, setMsgDate] = useState(getTodayDateString());
   const [msgActivities, setMsgActivities] = useState('');
   const [msgHomework, setMsgHomework] = useState('');
   const [msgNote, setMsgNote] = useState('');
@@ -39,14 +40,14 @@ export default function Messages({
   // Form states - Notice
   const [noticeType, setNoticeType] = useState('APP_NOTICE');
   const [noticeTitle, setNoticeTitle] = useState('');
-  const [noticeDate, setNoticeDate] = useState(new Date().toISOString().split('T')[0]);
+  const [noticeDate, setNoticeDate] = useState(getTodayDateString());
   const [noticeDesc, setNoticeDesc] = useState('');
   const [noticeClass, setNoticeClass] = useState('All Classes');
   const [sendTo, setSendTo] = useState('All Parents');
 
   // Form states - Routine
   const [routineClass, setRoutineClass] = useState('');
-  const [routineEffectiveDate, setRoutineEffectiveDate] = useState(new Date().toISOString().split('T')[0]);
+  const [routineEffectiveDate, setRoutineEffectiveDate] = useState(getTodayDateString());
   const [routineNote, setRoutineNote] = useState('');
   const [routineRows, setRoutineRows] = useState([
     { id: '1', time: '8:00 - 9:00', Sunday: 'Hifz', Monday: 'Quran', Tuesday: 'Hifz', Wednesday: 'Arabic', Thursday: 'Hifz' },

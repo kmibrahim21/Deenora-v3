@@ -11,6 +11,7 @@ import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import SmartResultAnalytics from 'components/SmartResultAnalytics';
 import { isValidUUID } from 'utils/validation';
 import { CacheService } from 'services/cacheService';
+import { getTodayDateString, getTodayMonthString } from 'utils/calendarUtils';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 
 interface HomeProps {
@@ -118,7 +119,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         }
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
+      const currentMonth = getTodayMonthString();
       const allowedClasses = profile?.permissions?.allowed_classes;
       const isTeacher = role === 'teacher';
 
@@ -169,7 +171,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const ledgerProm = requestManager.cachedFetch(
         'ledger',
         (q) => {
-          let query = q.select('type, amount').eq('institution_id', institutionId).gte('transaction_date', new Date().toISOString().slice(0, 7) + '-01');
+          let query = q.select('type, amount').eq('institution_id', institutionId).gte('transaction_date', currentMonth + '-01');
           if (activeYearId) query = query.eq('academic_year_id', activeYearId);
           return query;
         },
@@ -236,7 +238,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         { table: 'teachers', key: `dashboard_teachers:${institutionId}` },
         { table: 'institutions', key: `dashboard_balance:${institutionId}` },
         { table: 'ledger', key: `dashboard_ledger:${institutionId}:${activeYearId || 'all'}` },
-        { table: 'attendance', key: `dashboard_attendance:${institutionId}:${new Date().toISOString().split('T')[0]}` }
+        { table: 'attendance', key: `dashboard_attendance:${institutionId}:${getTodayDateString()}` }
       ];
 
       const unsubscribers = keysToWatch.map(cfg => 
