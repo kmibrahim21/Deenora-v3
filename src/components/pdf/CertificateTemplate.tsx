@@ -39,11 +39,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
   const upazila = addressParts[2] || '';
   const district = addressParts[3] || '';
 
-  const Field = ({ value, minWidth = '150px' }: { value: string; minWidth?: string }) => (
-    <span className="inline-flex mx-2 translate-y-1">
+  const Field = ({ value, minWidth = '150px', stretch = false }: { value: string; minWidth?: string; stretch?: boolean }) => (
+    <span className={`inline-flex mx-2 items-baseline ${stretch ? 'flex-1' : ''}`}>
       <span 
-        className="border-b-[1.5px] border-dashed border-slate-400 px-3 text-center font-bold text-[#0f2c59] whitespace-nowrap"
-        style={{ minWidth, lineHeight: '1.2', display: 'inline-block', fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif", fontSize: '24px' }}
+        className={`border-b-[1.5px] border-dashed border-slate-400 px-3 text-center font-bold text-[#0f2c59] whitespace-nowrap ${stretch ? 'w-full inline-block' : ''}`}
+        style={{ minWidth: stretch ? undefined : minWidth, lineHeight: '1.1', display: 'inline-block', fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif", fontSize: '24px' }}
       >
         {value || ''}
       </span>
@@ -151,14 +151,19 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
            {type === 'testimonial' && (
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
-                 <p className="text-justify">
-                   <span className="mr-2">এই মর্মে প্রশংসাপত্র প্রদান করা যাচ্ছে যে,</span>
-                   <Field value={student.student_name} minWidth="320px" />
-                   <span>, পিতা:</span>
-                   <Field value={student.guardian_name || ''} minWidth="260px" />
-                   <span>, মাতা:</span>
-                   <Field value={student.mother_name || ''} minWidth="260px" />
-                   <span>, গ্রাম/এলাকা:</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">এই মর্মে প্রশংসাপত্র প্রদান করা যাচ্ছে যে,</span>
+                     <Field value={student.student_name} minWidth="320px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>পিতা:</span>
+                     <Field value={student.guardian_name || ''} minWidth="260px" stretch />
+                     <span>, মাতা:</span>
+                     <Field value={student.mother_name || ''} minWidth="260px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>গ্রাম/এলাকা:</span>
                    <Field value={villageOrArea} minWidth="220px" />
                    <span>, ডাকঘর:</span>
                    <Field value={postOffice} minWidth="160px" />
@@ -180,15 +185,21 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="160px" />
                    <span>। অত্র প্রতিষ্ঠানে অধ্যয়নকালে সে কোনো রাষ্ট্র বা শৃঙ্খলা বিরোধী কাজে অংশগ্রহণ করেনি। আমি তার সর্বাঙ্গীন উন্নতি ও উজ্জ্বল ভবিষ্যৎ কামনা করি।</span>
                  </p>
+                 </div>
                ) : (
-                 <p className="text-justify" style={{ lineHeight: '1.9' }}>
-                   <span className="mr-2">This testimonial is proudly presented to</span>
-                   <Field value={student.name_en || student.student_name} minWidth="380px" />
-                   <span>, son/daughter of</span>
-                   <Field value={student.guardian_name || ''} minWidth="300px" />
-                   <span>and</span>
-                   <Field value={student.mother_name || ''} minWidth="300px" />
-                   <span>, address:</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">This testimonial is proudly presented to</span>
+                     <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>son/daughter of</span>
+                     <Field value={student.guardian_name || ''} minWidth="300px" stretch />
+                     <span>and</span>
+                     <Field value={student.mother_name || ''} minWidth="300px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>address:</span>
                    <Field value={student.address || ''} minWidth="340px" />
                    
                    <span>. He/She appeared in the final examination of class</span>
@@ -203,6 +214,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
 
                    <span className="mr-2 mt-4 inline-block">His/Her academic performance and merit were highly commendable. During his/her stay, he/she did not take part in any activity subversive to the state or discipline. I wish him/her a very bright and prosperous future.</span>
                  </p>
+                 </div>
                )}
              </div>
            )}
@@ -210,14 +222,19 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
            {type === 'certificate' && (
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
-                 <p className="text-justify">
-                   <span className="mr-2">এই মর্মে প্রত্যয়ন করা যাচ্ছে যে,</span>
-                   <Field value={student.student_name} minWidth="320px" />
-                   <span>, পিতা:</span>
-                   <Field value={student.guardian_name || ''} minWidth="260px" />
-                   <span>, মাতা:</span>
-                   <Field value={student.mother_name || ''} minWidth="260px" />
-                   <span>, গ্রাম/এলাকা:</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">এই মর্মে প্রত্যয়ন করা যাচ্ছে যে,</span>
+                     <Field value={student.student_name} minWidth="320px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>পিতা:</span>
+                     <Field value={student.guardian_name || ''} minWidth="260px" stretch />
+                     <span>, মাতা:</span>
+                     <Field value={student.mother_name || ''} minWidth="260px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>গ্রাম/এলাকা:</span>
                    <Field value={villageOrArea} minWidth="220px" />
                    <span>, ডাকঘর:</span>
                    <Field value={postOffice} minWidth="160px" />
@@ -237,15 +254,21 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="160px" />
                    <span>। আমি তার সুন্দর, সমৃদ্ধ ও আলোকিত জীবনের সার্বিক সাফল্য কামনা করি।</span>
                  </p>
+                 </div>
                ) : (
-                 <p className="text-justify" style={{ lineHeight: '1.9' }}>
-                   <span className="mr-2">This is to certify that</span>
-                   <Field value={student.name_en || student.student_name} minWidth="380px" />
-                   <span>, son/daughter of</span>
-                   <Field value={student.guardian_name || ''} minWidth="300px" />
-                   <span>and</span>
-                   <Field value={student.mother_name || ''} minWidth="300px" />
-                   <span>, address:</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">This is to certify that</span>
+                     <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>son/daughter of</span>
+                     <Field value={student.guardian_name || ''} minWidth="300px" stretch />
+                     <span>and</span>
+                     <Field value={student.mother_name || ''} minWidth="300px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>address:</span>
                    <Field value={student.address || ''} minWidth="340px" />
                    
                    <span>, is a regular student of class</span>
@@ -260,6 +283,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
 
                    <span className="mr-2 mt-4 inline-block">He/She is a polite, obedient and brilliant student. His/Her participation in academic and co-curricular activities is satisfactory. I wish him/her success in all future endeavors.</span>
                  </p>
+                 </div>
                )}
              </div>
            )}
@@ -267,14 +291,19 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
            {type === 'character' && (
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
-                 <p className="text-justify">
-                   <span className="mr-2">এই মর্মে চারিত্রিক সনদপত্র প্রদান করা যাচ্ছে যে,</span>
-                   <Field value={student.student_name} minWidth="320px" />
-                   <span>, পিতা:</span>
-                   <Field value={student.guardian_name || ''} minWidth="260px" />
-                   <span>, মাতা:</span>
-                   <Field value={student.mother_name || ''} minWidth="260px" />
-                   <span>, গ্রাম/এলাকা:</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">এই মর্মে চারিত্রিক সনদপত্র প্রদান করা যাচ্ছে যে,</span>
+                     <Field value={student.student_name} minWidth="320px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>পিতা:</span>
+                     <Field value={student.guardian_name || ''} minWidth="260px" stretch />
+                     <span>, মাতা:</span>
+                     <Field value={student.mother_name || ''} minWidth="260px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>গ্রাম/এলাকা:</span>
                    <Field value={villageOrArea} minWidth="220px" />
                    <span>, ডাকঘর:</span>
                    <Field value={postOffice} minWidth="160px" />
@@ -292,15 +321,21 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="160px" />
                    <span>। অত্র প্রতিষ্ঠানে অধ্যয়নকালে সে কোনো রাষ্ট্র, সমাজ বা শৃঙ্খলা বিরোধী কার্যকলাপে জড়িত ছিল না। আমি তার ভবিষ্যৎ জীবনের উন্নতি ও মঙ্গল কামনা করি।</span>
                  </p>
+                 </div>
                ) : (
-                 <p className="text-justify" style={{ lineHeight: '1.9' }}>
-                   <span className="mr-2">This character certificate is issued to certify that</span>
-                   <Field value={student.name_en || student.student_name} minWidth="380px" />
-                   <span>, son/daughter of</span>
-                   <Field value={student.guardian_name || ''} minWidth="300px" />
-                   <span>and</span>
-                   <Field value={student.mother_name || ''} minWidth="300px" />
-                   <span>, address:</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">This character certificate is issued to certify that</span>
+                     <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>son/daughter of</span>
+                     <Field value={student.guardian_name || ''} minWidth="300px" stretch />
+                     <span>and</span>
+                     <Field value={student.mother_name || ''} minWidth="300px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>address:</span>
                    <Field value={student.address || ''} minWidth="340px" />
                    
                    <span>, is/was a regular student of class</span>
@@ -313,6 +348,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
 
                    <span className="mr-2 mt-4 inline-block">To the best of my knowledge, his/her character, conduct, and moral values are excellent. He/She is an honest and responsible student. He/She was never involved in any anti-social or anti-disciplinary activities. I wish him/her all the best for his/her future.</span>
                  </p>
+                 </div>
                )}
              </div>
            )}
@@ -320,14 +356,19 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
            {type === 'tc' && (
              <div className="font-medium w-full text-justify">
                {isBn ? (
-                 <p className="text-justify" style={{ lineHeight: '1.9' }}>
-                   <span className="mr-2">এতদ্বারা প্রত্যয়ন করা যাচ্ছে যে,</span>
-                   <Field value={student.student_name} minWidth="320px" />
-                   <span>, পিতা:</span>
-                   <Field value={student.guardian_name || ''} minWidth="260px" />
-                   <span>, মাতা:</span>
-                   <Field value={student.mother_name || ''} minWidth="260px" />
-                   <span>, গ্রাম/এলাকা:</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">এতদ্বারা প্রত্যয়ন করা যাচ্ছে যে,</span>
+                     <Field value={student.student_name} minWidth="320px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>পিতা:</span>
+                     <Field value={student.guardian_name || ''} minWidth="260px" stretch />
+                     <span>, মাতা:</span>
+                     <Field value={student.mother_name || ''} minWidth="260px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>গ্রাম/এলাকা:</span>
                    <Field value={villageOrArea} minWidth="220px" />
                    <span>, ডাকঘর:</span>
                    <Field value={postOffice} minWidth="160px" />
@@ -348,15 +389,21 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <span>। </span>
                    <span>তার চরিত্র ও আচরণ ভালো। আমরা তার ভবিষ্যৎ জীবনের সাফল্য কামনা করি।</span>
                  </p>
+                 </div>
                ) : (
-                 <p className="text-justify" style={{ lineHeight: '1.9' }}>
-                   <span className="mr-2">This is to certify that</span>
-                   <Field value={student.name_en || student.student_name} minWidth="380px" />
-                   <span>, son/daughter of</span>
-                   <Field value={student.guardian_name || ''} minWidth="300px" />
-                   <span>and</span>
-                   <Field value={student.mother_name || ''} minWidth="300px" />
-                   <span>, was a regular student of class</span>
+                 <div className="flex flex-col gap-y-1 w-full text-justify">
+                   <div className="flex w-full items-end pb-1">
+                     <span className="mr-2">This is to certify that</span>
+                     <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
+                   </div>
+                   <div className="flex w-full items-end pb-1">
+                     <span>son/daughter of</span>
+                     <Field value={student.guardian_name || ''} minWidth="300px" stretch />
+                     <span>and</span>
+                     <Field value={student.mother_name || ''} minWidth="300px" stretch />
+                   </div>
+                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
+                     <span>, was a regular student of class</span>
                    <Field value={student.className || ''} minWidth="180px" />
                    <span>in this institution. His/Her Roll No was</span>
                    <Field value={String(student.roll || '')} minWidth="120px" />
@@ -368,6 +415,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="180px" />
                    <span>. His/Her character and conduct were good. We wish him/her success in future endeavors.</span>
                  </p>
+                 </div>
                )}
              </div>
            )}
