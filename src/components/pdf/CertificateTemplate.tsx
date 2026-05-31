@@ -40,15 +40,16 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
   const district = addressParts[3] || '';
 
   const Field = ({ value, minWidth = '150px', stretch = false }: { value: string; minWidth?: string; stretch?: boolean }) => (
-    <span className={`inline-flex mx-2 items-baseline ${stretch ? 'flex-1' : ''}`}>
+    <span className={`inline-block mx-2 -translate-y-1 ${stretch ? 'flex-1' : ''}`}>
       <span 
-        className={`border-b-[1.5px] border-dashed border-slate-400 px-3 text-center font-bold text-[#0f2c59] whitespace-nowrap ${stretch ? 'w-full inline-block' : ''}`}
-        style={{ minWidth: stretch ? undefined : minWidth, lineHeight: '1.1', display: 'inline-block', fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif", fontSize: '24px' }}
+        className={`border-b-[1.5px] border-dashed border-slate-400 px-3 text-center font-bold text-[#0f2c59] whitespace-nowrap ${stretch ? 'block w-full' : 'inline-block'}`}
+        style={{ minWidth: stretch ? undefined : minWidth, lineHeight: '1', fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif", fontSize: '22px' }}
       >
         {value || ''}
       </span>
     </span>
   );
+
 
   return (
     <div className="w-[1122px] h-[793px] bg-white relative flex flex-col overflow-hidden box-border" style={{ fontFamily: isBn ? "'Noto Sans Bengali', sans-serif" : "'Inter', sans-serif" }}>
@@ -79,7 +80,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
       {/* Centered Institution Logo Watermark */}
       {madrasah?.logo_url && (
         <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] z-0 pointer-events-none">
-          <img src={madrasah.logo_url} className="w-[450px] h-[450px] object-contain grayscale" alt="watermark" />
+          <img src={madrasah.logo_url} className="w-[450px] h-[450px] object-contain grayscale mix-blend-multiply" alt="watermark" />
         </div>
       )}
 
@@ -99,7 +100,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
       ))}
 
       {/* --- Main Content --- */}
-      <div className="relative z-20 flex flex-col h-full px-20 pt-[45px] pb-10">
+      <div className="relative z-20 flex flex-col h-full px-20 pt-[45px] pb-[100px] justify-between">
         
         {/* Absolute Header Layer: Serial */}
         <div className="absolute top-[50px] left-[65px] z-30">
@@ -120,7 +121,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
         {/* Institution Info */}
         <div className="flex flex-col items-center mb-4 relative z-30">
           {madrasah?.logo_url && (
-            <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain drop-shadow-sm pb-2" alt="Logo" />
+            <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain drop-shadow-sm pb-2 mix-blend-multiply" alt="Logo" />
           )}
           <h1 className="text-[44px] font-bold text-[#0f2c59] tracking-tight drop-shadow-sm text-center leading-tight whitespace-nowrap mt-1" style={{ fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif" }}>
             {isBn ? (madrasah?.name || 'প্রতিষ্ঠানের নাম') : (madrasah?.config_json as any)?.name_english || madrasah?.name || 'Institution Name'}
@@ -152,11 +153,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">এই মর্মে প্রশংসাপত্র প্রদান করা যাচ্ছে যে,</span>
                      <Field value={student.student_name} minWidth="320px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>পিতা:</span>
                      <Field value={student.guardian_name || ''} minWidth="260px" stretch />
                      <span>, মাতা:</span>
@@ -188,11 +189,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                  </div>
                ) : (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">This testimonial is proudly presented to</span>
                      <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>son/daughter of</span>
                      <Field value={student.guardian_name || ''} minWidth="300px" stretch />
                      <span>and</span>
@@ -223,11 +224,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">এই মর্মে প্রত্যয়ন করা যাচ্ছে যে,</span>
                      <Field value={student.student_name} minWidth="320px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>পিতা:</span>
                      <Field value={student.guardian_name || ''} minWidth="260px" stretch />
                      <span>, মাতা:</span>
@@ -257,11 +258,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                  </div>
                ) : (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">This is to certify that</span>
                      <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>son/daughter of</span>
                      <Field value={student.guardian_name || ''} minWidth="300px" stretch />
                      <span>and</span>
@@ -292,11 +293,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">এই মর্মে চারিত্রিক সনদপত্র প্রদান করা যাচ্ছে যে,</span>
                      <Field value={student.student_name} minWidth="320px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>পিতা:</span>
                      <Field value={student.guardian_name || ''} minWidth="260px" stretch />
                      <span>, মাতা:</span>
@@ -324,11 +325,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                  </div>
                ) : (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">This character certificate is issued to certify that</span>
                      <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>son/daughter of</span>
                      <Field value={student.guardian_name || ''} minWidth="300px" stretch />
                      <span>and</span>
@@ -357,11 +358,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
              <div className="font-medium w-full text-justify">
                {isBn ? (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">এতদ্বারা প্রত্যয়ন করা যাচ্ছে যে,</span>
                      <Field value={student.student_name} minWidth="320px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>পিতা:</span>
                      <Field value={student.guardian_name || ''} minWidth="260px" stretch />
                      <span>, মাতা:</span>
@@ -392,11 +393,11 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                  </div>
                ) : (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span className="mr-2">This is to certify that</span>
                      <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
                    </div>
-                   <div className="flex w-full items-end pb-1">
+                   <div className="flex w-full items-baseline pb-1">
                      <span>son/daughter of</span>
                      <Field value={student.guardian_name || ''} minWidth="300px" stretch />
                      <span>and</span>
@@ -423,7 +424,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
         </div>
 
         {/* --- Footer Area: Signatures and Stamp --- */}
-        <div className="flex w-full justify-between items-end mt-auto relative z-30 pb-2 px-2">
+        <div className="absolute bottom-[45px] left-0 w-full flex justify-between items-end z-30 px-[100px]">
            
            {/* Class Teacher Signature */}
            <div className="flex flex-col items-center">
@@ -431,13 +432,6 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
               <p className="text-[16px] font-bold text-[#0f2c59] tracking-wide">{isBn ? 'শ্রেণি শিক্ষক' : 'Class Teacher'}</p>
            </div>
            
-           {/* Seal / Stamp Area */}
-           <div className="relative flex flex-col items-center justify-center -translate-y-4">
-              <div className="w-20 h-20 border-[1.5px] border-dashed border-[#d4af37] rounded-full flex items-center justify-center opacity-60 bg-white/70 backdrop-blur-sm shadow-sm">
-                <p className="text-[#a41717] font-bold text-[13px] rotate-[-15deg] opacity-70 tracking-widest">{isBn ? 'সীলমোহর' : 'Official Seal'}</p>
-              </div>
-           </div>
-
            {/* Principal Signature */}
            <div className="flex flex-col items-center">
               <span className="border-b-[1.5px] border-slate-400 w-48 mb-2"></span>
