@@ -3,6 +3,7 @@ import { ChevronLeft, Calendar as CalendarIcon, ArrowLeft, Settings, XCircle, Lo
 import MultiCalendar from "components/MultiCalendar";
 import { Language, View, Institution } from "types";
 import { supabase } from "supabase";
+import { requestManager } from "services/RequestManager";
 
 interface AcademicCalendarPageProps {
   lang: Language;
@@ -51,6 +52,10 @@ const AcademicCalendarPage: React.FC<AcademicCalendarPageProps> = ({
         .eq('id', madrasah.id);
         
       if (error) throw error;
+      
+      // Invalidate patterns that might depend on institution config
+      requestManager.invalidatePattern(`institution`);
+      requestManager.invalidatePattern(`dashboard_`);
       
       setShowSettings(false);
       window.location.reload();

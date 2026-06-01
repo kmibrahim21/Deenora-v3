@@ -135,22 +135,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
   const fetchSmsTemplates = async () => {
     if (!madrasah) return;
-    const { data } = await supabase
-      .from('sms_templates')
-      .select('*')
-      .eq('institution_id', madrasah.id)
-      .order('created_at', { ascending: false });
+    const { data } = await requestManager.cachedFetch(
+      'sms_templates',
+      (q: any) => q.select('*').eq('institution_id', madrasah.id).order('created_at', { ascending: false }),
+      `sms_templates:${madrasah.id}`
+    );
     if (data) setSmsTemplates(data);
   };
 
   const fetchVoiceTemplates = async () => {
     if (!madrasah) return;
-    const { data } = await supabase
-      .from('voice_templates')
-      .select('*')
-      .eq('institution_id', madrasah.id)
-      .eq('provider_status', 'approved')
-      .order('created_at', { ascending: false });
+    const { data } = await requestManager.cachedFetch(
+      'voice_templates',
+      (q: any) => q.select('*').eq('institution_id', madrasah.id).eq('provider_status', 'approved').order('created_at', { ascending: false }),
+      `voice_templates:${madrasah.id}:approved`
+    );
     if (data) setVoiceTemplates(data);
   };
 
@@ -212,11 +211,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const fetchDayEvents = async () => {
     if (!madrasah) return;
     try {
-      const { data: customEvents } = await supabase
-        .from('calendar_events')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .or(`event_date.eq.${date},and(event_date.lte.${date},end_date.gte.${date})`);
+      const { data: customEvents } = await requestManager.cachedFetch(
+        'calendar_events',
+        (q: any) => q.select('*').eq('institution_id', madrasah.id).or(`event_date.eq.${date},and(event_date.lte.${date},end_date.gte.${date})`),
+        `calendar_events:${madrasah.id}:${date}`
+      );
       
       let events = getEventsForDate(new Date(date), customEvents || []);
       
@@ -371,20 +370,26 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       }
 
       if (reportType === 'daily') {
-        let checkQuery = supabase.from('attendance')
-           .select('id')
-           .eq('institution_id', madrasah?.id)
-           .eq('date', reportDate)
-           .limit(1);
+        const { data: checkData, error: checkError } = await requestManager.cachedFetch(
+          'attendance',
+          (q: any) => {
+            let query = q.select('id')
+               .eq('institution_id', madrasah?.id)
+               .eq('date', reportDate)
+               .limit(1);
 
-        if (cid && cid !== 'all') {
-           checkQuery = checkQuery.eq('class_id', cid);
-        }
-        if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
-           checkQuery = checkQuery.eq('session', selectedSession);
-        }
-
-        const { data: checkData, error: checkError } = await checkQuery;
+            if (cid && cid !== 'all') {
+               query = query.eq('class_id', cid);
+            }
+            if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+               query = query.eq('session', selectedSession);
+            }
+            return query;
+          },
+          `attendance_check:${madrasah?.id}:${reportDate}:${cid || 'all'}:${selectedSession || 'daily'}`,
+          CACHE_TTLS.SHORT
+        );
+        
         if (checkError) throw checkError;
 
         if (!checkData || checkData.length === 0) {
@@ -493,12 +498,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setSaving(true);
     
     // Invalidate RequestManager pattern-based caches
-    await requestManager.invalidatePattern(`attendance:${madrasah.id}`);
+    await requestManager.invalidatePattern(`attendance:`);
     await requestManager.invalidatePattern(`stats:${madrasah.id}`);
     await requestManager.invalidatePattern(`dashboard_`);
     await requestManager.invalidatePattern('get_today_attendance_count');
     await requestManager.invalidatePattern('get_daily_attendance_details');
     await requestManager.invalidatePattern('get_attendance_report');
+    await requestManager.invalidatePattern('attendance_check:');
     await CacheService.clearCache('stats', madrasah.id);
 
     try {
@@ -738,7 +744,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           if (phoneNumbers.length === 0) throw new Error('No valid phone numbers found');
 
           // Get sender number from institution
-          const { data: instData } = await supabase.from('institutions').select('voice_sender_id').eq('id', madrasah.id).single();
+          const { data: instData } = await requestManager.cachedFetch('institutions', (q: any) => 
+            q.select('voice_sender_id').eq('id', madrasah.id).single(),
+            `institution_voice_sender:${madrasah.id}`,
+            CACHE_TTLS.LONG
+          );
           let sNumber = instData?.voice_sender_id || '';
           
           if (!sNumber) {

@@ -99,8 +99,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   // Load saved routines from config_json
   React.useEffect(() => {
-    if (madrasah?.config_json?.saved_exam_routines) {
-      setSavedRoutines(madrasah.config_json.saved_exam_routines);
+    if ((madrasah?.config_json as any)?.saved_exam_routines) {
+      setSavedRoutines((madrasah.config_json as any).saved_exam_routines);
     }
   }, [madrasah?.config_json]);
 
@@ -497,7 +497,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       };
 
       const currentConfig = madrasah.config_json || {};
-      const updatedRoutines = [...(currentConfig.saved_exam_routines || []), payload];
+      const updatedRoutines = [...((currentConfig as any).saved_exam_routines || []), payload];
       const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
 
       const { error } = await supabase
@@ -509,7 +509,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       setSavedRoutines(updatedRoutines);
       // We also update the madrasah prop config_json contextually to keep UI in sync without reload
       if (madrasah.config_json) {
-        madrasah.config_json.saved_exam_routines = updatedRoutines;
+        (madrasah.config_json as any).saved_exam_routines = updatedRoutines;
       }
       
       setSuccessTitle(lang === 'bn' ? 'রুটিন সেভ হয়েছে' : 'Routine Saved');
@@ -574,7 +574,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setOnConfirm(() => async () => {
       try {
         const currentConfig = madrasah.config_json || {};
-        const updatedRoutines = (currentConfig.saved_exam_routines || []).filter((r: any) => r.id !== id);
+        const updatedRoutines = ((currentConfig as any).saved_exam_routines || []).filter((r: any) => r.id !== id);
         const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
 
         const { error } = await supabase
@@ -585,7 +585,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         if (error) throw error;
         setSavedRoutines(updatedRoutines);
         if (madrasah.config_json) {
-          madrasah.config_json.saved_exam_routines = updatedRoutines;
+          (madrasah.config_json as any).saved_exam_routines = updatedRoutines;
         }
         
         setSuccessTitle(lang === 'bn' ? 'রুটিন মুছে ফেলা হয়েছে' : 'Routine Deleted');
@@ -622,7 +622,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         routineData, 
         lang,
         {
-          routineSelectionMode,
+          routineSelectionMode: routineSelectionMode as any,
           selectedRoutineClassId,
           classesList: routineDisplayClasses,
           routineMorningTime,
@@ -699,27 +699,34 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   }, [madrasah?.id, selectedClassId, view, activeTab, selectedRoutineClassId, routineSelectionMode]);
 
   const fetchExams = async (targetClassId?: string | null) => {
+    if (!madrasah) return;
     const activeYearId = madrasah?.config_json?.active_academic_year_id;
-    let query = supabase.from('exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
-    
-    if (activeYearId) {
-      query = query.eq('academic_year_id', activeYearId);
-    } else {
-      const yearStart = madrasah?.config_json?.academic_year_start;
-      if (yearStart) {
-        query = query.gte('created_at', yearStart);
-      }
-    }
-
     const classToFetch = targetClassId !== undefined ? targetClassId : selectedClassId;
-    if (classToFetch) {
-        query = query.eq('class_id', classToFetch);
-    }
-    const { data } = await query.order('created_at', { ascending: false });
+    
+    const cacheKey = `exams:${madrasah.id}:${classToFetch || 'all'}:${activeYearId || 'no-year'}`;
+    
+    const { data } = await requestManager.cachedFetch('exams', (q: any) => {
+      let query = q.select('*, classes(class_name)').eq('institution_id', madrasah.id);
+      
+      if (activeYearId) {
+        query = query.eq('academic_year_id', activeYearId);
+      } else {
+        const yearStart = madrasah?.config_json?.academic_year_start;
+        if (yearStart) {
+          query = query.gte('created_at', yearStart);
+        }
+      }
+
+      if (classToFetch) {
+          query = query.eq('class_id', classToFetch);
+      }
+      return query.order('created_at', { ascending: false });
+    }, cacheKey);
+
     if (data) {
       let filteredExams = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredExams = data.filter(exam => profile.permissions?.allowed_classes?.includes(exam.class_id));
+        filteredExams = data.filter((exam: any) => profile.permissions?.allowed_classes?.includes(exam.class_id));
       }
       setExams(filteredExams);
     }
@@ -727,11 +734,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   };
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah?.id);
+    if (!madrasah) return;
+    const { data } = await requestManager.cachedFetch('classes', (q: any) => 
+      q.select('*').eq('institution_id', madrasah.id),
+      `classes:${madrasah.id}`
+    );
+    
     if (data) {
       let filteredClasses = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+        filteredClasses = data.filter((cls: any) => profile.permissions?.allowed_classes?.includes(cls.id));
       }
       setClasses(sortMadrasahClasses(filteredClasses));
     }
@@ -740,7 +752,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   const fetchSubjects = async (examId: string) => {
     setLoading(true);
-    const { data } = await supabase.from('exam_subjects').select('*').eq('exam_id', examId).order('sort_order', { ascending: true });
+    const { data } = await requestManager.cachedFetch('exam_subjects', (q: any) => 
+      q.select('*').eq('exam_id', examId).order('sort_order', { ascending: true }),
+      `exam_subjects:${examId}`
+    );
+
     if (data) setSubjects(data);
     setLoading(false);
   };
@@ -748,19 +764,26 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const fetchMarkEntryData = async (examId: string, classId: string) => {
     setLoading(true);
     const activeYearId = madrasah?.config_json?.active_academic_year_id;
+    
     // 1. Fetch Students of the exam's class
-    let studentQuery = supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
-    if (activeYearId) {
-      studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-    }
-    const { data: stds } = await studentQuery;
+    const { data: stds } = await requestManager.cachedFetch('students', (q: any) => {
+      let query = q.select('*').eq('class_id', classId).order('roll', { ascending: true });
+      if (activeYearId) {
+        query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+      }
+      return query;
+    }, `students:${classId}:${activeYearId || 'no-year'}`);
+
     // 2. Fetch existing marks
-    const { data: marks } = await supabase.from('exam_marks').select('*').eq('exam_id', examId);
+    const { data: marks } = await requestManager.cachedFetch('exam_marks', (q: any) => 
+      q.select('*').eq('exam_id', examId),
+      `exam_marks:${examId}`
+    );
     
     if (stds) setStudents(stds);
     if (marks) {
         const initialMarks: any = {};
-        marks.forEach(m => {
+        marks.forEach((m: any) => {
             if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
             initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
         });
@@ -781,7 +804,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       const relevantExams = exams.filter(e => e.exam_name.includes(targetTerm));
       
       // 2. Fetch all subjects for these exams
-      const { data: allSubs } = await supabase.from('exam_subjects').select('*').in('exam_id', relevantExams.map(e => e.id)).order('sort_order', { ascending: true });
+      const { data: allSubs } = await requestManager.cachedFetch('exam_subjects', (q: any) => 
+        q.select('*').in('exam_id', relevantExams.map(e => e.id)).order('sort_order', { ascending: true }),
+        `exam_subjects:multiple:${relevantExams.map(e => e.id).join('-')}`
+      );
       
       if (!allSubs || allSubs.length === 0) {
         alert(lang === 'bn' ? 'কোনো বিষয় পাওয়া যায়নি' : 'No subjects found for routine');
@@ -851,13 +877,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       
       // Fetch data for ranking computation
       const [subsRes, studentsRes, marksRes] = await Promise.all([
-        supabase.from('exam_subjects').select('*').eq('exam_id', examId),
-        (() => {
-          let q = supabase.from('students').select('*').eq('class_id', classId);
-          if (activeYearId) q = q.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
-          return q;
-        })(),
-        supabase.from('exam_marks').select('*').eq('exam_id', examId)
+        requestManager.cachedFetch('exam_subjects', (q: any) => q.select('*').eq('exam_id', examId), `exam_subjects:${examId}`),
+        requestManager.cachedFetch('students', (q: any) => {
+          let query = q.select('*').eq('class_id', classId);
+          if (activeYearId) query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          return query;
+        }, `students:${classId}:${activeYearId || 'no-year'}`),
+        requestManager.cachedFetch('exam_marks', (q: any) => q.select('*').eq('exam_id', examId), `exam_marks:${examId}`)
       ]);
 
       const subs = subsRes.data || [];
@@ -1071,7 +1097,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setIsDownloading(true);
     try {
         // Fetch students for the exam class
-        const { data: stds } = await supabase.from('students').select('*, classes(class_name)').eq('class_id', examForAdmitCard.class_id).order('roll', { ascending: true });
+        const { data: stds } = await requestManager.cachedFetch('students', (q: any) => 
+          q.select('*, classes(class_name)').eq('class_id', examForAdmitCard.class_id).order('roll', { ascending: true }),
+          `students:${examForAdmitCard.class_id}:with-classes`
+        );
         
         if (!stds || stds.length === 0) {
             alert('No students found for this class');
@@ -1103,11 +1132,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       
       setLoading(true);
       // Fetch students from selected classes
-      const { data: stds } = await supabase.from('students')
-        .select('*, classes(class_name)')
-        .in('class_id', selectedClassesForSeatPlan)
-        .order('class_id', { ascending: true })
-        .order('roll', { ascending: true });
+      const { data: stds } = await requestManager.cachedFetch('students', (q: any) => 
+        q.select('*, classes(class_name)')
+          .in('class_id', selectedClassesForSeatPlan)
+          .order('class_id', { ascending: true })
+          .order('roll', { ascending: true }),
+        `students:seatplan:${selectedClassesForSeatPlan.join('-')}`
+      );
         
       if (!stds || stds.length === 0) {
           setLoading(false);
@@ -1223,6 +1254,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         if (madrasah?.id) {
           requestManager.invalidatePattern(`exams:${madrasah.id}`);
           requestManager.invalidatePattern('dashboard_');
+          // Also invalidate routine data as it depends on exams
+          requestManager.invalidatePattern(`exam_subjects:`);
         }
         setShowAddExam(false);
         setEditingExam(null);
@@ -1262,6 +1295,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       } else {
         if (madrasah?.id) {
           requestManager.invalidatePattern(`exams:${madrasah.id}`);
+          requestManager.invalidatePattern(`exam_subjects:${examId}`);
+          requestManager.invalidatePattern(`exam_marks:${examId}`);
           requestManager.invalidatePattern('dashboard_');
         }
         fetchExams();
@@ -1343,6 +1378,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (!error && selectedExam) {
       if (madrasah?.id) {
         requestManager.invalidatePattern(`exam_subjects:${selectedExam.id}`);
+        // Routine data also depends on subjects
+        requestManager.invalidatePattern(`exam_subjects:multiple:`);
         requestManager.invalidatePattern('dashboard_');
       }
       fetchSubjects(selectedExam.id);
@@ -1361,12 +1398,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     const payload: any[] = [];
     Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
         Object.entries(subMarks).forEach(([subjectId, marks]) => {
-            payload.push({
-                exam_id: selectedExam.id,
-                student_id: studentId,
-                subject_id: subjectId,
-                marks_obtained: parseFloat(marks as string)
-            });
+            if (marks !== undefined && marks !== null && marks !== '') {
+              payload.push({
+                  exam_id: selectedExam.id,
+                  student_id: studentId,
+                  subject_id: subjectId,
+                  marks_obtained: parseFloat(marks as string)
+              });
+            }
         });
     });
 

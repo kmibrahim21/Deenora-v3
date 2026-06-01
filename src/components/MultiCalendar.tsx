@@ -4,6 +4,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, en
 import { Language, CalendarEvent, Institution } from 'types';
 import { getBengaliDate, getHijriDate, getEventsForDate } from '../utils/calendarUtils';
 import { supabase } from '../supabase';
+import { requestManager } from '../services/RequestManager';
 
 interface MultiCalendarProps {
   lang: Language;
@@ -33,10 +34,11 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({ lang, institutionId, isAd
   const fetchEvents = async () => {
     if (!institutionId) return;
     try {
-      const { data, error } = await supabase
-        .from('calendar_events')
-        .select('*')
-        .eq('institution_id', institutionId);
+      const { data, error } = await requestManager.cachedFetch(
+        'calendar_events',
+        (q: any) => q.select('*').eq('institution_id', institutionId),
+        `calendar_events_all:${institutionId}`
+      );
       
       if (error) {
         console.error('Supabase error fetching events:', error);
@@ -62,6 +64,10 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({ lang, institutionId, isAd
         .eq('institution_id', institutionId);
         
       if (error) throw error;
+      
+      // Invalidate all calendar related caches
+      await requestManager.invalidatePattern('calendar_events');
+      
       fetchEvents();
       setEventToDelete(null);
     } catch (err) {
@@ -515,6 +521,9 @@ const EventModal: React.FC<{
         alert('Error saving event: ' + error.message);
         return;
       }
+
+      // Invalidate all calendar related caches
+      await requestManager.invalidatePattern('calendar_events');
 
       onSuccess();
     } catch (err) {

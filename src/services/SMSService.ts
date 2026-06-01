@@ -143,6 +143,7 @@ export const SMSService = {
       const sendPromises = batches.map(async (chunk) => {
         const validMsgs: typeof chunk = [];
         const logs: any[] = [];
+        let batchErrorStr = '';
         
         chunk.forEach(m => {
           const normPhone = normalizePhone(m.phone);
@@ -172,7 +173,6 @@ export const SMSService = {
             return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(m.phone)}&messageContent=${encodedContent}&type=3`;
           });
 
-          let batchErrorStr = '';
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
@@ -231,6 +231,7 @@ export const SMSService = {
         const { parts } = getSmsLengthInfo(message);
         const validMsgs: Student[] = [];
         const logs: any[] = [];
+        let batchErrorStr = '';
         
         chunkStudents.forEach(s => {
           const normPhone = normalizePhone(s.guardian_phone);
@@ -260,7 +261,6 @@ export const SMSService = {
             return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(s.guardian_phone)}&messageContent=${encodedContent}&type=3`;
           });
           
-          let batchErrorStr = '';
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
@@ -339,13 +339,13 @@ export const SMSService = {
 
     const target = normalizePhone(phone);
     let finalStatus = 'sent';
+    let throwErrorMsg = '';
     
     if (!target) {
       finalStatus = 'failed';
     } else {
       const encodedContent = encodeURIComponent(message).replace(/%2B/g, '%252B');
       let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${target}&messageContent=${encodedContent}&type=3`;
-      let throwErrorMsg = '';
       try { 
         const res = await fetch('/api/sms', { 
           method: 'POST',
