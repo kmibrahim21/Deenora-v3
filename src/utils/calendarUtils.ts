@@ -158,13 +158,11 @@ export const getEventsForDate = (date: Date, customEvents: any[] = []) => {
     const thisDate = new Date(dateStr);
     
     try {
-      const eStartDate = new Date(e.event_date);
-      const formattedStartDate = format(eStartDate, 'yyyy-MM-dd');
+      const formattedStartDate = e.event_date.split('T')[0];
       
       // If it has an end date, check range
       if (e.end_date) {
-        const eEndDate = new Date(e.end_date);
-        const formattedEndDate = format(eEndDate, 'yyyy-MM-dd');
+        const formattedEndDate = e.end_date.split('T')[0];
         return dateStr >= formattedStartDate && dateStr <= formattedEndDate;
       }
       

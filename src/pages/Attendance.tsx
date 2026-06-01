@@ -216,7 +216,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         .from('calendar_events')
         .select('*')
         .eq('institution_id', madrasah.id)
-        .eq('event_date', date);
+        .or(`event_date.eq.${date},and(event_date.lte.${date},end_date.gte.${date})`);
       
       let events = getEventsForDate(new Date(date), customEvents || []);
       
@@ -238,7 +238,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       
       setDayEvents(events);
       
-      const holiday = events.length > 0;
+      const holiday = events.some(e => {
+        const type = e.event_type || e.type;
+        return ['holiday', 'closed', 'islamic'].includes(type);
+      });
       setIsHoliday(holiday);
     } catch (e) {
       console.error('Error fetching day events:', e);

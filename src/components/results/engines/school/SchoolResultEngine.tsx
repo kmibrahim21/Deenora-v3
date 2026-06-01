@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -55,13 +55,19 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successTitle, setSuccessTitle] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [modalMode, setModalMode] = useState<'success' | 'error' | 'confirm'>('success');
+  const [onConfirm, setOnConfirm] = useState<(() => void) | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [cancelText, setCancelText] = useState('');
 
   // Exam Routine Feature States
   const [routineTermGroup, setRoutineTermGroup] = useState<string>('');
   const [selectedRoutineExamId, setSelectedRoutineExamId] = useState<string>('');
   const [selectedRoutineAllExamIds, setSelectedRoutineAllExamIds] = useState<string[]>([]);
   const [customRoutineTitle, setCustomRoutineTitle] = useState<string>('');
-  const [routineSelectionMode, setRoutineSelectionMode] = useState<'all' | 'class'>('all');
+  const [routineSelectionMode, setRoutineSelectionMode] = useState<'all' | 'class' | 'saved'>('all');
   const [selectedRoutineClassId, setSelectedRoutineClassId] = useState<string>('');
   const [routineMorningTime, setRoutineMorningTime] = useState<string>('09:00 AM - 12:00 PM');
   const [routineAfternoonTime, setRoutineAfternoonTime] = useState<string>('02:00 PM - 05:00 PM');
@@ -88,6 +94,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     'পরিষ্কার-পরিচ্ছন্ন ও সুশৃঙ্খলভাবে পরীক্ষা দিতে হবে'
   ]);
   const [routineData, setRoutineData] = useState<any[]>([]);
+  const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
+  const [isRestoringRoutine, setIsRestoringRoutine] = useState(false);
+
+  // Load saved routines from config_json
+  React.useEffect(() => {
+    if (madrasah?.config_json?.saved_exam_routines) {
+      setSavedRoutines(madrasah.config_json.saved_exam_routines);
+    }
+  }, [madrasah?.config_json]);
 
   // Scaler Hook/Ref for responsive A4 Live Preview
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
@@ -160,6 +175,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   // Automatically fetch / prepare data when active tab is exam-routine or filters update
   React.useEffect(() => {
+    if (isRestoringRoutine) return;
+    
     const loadRoutineData = async () => {
       try {
         let relevantExams = [];
@@ -448,6 +465,143 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   const handleRemoveRoutineDay = (id: string) => {
     setRoutineData(prev => prev.filter(d => d.id !== id));
+  };
+
+  const saveRoutineToDB = async () => {
+    if (!madrasah) return;
+    try {
+      const payload = {
+        id: Date.now().toString(),
+        name: customRoutineTitle || activeExamName || (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine'),
+        createdAt: new Date().toISOString(),
+        routineData,
+        routineInstructions,
+        routineMorningTime,
+        routineAfternoonTime,
+        routineThemeColor,
+        activeExamName,
+        routineStartDate,
+        showRoutineAfternoon,
+        routineSelectionMode,
+        selectedRoutineClassId,
+        customRoutineTitle,
+        routineMorningStart,
+        routineMorningEnd,
+        routineAfternoonStart,
+        routineAfternoonEnd,
+        routinePrincipalName,
+        routinePrincipalMobile,
+        selectedRoutineExamId,
+        selectedRoutineAllExamIds,
+        routineTermGroup
+      };
+
+      const currentConfig = madrasah.config_json || {};
+      const updatedRoutines = [...(currentConfig.saved_exam_routines || []), payload];
+      const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
+
+      const { error } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (error) throw error;
+      setSavedRoutines(updatedRoutines);
+      // We also update the madrasah prop config_json contextually to keep UI in sync without reload
+      if (madrasah.config_json) {
+        madrasah.config_json.saved_exam_routines = updatedRoutines;
+      }
+      
+      setSuccessTitle(lang === 'bn' ? 'রুটিন সেভ হয়েছে' : 'Routine Saved');
+      setSuccessMessage(lang === 'bn' ? 'আপনার পরীক্ষার রুটিনটি সফলভাবে সার্ভারে সংরক্ষিত হয়েছে।' : 'Your exam routine has been successfully saved to the server.');
+      setModalMode('success');
+      setShowSuccessModal(true);
+    } catch (err) {
+      console.error('Error saving routine:', err);
+      setSuccessTitle(lang === 'bn' ? 'সমস্যা হয়েছে' : 'Error Occurred');
+      setSuccessMessage(lang === 'bn' ? 'রুটিন সেভ করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।' : 'Failed to save routine. Please try again.');
+      setModalMode('error');
+      setShowSuccessModal(true);
+    }
+  };
+
+  const loadRoutineFromDB = (routine: any) => {
+    setIsRestoringRoutine(true);
+
+    if (routine.routineData) setRoutineData(routine.routineData);
+    if (routine.routineInstructions) setRoutineInstructions(routine.routineInstructions);
+    if (routine.routineMorningTime) setRoutineMorningTime(routine.routineMorningTime);
+    if (routine.routineAfternoonTime) setRoutineAfternoonTime(routine.routineAfternoonTime);
+    if (routine.routineThemeColor) setRoutineThemeColor(routine.routineThemeColor);
+    if (routine.customRoutineTitle) setCustomRoutineTitle(routine.customRoutineTitle);
+    else if (routine.activeExamName && routine.routineSelectionMode === 'all') setCustomRoutineTitle(routine.activeExamName);
+    if (routine.routineStartDate) setRoutineStartDate(routine.routineStartDate);
+    if (routine.showRoutineAfternoon !== undefined) setShowRoutineAfternoon(routine.showRoutineAfternoon);
+    if (routine.routineSelectionMode) setRoutineSelectionMode(routine.routineSelectionMode);
+    if (routine.selectedRoutineClassId) setSelectedRoutineClassId(routine.selectedRoutineClassId);
+    
+    // Additional fields for complete restore
+    if (routine.routineMorningStart) setRoutineMorningStart(routine.routineMorningStart);
+    if (routine.routineMorningEnd) setRoutineMorningEnd(routine.routineMorningEnd);
+    if (routine.routineAfternoonStart) setRoutineAfternoonStart(routine.routineAfternoonStart);
+    if (routine.routineAfternoonEnd) setRoutineAfternoonEnd(routine.routineAfternoonEnd);
+    if (routine.routinePrincipalName) setRoutinePrincipalName(routine.routinePrincipalName);
+    if (routine.routinePrincipalMobile) setRoutinePrincipalMobile(routine.routinePrincipalMobile);
+    if (routine.selectedRoutineExamId) setSelectedRoutineExamId(routine.selectedRoutineExamId);
+    if (routine.selectedRoutineAllExamIds) setSelectedRoutineAllExamIds(routine.selectedRoutineAllExamIds);
+    if (routine.routineTermGroup) setRoutineTermGroup(routine.routineTermGroup);
+
+    setSuccessTitle(lang === 'bn' ? 'রুটিন লোড হয়েছে' : 'Routine Loaded');
+    setSuccessMessage(lang === 'bn' ? 'রুটিনটি সফলভাবে লোড করা হয়েছে। আপনি এখন এটি এডিট করতে পারেন।' : 'Routine has been loaded successfully. You can now edit it.');
+    setModalMode('success');
+    setShowSuccessModal(true);
+
+    // Release the lock after a delay to ensure effects have finished triggering
+    setTimeout(() => {
+      setIsRestoringRoutine(false);
+    }, 500);
+  };
+
+  const deleteRoutineFromDB = async (id: string) => {
+    if (!madrasah) return;
+    
+    setModalMode('confirm');
+    setSuccessTitle(lang === 'bn' ? 'মুছে ফেলতে নিশ্চিত?' : 'Confirm Delete');
+    setSuccessMessage(lang === 'bn' ? 'আপনি কি রুটিনটি মুছে ফেলতে নিশ্চিত?' : 'Are you sure you want to delete this routine?');
+    setConfirmText(lang === 'bn' ? 'মুছে ফেলুন' : 'Delete');
+    setCancelText(lang === 'bn' ? 'বাতিল' : 'Cancel');
+    
+    setOnConfirm(() => async () => {
+      try {
+        const currentConfig = madrasah.config_json || {};
+        const updatedRoutines = (currentConfig.saved_exam_routines || []).filter((r: any) => r.id !== id);
+        const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
+
+        const { error } = await supabase
+          .from('institutions')
+          .update({ config_json: updatedConfig })
+          .eq('id', madrasah.id);
+
+        if (error) throw error;
+        setSavedRoutines(updatedRoutines);
+        if (madrasah.config_json) {
+          madrasah.config_json.saved_exam_routines = updatedRoutines;
+        }
+        
+        setSuccessTitle(lang === 'bn' ? 'রুটিন মুছে ফেলা হয়েছে' : 'Routine Deleted');
+        setSuccessMessage(lang === 'bn' ? 'রুটিনটি সফলভাবে তালিকা থেকে সরিয়ে ফেলা হয়েছে।' : 'The routine has been successfully removed from the list.');
+        setModalMode('success');
+        setShowSuccessModal(true);
+      } catch (err) {
+        console.error('Error deleting routine:', err);
+        setSuccessTitle(lang === 'bn' ? 'মুছে ফেলা যায়নি' : 'Delete Failed');
+        setSuccessMessage(lang === 'bn' ? 'রুটিন মুছতে সমস্যা হয়েছে।' : 'Failed to delete routine.');
+        setModalMode('error');
+        setShowSuccessModal(true);
+      }
+    });
+
+    setShowSuccessModal(true);
   };
 
   const handleDownloadCustomExamRoutine = async () => {
@@ -1598,25 +1752,34 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 {/* Routine Selection Mode Option */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'রুটিনের ধরণ' : 'Routine Type'}</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => setRoutineSelectionMode('all')}
-                      className={`py-2 px-3 rounded-xl text-xs font-black border transition-all ${routineSelectionMode === 'all' ? 'bg-[#2563EB] border-[#2563EB] text-white shadow-premium' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100')}`}
+                      className={`py-2 px-1 rounded-xl text-xs font-black border transition-all ${routineSelectionMode === 'all' ? 'bg-[#2563EB] border-[#2563EB] text-white shadow-premium' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100')}`}
                     >
-                      {lang === 'bn' ? 'সব ক্লাস একসাথে' : 'All Classes'}
+                      {lang === 'bn' ? 'সব ক্লাস' : 'All Classes'}
                     </button>
                     <button
                       onClick={() => setRoutineSelectionMode('class')}
-                      className={`py-2 px-3 rounded-xl text-xs font-black border transition-all ${routineSelectionMode === 'class' ? 'bg-[#2563EB] border-[#2563EB] text-white shadow-premium' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100')}`}
+                      className={`py-2 px-1 rounded-xl text-xs font-black border transition-all ${routineSelectionMode === 'class' ? 'bg-[#2563EB] border-[#2563EB] text-white shadow-premium' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100')}`}
                     >
                       {lang === 'bn' ? 'ক্লাস ভিত্তিক' : 'Class-wise'}
+                    </button>
+                    <button
+                      onClick={() => setRoutineSelectionMode('saved')}
+                      className={`py-2 px-1 rounded-xl text-xs font-black border transition-all ${routineSelectionMode === 'saved' ? 'bg-emerald-600 border-emerald-600 text-white shadow-premium' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100')}`}
+                    >
+                      {lang === 'bn' ? 'সেভ করা রুটিন' : 'Saved'}
                     </button>
                   </div>
                 </div>
 
-                {/* Dropdown for class selection */}
-                {routineSelectionMode === 'class' && (
-                  <div className="space-y-4 pt-2 border-t border-dashed border-slate-200/50 animate-fadeIn">
+                {/* Options below the tabs - only show when not in 'saved' tab */}
+                {routineSelectionMode !== 'saved' && (
+                  <>
+                    {/* Dropdown for class selection */}
+                    {routineSelectionMode === 'class' && (
+                      <div className="space-y-4 pt-2 border-t border-dashed border-slate-200/50 animate-fadeIn">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'ক্লাস নির্বাচন করুন' : 'Select Class'}</label>
                       <select
@@ -1866,6 +2029,95 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                   )}
                   {lang === 'bn' ? 'পিডিএফ ডাউনলোড করুন' : 'Download Printable PDF'}
                 </button>
+              </>
+            )}
+
+            {/* Content for Saved tab */}
+            {routineSelectionMode === 'saved' && (
+              <div className="space-y-4 pt-2 border-t border-dashed border-slate-200/50 animate-fadeIn">
+                
+                {/* Saved Routines List */}
+                {savedRoutines.length > 0 ? (
+                  <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+                      {lang === 'bn' ? 'সেভ করা রুটিন সমূহ' : 'Saved Routines'}
+                    </h4>
+                    <div className="space-y-2">
+                      {savedRoutines.map((r, i) => (
+                        <div key={r.id || i} className="flex flex-col gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">{r.name}</p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">
+                                {new Date(r.createdAt).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', {
+                                  day: '2-digit', month: 'long', year: 'numeric'
+                                })} • {r.routineSelectionMode === 'all' ? (lang === 'bn' ? 'মাস্টার রুটিন' : 'Master Routine') : (lang === 'bn' ? 'সিঙ্গেল ক্লাস' : 'Single Class')}
+                              </p>
+                            </div>
+                            <button 
+                              onClick={() => deleteRoutineFromDB(r.id)}
+                              className="text-red-400 hover:text-red-500 transition-colors p-1"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-1">
+                            <button 
+                              onClick={() => loadRoutineFromDB(r)}
+                              className="h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <Upload size={12} />
+                              {lang === 'bn' ? 'লোড করুন' : 'Load'}
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                // Direct download of this saved routine context
+                                setIsDownloading(true);
+                                try {
+                                  const tempName = r.customRoutineTitle || r.activeExamName || (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine');
+                                  await generateExamRoutinePDF(
+                                    { ...madrasah, name: madrasah?.name || 'School' } as any,
+                                    tempName,
+                                    r.routineData,
+                                    lang,
+                                    {
+                                      routineSelectionMode: r.routineSelectionMode,
+                                      selectedRoutineClassId: r.selectedRoutineClassId,
+                                      classesList: classes,
+                                      routineMorningTime: r.routineMorningTime,
+                                      routineAfternoonTime: r.routineAfternoonTime,
+                                      routineInstructions: r.routineInstructions,
+                                      routinePrincipalName: routinePrincipalName,
+                                      routinePrincipalMobile: routinePrincipalMobile,
+                                      showRoutineAfternoon: r.showRoutineAfternoon,
+                                      examYear: currentYear,
+                                      themeColor: r.routineThemeColor
+                                    }
+                                  );
+                                } finally {
+                                  setIsDownloading(false);
+                                }
+                              }}
+                              className="h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <Download size={12} />
+                              {lang === 'bn' ? 'ডাউনলোড' : 'Download'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-slate-50 border border-slate-200 rounded-xl">
+                    <Calendar size={24} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-xs font-bold text-slate-400">
+                      {lang === 'bn' ? 'কোনো রুটিন সেভ করা নেই' : 'No saved routines'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
               </div>
             </div>
 
@@ -1876,7 +2128,18 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                   <h3 className={`text-base font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
                     {lang === 'bn' ? 'লাইভ প্রিন্ট প্রিভিউ' : 'Live Print Preview'}
                   </h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {routineSelectionMode !== 'saved' && (
+                      <div className="flex bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                        <button 
+                          onClick={saveRoutineToDB}
+                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black transition-colors flex items-center gap-1"
+                        >
+                          <Save size={12} />
+                          {lang === 'bn' ? 'রুটিন সেভ' : 'Save Routine'}
+                        </button>
+                      </div>
+                    )}
                     <div className="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">
                       <button onClick={() => setUserZoom(z => Math.max(0.5, z - 0.2))} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'জুম আউট' : 'Zoom Out'}><ZoomOut size={16} /></button>
                       <span className="text-[11px] font-black text-slate-700 min-w-[44px] text-center">{Math.round(userZoom * 100)}%</span>
@@ -2967,30 +3230,58 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
-                    className="w-24 h-24 bg-emerald-500 rounded-[2rem] flex items-center justify-center shadow-lg shadow-emerald-500/30 relative z-10"
+                    className={`w-24 h-24 ${modalMode === 'success' ? 'bg-emerald-500 shadow-emerald-500/30' : modalMode === 'error' ? 'bg-rose-500 shadow-rose-500/30' : 'bg-amber-500 shadow-amber-500/30'} rounded-[2rem] flex items-center justify-center shadow-lg relative z-10`}
                   >
-                    <CheckCircle2 size={48} className="text-white" />
+                    {modalMode === 'success' ? (
+                      <CheckCircle2 size={48} className="text-white" />
+                    ) : modalMode === 'error' ? (
+                      <AlertCircle size={48} className="text-white" />
+                    ) : (
+                      <HelpCircle size={48} className="text-white" />
+                    )}
                   </motion.div>
                   <motion.div 
                     animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0, 0.3] }}
                     transition={{ duration: 2, repeat: Infinity }}
-                    className="absolute inset-0 bg-emerald-500 rounded-[2rem] blur-2xl -z-10"
+                    className={`absolute inset-0 ${modalMode === 'success' ? 'bg-emerald-500' : modalMode === 'error' ? 'bg-rose-500' : 'bg-amber-500'} rounded-[2rem] blur-2xl -z-10`}
                   />
                 </div>
                 
                 <h3 className={`text-2xl font-black mb-2 font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                  {lang === 'bn' ? 'সফলভাবে সংরক্ষিত!' : 'Successfully Saved!'}
+                  {successTitle || (modalMode === 'success' ? (lang === 'bn' ? 'সফলভাবে সংরক্ষিত!' : 'Successfully Saved!') : (lang === 'bn' ? 'ত্রুটি!' : 'Error!'))}
                 </h3>
                 <p className={`text-sm font-bold mb-8 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {lang === 'bn' ? 'পরীক্ষার নম্বরগুলো ডাটাবেসে সফলভাবে আপডেট করা হয়েছে।' : 'The exam marks have been successfully updated in the database.'}
+                  {successMessage || (lang === 'bn' ? 'পরীক্ষার নম্বরগুলো ডাটাবেসে সফলভাবে আপডেট করা হয়েছে।' : 'The exam marks have been successfully updated in the database.')}
                 </p>
                 
-                <button 
-                  onClick={() => setShowSuccessModal(false)}
-                  className="w-full py-5 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-lg"
-                >
-                  {lang === 'bn' ? 'ঠিক আছে' : 'Awesome'}
-                </button>
+                {modalMode === 'confirm' ? (
+                  <div className="flex gap-3 w-full">
+                    <button 
+                      onClick={() => setShowSuccessModal(false)}
+                      className={`flex-1 py-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'} font-black rounded-2xl transition-all`}
+                    >
+                      {cancelText || (lang === 'bn' ? 'বাতিল' : 'Cancel')}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setShowSuccessModal(false);
+                        if (onConfirm) {
+                          onConfirm();
+                        }
+                      }}
+                      className="flex-1 py-4 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-2xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                    >
+                      {confirmText || (lang === 'bn' ? 'নিশ্চিত' : 'Confirm')}
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => setShowSuccessModal(false)}
+                    className={`w-full py-5 ${modalMode === 'success' ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-rose-500 shadow-rose-500/20'} text-white font-black rounded-2xl shadow-lg active:scale-95 transition-all text-lg`}
+                  >
+                    {lang === 'bn' ? 'ঠিক আছে' : (modalMode === 'success' ? 'Awesome' : 'Close')}
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
