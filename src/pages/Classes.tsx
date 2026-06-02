@@ -11,8 +11,8 @@ export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
     // Primary sort by sort_order
-    const orderA = a.sort_order ?? 999999;
-    const orderB = b.sort_order ?? 999999;
+    const orderA = a.sort_order != null && a.sort_order !== '' ? Number(a.sort_order) : 999999;
+    const orderB = b.sort_order != null && b.sort_order !== '' ? Number(b.sort_order) : 999999;
     if (orderA !== orderB) return orderA - orderB;
     // Fallback to alphabetical
     return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
@@ -117,7 +117,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     try {
       if (editingClass) {
         // Optimistic Update
-        setClasses(prev => prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c));
+        setClasses(prev => sortMadrasahClasses(prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c)));
         
         if (navigator.onLine) {
           const { error } = await supabase.from('classes').update({ 

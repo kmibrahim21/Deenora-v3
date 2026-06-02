@@ -323,9 +323,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       
       // Ensure robust numeric sorting in case database sorting is lexicographical
       finalStdData = [...finalStdData].sort((a: any, b: any) => {
-        const rollA = a.roll != null ? Number(a.roll) : 999999;
-        const rollB = b.roll != null ? Number(b.roll) : 999999;
-        return rollA - rollB;
+        const rollA = a.roll != null && a.roll !== '' ? Number(a.roll) : 999999;
+        const rollB = b.roll != null && b.roll !== '' ? Number(b.roll) : 999999;
+        if (rollA !== rollB) return rollA - rollB;
+        return (a.student_name || '').localeCompare(b.student_name || '') || (a.id || '').localeCompare(b.id || '');
       });
 
       // Also fetch attendance with institution_id and session
