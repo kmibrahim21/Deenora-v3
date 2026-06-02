@@ -137,18 +137,27 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           return sorted;
         });
         
-        if (navigator.onLine) {
+        try {
+          // Always try online first
           const { error } = await supabase.from('classes').update({ 
             class_name: newClassName.trim(),
             sort_order: orderValue 
           }).eq('id', editingClass.id);
+          
           if (error) throw error;
-        } else {
-          offlineApi.queueAction('classes', 'UPDATE', { 
-            id: editingClass.id, 
-            class_name: newClassName.trim(),
-            sort_order: orderValue
-          });
+        } catch (err: any) {
+          // Fallback to offline queue if truly offline/network error
+          const isNetworkError = !navigator.onLine || err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('Network');
+          if (isNetworkError) {
+            console.log("[Classes] Network offline during UPDATE, enqueuing offline action");
+            offlineApi.queueAction('classes', 'UPDATE', { 
+              id: editingClass.id, 
+              class_name: newClassName.trim(),
+              sort_order: orderValue
+            });
+          } else {
+            throw err;
+          }
         }
       } else {
         const tempId = crypto.randomUUID();
@@ -167,12 +176,14 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           return sorted;
         });
 
-        if (navigator.onLine) {
+        try {
+          // Always try online first
           const { data, error } = await supabase.from('classes').insert({
             class_name: payload.class_name,
             institution_id: payload.institution_id,
             sort_order: payload.sort_order
           }).select().single();
+          
           if (error) throw error;
           
           // Replace temp item with real data if needed
@@ -184,8 +195,15 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                return sorted;
              });
           }
-        } else {
-          offlineApi.queueAction('classes', 'INSERT', payload);
+        } catch (err: any) {
+          // Fallback to offline queue if truly offline/network error
+          const isNetworkError = !navigator.onLine || err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('Network');
+          if (isNetworkError) {
+            console.log("[Classes] Network offline during INSERT, enqueuing offline action");
+            offlineApi.queueAction('classes', 'INSERT', payload);
+          } else {
+            throw err;
+          }
         }
       }
       setShowModal(false);
@@ -251,7 +269,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-          {classes.map(cls => (
+          {sortMadrasahClasses(classes).map(cls => (
             <div key={cls.id} onClick={() => onClassClick(cls)} className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 sm:p-5 rounded-[2.2rem] border flex items-center justify-between active:scale-[0.98] transition-all group shadow-bubble relative overflow-hidden`}>
               <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                 <div className={`w-12 h-12 sm:w-14 sm:h-14 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-2xl flex items-center justify-center shrink-0 border shadow-inner`}>
