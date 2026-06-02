@@ -58,7 +58,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       // 1. Fetch Classes (Cached)
       const { data: classesData, error } = await requestManager.cachedFetch(
         'classes',
-        (q) => q.select('*').eq('institution_id', madrasah.id),
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
         `classes:${madrasah.id}`,
         30 * 60 * 1000
       );
