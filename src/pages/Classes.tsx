@@ -11,11 +11,16 @@ export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
     // Primary sort by sort_order (Numeric)
+    // We treat null, undefined, empty string, AND 0 as "unspecified" (place at bottom)
     const valA = a.sort_order;
     const valB = b.sort_order;
     
-    const orderA = (valA !== null && valA !== undefined && valA !== '') ? Number(valA) : 999999;
-    const orderB = (valB !== null && valB !== undefined && valB !== '') ? Number(valB) : 999999;
+    const numA = (valA !== null && valA !== undefined && valA !== '' && valA !== 0) ? Number(valA) : 999999;
+    const numB = (valB !== null && valB !== undefined && valB !== '' && valB !== 0) ? Number(valB) : 999999;
+    
+    // Defensive check for NaN
+    const orderA = isNaN(numA) ? 999999 : numA;
+    const orderB = isNaN(numB) ? 999999 : numB;
     
     if (orderA !== orderB) return orderA - orderB;
     

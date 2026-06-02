@@ -22,6 +22,7 @@ import { createPortal } from "react-dom";
 import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
 import { useGlobalUpdate } from "hooks/useGlobalUpdate";
 import { requestManager } from "services/RequestManager";
+import { offlineApi } from "supabase";
 
 const Auth = React.lazy(() => import("pages/Auth"));
 const Home = React.lazy(() => import("pages/Home"));

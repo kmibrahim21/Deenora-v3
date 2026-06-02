@@ -119,8 +119,8 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         
         // Ensure robust numeric sorting in case database sorting is lexicographical
         formattedData.sort((a, b) => {
-          const rollA = a.roll != null && a.roll !== '' ? Number(a.roll) : 999999;
-          const rollB = b.roll != null && b.roll !== '' ? Number(b.roll) : 999999;
+          const rollA = a.roll != null && (a.roll as any) !== '' ? Number(a.roll) : 999999;
+          const rollB = b.roll != null && (b.roll as any) !== '' ? Number(b.roll) : 999999;
           if (rollA !== rollB) return rollA - rollB;
           return (a.student_name || '').localeCompare(b.student_name || '') || (a.id || '').localeCompare(b.id || '');
         });
