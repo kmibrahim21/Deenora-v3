@@ -10,12 +10,19 @@ import { requestManager } from 'services/RequestManager';
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
-    // Primary sort by sort_order
-    const orderA = a.sort_order != null && a.sort_order !== '' ? Number(a.sort_order) : 999999;
-    const orderB = b.sort_order != null && b.sort_order !== '' ? Number(b.sort_order) : 999999;
+    // Primary sort by sort_order (Numeric)
+    const valA = a.sort_order;
+    const valB = b.sort_order;
+    
+    const orderA = (valA !== null && valA !== undefined && valA !== '') ? Number(valA) : 999999;
+    const orderB = (valB !== null && valB !== undefined && valB !== '') ? Number(valB) : 999999;
+    
     if (orderA !== orderB) return orderA - orderB;
-    // Fallback to alphabetical
-    return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
+    
+    // Fallback to alphabetical order for same serial
+    const nameA = String(a.class_name || '');
+    const nameB = String(b.class_name || '');
+    return nameA.localeCompare(nameB, 'bn', { numeric: true, sensitivity: 'base' });
   });
 };
 
@@ -111,8 +118,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     const englishSortOrder = newSortOrder ? newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
     const orderValue = englishSortOrder && !isNaN(Number(englishSortOrder)) ? Number(englishSortOrder) : null;
     
-    // Invalidate RequestManager cache immediately
-    requestManager.invalidatePattern(`classes:${madrasah.id}`);
+    // Explicitly clear caches before proceeding
+    await requestManager.invalidatePattern(`classes:${madrasah.id}`);
+    offlineApi.removeCache(`classes:${madrasah.id}`);
 
     try {
       if (editingClass) {

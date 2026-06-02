@@ -102,10 +102,20 @@ const App: React.FC = () => {
 
   const { config: globalUpdate, showPopup: showUpdatePopup, dismissPopup: dismissUpdatePopup } = useGlobalUpdate();
 
-  const triggerRefresh = () => {
-    requestManager.invalidate();
-    setDataVersion((prev) => prev + 1);
-    refreshMadrasah();
+  const triggerRefresh = async () => {
+    try {
+      await requestManager.invalidate();
+      // Ensure offline cache is cleared for this institution to prevent stale data on reload
+      if (madrasah?.id) {
+        offlineApi.removeCache(`classes:${madrasah.id}`);
+        offlineApi.removeCache(`student_counts:${madrasah.id}`);
+      }
+      setDataVersion((prev) => prev + 1);
+      await refreshMadrasah();
+    } catch (err) {
+      console.warn("Refresh failed:", err);
+      setDataVersion((prev) => prev + 1);
+    }
   };
 
   const handleBack = (fallback: View = "home") => {
