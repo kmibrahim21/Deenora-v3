@@ -27,7 +27,7 @@ interface StudentsProps {
   onNavigateToVoiceBroadcast?: (ids: string[]) => void;
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 1000;
 
 const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
   const [students, setStudents] = useState<Student[]>([]);
