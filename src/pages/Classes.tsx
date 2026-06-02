@@ -51,7 +51,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     setLoading(true);
     
     // First, show whatever is in offline cache immediately
-    const cached = offlineApi.getCache('classes');
+    const cached = offlineApi.getCache(`classes:${madrasah.id}`);
     if (cached) setClasses(sortMadrasahClasses(cached));
 
     try {
@@ -94,7 +94,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         }));
         const sorted = sortMadrasahClasses(withCounts);
         setClasses(sorted);
-        offlineApi.setCache('classes', sorted);
+        offlineApi.setCache(`classes:${madrasah.id}`, sorted);
       }
     } catch (err) { 
       console.error('Fetch Classes Error:', err); 
@@ -109,7 +109,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     
     const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
     const englishSortOrder = newSortOrder ? newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
-    const order = englishSortOrder ? parseInt(englishSortOrder) : null;
+    const orderValue = englishSortOrder && !isNaN(Number(englishSortOrder)) ? Number(englishSortOrder) : null;
     
     // Invalidate RequestManager cache immediately
     requestManager.invalidatePattern(`classes:${madrasah.id}`);
@@ -117,19 +117,24 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     try {
       if (editingClass) {
         // Optimistic Update
-        setClasses(prev => sortMadrasahClasses(prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c)));
+        setClasses(prev => {
+          const updated = prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: orderValue } : c);
+          const sorted = sortMadrasahClasses(updated);
+          offlineApi.setCache(`classes:${madrasah.id}`, sorted);
+          return sorted;
+        });
         
         if (navigator.onLine) {
           const { error } = await supabase.from('classes').update({ 
             class_name: newClassName.trim(),
-            sort_order: order 
+            sort_order: orderValue 
           }).eq('id', editingClass.id);
           if (error) throw error;
         } else {
           offlineApi.queueAction('classes', 'UPDATE', { 
             id: editingClass.id, 
             class_name: newClassName.trim(),
-            sort_order: order
+            sort_order: orderValue
           });
         }
       } else {
@@ -138,11 +143,16 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           id: tempId,
           class_name: newClassName.trim(), 
           institution_id: madrasah.id,
-          sort_order: order
+          sort_order: orderValue
         };
         
         // Optimistic Update
-        setClasses(prev => sortMadrasahClasses([...prev, { ...payload, student_count: 0 }]));
+        setClasses(prev => {
+          const updated = [...prev, { ...payload, student_count: 0 }];
+          const sorted = sortMadrasahClasses(updated);
+          offlineApi.setCache(`classes:${madrasah.id}`, sorted);
+          return sorted;
+        });
 
         if (navigator.onLine) {
           const { data, error } = await supabase.from('classes').insert({
@@ -152,9 +162,14 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           }).select().single();
           if (error) throw error;
           
-          // Replace temp item with real data if needed (though next refresh will handle it)
+          // Replace temp item with real data if needed
           if (data) {
-             setClasses(prev => prev.map(c => c.id === tempId ? { ...data, student_count: 0 } : c));
+             setClasses(prev => {
+               const updated = prev.map(c => c.id === tempId ? { ...data, student_count: 0 } : c);
+               const sorted = sortMadrasahClasses(updated);
+               offlineApi.setCache(`classes:${madrasah.id}`, sorted);
+               return sorted;
+             });
           }
         } else {
           offlineApi.queueAction('classes', 'INSERT', payload);
