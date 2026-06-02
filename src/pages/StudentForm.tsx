@@ -89,13 +89,16 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
       // Validate UUID format for academic_year_id
       const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       
+      const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+      const englishRoll = roll ? roll.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
+
       const payload: any = {
         student_name: name.trim(),
         admission_number: admissionNumber.trim() || null,
         registration_number: registrationNumber.trim() || null,
         guardian_name: guardianName.trim(),
         mother_name: motherName.trim() || null,
-        roll: roll ? parseInt(roll) : null,
+        roll: englishRoll ? parseInt(englishRoll) : null,
         date_of_birth: dob || null,
         blood_group: bloodGroup || null,
         guardian_phone: phone.trim(),
@@ -357,7 +360,9 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   {t('roll', lang, madrasah?.institution_type)}
                 </label>
                 <input 
-                  type="number" 
+                  type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
                   placeholder="00"
                   className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] font-black text-lg outline-none text-center focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
                   value={roll} 

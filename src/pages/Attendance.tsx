@@ -211,6 +211,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const fetchDayEvents = async () => {
     if (!madrasah) return;
     try {
+      // Invalidate the cache right before fetching to ensure we get the latest events for attendance
+      await requestManager.invalidatePattern(`calendar_events:${madrasah.id}:${date}`);
+      
       const { data: customEvents } = await requestManager.cachedFetch(
         'calendar_events',
         (q: any) => q.select('*').eq('institution_id', madrasah.id).or(`event_date.eq.${date},and(event_date.lte.${date},end_date.gte.${date})`),
@@ -318,6 +321,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
       }
       
+      // Ensure robust numeric sorting in case database sorting is lexicographical
+      finalStdData = [...finalStdData].sort((a: any, b: any) => {
+        const rollA = a.roll != null ? Number(a.roll) : 999999;
+        const rollB = b.roll != null ? Number(b.roll) : 999999;
+        return rollA - rollB;
+      });
+
       // Also fetch attendance with institution_id and session
       const { data: attData, error: attError } = await requestManager.cachedFetch(
         'attendance',

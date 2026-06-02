@@ -112,10 +112,17 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       }
 
       if (data) {
-        const formattedData = (data as any[]).map(s => ({
+        let formattedData = (data as any[]).map(s => ({
           ...s,
           classes: Array.isArray(s.classes) ? s.classes[0] : s.classes
         })) as Student[];
+        
+        // Ensure robust numeric sorting in case database sorting is lexicographical
+        formattedData.sort((a, b) => {
+          const rollA = a.roll != null ? Number(a.roll) : 999999;
+          const rollB = b.roll != null ? Number(b.roll) : 999999;
+          return rollA - rollB;
+        });
         
         setStudents(prev => reset ? formattedData : [...prev, ...formattedData]);
         setHasMore(data.length === PAGE_SIZE);

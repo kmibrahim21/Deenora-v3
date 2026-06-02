@@ -106,7 +106,10 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const handleSaveClass = async () => {
     if (!newClassName.trim() || !madrasah) return;
     setModalLoading(true);
-    const order = newSortOrder ? parseInt(newSortOrder) : null;
+    
+    const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+    const englishSortOrder = newSortOrder ? newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
+    const order = englishSortOrder ? parseInt(englishSortOrder) : null;
     
     // Invalidate RequestManager cache immediately
     requestManager.invalidatePattern(`classes:${madrasah.id}`);
@@ -291,7 +294,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                   <Hash size={12} /> সিরিয়াল নম্বর (Sorting)
                 </label>
                 <input 
-                  type="number" 
+                  type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
                   className={`w-full px-6 py-5 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border-2 rounded-[1.8rem] font-black text-lg outline-none focus:border-[#2563EB]/30 focus:bg-white transition-all shadow-inner`} 
                   value={newSortOrder} 
                   onChange={(e) => setNewSortOrder(e.target.value)}
