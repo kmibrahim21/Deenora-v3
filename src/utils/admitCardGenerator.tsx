@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { toPng } from 'html-to-image';
+import { toJpeg } from 'html-to-image';
 import jsPDF from 'jspdf';
 import { Exam, Student } from '../types';
 
@@ -299,15 +299,9 @@ export const generateAdmitCardPDF = async (
   lang: 'en' | 'bn' = 'en'
 ) => {
   const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '100vw';
-  container.style.height = '100vh';
-  container.style.zIndex = '-9999';
-  container.style.overflow = 'auto';
-  container.style.pointerEvents = 'none';
-  container.style.opacity = '0';
+  container.style.position = 'absolute';
+  container.style.top = '-9999px';
+  container.style.left = '-9999px';
   document.body.appendChild(container);
 
   const root = createRoot(container);
@@ -330,58 +324,65 @@ export const generateAdmitCardPDF = async (
   const marginX = (pageWidth - (cardWidthMm * 2 + gapX)) / 2;
   const marginY = (pageHeight - (cardHeightMm * 2 + gapY)) / 2;
 
-  // Render all cards at once for better efficiency
-  await new Promise<void>((resolve) => {
-    root.render(
-      <div id="admit-cards-wrapper">
-        {students.map((student, index) => (
-          <div key={student.id || index} className="admit-card-item inline-block">
-            <AdmitCardTemplate exam={exam} student={student} madrasah={madrasah} templateId={templateId} lang={lang} />
-          </div>
-        ))}
-      </div>
-    );
-    
-    // Safety timeout + image check
-    let resolved = false;
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        resolve();
-      }
-    }, 30000); // 30s max for all cards
+  await document.fonts.ready;
 
-    const checkReady = () => {
-      if (resolved) return;
-      const imgs = container.querySelectorAll('img');
-      const allDone = Array.from(imgs).every(img => img.complete);
-      if (allDone && imgs.length > 0) {
-        resolved = true;
-        clearTimeout(timeout);
-        setTimeout(resolve, 2000); // Small grace period for fonts and rendering
-      } else if (imgs.length === 0) {
-        resolved = true;
-        clearTimeout(timeout);
-        setTimeout(resolve, 2500);
-      } else {
-        setTimeout(checkReady, 500);
-      }
-    };
-    // Start checking after a short delay
-    setTimeout(checkReady, 500);
-  });
-
-  const cardElements = container.querySelectorAll('.admit-card-item > div');
-  
-  for (let i = 0; i < cardElements.length; i++) {
-    const element = cardElements[i] as HTMLElement;
+  for (let i = 0; i < students.length; i++) {
+    const student = students[i];
+    console.log(`Generating admit card for: ${student.student_name} (${i + 1}/${students.length})`);
     
+    await new Promise<void>((resolve) => {
+      root.render(<AdmitCardTemplate exam={exam} student={student} madrasah={madrasah} templateId={templateId} lang={lang} />);
+      
+      let isResolved = false;
+      const timeout = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          resolve();
+        }
+      }, 5000);
+
+      const checkImages = () => {
+        if (isResolved) return;
+        
+        const imgs = container.querySelectorAll('img');
+        const allLoaded = Array.from(imgs).every(img => img.complete && img.naturalHeight !== 0);
+        
+        if (allLoaded && imgs.length > 0) {
+          isResolved = true;
+          clearTimeout(timeout);
+          setTimeout(resolve, 500);
+        } else if (imgs.length === 0 && document.body.contains(container)) {
+           setTimeout(() => {
+             if (!isResolved) {
+               isResolved = true;
+               clearTimeout(timeout);
+               resolve();
+             }
+           }, 800);
+        } else {
+          setTimeout(checkImages, 200);
+        }
+      };
+      
+      checkImages();
+    });
+
     try {
-      const imgData = await toPng(element, {
+      const element = container.querySelector('div');
+      if (!element) {
+        console.error('Admit card element not found');
+        continue;
+      }
+
+      const imgData = await toJpeg(element as HTMLElement, {
         pixelRatio: 1.5, 
+        quality: 0.8,
         backgroundColor: '#ffffff',
         cacheBust: true,
-        skipFonts: false
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left'
+        }
       });
 
       if (i > 0 && i % 4 === 0) {
@@ -395,18 +396,17 @@ export const generateAdmitCardPDF = async (
       const xPos = marginX + col * (cardWidthMm + gapX);
       const yPos = marginY + row * (cardHeightMm + gapY);
 
-      pdf.addImage(imgData, 'PNG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
+      pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
     } catch (err) {
-      console.error('Error generating image for card:', i, err);
+      console.error('Error generating image for student:', student.student_name, err);
     }
   }
-
-  const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  pdf.save(`Admit_Cards_${safeExamName}.pdf`);
 
   setTimeout(() => {
     root.unmount();
     document.body.removeChild(container);
   }, 1000);
-};
 
+  const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  pdf.save(`Admit_Cards_${safeExamName}.pdf`);
+};

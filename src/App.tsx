@@ -102,8 +102,8 @@ const App: React.FC = () => {
 
   const { config: globalUpdate, showPopup: showUpdatePopup, dismissPopup: dismissUpdatePopup } = useGlobalUpdate();
 
-  const triggerRefresh = async () => {
-    await requestManager.invalidate();
+  const triggerRefresh = () => {
+    requestManager.invalidate();
     setDataVersion((prev) => prev + 1);
     refreshMadrasah();
   };
