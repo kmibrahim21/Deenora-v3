@@ -11,8 +11,8 @@ export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
     // Primary sort by sort_order (coerce to number to be safe)
-    const orderA = a.sort_order !== null && a.sort_order !== undefined ? Number(a.sort_order) : 999999;
-    const orderB = b.sort_order !== null && b.sort_order !== undefined ? Number(b.sort_order) : 999999;
+    const orderA = a.sort_order != null && String(a.sort_order).trim() !== '' ? Number(a.sort_order) : 999999;
+    const orderB = b.sort_order != null && String(b.sort_order).trim() !== '' ? Number(b.sort_order) : 999999;
     
     if (orderA !== orderB) return orderA - orderB;
     

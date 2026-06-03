@@ -28,6 +28,7 @@ export interface Institution {
       sms?: boolean;
       messages?: boolean;
       certificates?: boolean;
+      student_photo?: boolean;
       id_cards?: boolean;
       exam_routine?: boolean;
     };

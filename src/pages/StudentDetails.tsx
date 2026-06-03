@@ -95,6 +95,8 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const [photoAlert, setPhotoAlert] = useState<{ show: boolean; type: 'success' | 'error'; message: string } | null>(null);
   
   const isDark = madrasah?.theme === 'dark';
+  const isPhotoModuleEnabled = madrasah?.config_json?.modules?.student_photo === true;
+  const canUploadPhoto = isPhotoModuleEnabled && (role === 'super_admin' || role === 'madrasah_admin' || !!profile?.permissions?.can_upload_student_photos);
 
   useEffect(() => {
     if (photoAlert && photoAlert.show) {
@@ -427,10 +429,9 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
 
             <div 
               onClick={() => {
-                const canUploadPhoto = role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos;
                 if (canUploadPhoto && !isUploadingImage) fileInputRef.current?.click();
               }}
-              className={`relative w-24 h-24 rounded-[1rem] flex items-center justify-center text-[#2563EB] border-[2px] shadow-xl overflow-hidden transform group-hover:scale-105 transition-all duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'} ${(role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos) ? 'cursor-pointer hover:border-[#2563EB]' : ''}`}
+              className={`relative w-24 h-24 rounded-[1rem] flex items-center justify-center text-[#2563EB] border-[2px] shadow-xl overflow-hidden transform group-hover:scale-105 transition-all duration-500 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-800' : 'bg-gradient-to-br from-blue-50 to-white border-white'} ${canUploadPhoto ? 'cursor-pointer hover:border-[#2563EB]' : ''}`}
             >
               {isUploadingImage ? (
                 <div className="flex flex-col items-center justify-center text-slate-500">
@@ -444,7 +445,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
               )}
 
               {/* Hover Camera icon overlay */}
-              {(role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos) && !isUploadingImage && (
+              {canUploadPhoto && !isUploadingImage && (
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <Camera className="text-white" size={20} />
                 </div>
@@ -463,7 +464,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
             </div>
           </div>
           
-          {currentPhotoUrl && (role === 'super_admin' || role === 'madrasah_admin' || !readOnly || !!profile?.permissions?.can_upload_student_photos) && (
+          {currentPhotoUrl && canUploadPhoto && (
             <button 
               onClick={handleDeletePhoto}
               disabled={isDeletingPhoto}
