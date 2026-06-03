@@ -137,7 +137,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   };
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah?.id);
+    const { data } = await supabase.from('classes')
+      .select('*')
+      .eq('institution_id', madrasah?.id)
+      .order('sort_order', { ascending: true });
     if (data) {
       let filteredClasses = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {

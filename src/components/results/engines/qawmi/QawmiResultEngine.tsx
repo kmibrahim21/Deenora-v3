@@ -24,7 +24,10 @@ const QawmiResultEngine: React.FC<QawmiResultEngineProps> = ({ lang, madrasah, o
   }, [madrasah?.id]);
 
   const fetchClasses = async () => {
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah?.id);
+    const { data } = await supabase.from('classes')
+      .select('*')
+      .eq('institution_id', madrasah?.id)
+      .order('sort_order', { ascending: true });
     if (data) {
       let filteredClasses = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {

@@ -736,7 +736,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const fetchClasses = async () => {
     if (!madrasah) return;
     const { data } = await requestManager.cachedFetch('classes', (q: any) => 
-      q.select('*').eq('institution_id', madrasah.id),
+      q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
       `classes:${madrasah.id}`
     );
     

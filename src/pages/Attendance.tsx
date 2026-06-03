@@ -254,7 +254,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     if (!madrasah?.id) return;
     const { data } = await requestManager.cachedFetch(
       'classes',
-      (q) => q.select('*').eq('institution_id', madrasah.id),
+      (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
       `classes:${madrasah.id}`,
       CACHE_TTLS.LONG
     );
