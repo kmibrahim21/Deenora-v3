@@ -10,24 +10,12 @@ import { requestManager } from 'services/RequestManager';
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
-    // Primary sort by sort_order (Numeric)
-    // We treat null, undefined, empty string, AND 0 as "unspecified" (place at bottom)
-    const valA = a.sort_order;
-    const valB = b.sort_order;
-    
-    const numA = (valA !== null && valA !== undefined && valA !== '' && valA !== 0) ? Number(valA) : 999999;
-    const numB = (valB !== null && valB !== undefined && valB !== '' && valB !== 0) ? Number(valB) : 999999;
-    
-    // Defensive check for NaN
-    const orderA = isNaN(numA) ? 999999 : numA;
-    const orderB = isNaN(numB) ? 999999 : numB;
-    
+    // Primary sort by sort_order
+    const orderA = a.sort_order ?? 999999;
+    const orderB = b.sort_order ?? 999999;
     if (orderA !== orderB) return orderA - orderB;
-    
-    // Fallback to alphabetical order for same serial
-    const nameA = String(a.class_name || '');
-    const nameB = String(b.class_name || '');
-    return nameA.localeCompare(nameB, 'bn', { numeric: true, sensitivity: 'base' });
+    // Fallback to alphabetical
+    return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
   });
 };
 
@@ -63,14 +51,14 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     setLoading(true);
     
     // First, show whatever is in offline cache immediately
-    const cached = offlineApi.getCache(`classes:${madrasah.id}`);
+    const cached = offlineApi.getCache('classes');
     if (cached) setClasses(sortMadrasahClasses(cached));
 
     try {
       // 1. Fetch Classes (Cached)
       const { data: classesData, error } = await requestManager.cachedFetch(
         'classes',
-        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        (q) => q.select('*').eq('institution_id', madrasah.id),
         `classes:${madrasah.id}`,
         30 * 60 * 1000
       );
@@ -106,7 +94,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         }));
         const sorted = sortMadrasahClasses(withCounts);
         setClasses(sorted);
-        offlineApi.setCache(`classes:${madrasah.id}`, sorted);
+        offlineApi.setCache('classes', sorted);
       }
     } catch (err) { 
       console.error('Fetch Classes Error:', err); 
@@ -120,49 +108,29 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     setModalLoading(true);
     
     const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
-    const cleanSortOrder = (newSortOrder !== null && newSortOrder !== undefined) ? String(newSortOrder).trim() : '';
-    const englishSortOrder = cleanSortOrder ? cleanSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match] || match) : '';
-    const parsedNum = parseInt(englishSortOrder, 10);
-    const orderValue = !isNaN(parsedNum) ? parsedNum : null;
+    const englishSortOrder = newSortOrder ? newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
+    const order = englishSortOrder ? parseInt(englishSortOrder) : null;
     
-    // Explicitly clear caches before proceeding
-    await requestManager.invalidatePattern(`classes:${madrasah.id}`);
-    offlineApi.removeCache(`classes:${madrasah.id}`);
+    // Invalidate RequestManager cache immediately
+    requestManager.invalidatePattern(`classes:${madrasah.id}`);
 
     try {
       if (editingClass) {
         // Optimistic Update
-        setClasses(prev => {
-          const updated = prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: orderValue } : c);
-          const sorted = sortMadrasahClasses(updated);
-          offlineApi.setCache(`classes:${madrasah.id}`, sorted);
-          return sorted;
-        });
+        setClasses(prev => prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c));
         
-        try {
-          // Always try online first
-          const { data: updatedData, error } = await supabase.from('classes').update({ 
+        if (navigator.onLine) {
+          const { error } = await supabase.from('classes').update({ 
             class_name: newClassName.trim(),
-            sort_order: orderValue 
-          }).eq('id', editingClass.id).select();
-          
+            sort_order: order 
+          }).eq('id', editingClass.id);
           if (error) throw error;
-          if (!updatedData || updatedData.length === 0) {
-            throw new Error(lang === 'bn' ? 'ডাটাবেজে পরিবর্তন সংরক্ষিত হয়নি। আপনার পারমিশন চেক করুন।' : 'Changes could not be saved to the database. Please check your permissions.');
-          }
-        } catch (err: any) {
-          // Fallback to offline queue if truly offline/network error
-          const isNetworkError = !navigator.onLine || err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('Network');
-          if (isNetworkError) {
-            console.log("[Classes] Network offline during UPDATE, enqueuing offline action");
-            offlineApi.queueAction('classes', 'UPDATE', { 
-              id: editingClass.id, 
-              class_name: newClassName.trim(),
-              sort_order: orderValue
-            });
-          } else {
-            throw err;
-          }
+        } else {
+          offlineApi.queueAction('classes', 'UPDATE', { 
+            id: editingClass.id, 
+            class_name: newClassName.trim(),
+            sort_order: order
+          });
         }
       } else {
         const tempId = crypto.randomUUID();
@@ -170,45 +138,26 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           id: tempId,
           class_name: newClassName.trim(), 
           institution_id: madrasah.id,
-          sort_order: orderValue
+          sort_order: order
         };
         
         // Optimistic Update
-        setClasses(prev => {
-          const updated = [...prev, { ...payload, student_count: 0 }];
-          const sorted = sortMadrasahClasses(updated);
-          offlineApi.setCache(`classes:${madrasah.id}`, sorted);
-          return sorted;
-        });
+        setClasses(prev => sortMadrasahClasses([...prev, { ...payload, student_count: 0 }]));
 
-        try {
-          // Always try online first
+        if (navigator.onLine) {
           const { data, error } = await supabase.from('classes').insert({
             class_name: payload.class_name,
             institution_id: payload.institution_id,
             sort_order: payload.sort_order
           }).select().single();
-          
           if (error) throw error;
           
-          // Replace temp item with real data if needed
+          // Replace temp item with real data if needed (though next refresh will handle it)
           if (data) {
-             setClasses(prev => {
-               const updated = prev.map(c => c.id === tempId ? { ...data, student_count: 0 } : c);
-               const sorted = sortMadrasahClasses(updated);
-               offlineApi.setCache(`classes:${madrasah.id}`, sorted);
-               return sorted;
-             });
+             setClasses(prev => prev.map(c => c.id === tempId ? { ...data, student_count: 0 } : c));
           }
-        } catch (err: any) {
-          // Fallback to offline queue if truly offline/network error
-          const isNetworkError = !navigator.onLine || err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('Network');
-          if (isNetworkError) {
-            console.log("[Classes] Network offline during INSERT, enqueuing offline action");
-            offlineApi.queueAction('classes', 'INSERT', payload);
-          } else {
-            throw err;
-          }
+        } else {
+          offlineApi.queueAction('classes', 'INSERT', payload);
         }
       }
       setShowModal(false);
@@ -235,7 +184,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       setClasses(prev => prev.filter(c => c.id !== showDeleteConfirm.id));
 
       if (navigator.onLine) {
-        const { data: deletedData, error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id).select();
+        const { error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
         if (error) {
           // Check for foreign key constraint violation (PostgreSQL error code 23503)
           if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
@@ -244,9 +193,6 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                : 'This class cannot be deleted because it is linked to other records (e.g. students, fees, exams). Please delete the linked records first.');
           }
           throw error;
-        }
-        if (!deletedData || deletedData.length === 0) {
-          throw new Error(lang === 'bn' ? 'ডাটাবেজ থেকে ক্লাসটি ডিলিট করা যায়নি। আপনার পারমিশন চেক করুন।' : 'Class could not be deleted from database. Please check your permissions.');
         }
       } else {
         // Offline check (limited)
@@ -267,17 +213,14 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         <div className="flex items-center justify-between px-2">
           <h1 className={`text-xl font-noto font-black ${isDark ? 'text-white' : 'text-[#1E293B]'}`}>{t('classes_title', lang, madrasah?.institution_type)}</h1>
           {!readOnly && (
-            <button 
-              onClick={() => { setNewClassName(''); setNewSortOrder(''); setEditingClass(null); setShowModal(true); }} 
-              className="bg-[#2563EB] text-white px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 shadow-premium"
-            >
+            <button onClick={() => { setNewClassName(''); setNewSortOrder(''); setEditingClass(null); setShowModal(true); }} className="bg-[#2563EB] text-white px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 shadow-premium">
               <Plus size={16} strokeWidth={4} /> {t('new_class', lang, madrasah?.institution_type)}
             </button>
           )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-          {sortMadrasahClasses(classes).map(cls => (
+          {classes.map(cls => (
             <div key={cls.id} onClick={() => onClassClick(cls)} className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 sm:p-5 rounded-[2.2rem] border flex items-center justify-between active:scale-[0.98] transition-all group shadow-bubble relative overflow-hidden`}>
               <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                 <div className={`w-12 h-12 sm:w-14 sm:h-14 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-2xl flex items-center justify-center shrink-0 border shadow-inner`}>
@@ -296,13 +239,6 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                 </div>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                <div className="flex flex-col items-end mr-1">
-                  {cls.sort_order != null && cls.sort_order !== 0 && (
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
-                      #{cls.sort_order}
-                    </span>
-                  )}
-                </div>
                 {!readOnly && (
                   <>
                     <button onClick={(e) => { e.stopPropagation(); setNewClassName(cls.class_name || ''); setNewSortOrder(cls.sort_order?.toString() || ''); setEditingClass(cls); setShowModal(true); }} 
@@ -376,7 +312,6 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         </div>,
         document.body
       )}
-
 
       {showDeleteConfirm && createPortal(
         <div className="modal-overlay bg-[#080A12]/40 backdrop-blur-2xl animate-in fade-in duration-300">

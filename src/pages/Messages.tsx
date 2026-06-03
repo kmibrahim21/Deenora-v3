@@ -4,7 +4,6 @@ import { MessageSquare, Calendar, Send, List, Trash2, CalendarDays, BookOpen, Cl
 import { Institution, Language } from '../types';
 import { OfflineService } from '../services/OfflineService';
 import { getTodayDateString } from '../utils/calendarUtils';
-import { sortMadrasahClasses } from './Classes';
 
 export default function Messages({ 
   lang = 'bn',
@@ -83,8 +82,8 @@ export default function Messages({
           try { setMessages(JSON.parse(cached)); setIsLoading(false); } catch(e) {}
       }
 
-      const { data: cls } = await supabase.from('classes').select('id, class_name, sort_order').eq('institution_id', madrasah.id).order('sort_order', { ascending: true });
-      if (cls) setClasses(sortMadrasahClasses(cls));
+      const { data: cls } = await supabase.from('classes').select('id, class_name').eq('institution_id', madrasah.id).order('created_at');
+      if (cls) setClasses(cls);
 
       const { data: history } = await supabase.from('messages')
         .select('id, class_name, title, message, created_at, sender_name, type')

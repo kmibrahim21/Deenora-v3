@@ -45,19 +45,18 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
   useEffect(() => {
     fetchClasses();
-  }, [madrasah?.id]);
+  }, []);
 
   const fetchClasses = async () => {
-    if (!madrasah?.id) return;
-    const cached = offlineApi.getCache(`classes:${madrasah.id}`);
+    const cached = offlineApi.getCache('classes');
     if (cached) setClasses(sortMadrasahClasses(cached));
 
-    if (navigator.onLine) {
+    if (navigator.onLine && madrasah) {
       const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
       if (data) {
         const sorted = sortMadrasahClasses(data);
         setClasses(sorted);
-        offlineApi.setCache(`classes:${madrasah.id}`, sorted);
+        offlineApi.setCache('classes', sorted);
       }
     }
   };

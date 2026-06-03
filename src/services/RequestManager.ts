@@ -276,39 +276,29 @@ class RequestManager {
   async invalidatePattern(pattern: string | RegExp) {
     const now = Date.now();
     const keysToDelete: string[] = [];
-    
-    // 1. Clear from memory cache
     for (const key of this.cache.keys()) {
-      const match = typeof pattern === 'string' ? key.includes(pattern) : pattern.test(key);
-      if (match) {
+      if (typeof pattern === 'string') {
+        if (key.includes(pattern)) {
+          this.cache.delete(key);
+          this.lastInvalidation.set(key, now);
+          keysToDelete.push(key);
+        }
+      } else if (pattern.test(key)) {
         this.cache.delete(key);
         this.lastInvalidation.set(key, now);
         keysToDelete.push(key);
       }
     }
-    
-    // 2. Clear from pending requests
+    // Also clear pending matches
     for (const key of this.pending.keys()) {
-      const match = typeof pattern === 'string' ? key.includes(pattern) : pattern.test(key);
-      if (match) this.pending.delete(key);
+      if (typeof pattern === 'string') {
+        if (key.includes(pattern)) this.pending.delete(key);
+      } else if (pattern.test(key)) {
+        this.pending.delete(key);
+      }
     }
-    
-    // 3. NUCLEAR: Search ALL keys in IndexedDB even if they are not in memory
-    // This is slower but guarantees consistency after a refresh
-    try {
-      const allDbKeys = await offlineDb.response_cache.toCollection().primaryKeys();
-      for (const dbKey of allDbKeys) {
-        const match = typeof pattern === 'string' ? dbKey.includes(pattern) : pattern.test(dbKey);
-        if (match && !keysToDelete.includes(dbKey)) {
-          keysToDelete.push(dbKey);
-        }
-      }
-      
-      if (keysToDelete.length > 0) {
-        await offlineDb.response_cache.bulkDelete(keysToDelete);
-      }
-    } catch (e) {
-      console.warn("Failed to clear IndexedDB pattern cache:", e);
+    if (keysToDelete.length > 0) {
+      await offlineDb.response_cache.bulkDelete(keysToDelete);
     }
   }
 }

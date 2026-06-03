@@ -27,7 +27,7 @@ interface StudentsProps {
   onNavigateToVoiceBroadcast?: (ids: string[]) => void;
 }
 
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 50;
 
 const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -119,10 +119,9 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         
         // Ensure robust numeric sorting in case database sorting is lexicographical
         formattedData.sort((a, b) => {
-          const rollA = a.roll != null && (a.roll as any) !== '' ? Number(a.roll) : 999999;
-          const rollB = b.roll != null && (b.roll as any) !== '' ? Number(b.roll) : 999999;
-          if (rollA !== rollB) return rollA - rollB;
-          return (a.student_name || '').localeCompare(b.student_name || '') || (a.id || '').localeCompare(b.id || '');
+          const rollA = a.roll != null ? Number(a.roll) : 999999;
+          const rollB = b.roll != null ? Number(b.roll) : 999999;
+          return rollA - rollB;
         });
         
         setStudents(prev => reset ? formattedData : [...prev, ...formattedData]);
