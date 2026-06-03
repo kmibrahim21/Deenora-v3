@@ -9,14 +9,26 @@ import { requestManager } from 'services/RequestManager';
 
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
+  
+  const bnToEn = (str: any) => {
+    if (str === null || str === undefined) return null;
+    const s = String(str);
+    const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    const englishDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    let res = s;
+    for (let i = 0; i < 10; i++) {
+        res = res.replace(new RegExp(bengaliDigits[i], 'g'), englishDigits[i]);
+    }
+    const num = Number(res);
+    return isNaN(num) ? null : num;
+  };
+
   return [...classes].sort((a, b) => {
-    // Primary sort by sort_order (coerce to number to be safe)
-    const orderA = a.sort_order !== null && a.sort_order !== undefined ? Number(a.sort_order) : 999999;
-    const orderB = b.sort_order !== null && b.sort_order !== undefined ? Number(b.sort_order) : 999999;
+    const orderA = bnToEn(a.sort_order) ?? 999999;
+    const orderB = bnToEn(b.sort_order) ?? 999999;
     
     if (orderA !== orderB) return orderA - orderB;
     
-    // Fallback to alphabetical
     return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
   });
 };
@@ -172,7 +184,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       setNewClassName('');
       setNewSortOrder('');
       setEditingClass(null);
-      triggerRefresh();
+      await triggerRefresh();
     } catch (err: any) {
       alert(lang === 'bn' ? `ব্যর্থ হয়েছে: ${err.message}` : `Failed: ${err.message}`);
       // On error, we really should revert the optimistic state but for now fetchClasses will correct it
