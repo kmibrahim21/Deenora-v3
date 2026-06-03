@@ -120,8 +120,10 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     setModalLoading(true);
     
     const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
-    const englishSortOrder = newSortOrder ? newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
-    const orderValue = englishSortOrder && !isNaN(Number(englishSortOrder)) ? Number(englishSortOrder) : null;
+    const cleanSortOrder = (newSortOrder !== null && newSortOrder !== undefined) ? String(newSortOrder).trim() : '';
+    const englishSortOrder = cleanSortOrder ? cleanSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match] || match) : '';
+    const parsedNum = parseInt(englishSortOrder, 10);
+    const orderValue = !isNaN(parsedNum) ? parsedNum : null;
     
     // Explicitly clear caches before proceeding
     await requestManager.invalidatePattern(`classes:${madrasah.id}`);
