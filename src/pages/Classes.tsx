@@ -10,10 +10,12 @@ import { requestManager } from 'services/RequestManager';
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
-    // Primary sort by sort_order
-    const orderA = a.sort_order ?? 999999;
-    const orderB = b.sort_order ?? 999999;
+    // Primary sort by sort_order (coerce to number to be safe)
+    const orderA = a.sort_order !== null && a.sort_order !== undefined ? Number(a.sort_order) : 999999;
+    const orderB = b.sort_order !== null && b.sort_order !== undefined ? Number(b.sort_order) : 999999;
+    
     if (orderA !== orderB) return orderA - orderB;
+    
     // Fallback to alphabetical
     return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
   });
@@ -51,14 +53,15 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     setLoading(true);
     
     // First, show whatever is in offline cache immediately
-    const cached = offlineApi.getCache('classes');
+    const cacheKey = `classes_${madrasah.id}`;
+    const cached = offlineApi.getCache(cacheKey);
     if (cached) setClasses(sortMadrasahClasses(cached));
 
     try {
       // 1. Fetch Classes (Cached)
       const { data: classesData, error } = await requestManager.cachedFetch(
         'classes',
-        (q) => q.select('*').eq('institution_id', madrasah.id),
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
         `classes:${madrasah.id}`,
         30 * 60 * 1000
       );
@@ -94,7 +97,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         }));
         const sorted = sortMadrasahClasses(withCounts);
         setClasses(sorted);
-        offlineApi.setCache('classes', sorted);
+        offlineApi.setCache(cacheKey, sorted);
       }
     } catch (err) { 
       console.error('Fetch Classes Error:', err); 
@@ -117,7 +120,10 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     try {
       if (editingClass) {
         // Optimistic Update
-        setClasses(prev => prev.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c));
+        const updatedClasses = classes.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c);
+        const sorted = sortMadrasahClasses(updatedClasses);
+        setClasses(sorted);
+        offlineApi.setCache(`classes_${madrasah.id}`, sorted);
         
         if (navigator.onLine) {
           const { error } = await supabase.from('classes').update({ 
@@ -142,7 +148,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         };
         
         // Optimistic Update
-        setClasses(prev => sortMadrasahClasses([...prev, { ...payload, student_count: 0 }]));
+        const updatedClasses = sortMadrasahClasses([...classes, { ...payload, student_count: 0 }]);
+        setClasses(updatedClasses);
+        offlineApi.setCache(`classes_${madrasah.id}`, updatedClasses);
 
         if (navigator.onLine) {
           const { data, error } = await supabase.from('classes').insert({
