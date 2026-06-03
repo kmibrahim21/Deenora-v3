@@ -275,18 +275,17 @@ class RequestManager {
 
   async invalidatePattern(pattern: string | RegExp) {
     const now = Date.now();
-    const keysToDelete: string[] = [];
+    
+    // First, clear from memory cache
     for (const key of this.cache.keys()) {
       if (typeof pattern === 'string') {
         if (key.includes(pattern)) {
           this.cache.delete(key);
           this.lastInvalidation.set(key, now);
-          keysToDelete.push(key);
         }
       } else if (pattern.test(key)) {
         this.cache.delete(key);
         this.lastInvalidation.set(key, now);
-        keysToDelete.push(key);
       }
     }
     // Also clear pending matches
@@ -297,8 +296,20 @@ class RequestManager {
         this.pending.delete(key);
       }
     }
-    if (keysToDelete.length > 0) {
-      await offlineDb.response_cache.bulkDelete(keysToDelete);
+    
+    // Crucially, we must scan the indexedDB directly to find keys to delete,
+    // because memory cache may be empty after a fresh load.
+    try {
+      const records = await offlineDb.response_cache.toArray();
+      const keysToDelete = records
+        .filter(record => typeof pattern === 'string' ? record.key.includes(pattern) : pattern.test(record.key))
+        .map(record => record.key);
+
+      if (keysToDelete.length > 0) {
+        await offlineDb.response_cache.bulkDelete(keysToDelete);
+      }
+    } catch (e) {
+      console.warn("Failed to delete from response_cache:", e);
     }
   }
 }

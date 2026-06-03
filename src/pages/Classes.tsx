@@ -11,8 +11,14 @@ export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
     // Primary sort by sort_order (coerce to number to be safe)
-    const orderA = a.sort_order != null && String(a.sort_order).trim() !== '' ? Number(a.sort_order) : 999999;
-    const orderB = b.sort_order != null && String(b.sort_order).trim() !== '' ? Number(b.sort_order) : 999999;
+    // Treat 0 or null/empty as unassigned, sending them to the bottom (999999)
+    const getOrder = (val: any) => {
+      if (val == null || String(val).trim() === '' || Number(val) === 0) return 999999;
+      return Number(val);
+    };
+
+    const orderA = getOrder(a.sort_order);
+    const orderB = getOrder(b.sort_order);
     
     if (orderA !== orderB) return orderA - orderB;
     
