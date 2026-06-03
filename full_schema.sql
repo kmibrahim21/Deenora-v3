@@ -689,7 +689,8 @@ CREATE POLICY "Enable all access for institution admins" ON classes FOR ALL USIN
         WHERE profiles.id = auth.uid() 
         AND (
             (profiles.role = 'madrasah_admin' AND profiles.institution_id = classes.institution_id) OR
-            (profiles.role = 'super_admin')
+            (profiles.role = 'super_admin') OR
+            (profiles.role = 'teacher' AND (profiles.permissions->>'can_manage_classes')::boolean = true AND profiles.institution_id = classes.institution_id)
         )
     )
 );
@@ -1159,7 +1160,8 @@ CREATE POLICY "Enable all access for institution admins" ON class_routines FOR A
         WHERE profiles.id = auth.uid() 
         AND (
             (profiles.role = 'madrasah_admin' AND profiles.institution_id = class_routines.institution_id) OR
-            (profiles.role = 'super_admin')
+            (profiles.role = 'super_admin') OR
+            (profiles.role = 'teacher' AND (profiles.permissions->>'can_manage_routines')::boolean = true AND profiles.institution_id = class_routines.institution_id)
         )
     )
 );

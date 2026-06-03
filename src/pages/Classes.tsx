@@ -141,12 +141,15 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         
         try {
           // Always try online first
-          const { error } = await supabase.from('classes').update({ 
+          const { data: updatedData, error } = await supabase.from('classes').update({ 
             class_name: newClassName.trim(),
             sort_order: orderValue 
-          }).eq('id', editingClass.id);
+          }).eq('id', editingClass.id).select();
           
           if (error) throw error;
+          if (!updatedData || updatedData.length === 0) {
+            throw new Error(lang === 'bn' ? 'ডাটাবেজে পরিবর্তন সংরক্ষিত হয়নি। আপনার পারমিশন চেক করুন।' : 'Changes could not be saved to the database. Please check your permissions.');
+          }
         } catch (err: any) {
           // Fallback to offline queue if truly offline/network error
           const isNetworkError = !navigator.onLine || err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('Network');
@@ -232,7 +235,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       setClasses(prev => prev.filter(c => c.id !== showDeleteConfirm.id));
 
       if (navigator.onLine) {
-        const { error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id);
+        const { data: deletedData, error } = await supabase.from('classes').delete().eq('id', showDeleteConfirm.id).select();
         if (error) {
           // Check for foreign key constraint violation (PostgreSQL error code 23503)
           if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
@@ -241,6 +244,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                : 'This class cannot be deleted because it is linked to other records (e.g. students, fees, exams). Please delete the linked records first.');
           }
           throw error;
+        }
+        if (!deletedData || deletedData.length === 0) {
+          throw new Error(lang === 'bn' ? 'ডাটাবেজ থেকে ক্লাসটি ডিলিট করা যায়নি। আপনার পারমিশন চেক করুন।' : 'Class could not be deleted from database. Please check your permissions.');
         }
       } else {
         // Offline check (limited)
