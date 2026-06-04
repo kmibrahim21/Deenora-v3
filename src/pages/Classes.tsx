@@ -128,7 +128,10 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     }
     
     // Invalidate RequestManager cache immediately
-    requestManager.invalidatePattern(`classes:${madrasah.id}`);
+    if (madrasah?.id) {
+      await requestManager.invalidatePattern(`classes:${madrasah.id}`);
+      await requestManager.invalidatePattern(`classes`);
+    }
 
     try {
       if (editingClass) {
@@ -136,7 +139,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         const updatedClasses = classes.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c);
         const sorted = sortMadrasahClasses(updatedClasses);
         setClasses(sorted);
-        offlineApi.setCache(`classes_${madrasah.id}`, sorted);
+        if (madrasah?.id) {
+          offlineApi.setCache(`classes_${madrasah.id}`, sorted);
+        }
         
         if (navigator.onLine) {
           const { error } = await supabase.from('classes').update({ 
@@ -163,7 +168,9 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         // Optimistic Update
         const updatedClasses = sortMadrasahClasses([...classes, { ...payload, student_count: 0 }]);
         setClasses(updatedClasses);
-        offlineApi.setCache(`classes_${madrasah.id}`, updatedClasses);
+        if (madrasah?.id) {
+          offlineApi.setCache(`classes_${madrasah.id}`, updatedClasses);
+        }
 
         if (navigator.onLine) {
           const { data, error } = await supabase.from('classes').insert({
@@ -173,7 +180,6 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           }).select().single();
           if (error) throw error;
           
-          // Replace temp item with real data if needed (though next refresh will handle it)
           if (data) {
              setClasses(prev => prev.map(c => c.id === tempId ? { ...data, student_count: 0 } : c));
           }
@@ -181,6 +187,12 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           offlineApi.queueAction('classes', 'INSERT', payload);
         }
       }
+      
+      // Final cache clearing to be safe
+      if (madrasah?.id) {
+        await requestManager.invalidatePattern(`classes`);
+      }
+      
       setShowModal(false);
       setNewClassName('');
       setNewSortOrder('');
