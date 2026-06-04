@@ -1103,7 +1103,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
     }
 
-    setEditStudentLimit(userConfig?.student_limit || 0);
+    setEditStudentLimit(userConfig?.student_limit !== undefined ? Number(userConfig.student_limit) : 200);
     setEditPassword(userConfig?.user_pin || '');
 
     const userModules = { ...(userConfig?.modules || {}) };

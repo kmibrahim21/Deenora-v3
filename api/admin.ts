@@ -140,6 +140,7 @@ async function setupInstitution(supabase, userId, body, res) {
     is_super_admin: false,
     status: 'active',
     config_json: {
+      student_limit: 200,
       modules: {
         attendance: true,
         results: true,
