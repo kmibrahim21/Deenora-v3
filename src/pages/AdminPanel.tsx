@@ -2446,7 +2446,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         </div>
                       </div>
                       <div className="px-1 space-y-2">
-                        <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight`}>{tr.institutions?.name}</p>
+                        <div className={`flex items-start justify-between gap-2`}>
+                          <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight`}>
+                            {tr.institutions?.config_json?.institute_code ? `[${tr.institutions.config_json.institute_code}] ` : ''}{tr.institutions?.name}
+                          </p>
+                          {tr.institutions?.reve_api_key && (
+                            <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-600 border-purple-100'} whitespace-nowrap`}>
+                              Masking
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-col gap-1">
                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TrxID: <span className="text-blue-500 font-mono">{tr.transaction_id}</span></p>
                            <p className={`text-xs font-black flex items-center gap-2 ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
