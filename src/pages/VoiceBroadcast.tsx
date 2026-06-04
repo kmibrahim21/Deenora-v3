@@ -31,6 +31,8 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { normalizePhone } from 'utils/smsUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 
+import { requestManager } from 'services/RequestManager';
+
 interface VoiceBroadcastProps {
   lang: Language;
   madrasah: Institution | null;
@@ -610,13 +612,23 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (insts) setAllInstitutions(insts);
     }
 
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
-    if (data) {
-      let filteredClasses = data;
-      if (role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+    try {
+      const { data } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
+
+      if (data) {
+        let filteredClasses = data;
+        if (role === 'teacher' && profile?.permissions?.allowed_classes) {
+          filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+        }
+        setClasses(sortMadrasahClasses(filteredClasses));
       }
-      setClasses(sortMadrasahClasses(filteredClasses));
+    } catch (e) {
+      console.error('Error fetching classes in VoiceBroadcast:', e);
     }
   };
 

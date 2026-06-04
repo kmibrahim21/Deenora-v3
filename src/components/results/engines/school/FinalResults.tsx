@@ -4,6 +4,7 @@ import { Institution, Class, Exam, FinalResult, FinalResultExam, Language, UserR
 import { ArrowLeft, Plus, Save, Trash2, Download, Loader2, Calculator, Check, X, AlertCircle } from 'lucide-react';
 import { t } from 'translations';
 import { generateFinalResultPDF } from '../../../../utils/pdfGenerator';
+import { sortMadrasahClasses } from 'pages/Classes';
 
 interface FinalResultsProps {
   lang: Language;
@@ -77,7 +78,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
         filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
       }
-      setClasses(filteredClasses);
+      setClasses(sortMadrasahClasses(filteredClasses));
     }
   };
 

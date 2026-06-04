@@ -4,6 +4,8 @@ import { supabase } from 'supabase';
 import { Institution, Language, Class, Teacher, ClassRoutine as ClassRoutineType, Profile } from 'types';
 import { generateClassRoutinePDF, generateMasterClassRoutinePDF } from '../utils/pdfGenerator';
 
+import { requestManager } from 'services/RequestManager';
+
 interface ClassRoutineProps {
   lang: Language;
   madrasah: Institution | null;
@@ -22,6 +24,8 @@ const DAYS = [
   { id: 'Thursday', bn: 'বৃহস্পতিবার', en: 'Thursday' },
   { id: 'Friday', bn: 'শুক্রবার', en: 'Friday' },
 ];
+
+import { sortMadrasahClasses } from 'pages/Classes';
 
 const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, profile }) => {
   const [classes, setClasses] = useState<Class[]>([]);
@@ -58,13 +62,26 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
     if (!madrasah) return;
     setLoading(true);
     try {
+      const clsProm = requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
+      
       const [clsRes, teaRes, rouRes] = await Promise.all([
-        supabase.from('classes').select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        clsProm,
         supabase.from('teachers').select('*').eq('institution_id', madrasah.id).eq('is_active', true),
         supabase.from('class_routines').select('*, classes(class_name), teachers(teacher_name)').eq('institution_id', madrasah.id).order('start_time', { ascending: true })
       ]);
 
-      if (clsRes.data) setClasses(clsRes.data);
+      if (clsRes.data) {
+        let filteredClasses = clsRes.data;
+        if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
+          filteredClasses = clsRes.data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+        }
+        setClasses(sortMadrasahClasses(filteredClasses));
+      }
       if (teaRes.data) setTeachers(teaRes.data.map(t => ({ ...t, name: t.teacher_name, phone: t.mobile })));
       if (rouRes.data) setRoutines(rouRes.data);
     } catch (err) {

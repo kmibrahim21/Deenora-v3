@@ -48,16 +48,26 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   }, []);
 
   const fetchClasses = async () => {
-    const cached = offlineApi.getCache('classes');
+    if (!madrasah?.id) return;
+    const cacheKey = `classes_${madrasah.id}`;
+    const cached = offlineApi.getCache(cacheKey);
     if (cached) setClasses(sortMadrasahClasses(cached));
 
-    if (navigator.onLine && madrasah) {
-      const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
+    try {
+      const { data } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', madrasah.id),
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
+      
       if (data) {
         const sorted = sortMadrasahClasses(data);
         setClasses(sorted);
-        offlineApi.setCache('classes', sorted);
+        offlineApi.setCache(cacheKey, sorted);
       }
+    } catch (e) {
+      console.error('Failed to fetch classes in StudentForm:', e);
     }
   };
 

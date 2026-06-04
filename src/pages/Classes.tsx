@@ -12,11 +12,9 @@ export const sortMadrasahClasses = (classes: any[]) => {
   return [...classes].sort((a, b) => {
     // Primary sort by sort_order (coerce to number to be safe)
     // Treat null/empty as unassigned, sending them to the bottom (999999). 
-    // Wait, if sort_order in database is DEFAULT 0, many will be 0.
-    // If we want untouched ones to be at the bottom, maybe we should leave 0 as 999999 unless it's explicitly set.
-    // However, if the user explicitly set it to a number, and the DB has it, let's just use it!
+    // If we want untouched ones to be at the bottom, we treat 0 as 999999 unless it's explicitly set.
     const getOrder = (val: any) => {
-      if (val == null || String(val).trim() === '') return 999999;
+      if (val == null || String(val).trim() === '' || Number(val) === 0) return 999999;
       return Number(val);
     };
 
@@ -61,8 +59,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     if (!madrasah?.id) return;
     setLoading(true);
     
-    // First, show whatever is in offline cache immediately
-    const cacheKey = `classes_${madrasah.id}`;
+    const cacheKey = madrasah?.id ? `classes_${madrasah.id}` : 'classes';
     const cached = offlineApi.getCache(cacheKey);
     if (cached) setClasses(sortMadrasahClasses(cached));
 

@@ -8,6 +8,8 @@ import jsPDF from 'jspdf';
 import { toJpeg } from 'html-to-image';
 import { CertificateTemplate } from '../components/pdf/CertificateTemplate';
 
+import { requestManager } from 'services/RequestManager';
+
 interface CertificatesProps {
   lang: Language;
   madrasah: Institution | null;
@@ -21,6 +23,8 @@ const certificateTypes = [
   { id: 'certificate', label: 'General Certificate', labelBn: 'সাধারণ সনদপত্র' },
   { id: 'character', label: 'Character Certificate', labelBn: 'চারিত্রিক সনদপত্র' },
 ];
+
+import { sortMadrasahClasses } from 'pages/Classes';
 
 const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, profile }) => {
   const [classes, setClasses] = useState<Class[]>([]);
@@ -84,16 +88,18 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
     if (!madrasah) return;
     setLoadingConfig(true);
     try {
-      const { data, error } = await supabase
-        .from('classes')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .order('sort_order', { ascending: true });
+      const { data, error } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
 
       if (error) throw error;
-      setClasses(data || []);
+      const sortedClasses = sortMadrasahClasses(data || []);
+      setClasses(sortedClasses);
       const map: Record<string, string> = {};
-      data?.forEach(c => map[c.id] = c.class_name);
+      sortedClasses.forEach((c: Class) => map[c.id] = c.class_name);
       setSelectedClassMap(map);
     } catch (err: any) {
       console.error('Error fetching classes:', err);

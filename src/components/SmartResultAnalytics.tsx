@@ -6,6 +6,8 @@ import { t } from 'translations';
 import { TrendingUp, TrendingDown, Award, AlertCircle, Loader2, User, ChevronRight, BarChart2, BookOpen, Users, ArrowUpRight, ArrowDownRight, Filter, Check, Search, Target, Activity } from 'lucide-react';
 import { isValidUUID } from 'utils/validation';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { requestManager } from 'services/RequestManager';
+import { sortMadrasahClasses } from 'pages/Classes';
 
 interface SmartResultAnalyticsProps {
   institutionId: string;
@@ -93,8 +95,17 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
 
   const fetchClasses = async () => {
     if (!isValidUUID(institutionId)) return;
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', institutionId);
-    if (data) setClasses(data);
+    try {
+      const { data } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', institutionId).order('sort_order', { ascending: true }),
+        `classes:${institutionId}`,
+        30 * 60 * 1000 // 30 mins
+      );
+      if (data) setClasses(sortMadrasahClasses(data));
+    } catch (e) {
+      console.error('Error fetching classes in Analytics:', e);
+    }
   };
 
   const fetchAnalytics = async () => {

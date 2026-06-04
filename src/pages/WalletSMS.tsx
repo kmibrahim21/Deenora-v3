@@ -10,6 +10,8 @@ import { getSmsLengthInfo } from 'utils/smsUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 import VoiceBroadcast from './VoiceBroadcast';
 
+import { requestManager } from 'services/RequestManager';
+
 interface WalletSMSProps {
   lang: Language;
   madrasah: Institution | null;
@@ -168,13 +170,23 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
       if (insts) setAllInstitutions(insts);
     }
 
-    const { data } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id);
-    if (data) {
-      let filteredClasses = data;
-      if (role === 'teacher' && profile?.permissions?.allowed_classes) {
-        filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+    try {
+      const { data } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
+
+      if (data) {
+        let filteredClasses = data;
+        if (role === 'teacher' && profile?.permissions?.allowed_classes) {
+          filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
+        }
+        setClasses(sortMadrasahClasses(filteredClasses));
       }
-      setClasses(sortMadrasahClasses(filteredClasses));
+    } catch (e) {
+      console.error('Error fetching classes in WalletSMS:', e);
     }
   };
 

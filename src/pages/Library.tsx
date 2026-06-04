@@ -40,6 +40,9 @@ interface LibraryProps {
   profile?: Profile | null;
 }
 
+import { requestManager } from 'services/RequestManager';
+import { sortMadrasahClasses } from 'pages/Classes';
+
 export default function Library({ lang, madrasah, profile }: LibraryProps) {
   const isDark = madrasah?.theme === 'dark';
   const [activeTab, setActiveTab] = useState<'dashboard' | 'books' | 'issues'>('dashboard');
@@ -105,14 +108,21 @@ export default function Library({ lang, madrasah, profile }: LibraryProps) {
   const fetchUsers = async () => {
     if (!madrasah?.id) return;
     try {
+      const clProm = requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('id, class_name, sort_order').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
+
       const [stRes, tcRes, clRes] = await Promise.all([
         supabase.from('students').select('id, student_name, roll, class_id').eq('institution_id', madrasah.id),
         supabase.from('teachers').select('id, name:teacher_name').eq('institution_id', madrasah.id).eq('is_active', true),
-        supabase.from('classes').select('id, class_name').eq('institution_id', madrasah.id).order('sort_order', { ascending: true })
+        clProm
       ]);
       if (stRes.data) setStudents(stRes.data);
       if (tcRes.data) setTeachers(tcRes.data);
-      if (clRes.data) setClasses(clRes.data);
+      if (clRes.data) setClasses(sortMadrasahClasses(clRes.data));
     } catch (e) {}
   };
 

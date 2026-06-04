@@ -57,6 +57,8 @@ import { CacheService } from "services/cacheService";
 import { generateAttendanceReportPDF } from "../utils/pdfGenerator";
 import { getEventsForDate, getTodayDateString, getTodayMonthString } from "../utils/calendarUtils";
 
+import { sortMadrasahClasses } from "pages/Classes";
+
 interface TeacherManagementProps {
   lang: Language;
   madrasah: Institution | null;
@@ -449,10 +451,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       const { data, error } = await supabase
         .from("classes")
         .select("*")
-        .eq("institution_id", madrasah.id)
-        .order("sort_order", { ascending: true });
+        .eq("institution_id", madrasah.id);
       if (error) throw error;
-      setClasses(data || []);
+      setClasses(sortMadrasahClasses(data || []));
     } catch (err: any) {
       console.error("Fetch classes error:", err);
     }

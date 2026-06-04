@@ -4,6 +4,7 @@ import { Institution, Class, Language, UserRole, BefaqExam, Profile } from 'type
 import { ArrowLeft, Plus, Save, Trash2, Download, Loader2, Calculator, Check, X, Trophy } from 'lucide-react';
 import { t } from 'translations';
 import { generateFinalResultPDF } from '../../../../utils/pdfGenerator';
+import { sortMadrasahClasses } from 'pages/Classes';
 
 interface FinalResultsProps {
   lang: Language;
@@ -74,7 +75,7 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
         filteredClasses = data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
       }
-      setClasses(filteredClasses);
+      setClasses(sortMadrasahClasses(filteredClasses));
     }
   };
 

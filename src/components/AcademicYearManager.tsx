@@ -24,6 +24,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 
+import { sortMadrasahClasses } from "pages/Classes";
+
 interface AcademicYearManagerProps {
   institution: Institution;
   onClose: () => void;
@@ -157,11 +159,12 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
         .order("sort_order", { ascending: true });
 
       if (cls) {
-        setClasses(cls);
+        const sorted = sortMadrasahClasses(cls);
+        setClasses(sorted);
         // Auto-populate promotion map
         const map: any = {};
-        cls.forEach((c, idx) => {
-          const nextClass = cls[idx + 1];
+        sorted.forEach((c, idx) => {
+          const nextClass = sorted[idx + 1];
           map[c.id] = {
             nextClassId: nextClass ? nextClass.id : "graduated",
             examId: "",

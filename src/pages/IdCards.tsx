@@ -5,12 +5,16 @@ import { supabase } from '../supabase';
 import { t } from '../translations';
 import StudentIdCardGenerator from '../components/StudentIdCardGenerator';
 
+import { requestManager } from 'services/RequestManager';
+
 interface IdCardsProps {
   lang: Language;
   madrasah: Institution | null;
   onBack: () => void;
   profile: Profile | null;
 }
+
+import { sortMadrasahClasses } from 'pages/Classes';
 
 const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile }) => {
   const [classes, setClasses] = useState<Class[]>([]);
@@ -41,16 +45,18 @@ const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile }) =>
     if (!madrasah) return;
     setLoadingConfig(true);
     try {
-      const { data, error } = await supabase
-        .from('classes')
-        .select('*')
-        .eq('institution_id', madrasah.id)
-        .order('sort_order', { ascending: true });
+      const { data, error } = await requestManager.cachedFetch(
+        'classes',
+        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
+        `classes:${madrasah.id}`,
+        30 * 60 * 1000 // 30 mins
+      );
 
       if (error) throw error;
-      setClasses(data || []);
+      const sortedClasses = sortMadrasahClasses(data || []);
+      setClasses(sortedClasses);
       const map: Record<string, string> = {};
-      data?.forEach(c => map[c.id] = c.class_name);
+      sortedClasses.forEach((c: Class) => map[c.id] = c.class_name);
       setSelectedClassMap(map);
     } catch (err: any) {
       console.error('Error fetching classes:', err);
