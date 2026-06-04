@@ -33,6 +33,10 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   const isDark = madrasah?.theme === "dark";
   const isBangla = lang === "bn";
 
+  React.useEffect(() => {
+    setCurrentRenderStudent(student);
+  }, [student]);
+
   const generateSingleCardData = async () => {
     if (!cardRef.current || !backCardRef.current) return null;
     try {
