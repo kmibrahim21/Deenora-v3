@@ -10,7 +10,20 @@ import { requestManager } from 'services/RequestManager';
 export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
-    // Primary sort by alphabetical name
+    // Primary sort by sort_order (coerce to number to be safe)
+    // Treat null/empty as unassigned, sending them to the bottom (999999). 
+    const getOrder = (val: any) => {
+      if (val === 0) return 0;
+      if (val == null || String(val).trim() === '') return 999999;
+      return Number(val);
+    };
+
+    const orderA = getOrder(a.sort_order);
+    const orderB = getOrder(b.sort_order);
+    
+    if (orderA !== orderB) return orderA - orderB;
+    
+    // Fallback to alphabetical
     return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
   });
 };
@@ -30,6 +43,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [newClassName, setNewClassName] = useState('');
+  const [newSortOrder, setNewSortOrder] = useState('');
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Class | null>(null);
@@ -37,6 +51,8 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
 
   useEffect(() => { 
     if (madrasah?.id) {
+      // Force clear cache once to satisfy user request for fresh start
+      requestManager.invalidatePattern(`classes:${madrasah.id}`);
       fetchClasses(); 
     }
   }, [dataVersion, madrasah?.id]);
@@ -102,6 +118,16 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     if (!newClassName.trim() || !madrasah) return;
     setModalLoading(true);
     
+    let order: number | null = null;
+    if (newSortOrder && newSortOrder.trim() !== '') {
+      const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+      const eng = newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]).trim();
+      const parsed = parseInt(eng, 10);
+      if (!isNaN(parsed)) {
+        order = parsed;
+      }
+    }
+    
     // Invalidate RequestManager cache immediately
     if (madrasah?.id) {
       await requestManager.invalidatePattern(`classes:${madrasah.id}`);
@@ -111,7 +137,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     try {
       if (editingClass) {
         // Optimistic Update
-        const updatedClasses = classes.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: null } : c);
+        const updatedClasses = classes.map(c => c.id === editingClass.id ? { ...c, class_name: newClassName.trim(), sort_order: order } : c);
         const sorted = sortMadrasahClasses(updatedClasses);
         setClasses(sorted);
         if (madrasah?.id) {
@@ -121,14 +147,14 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
         if (navigator.onLine) {
           const { error } = await supabase.from('classes').update({ 
             class_name: newClassName.trim(),
-            sort_order: null 
+            sort_order: order 
           }).eq('id', editingClass.id);
           if (error) throw error;
         } else {
           offlineApi.queueAction('classes', 'UPDATE', { 
             id: editingClass.id, 
             class_name: newClassName.trim(),
-            sort_order: null
+            sort_order: order
           });
         }
       } else {
@@ -137,7 +163,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           id: tempId,
           class_name: newClassName.trim(), 
           institution_id: madrasah.id,
-          sort_order: null
+          sort_order: order
         };
         
         // Optimistic Update
@@ -151,7 +177,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
           const { data, error } = await supabase.from('classes').insert({
             class_name: payload.class_name,
             institution_id: payload.institution_id,
-            sort_order: null
+            sort_order: payload.sort_order
           }).select().single();
           if (error) throw error;
           
@@ -170,6 +196,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
       
       setShowModal(false);
       setNewClassName('');
+      setNewSortOrder('');
       setEditingClass(null);
       triggerRefresh();
     } catch (err: any) {
@@ -221,7 +248,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
             <h1 className={`text-xl font-noto font-black ${isDark ? 'text-white' : 'text-[#1E293B]'}`}>{t('classes_title', lang, madrasah?.institution_type)}</h1>
           </div>
           {!readOnly && (
-            <button onClick={() => { setNewClassName(''); setEditingClass(null); setShowModal(true); }} className="bg-[#2563EB] text-white px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 shadow-premium">
+            <button onClick={() => { setNewClassName(''); setNewSortOrder(''); setEditingClass(null); setShowModal(true); }} className="bg-[#2563EB] text-white px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 shadow-premium">
               <Plus size={16} strokeWidth={4} /> {t('new_class', lang, madrasah?.institution_type)}
             </button>
           )}
@@ -249,7 +276,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 {!readOnly && (
                   <>
-                    <button onClick={(e) => { e.stopPropagation(); setNewClassName(cls.class_name || ''); setEditingClass(cls); setShowModal(true); }} 
+                    <button onClick={(e) => { e.stopPropagation(); setNewClassName(cls.class_name || ''); setNewSortOrder(cls.sort_order?.toString() || ''); setEditingClass(cls); setShowModal(true); }} 
                       className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
                       <Edit3 size={14} className="sm:size-4" />
                     </button>
@@ -294,6 +321,21 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                   value={newClassName} 
                   onChange={(e) => setNewClassName(e.target.value)}
                   placeholder="যেমন: হিফয বিভাগ"
+                />
+              </div>
+
+              <div className="space-y-2.5">
+                <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">
+                  <Hash size={12} /> সিরিয়াল নম্বর (Sorting)
+                </label>
+                <input 
+                  type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
+                  className={`w-full px-6 py-5 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border-2 rounded-[1.8rem] font-black text-lg outline-none focus:border-[#2563EB]/30 focus:bg-white transition-all shadow-inner`} 
+                  value={newSortOrder} 
+                  onChange={(e) => setNewSortOrder(e.target.value)}
+                  placeholder="যেমন: ১"
                 />
               </div>
 
