@@ -11,9 +11,12 @@ export const sortMadrasahClasses = (classes: any[]) => {
   if (!classes || !Array.isArray(classes)) return [];
   return [...classes].sort((a, b) => {
     // Primary sort by sort_order (coerce to number to be safe)
-    // Treat 0 or null/empty as unassigned, sending them to the bottom (999999)
+    // Treat null/empty as unassigned, sending them to the bottom (999999). 
+    // Wait, if sort_order in database is DEFAULT 0, many will be 0.
+    // If we want untouched ones to be at the bottom, maybe we should leave 0 as 999999 unless it's explicitly set.
+    // However, if the user explicitly set it to a number, and the DB has it, let's just use it!
     const getOrder = (val: any) => {
-      if (val == null || String(val).trim() === '' || Number(val) === 0) return 999999;
+      if (val == null || String(val).trim() === '') return 999999;
       return Number(val);
     };
 
@@ -116,9 +119,15 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
     if (!newClassName.trim() || !madrasah) return;
     setModalLoading(true);
     
-    const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
-    const englishSortOrder = newSortOrder ? newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
-    const order = englishSortOrder ? parseInt(englishSortOrder) : null;
+    let order: number | null = null;
+    if (newSortOrder && newSortOrder.trim() !== '') {
+      const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+      const eng = newSortOrder.replace(/[০-৯]/g, match => bengaliToEnglish[match]).trim();
+      const parsed = parseInt(eng, 10);
+      if (!isNaN(parsed)) {
+        order = parsed;
+      }
+    }
     
     // Invalidate RequestManager cache immediately
     requestManager.invalidatePattern(`classes:${madrasah.id}`);

@@ -417,8 +417,8 @@ export const useAuth = () => {
                 // Notify the dashboard balance cache key used in Home.tsx
                 requestManager.setManualCache(`fetch:institutions:dashboard_balance:${instId}`, updatedInst);
                 
-                // Update local persistence
-                OfflineService.setCache('profile', updatedInst);
+                // Update local persistence securely
+                OfflineService.setCache('institution', updatedInst);
               }
             }
           )
@@ -427,6 +427,28 @@ export const useAuth = () => {
                console.warn("Realtime subscription error:", err);
              }
           });
+
+        if (session?.user?.id) {
+          supabase
+            .channel('profile-changes')
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${session.user.id}`,
+              },
+              (payload) => {
+                console.log('useAuth: Received real-time update for profile:', payload.new);
+                const updatedProfile = payload.new as Profile;
+                setProfile(updatedProfile);
+                requestManager.setManualCache(`fetch:profiles:profile:${session.user.id}`, updatedProfile);
+                OfflineService.setCache('profile', updatedProfile);
+              }
+            )
+            .subscribe();
+        }
       } catch (e) {
         console.warn("Could not start realtime subscription:", e);
       }
