@@ -156,12 +156,36 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           const sheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 'A', defval: '' }) as any[];
 
-          const rows = jsonData.slice(1);
+          let rows = jsonData.slice(1);
           if (rows.length === 0) throw new Error("File is empty");
+
+          let currentLimit = madrasah.config_json?.student_limit || 0;
+          let total = rows.length;
+
+          if (navigator.onLine) {
+            const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
+            if (instData?.config_json?.student_limit !== undefined) {
+              currentLimit = instData.config_json.student_limit;
+            }
+          }
+
+          if (currentLimit > 0 && navigator.onLine) {
+            const { count, error } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
+            if (!error && count !== null) {
+              if (count >= currentLimit) {
+                throw new Error(lang === 'bn' ? `দুঃখিত, আপনার প্রতিষ্ঠানে সর্বোচ্চ ${currentLimit} জন শিক্ষার্থী অ্যাড করার লিমিট রয়েছে।` : `Limit reached! You can only add up to ${currentLimit} students.`);
+              }
+              const remainingAllowed = currentLimit - count;
+              if (rows.length > remainingAllowed) {
+                rows = rows.slice(0, remainingAllowed);
+                total = rows.length;
+                alert(lang === 'bn' ? `আপনার লিমিট অনুযায়ী মাত্র ${remainingAllowed} জন শিক্ষার্থী যোগ করা হবে।` : `Due to limit, only ${remainingAllowed} students will be imported.`);
+              }
+            }
+          }
 
           let successCount = 0;
           let skippedCount = 0;
-          let total = rows.length;
 
           for (let i = 0; i < rows.length; i++) {
             const row = rows[i];

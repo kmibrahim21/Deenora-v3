@@ -453,9 +453,6 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
             </div>
 
             <div className="absolute -bottom-0.5 -right-0.5 flex flex-col gap-1 items-end pointer-events-none">
-              <div className={`min-w-[1.75rem] h-6 px-1 bg-[#2563EB] text-white rounded-[0.6rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`} title="Admission Number">
-                <span className="text-[10px] font-black tracking-tighter">A: {student.admission_number || '#'}</span>
-              </div>
               {student.registration_number && (
                 <div className={`min-w-[1.75rem] h-6 px-1 bg-indigo-600 text-white rounded-[0.6rem] flex items-center justify-center border-2 shadow-xl ${isDark ? 'border-slate-800' : 'border-white'}`} title="Registration Number">
                   <span className="text-[10px] font-black tracking-tighter">R: {student.registration_number}</span>

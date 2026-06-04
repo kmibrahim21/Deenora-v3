@@ -40,6 +40,7 @@ export interface Institution {
     template_set?: string;
     fee_engine?: 'school' | 'qawmi' | 'kindergarten' | 'simple';
     accounting_mode?: 'qawmi_flexible' | 'school_system';
+    student_limit?: number;
     user_pin?: string;
     academic_year_start?: string;
     active_academic_year_id?: string;

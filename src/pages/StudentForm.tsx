@@ -23,7 +23,6 @@ interface StudentFormProps {
 
 const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultClassId, isEditing, onSuccess, onCancel, lang, title }) => {
   const [name, setName] = useState(student?.student_name || '');
-  const [admissionNumber, setAdmissionNumber] = useState(student?.admission_number || '');
   const [registrationNumber, setRegistrationNumber] = useState(student?.registration_number || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
   const [motherName, setMotherName] = useState(student?.mother_name || '');
@@ -94,6 +93,24 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
     setLoading(true);
     try {
+      let currentLimit = madrasah.config_json?.student_limit || 0;
+      if (!isEditing && navigator.onLine) {
+        // Fetch current limit fresh from DB to avoid staleness
+        const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
+        if (instData?.config_json?.student_limit !== undefined) {
+          currentLimit = instData.config_json.student_limit;
+        }
+        
+        if (currentLimit > 0) {
+          const { count, error } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
+          if (!error && count !== null && count >= currentLimit) {
+            setErrorModal({ show: true, message: lang === 'bn' ? `দুঃখিত, আপনার প্রতিষ্ঠানে সর্বোচ্চ ${currentLimit} জন শিক্ষার্থী অ্যাড করার লিমিট রয়েছে। লিমিট বাড়াতে কর্তৃপক্ষের সাথে যোগাযোগ করুন।` : `Limit reached! You can only add up to ${currentLimit} students.` });
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       
       // Validate UUID format for academic_year_id
@@ -104,7 +121,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
       const payload: any = {
         student_name: name.trim(),
-        admission_number: admissionNumber.trim() || null,
         registration_number: registrationNumber.trim() || null,
         guardian_name: guardianName.trim(),
         mother_name: motherName.trim() || null,
@@ -245,20 +261,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
                   value={name} 
                   onChange={(e) => setName(e.target.value)} 
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
-                  <Hash size={11} className="text-[#2563EB]" /> 
-                  {t('admission_number', lang, madrasah?.institution_type)}
-                </label>
-                <input 
-                  type="text" 
-                  placeholder="Admission ID"
-                  className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
-                  value={admissionNumber} 
-                  onChange={(e) => setAdmissionNumber(e.target.value)} 
                 />
               </div>
 

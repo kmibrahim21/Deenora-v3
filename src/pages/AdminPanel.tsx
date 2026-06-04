@@ -162,6 +162,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
   const [editPackageRate, setEditPackageRate] = useState<number>(0);
   const [editPackageName, setEditPackageName] = useState<string>('');
+  const [editStudentLimit, setEditStudentLimit] = useState<number>(0);
 
   const formatMonthsRange = (months: string[]) => {
     if (!months || months.length === 0) return '';
@@ -1102,6 +1103,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
     }
 
+    setEditStudentLimit(userConfig?.student_limit || 0);
     setEditPassword(userConfig?.user_pin || '');
 
     const userModules = { ...(userConfig?.modules || {}) };
@@ -1231,6 +1233,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           paid_months: editPaidMonths,
           package_rate: editPackageRate,
           package_name: editPackageName,
+          student_limit: editStudentLimit,
           institute_code: editInstituteCode.trim(),
           user_pin: editPassword.trim()
         }
@@ -2718,6 +2721,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       <option value="kindergarten">Kindergarten</option>
                                       <option value="choching">Choching</option>
                                     </select>
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center justify-between">
+                                      <span>Student Limit (0 for unlimited)</span>
+                                    </label>
+                                    <input 
+                                      type="number" 
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black outline-none focus:border-blue-500 transition-all`}
+                                      value={editStudentLimit}
+                                      onChange={(e) => setEditStudentLimit(Math.max(0, Number(e.target.value)))}
+                                      placeholder="0 for unlimited"
+                                    />
                                  </div>
                               </div>
                            </div>
