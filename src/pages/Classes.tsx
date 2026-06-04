@@ -14,7 +14,8 @@ export const sortMadrasahClasses = (classes: any[]) => {
     // Treat null/empty as unassigned, sending them to the bottom (999999). 
     // If we want untouched ones to be at the bottom, we treat 0 as 999999 unless it's explicitly set.
     const getOrder = (val: any) => {
-      if (val == null || String(val).trim() === '' || Number(val) === 0) return 999999;
+      if (val === 0) return 0; // Explicitly allowed 0
+      if (val == null || String(val).trim() === '') return 999999;
       return Number(val);
     };
 
