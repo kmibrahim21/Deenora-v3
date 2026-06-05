@@ -33,6 +33,14 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   const isDark = madrasah?.theme === "dark";
   const isBangla = lang === "bn";
 
+  const instName = madrasah?.name || "Institution Name";
+  const instAddress = madrasah?.address || "Dhaka, Bangladesh";
+  const nameLen = instName.length;
+  const addressLen = instAddress.length;
+  
+  const nameSizeClass = nameLen > 45 ? "text-[11px] leading-[1.1]" : nameLen > 30 ? "text-[13px] leading-tight" : "text-[15px] leading-tight";
+  const addressSizeClass = addressLen > 65 ? "text-[7.5px] leading-[1.1]" : addressLen > 40 ? "text-[8px] leading-tight" : "text-[8.5px] leading-tight";
+
   React.useEffect(() => {
     setCurrentRenderStudent(student);
   }, [student]);
@@ -347,28 +355,28 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               {/* Content Container */}
               <div className="relative z-10 flex flex-col h-full w-full">
                   {/* Header - Logo & Madrasah Info */}
-                  <div className="flex items-center gap-3 pt-4 px-5">
+                  <div className="flex items-center gap-3 pt-3 px-5">
                        <div className="w-[50px] h-[50px] bg-white rounded-full p-[2px] shadow-sm flex items-center justify-center shrink-0">
                           {madrasah?.logo_url ? (
                             <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain rounded-full" crossOrigin="anonymous" />
                           ) : (
                             <div className="w-full h-full rounded-full flex items-center justify-center text-[20px] font-black" style={{ color: themeColor }}>
-                              {madrasah?.name?.charAt(0) || "M"}
+                              {instName.charAt(0) || "M"}
                             </div>
                           )}
                        </div>
                        <div className="flex-1">
-                           <h3 className="font-bold text-white text-[15px] leading-tight font-noto tracking-wide drop-shadow-md line-clamp-2 max-w-[200px]">
-                            {madrasah?.name || "Institution Name"}
+                           <h3 className={`font-bold text-white font-noto tracking-wide drop-shadow-md line-clamp-2 max-w-[200px] ${nameSizeClass}`}>
+                            {instName}
                           </h3>
-                          <p className="text-white/95 text-[8.5px] font-medium tracking-wide mt-[2px] leading-tight line-clamp-2 max-w-[200px]">
-                            {madrasah?.address || "Dhaka, Bangladesh"}
+                          <p className={`text-white/95 font-medium tracking-wide mt-[2px] line-clamp-2 max-w-[200px] ${addressSizeClass}`}>
+                            {instAddress}
                           </p>
                        </div>
                   </div>
 
                   {/* Photo & Title Section */}
-                  <div className="flex flex-col items-center mt-3.5 w-full relative z-10 px-5">
+                  <div className="flex flex-col items-center mt-2 w-full relative z-10 px-5">
                       {/* Photo Frame */}
                       <div className="w-[75px] h-[85px] bg-white border-[2.5px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0">
                          {currentRenderStudent.photo_url ? (
@@ -379,20 +387,20 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                       </div>
 
                       {/* Title: 'পরিচয় পত্র' or 'STUDENT ID CARD' */}
-                      <div className="mt-2 px-3 py-0.5 rounded-full text-white text-[8.5px] font-bold shadow-sm tracking-widest border border-white/20 uppercase inline-block" style={{ backgroundColor: themeColor }}>
+                      <div className="mt-1 px-3 py-0.5 rounded-full text-white text-[8.5px] font-bold shadow-sm tracking-widest border border-white/20 uppercase inline-block" style={{ backgroundColor: themeColor }}>
                         {t.idBadge}
                       </div>
 
                       {/* Name */}
-                      <div className="mt-1.5 text-center px-2">
-                         <h2 className="font-extrabold text-[18px] font-noto leading-snug tracking-tight pt-1 pb-0.5" style={{ color: themeColor }}>
+                      <div className="mt-1 text-center px-2">
+                         <h2 className="font-extrabold text-[17px] font-noto leading-snug tracking-tight pt-0.5" style={{ color: themeColor }}>
                               {currentRenderStudent.student_name || 'Student Name'}
                           </h2>
                       </div>
                   </div>
 
                   {/* Data Fields */}
-                  <div className="pl-10 pr-4 w-full flex flex-col gap-[5px] mt-1.5 z-10 relative">
+                  <div className="pl-10 pr-4 w-full flex flex-col gap-[3.5px] mt-0.5 z-10 relative">
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.class}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
@@ -436,7 +444,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                   </div>
 
                   {/* Footer */}
-                  <div className="w-full flex justify-end items-end mt-auto px-5 pb-3 relative z-10">
+                  <div className="w-full flex justify-end items-end mt-auto px-5 pb-2 relative z-10">
                     {/* Signature */}
                     <div className="text-center w-[70px]">
                       <div className="h-[20px] flex items-end justify-center mb-[2px]">
