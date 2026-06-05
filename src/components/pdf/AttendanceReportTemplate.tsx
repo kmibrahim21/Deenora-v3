@@ -113,10 +113,24 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                         </table>
 
                         {/* Footer - Only on the last page or fixed at bottom */}
-                        <div style={{ position: 'absolute', bottom: '40px', left: '40px', right: '40px', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
-                            <div>.............................<br/>{isBn ? 'শিক্ষকের স্বাক্ষর' : 'Teacher Signature'}</div>
-                            <div style={{ textAlign: 'center' }}>Page {pageIndex + 1} of {totalPages}</div>
-                            <div style={{ textAlign: 'right' }}>.............................<br/>{isBn ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Signature'}</div>
+                        <div style={{ position: 'absolute', bottom: '40px', left: '40px', right: '40px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', alignItems: 'flex-end' }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ minHeight: '30px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '5px' }}>
+                                    ................................................
+                                </div>
+                                {isBn ? 'শিক্ষকের স্বাক্ষর' : 'Teacher Signature'}
+                            </div>
+                            <div style={{ textAlign: 'center', paddingBottom: '10px' }}>Page {pageIndex + 1} of {totalPages}</div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ height: `${madrasah?.config_json?.signature_height || 40}px`, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '5px' }}>
+                                    {madrasah?.config_json?.signature_url ? (
+                                        <img src={madrasah.config_json.signature_url} alt="Sig" style={{ height: `${madrasah.config_json.signature_height || 40}px`, objectFit: 'contain' }} crossOrigin="anonymous" />
+                                    ) : (
+                                        <span style={{ color: '#cbd5e1' }}>................................................</span>
+                                    )}
+                                </div>
+                                {isBn ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Signature'}
+                            </div>
                         </div>
                     </div>
                 );

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -109,6 +109,9 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   
   const [adminBkash, setAdminBkash] = useState('০১৭৬৬-XXXXXX');
+  const [supportNumber, setSupportNumber] = useState('');
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [copiedSupport, setCopiedSupport] = useState(false);
   const [copiedBkash, setCopiedBkash] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad'>('bkash');
 
@@ -132,17 +135,24 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const fetchAdminBkash = async () => {
+    const fetchAdminSettings = async () => {
       try {
-        const { data, error } = await supabase.from('system_settings').select('bkash_number').single();
-        if (data && data.bkash_number) {
-          setAdminBkash(data.bkash_number);
+        // Fetch all to avoid failing if support_number is missing
+        const { data, error } = await supabase.from('system_settings').select('*').eq('id', '00000000-0000-0000-0000-000000000001').single();
+        if (data) {
+          if (data.bkash_number) setAdminBkash(data.bkash_number);
+          // @ts-ignore
+          if (data.support_number) setSupportNumber(data.support_number);
+          else setSupportNumber('01766326edcba'); // Hardcoded fallback for now
+        } else {
+           setSupportNumber('01766326edcba'); // Hardcoded fallback
         }
       } catch (err) {
-        console.error('Error fetching admin bkash:', err);
+        console.error('Error fetching admin settings:', err);
+        setSupportNumber('01766326edcba'); // Hardcoded fallback
       }
     };
-    fetchAdminBkash();
+    fetchAdminSettings();
   }, []);
 
   // Dynamic module configuration
@@ -956,7 +966,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               title={t('profile_settings', lang)}
               subtitle={t('branding', lang)}
               colorClass="bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400"
-              onClick={() => setIsEditingProfile(true)}
+              onClick={() => setView('profile-settings')}
               dark={madrasah?.theme === 'dark'}
             />
             
@@ -1406,7 +1416,97 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           0% { transform: translateX(-100%); }
           100% { transform: translateX(200%); }
         }
+        @keyframes bounce-subtle {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        @keyframes pulse-ring {
+          0% { transform: scale(0.8); opacity: 0.5; }
+          100% { transform: scale(1.4); opacity: 0; }
+        }
+        .animate-bounce-subtle {
+          animation: bounce-subtle 3s ease-in-out infinite;
+        }
       `}</style>
+
+      {/* Floating Support Icon */}
+      {supportNumber && (
+        <div className="fixed bottom-24 right-5 md:right-8 z-50 animate-in slide-in-from-bottom-10 fade-in duration-700">
+           <div className={`absolute inset-0 rounded-full animate-ping opacity-20 pointer-events-none ${madrasah?.theme === 'dark' ? 'bg-blue-400' : 'bg-blue-600'}`} style={{ animation: 'pulse-ring 2s infinite' }}></div>
+           <button 
+             onClick={() => setShowSupportModal(true)}
+             className={`w-14 h-14 md:w-16 md:h-16 rounded-[2rem] shadow-[0_20px_50px_rgba(37,99,235,0.3)] flex items-center justify-center transition-all active:scale-90 animate-bounce-subtle border-4 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-blue-400' : 'bg-white border-blue-50 text-blue-600'}`}
+           >
+              <Headset size={28} className="md:w-8 md:h-8" />
+           </button>
+        </div>
+      )}
+
+      {/* Support Info Modal */}
+      {showSupportModal && createPortal(
+         <div className="modal-overlay bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 z-[100]">
+            <div className={`w-[90%] max-w-[340px] rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] animate-in zoom-in-95 duration-500 border overflow-hidden relative p-8 md:p-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+               <div className="text-center space-y-6">
+                  <div className="relative inline-block">
+                    <div className={`w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto transition-transform hover:rotate-12 duration-500 ${madrasah?.theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                       <Headset size={48} strokeWidth={1.5} />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 border-4 border-white dark:border-slate-900 rounded-full flex items-center justify-center animate-pulse">
+                       <div className="w-2 h-2 bg-white rounded-full"></div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                     <h3 className={`text-2xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                        {lang === 'bn' ? 'সাপোর্ট ডেস্ক' : 'Support Desk'}
+                     </h3>
+                     <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Always here to help</p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div 
+                      className={`w-full py-5 rounded-3xl border font-mono font-black text-[22px] tracking-widest transition-all relative overflow-hidden flex items-center justify-center gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-slate-50 border-slate-100 text-[#2563EB]'}`} 
+                    >
+                       {supportNumber}
+                       <button 
+                         onClick={() => {
+                           navigator.clipboard.writeText(supportNumber);
+                           setCopiedSupport(true);
+                           setTimeout(() => setCopiedSupport(false), 2000);
+                         }}
+                         className={`p-2 rounded-xl transition-all active:scale-75 ${copiedSupport ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-400 hover:text-blue-500 hover:bg-blue-500/10'}`}
+                       >
+                          {copiedSupport ? <Check size={20} /> : <Copy size={20} />}
+                       </button>
+                    </div>
+                    
+                    <div className="pt-2">
+                       <a 
+                         href={`https://wa.me/${supportNumber.replace(/[^0-9]/g, '')}`}
+                         target="_blank"
+                         rel="noopener noreferrer"
+                         className={`w-full h-14 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-emerald-500/10 border ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-500 text-white border-emerald-400 hover:bg-emerald-600'}`}
+                       >
+                         <MessageCircle size={22} strokeWidth={2.5} />
+                         <span className="text-xs font-black uppercase tracking-[0.15em]">Chat on WhatsApp</span>
+                       </a>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                     <button 
+                       onClick={() => setShowSupportModal(false)}
+                       className={`w-full h-14 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                     >
+                       {lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
+                     </button>
+                  </div>
+               </div>
+            </div>
+         </div>,
+
+         document.body
+      )}
     </div>
   );
 };

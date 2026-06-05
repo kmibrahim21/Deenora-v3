@@ -445,20 +445,26 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
 
                   {/* Footer */}
                   <div className="w-full flex justify-end items-end mt-auto px-5 pb-2 relative z-10">
-                    {/* Signature */}
-                    <div className="text-center w-[70px]">
-                      <div className="h-[20px] flex items-end justify-center mb-[2px]">
-                        <img
-                          src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgNDAiPjxwYXRoIGQ9Ik0xMCAzMGM1LTUgMTAtMTAgMTEtMTVzLTIgMTAtNSAxNWMyLTUgNS0xMCAxMC0xNCA1LTMgOC01IDEwLTJzLTEgNS0zIDEwYzIgMCA0LTIgNi0zIDItejIgNCAwLTUgOC01IDQgMyAyIDEwLTMgMTRjLTIgMi01IDUtOCAxLTItMy0xLTYgMi04cyA1LTIgNyAwbDEgM2MyLTIgMy01IDUtNyAyLTIgNCAwIDUtMnMyIDEwLTMgMTQtMSA0IDMgNSA2IDVjLTItNSA1LTIgNyAwczIgNiAwIDEwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0NzU1NjkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+"
-                          className="w-[38px] opacity-70 mix-blend-multiply"
-                          alt="Sig"
-                        />
-                      </div>
-                      <div className="w-full h-[1px] bg-white/50 mb-0.5" />
-                      <p className="text-[6.5px] font-bold text-white font-noto uppercase tracking-wider shadow-sm">
-                        {t.principal}
-                      </p>
-                    </div>
+                     {/* Signature */}
+                     <div className="flex items-end gap-2 text-center relative w-full h-[35px] max-w-[120px]">
+                        <div className="flex flex-col items-center w-[70px] ml-auto">
+                           <div className="flex items-end justify-center mb-[2px]" style={{ height: `${madrasah?.config_json?.signature_height ? madrasah.config_json.signature_height / 1.5 : 22}px` }}>
+                           {madrasah?.config_json?.signature_url ? (
+                              <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height ? madrasah.config_json.signature_height / 1.5 : 22}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                           ) : (
+                              <img
+                                 src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgNDAiPjxwYXRoIGQ9Ik0xMCAzMGM1LTUgMTAtMTAgMTEtMTVzLTIgMTAtNSAxNWMyLTUgNS0xMCAxMC0xNCA1LTMgOC01IDEwLTJzLTEgNS0zIDEwYzIgMCA0LTIgNi0zIDItejIgNCAwLTUgOC01IDQgMyAyIDEwLTMgMTRjLTIgMi01IDUtOCAxLTItMy0xLTYgMi04cyA1LTIgNyAwbDEgM2MyLTIgMy01IDUtNyAyLTIgNCAwIDUtMnMyIDEwLTMgMTQtMSA0IDMgNSA2IDVjLTItNSA1LTIgNyAwczIgNiAwIDEwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0NzU1NjkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+"
+                                 className="w-[38px] opacity-70 mix-blend-multiply"
+                                 alt="Sig"
+                              />
+                           )}
+                           </div>
+                           <div className="w-full h-[1px] bg-white/50 mb-0.5" />
+                           <p className="text-[6.5px] font-bold text-white font-noto uppercase tracking-wider shadow-sm">
+                              {t.principal}
+                           </p>
+                        </div>
+                     </div>
                   </div>
               </div>
           </div>

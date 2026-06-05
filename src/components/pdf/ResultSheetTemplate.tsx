@@ -4,14 +4,7 @@ interface ResultSheetProps {
   student: any;
   exam: any;
   marks: any[];
-  madrasah: { 
-    name: string; 
-    logo_url?: string; 
-    address?: string;
-    institute_code?: string;
-    phone?: string;
-    email?: string;
-  };
+  madrasah: any;
   lang: "en" | "bn";
 }
 
@@ -23,6 +16,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
   lang,
 }) => {
   const isBangla = lang === "bn";
+  const config = madrasah?.config_json || {};
   const t = {
     marksheet: isBangla ? "একাডেমিক ট্রান্সক্রিপ্ট" : "ACADEMIC TRANSCRIPT",
     name: isBangla ? "শিক্ষার্থীর নাম" : "Student's Name",
@@ -305,13 +299,17 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               </div>
             </div>
 
-            <div className="text-center w-36">
-              <div className="h-8 mb-1 flex items-center justify-center relative">
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                    <div className="w-8 h-8 border border-slate-400 rounded-full flex items-center justify-center -rotate-12">
-                        <span className="text-[5px] font-black uppercase">Seal</span>
+            <div className="text-center w-36 relative">
+              <div className="mb-1 flex items-center justify-center relative" style={{ height: `${config.signature_height || 36}px` }}>
+                {config.signature_url ? (
+                    <img src={config.signature_url} style={{ height: `${config.signature_height || 36}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                ) : (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                        <div className="w-8 h-8 border border-slate-400 rounded-full flex items-center justify-center -rotate-12">
+                            <span className="text-[5px] font-black uppercase">Sig</span>
+                        </div>
                     </div>
-                </div>
+                )}
               </div>
               <div className="border-t-[1.5px] border-[#1E3A8A] pt-1.5 shadow-sm">
                 <p className="text-[10px] font-black text-[#1E3A8A] uppercase tracking-wider">{t.principalSign}</p>

@@ -5,12 +5,13 @@ interface FinalResultProps {
   className: string;
   subjects: string[];
   students: any[];
-  madrasah: { name: string };
+  madrasah: any;
   lang: 'en' | 'bn';
 }
 
 export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, className, subjects, students, madrasah, lang }) => {
   const isBangla = lang === 'bn';
+  const config = madrasah?.config_json || {};
   const t = {
     class: isBangla ? 'শ্রেণি' : 'Class',
     rank: isBangla ? 'মেধা' : 'Rank',
@@ -103,8 +104,13 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                     <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{t.examController}</div>
                   </div>
                 </div>
-                <div className="text-center">
-                  <div className="w-32 border-t border-slate-200 pt-1">
+                <div className="text-center relative">
+                  <div className="w-32 border-t border-slate-200 pt-1 relative">
+                    <div className="flex items-center justify-center relative mb-1" style={{ height: `${config.signature_height || 20}px` }}>
+                        {config.signature_url && (
+                            <img src={config.signature_url} style={{ height: `${config.signature_height || 20}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
+                        )}
+                    </div>
                     <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{t.principal}</div>
                   </div>
                 </div>

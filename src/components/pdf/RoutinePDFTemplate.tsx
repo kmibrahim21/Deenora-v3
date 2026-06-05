@@ -86,8 +86,15 @@ export const RoutinePDFTemplate: React.FC<RoutinePDFTemplateProps> = ({ madrasah
               <div className="text-center border-t border-slate-400 pt-1 min-w-[150px]">
                 <p className="text-[10px] font-bold">{lang === 'bn' ? 'সহকারী শিক্ষক' : 'Assistant Teacher'}</p>
               </div>
-              <div className="text-center border-t border-slate-400 pt-1 min-w-[150px]">
-                <p className="text-[10px] font-bold">{lang === 'bn' ? 'অধ্যক্ষ / মুহতামিম' : 'Principal / Muhtamim'}</p>
+              <div className="text-center min-w-[150px] relative">
+                <div className="flex items-center justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 40}px` }}>
+                   {madrasah?.config_json?.signature_url && (
+                     <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 40}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                   )}
+                </div>
+                <div className="border-t border-slate-400 pt-1">
+                  <p className="text-[10px] font-bold">{lang === 'bn' ? 'অধ্যক্ষ / মুহতামিম' : 'Principal / Muhtamim'}</p>
+                </div>
               </div>
             </div>
           </div>

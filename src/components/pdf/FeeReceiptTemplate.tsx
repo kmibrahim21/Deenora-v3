@@ -3,12 +3,13 @@ import React from 'react';
 interface FeeReceiptProps {
   student: any;
   month: string;
-  madrasah: { name: string; address?: string; phone?: string; logo_url?: string };
+  madrasah: any;
   lang: 'en' | 'bn';
 }
 
 export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, madrasah, lang }) => {
   const isBangla = lang === 'bn';
+  const config = madrasah?.config_json || {};
   const t = {
     title: isBangla ? 'ফি পেমেন্ট মানি রিসিট' : 'FEE PAYMENT RECEIPT',
     receiptNo: isBangla ? 'রিসিট নং' : 'Receipt No',
@@ -155,13 +156,17 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
             </div>
           </div>
 
-          <div className="text-center w-32">
-            <div className="h-6 mb-1 flex items-center justify-center relative">
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                    <div className="w-8 h-8 border border-slate-400 rounded-full flex items-center justify-center -rotate-12">
-                        <span className="text-[4px] font-black uppercase text-slate-400">Seal</span>
-                    </div>
-                </div>
+          <div className="text-center w-32 relative">
+            <div className="mb-1 flex items-center justify-center relative" style={{ height: `${config.signature_height || 26}px` }}>
+                {config.signature_url ? (
+                  <img src={config.signature_url} style={{ height: `${config.signature_height || 26}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                      <div className="w-8 h-8 border border-slate-400 rounded-full flex items-center justify-center -rotate-12">
+                          <span className="text-[4px] font-black uppercase text-slate-400">Sig</span>
+                      </div>
+                  </div>
+                )}
             </div>
             <div className="border-t border-slate-900 pt-1">
               <p className="text-[8px] font-black text-slate-700 uppercase tracking-[0.15em]">{t.principalSignature}</p>

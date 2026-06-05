@@ -7,7 +7,7 @@ import { Exam, Student } from '../types';
 interface AdmitCardProps {
   exam: any;
   student: Student;
-  madrasah: { name: string; logo_url?: string; institution_type?: string; phone?: string; address?: string };
+  madrasah: any;
   templateId?: string;
   lang: 'en' | 'bn';
 }
@@ -101,7 +101,12 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
                <div className="w-56 border-b-2 border-black mb-2"></div>
                <p className="font-bold text-[20px]">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
             </div>
-            <div className="text-center">
+            <div className="text-center relative">
+               <div className="flex items-end justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 35}px` }}>
+                  {madrasah?.config_json?.signature_url && (
+                    <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 35}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
+                  )}
+               </div>
                <div className="w-56 border-b-2 border-black mb-2"></div>
                <p className="font-bold text-[20px]">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
             </div>
@@ -172,19 +177,19 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
              </div>
           </div>
           
-          <div className="mt-auto flex justify-between items-end pt-8 px-8">
-            <div className="text-left">
-               <div className="w-48 border-b-2 border-slate-200 mb-2.5 opacity-70"></div>
-               <p className="font-bold text-xs text-slate-400 uppercase tracking-widest">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
+            <div className="text-right">
+               <div className="flex flex-col items-end">
+                  <div className="flex items-center justify-center relative mb-1 mr-12" style={{ height: `${madrasah?.config_json?.signature_height || 30}px` }}>
+                    {madrasah?.config_json?.signature_url && (
+                      <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 30}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
+                    )}
+                  </div>
+                  <div className="w-48 border-b-2 border-slate-200 mb-2.5 opacity-70"></div>
+                  <p className="font-bold text-xs text-slate-400 uppercase tracking-widest">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
+               </div>
             </div>
-            {madrasah.phone && (
-                <div className="text-[11px] font-bold tracking-widest text-[#2563EB] bg-blue-50 px-4 py-1.5 rounded-full">
-                   CONTACT: {madrasah.phone}
-                </div>
-            )}
           </div>
         </div>
-      </div>
     );
   }
 
@@ -282,9 +287,14 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
       </div>
 
       {/* Footer Signatures */}
-      <div className="absolute bottom-6 right-16 z-20 text-center">
+      <div className="absolute bottom-6 right-16 z-20 text-center flex flex-col items-center">
+         <div className="flex items-center justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 35}px` }}>
+            {madrasah?.config_json?.signature_url && (
+              <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 35}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+            )}
+         </div>
         <div className="w-36 border-b border-blue-200 mb-1.5 opacity-50"></div>
-        <p className="text-white text-[11px] font-bold tracking-widest">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
+        <p className="text-white text-[11px] font-bold tracking-widest">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
       </div>
       
     </div>
@@ -294,7 +304,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 export const generateAdmitCardPDF = async (
   exam: any,
   students: Student[],
-  madrasah: { name: string; logo_url?: string; institution_type?: string; phone?: string; address?: string },
+  madrasah: any,
   templateId: string = 'modern',
   lang: 'en' | 'bn' = 'en'
 ) => {

@@ -61,6 +61,10 @@ export interface Institution {
     };
     institute_code?: string;
     weekly_holidays?: number[];
+    seal_url?: string;
+    signature_url?: string;
+    signature_height?: number;
+    package_name?: string;
   };
   theme: string;
   status: 'active' | 'suspended' | 'trial';
@@ -442,7 +446,8 @@ export type View =
   | 'class-routine'
   | 'certificates'
   | 'id-cards'
-  | 'super-account';
+  | 'super-account'
+  | 'profile-settings';
 
 export interface Tutorial {
   id: string;

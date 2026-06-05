@@ -37,6 +37,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     reve_caller_id: '',
     reve_client_id: '',
     bkash_number: '',
+    support_number: '',
     sms_rate: 0.50,
     voice_rate: 1.00,
     global_update_active: false,
@@ -175,6 +176,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       reve_caller_id: settings.reve_caller_id || '',
       reve_client_id: settings.reve_client_id || '',
       bkash_number: settings.bkash_number || '',
+      support_number: settings.support_number || '',
       sms_rate: settings.sms_rate || 0.50,
       voice_rate: settings.voice_rate || 1.00,
       global_update_active: settings.global_update_active || false,
@@ -186,7 +188,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSaveBulkSMS = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from('system_settings').upsert({
+      const updateData: any = {
         id: '00000000-0000-0000-0000-000000000001',
         reve_api_key: (globalSettings.reve_api_key || '').trim(),
         reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
@@ -195,8 +197,25 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         bkash_number: (globalSettings.bkash_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
         voice_rate: Number(globalSettings.voice_rate)
-      });
-      if (error) throw error;
+      };
+
+      // Only add support_number if it's likely to exist or as a trial
+      if (globalSettings.support_number) {
+        updateData.support_number = globalSettings.support_number.trim();
+      }
+
+      const { error } = await supabase.from('system_settings').upsert(updateData);
+      if (error) {
+        if (error.message.includes('support_number')) {
+           // Fallback update without support_number
+           delete updateData.support_number;
+           const { error: error2 } = await supabase.from('system_settings').upsert(updateData);
+           if (error2) throw error2;
+           alert("Database Error: 'support_number' column is missing. Please run this in Supabase SQL Editor: ALTER TABLE system_settings ADD COLUMN support_number TEXT;");
+        } else {
+           throw error;
+        }
+      }
       setIsEditingBulkSMS(false);
       setShowSuccessModal({ show: true, title: 'Bulk SMS আপডেট', message: 'Bulk SMS ও রেট সেটিংস আপডেট হয়েছে।' });
       fetchGlobalSettings();
@@ -222,7 +241,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSavePayment = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from('system_settings').upsert({
+      const updateData: any = {
         id: '00000000-0000-0000-0000-000000000001',
         reve_api_key: (globalSettings.reve_api_key || '').trim(),
         reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
@@ -231,8 +250,23 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         bkash_number: (globalSettings.bkash_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
         voice_rate: Number(globalSettings.voice_rate)
-      });
-      if (error) throw error;
+      };
+
+      if (globalSettings.support_number) {
+        updateData.support_number = globalSettings.support_number.trim();
+      }
+
+      const { error } = await supabase.from('system_settings').upsert(updateData);
+      if (error) {
+        if (error.message.includes('support_number')) {
+           delete updateData.support_number;
+           const { error: error2 } = await supabase.from('system_settings').upsert(updateData);
+           if (error2) throw error2;
+           alert("Database Error: 'support_number' column is missing. Please run this in Supabase SQL Editor: ALTER TABLE system_settings ADD COLUMN support_number TEXT;");
+        } else {
+          throw error;
+        }
+      }
       setIsEditingPayment(false);
       setShowSuccessModal({ show: true, title: 'পেমেন্ট আপডেট', message: 'পেমেন্ট সেটিংস আপডেট হয়েছে।' });
       fetchGlobalSettings();
@@ -722,7 +756,14 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                  <div className="space-y-2.5">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Global Identities</h4>
                     <div className={`p-4 rounded-[2rem] border space-y-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Master Payment Number</label><input type="text" className={`w-full h-11 rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/50'}`} value={globalSettings.bkash_number} onChange={(e) => setGlobalSettings({...globalSettings, bkash_number: e.target.value})} /></div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Master Payment Number</label>
+                          <input type="text" className={`w-full h-11 rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/50'}`} value={globalSettings.bkash_number} onChange={(e) => setGlobalSettings({...globalSettings, bkash_number: e.target.value})} placeholder="bKash Number" />
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Support Number</label>
+                          <input type="text" className={`w-full h-11 rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/50'}`} value={globalSettings.support_number} onChange={(e) => setGlobalSettings({...globalSettings, support_number: e.target.value})} placeholder="Support Number" />
+                       </div>
                     </div>
                  </div>
                  <div className="pt-2">

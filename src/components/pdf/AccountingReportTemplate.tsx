@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface AccountingReportProps {
-  madrasah: { name: string };
+  madrasah: any;
   lang: 'en' | 'bn';
   period: string;
   stats: {
@@ -166,7 +166,12 @@ export const AccountingReportTemplate: React.FC<AccountingReportProps> = ({ madr
         <div className="text-[10px] text-slate-300 font-bold italic uppercase tracking-widest">
           Accounting Summary Report
         </div>
-        <div className="text-center">
+        <div className="text-center relative">
+          <div className="flex items-center justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 40}px` }}>
+            {madrasah?.config_json?.signature_url && (
+              <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 40}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+            )}
+          </div>
           <div className="w-48 h-px bg-slate-300 mb-2" />
           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{t.signature}</p>
         </div>

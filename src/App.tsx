@@ -51,6 +51,7 @@ const Tutorials = React.lazy(() => import("pages/Tutorials"));
 const ClassRoutine = React.lazy(() => import("pages/ClassRoutine"));
 const Certificates = React.lazy(() => import("pages/Certificates"));
 const IdCards = React.lazy(() => import("pages/IdCards"));
+const ProfileSettings = React.lazy(() => import("pages/ProfileSettings"));
 const VoiceServiceDashboard = React.lazy(() =>
   import("components/VoiceServiceDashboard").then((module) => ({
     default: module.VoiceServiceDashboard,
@@ -709,6 +710,16 @@ const App: React.FC = () => {
             madrasah={madrasah}
             onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
             profile={profile}
+          />
+        );
+      case "profile-settings":
+        return (
+          <ProfileSettings
+            lang={lang}
+            madrasah={madrasah}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            onProfileUpdate={refreshMadrasah}
+            setStatusModal={setStatusModal}
           />
         );
       case "certificates":

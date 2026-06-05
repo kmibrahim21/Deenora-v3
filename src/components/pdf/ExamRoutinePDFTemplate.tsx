@@ -333,9 +333,14 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
           </div>
 
           {/* Right Column: Sign Box */}
-          <div className="text-center min-w-[190px]">
+          <div className="text-center min-w-[220px]">
             <div className="border rounded-xl p-3 relative" style={{ borderColor: `${primary}33`, backgroundColor: `${light}26` }}>
-              <p className="text-[11.5px] font-black mb-5" style={{ color: `${primary}e6` }}>{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
+              <div className="relative flex flex-col items-center justify-center mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 50}px` }}>
+                {madrasah?.config_json?.signature_url && (
+                    <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 50}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                )}
+              </div>
+              <p className="text-[11.5px] font-black mb-1" style={{ color: `${primary}e6` }}>{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
               <div className="h-px bg-slate-200 w-full mb-1.5"></div>
               <p className="text-[11.5px] font-black" style={{ color: primary }}>
                 {routinePrincipalName || (isBn ? 'প্রতিষ্ঠাতা পরিচালক' : 'Founding Director')}
