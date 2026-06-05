@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
-import { requestManager } from 'services/RequestManager';
+import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
@@ -94,9 +94,10 @@ interface AccountProps {
   initialMadrasah: Institution | null;
   onLogout: () => void;
   profile?: Profile | null;
+  dataVersion?: number;
 }
 
-const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setView, initialMadrasah, onLogout, profile }) => {
+const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setView, initialMadrasah, onLogout, profile, dataVersion = 0 }) => {
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -137,23 +138,29 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   useEffect(() => {
     const fetchAdminSettings = async () => {
       try {
-        // Fetch all to avoid failing if support_number is missing
-        const { data, error } = await supabase.from('system_settings').select('*').eq('id', '00000000-0000-0000-0000-000000000001').single();
+        // Use cachedFetch for global admin settings to prevent redundant loads
+        const { data } = await requestManager.cachedFetch(
+          'system_settings',
+          (q) => q.select('*').eq('id', '00000000-0000-0000-0000-000000000001').single(),
+          'global_admin_settings',
+          CACHE_TTLS.LONG // 10 mins cache for fixed settings
+        );
+
         if (data) {
           if (data.bkash_number) setAdminBkash(data.bkash_number);
           // @ts-ignore
           if (data.support_number) setSupportNumber(data.support_number);
-          else setSupportNumber('01766326edcba'); // Hardcoded fallback for now
+          else setSupportNumber('01766326edcba');
         } else {
-           setSupportNumber('01766326edcba'); // Hardcoded fallback
+          setSupportNumber('01766326edcba');
         }
       } catch (err) {
         console.error('Error fetching admin settings:', err);
-        setSupportNumber('01766326edcba'); // Hardcoded fallback
+        setSupportNumber('01766326edcba');
       }
     };
     fetchAdminSettings();
-  }, []);
+  }, [dataVersion]);
 
   // Dynamic module configuration
   const modules = React.useMemo(() => {

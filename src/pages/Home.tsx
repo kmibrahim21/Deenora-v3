@@ -231,18 +231,27 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     if (institutionId && madrasah) {
       fetchDashboardStats();
 
-      // Subscribe to any potential background updates for dashboard keys (include active year in keys and correct prefixes)
+      // Only subscribe to critical updates to prevent "Data Storms"
+      // We limit re-validation frequency to at most once every 30 seconds for non-critical stats
+      let lastRevalidate = 0;
+      const THROTTLE = 30000;
+
+      const throttledRefresh = () => {
+        const now = Date.now();
+        if (now - lastRevalidate > THROTTLE) {
+          lastRevalidate = now;
+          fetchDashboardStats(true);
+        }
+      };
+
       const keysToWatch = [
-        { table: 'students', key: `dashboard_students:${institutionId}:${activeYearId || 'all'}` },
-        { table: 'classes', key: `dashboard_classes:${institutionId}` },
-        { table: 'teachers', key: `dashboard_teachers:${institutionId}` },
         { table: 'institutions', key: `dashboard_balance:${institutionId}` },
         { table: 'ledger', key: `dashboard_ledger:${institutionId}:${activeYearId || 'all'}` },
         { table: 'attendance', key: `dashboard_attendance:${institutionId}:${getTodayDateString()}` }
       ];
 
       const unsubscribers = keysToWatch.map(cfg => 
-        requestManager.subscribe(`fetch:${cfg.table}:${cfg.key}`, () => fetchDashboardStats(true))
+        requestManager.subscribe(`fetch:${cfg.table}:${cfg.key}`, throttledRefresh)
       );
 
       return () => unsubscribers.forEach(unsub => unsub());

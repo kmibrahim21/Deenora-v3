@@ -103,8 +103,22 @@ const App: React.FC = () => {
 
   const { config: globalUpdate, showPopup: showUpdatePopup, dismissPopup: dismissUpdatePopup } = useGlobalUpdate();
 
+  // Move useMemo to top level to avoid hook ordering issues
+  const parsedConfig = React.useMemo(() => {
+    let config = madrasah?.config_json as any;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
+    return config || {};
+  }, [madrasah?.config_json]);
+
   const triggerRefresh = () => {
-    requestManager.invalidate();
+    // Instead of total invalidation, we increment dataVersion to trigger targeted effect hooks
+    // requestManager.invalidate() is too aggressive and causes "loading storms"
     setDataVersion((prev) => prev + 1);
     refreshMadrasah();
   };
@@ -273,14 +287,7 @@ const App: React.FC = () => {
   const renderView = () => {
     const role = profile?.role || "accountant";
     
-    let parsedConfig = madrasah?.config_json as any;
-    if (typeof parsedConfig === 'string') {
-      try {
-        parsedConfig = JSON.parse(parsedConfig);
-      } catch (e) {
-        parsedConfig = {};
-      }
-    }
+    // parsedConfig is now at top level
     const activeYearId = parsedConfig?.active_academic_year_id;
     
     const isAdmin = role === "madrasah_admin" || role === "super_admin";
@@ -481,6 +488,7 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             onProfileUpdate={refreshMadrasah}
             profile={profile}
+            dataVersion={dataVersion}
           />
         );
       case "academic-year":
