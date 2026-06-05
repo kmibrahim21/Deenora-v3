@@ -355,7 +355,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               {/* Content Container */}
               <div className="relative z-10 flex flex-col h-full w-full">
                   {/* Header - Logo & Madrasah Info */}
-                  <div className="flex items-center gap-3 pt-3 px-5">
+                  <div className="flex items-center gap-3 pt-5 px-5">
                        <div className="w-[50px] h-[50px] bg-white rounded-full p-[2px] shadow-sm flex items-center justify-center shrink-0">
                           {madrasah?.logo_url ? (
                             <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain rounded-full" crossOrigin="anonymous" />
@@ -400,7 +400,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                   </div>
 
                   {/* Data Fields */}
-                  <div className="pl-10 pr-4 w-full flex flex-col gap-[3.5px] mt-0.5 z-10 relative">
+                  <div className="pl-10 pr-4 w-full flex flex-col gap-[1.5px] mt-0.5 z-10 relative">
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.class}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
@@ -434,7 +434,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto shrink-0 mt-[1px]">{t.address}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.2] line-clamp-2 max-w-[155px] font-noto">{currentRenderStudent.address || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.1] line-clamp-3 max-w-[155px] font-noto">{currentRenderStudent.address || "-"}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.issueDate}</span>
