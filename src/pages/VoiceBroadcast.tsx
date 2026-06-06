@@ -32,6 +32,7 @@ import { normalizePhone } from 'utils/smsUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 
 import { requestManager } from 'services/RequestManager';
+import { isValidUUID } from 'utils/validation';
 
 interface VoiceBroadcastProps {
   lang: Language;
@@ -385,10 +386,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (!madrasah) return;
+    if (!madrasah && !isSuperAdmin) return;
     fetchWalletBalance();
     if (activeTab === 'templates') fetchVoices();
-    if (activeTab === 'broadcast') { fetchClasses(); fetchVoices(); fetchSenders(); }
+    if (activeTab === 'broadcast') { 
+      if (madrasah && isValidUUID(madrasah.id)) fetchClasses(); 
+      fetchVoices(); 
+      fetchSenders(); 
+    }
     if (activeTab === 'history') {
       fetchHistory();
       fetchVoices();
@@ -407,18 +412,37 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const fetchWalletBalance = async () => {
-    if (!madrasah) return;
-    const { data } = await supabase.from('institutions').select('balance').eq('id', madrasah.id).single();
-    if (data) setWalletBalance(data.balance);
+    if (!madrasah && !isSuperAdmin) return;
+    
+    let targetId = madrasah?.id;
+    if (isSuperAdmin && (!targetId || !isValidUUID(targetId))) {
+       const { data: sysInst } = await supabase.from('institutions').select('id, balance').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+       if (sysInst && sysInst.length > 0) {
+         setWalletBalance(sysInst[0].balance || 0);
+         return;
+       }
+       setWalletBalance(999999);
+       return;
+    }
+    
+    if (targetId && isValidUUID(targetId)) {
+      const { data } = await supabase.from('institutions').select('balance').eq('id', targetId).single();
+      if (data) setWalletBalance(data.balance);
+    }
   };
 
   const fetchUserTransactions = async () => {
-    if (!madrasah) return;
+    if (!madrasah && !isSuperAdmin) return;
     setIsFetchingTransactions(true);
     try {
-      const { data } = await supabase.from('transactions')
-        .select('*')
-        .eq('institution_id', madrasah.id)
+      let query = supabase.from('transactions')
+        .select('*');
+      
+      if (madrasah?.id && isValidUUID(madrasah.id)) {
+        query = query.eq('institution_id', madrasah.id);
+      }
+      
+      const { data } = await query
         .eq('module', 'voice')
         .order('created_at', { ascending: false })
         .limit(10);
@@ -431,7 +455,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const fetchVoices = async () => {
-    if (!madrasah) return;
+    if (!madrasah && !isSuperAdmin) return;
     setLoading(true);
     try {
       setApiError(null);
@@ -633,9 +657,20 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const fetchHistory = async () => {
-    if (!madrasah) return;
+    if (!madrasah && !isSuperAdmin) return;
     setLoading(true);
-    const { data } = await supabase.from('voice_broadcasts').select('*, voice_templates(title)').eq('institution_id', madrasah.id).order('created_at', { ascending: false });
+    
+    let query = supabase.from('voice_broadcasts').select('*, voice_templates(title)');
+    
+    // For super admins, show all history if they are in the super admin panel (madrasah.id is 'super_admin')
+    // Otherwise filter by institution
+    if (!isSuperAdmin || (madrasah && isValidUUID(madrasah.id))) {
+      if (madrasah?.id && isValidUUID(madrasah.id)) {
+        query = query.eq('institution_id', madrasah.id);
+      }
+    }
+    
+    const { data } = await query.order('created_at', { ascending: false }).limit(200);
     if (data) setBroadcastHistory(data);
     
     // Track results for pending/sending broadcasts
@@ -929,11 +964,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         setHistoryDetails(mergedResult);
 
         // Fetch student names to map phone numbers
-        if (madrasah?.id) {
+        const targetInstId = broadcast.institution_id || madrasah?.id;
+        if (targetInstId && isValidUUID(targetInstId)) {
           const { data: students } = await supabase
             .from('students')
             .select('student_name, roll, guardian_phone, guardian_phone_2')
-            .eq('institution_id', madrasah.id);
+            .eq('institution_id', targetInstId);
               
           if (students) {
             console.log(`Fetched ${students.length} students for mapping`);
@@ -959,6 +995,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                 if (norm2) newMap[norm2] = info;
               }
             });
+            
+            // Also map institutions for super admin global broadcasts
+            if (isSuperAdmin && allInstitutions.length > 0) {
+              allInstitutions.forEach(inst => {
+                if (inst.phone) {
+                  const norm = normalizePhone(inst.phone);
+                  if (norm) newMap[norm] = { name: inst.name, roll: 'ID: ' + inst.id.substring(0, 4) };
+                }
+              });
+            }
+            
             setStudentNamesMap(newMap as any);
           }
         }
@@ -1220,8 +1267,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const campaignId = result.broadcast?.id || result.campaign_id || result.id || result.data?.id || result.data?.campaign_id || result.request_id || requestId;
 
       // 2. Save to Supabase
+      let saveInstId = madrasah.id;
+      if (isSuperAdmin && !isValidUUID(saveInstId)) {
+        // Find system institution ID as fallback
+        const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+        if (sysInst && sysInst.length > 0) {
+          saveInstId = sysInst[0].id;
+        }
+      }
+
       const { error } = await supabase.from('voice_broadcasts').insert({
-        institution_id: madrasah.id,
+        institution_id: saveInstId,
         voice_template_id: selectedVoiceId,
         target_type: 'students',
         target_class_name: targetClassName,
@@ -1235,7 +1291,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
       // 3. Deduct balance from institution
       const { error: deductError } = await supabase.rpc('deduct_balance', {
-        p_institution_id: madrasah.id,
+        p_institution_id: saveInstId,
         p_amount: finalEstimatedCost
       });
       

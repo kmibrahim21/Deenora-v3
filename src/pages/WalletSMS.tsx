@@ -21,9 +21,11 @@ interface WalletSMSProps {
   role: UserRole;
   profile?: Profile | null;
   onBack: () => void;
+  preSelectedInstitutionIds?: string[];
+  initialMessage?: string;
 }
 
-const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, dataVersion, initialTab, role, profile, onBack }) => {
+const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, dataVersion, initialTab, role, profile, onBack, preSelectedInstitutionIds = [], initialMessage = '' }) => {
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
   const canSendSms = !isTeacher || profile?.permissions?.can_send_sms;
@@ -124,6 +126,20 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
       if (data) setSmsBalance(data.sms_balance || 0);
     } catch (e) {}
   };
+
+  useEffect(() => {
+    if (preSelectedInstitutionIds.length > 0 && isSuperAdmin) {
+      setTargetType('specific_institution');
+      setSelectedInstitutionIds(preSelectedInstitutionIds);
+      setActiveTab('bulk-sms');
+    }
+  }, [preSelectedInstitutionIds, isSuperAdmin]);
+
+  useEffect(() => {
+    if (initialMessage && initialMessage.trim()) {
+      setBulkMessage(initialMessage);
+    }
+  }, [initialMessage]);
 
   useEffect(() => {
     if (madrasah) {
@@ -497,7 +513,26 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                     </h4>
                     
                     {/* Only show targeting options for non-super admins or if you want to keep 'all' for super admin but hide others */}
-                    {!isSuperAdmin ? (
+                    {isSuperAdmin && targetType === 'specific_institution' && selectedInstitutionIds.length > 0 ? (
+                      <div className="bg-orange-50 p-6 rounded-[1.8rem] border border-orange-100 flex flex-col items-center text-center gap-3">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-orange-600 shadow-sm">
+                          <Building2 size={24} />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black text-orange-600 uppercase tracking-widest mb-1">Target: {selectedInstitutionIds.length} Selected Schools</p>
+                          <p className="text-lg font-black text-[#1E3A8A]">Subscription Reminders</p>
+                          <button 
+                            onClick={() => {
+                              setSelectedInstitutionIds([]);
+                              setTargetType('all_institutions');
+                            }}
+                            className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500"
+                          >
+                            Reset Selection
+                          </button>
+                        </div>
+                      </div>
+                    ) : !isSuperAdmin ? (
                       <div className="relative space-y-3">
                         <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
                           <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>

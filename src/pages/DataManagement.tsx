@@ -164,8 +164,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
 
           if (navigator.onLine) {
             const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
-            if (instData?.config_json?.student_limit !== undefined) {
-              currentLimit = instData.config_json.student_limit;
+            let freshConfig: any = instData?.config_json;
+            if (typeof freshConfig === 'string') {
+              try { freshConfig = JSON.parse(freshConfig); } catch (e) { freshConfig = {}; }
+            }
+            if (freshConfig?.student_limit !== undefined) {
+              currentLimit = Number(freshConfig.student_limit);
             }
           }
 

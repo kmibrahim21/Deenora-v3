@@ -84,6 +84,7 @@ const App: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [preSelectedStudentIds, setPreSelectedStudentIds] = useState<string[]>([]);
   const [preSelectedInstitutionIds, setPreSelectedInstitutionIds] = useState<string[]>([]);
+  const [preSelectedMessage, setPreSelectedMessage] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const [lang, setLang] = useState<Language>(
@@ -564,6 +565,11 @@ const App: React.FC = () => {
               setPreSelectedInstitutionIds(ids);
               setView("voice-broadcast");
             }}
+            onNavigateToSMSBroadcast={(ids, msg) => {
+              setPreSelectedInstitutionIds(ids);
+              if (msg) setPreSelectedMessage(msg);
+              setView("wallet-sms");
+            }}
           />
         );
       case "admin-voice-service":
@@ -600,7 +606,13 @@ const App: React.FC = () => {
             initialTab={walletTab}
             role={role}
             profile={profile}
-            onBack={() => handleBack("home")}
+            onBack={() => {
+              setPreSelectedInstitutionIds([]);
+              setPreSelectedMessage('');
+              handleBack("home");
+            }}
+            preSelectedInstitutionIds={preSelectedInstitutionIds}
+            initialMessage={preSelectedMessage}
           />
         );
       case "voice-broadcast":

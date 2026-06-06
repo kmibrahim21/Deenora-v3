@@ -28,9 +28,10 @@ interface AdminPanelProps {
   profile?: any;
   setStatusModal: (modal: {show: boolean, type: 'success' | 'error', title: string, message: string}) => void;
   onNavigateToVoiceBroadcast?: (ids: string[]) => void;
+  onNavigateToSMSBroadcast?: (ids: string[], initialMessage?: string) => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal, onNavigateToVoiceBroadcast }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal, onNavigateToVoiceBroadcast, onNavigateToSMSBroadcast }) => {
   const [madrasahs, setMadrasahs] = useState<InstitutionWithStats[]>([]);
   const [pendingTrans, setPendingTrans] = useState<Transaction[]>([]);
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
@@ -42,7 +43,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [view, setView] = useState<'list' | 'approvals' | 'details' | 'dashboard' | 'institutions'>(
     currentView === 'approvals' ? 'approvals' : currentView === 'dashboard' ? 'dashboard' : currentView === 'institutions' ? 'institutions' : 'list'
   );
-  const [paymentTab, setPaymentTab] = useState<'sms' | 'voice'>('sms');
+  const [paymentTab, setPaymentTab] = useState<'sms' | 'voice' | 'subscription'>('sms');
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
 
 
@@ -608,7 +609,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       supabase.from('students').select('*', { count: 'exact', head: true }),
       supabase.from('classes').select('*', { count: 'exact', head: true }),
       supabase.from('teachers').select('*', { count: 'exact', head: true }),
-      supabase.from('transactions').select('sms_count, amount, module, description').eq('status', 'approved'),
+      supabase.from('transactions').select('sms_count, amount, module, description').eq('status', 'approved').limit(10000),
       supabase.from('institutions').select('sms_balance, balance, is_active, institution_type').eq('is_super_admin', false),
       supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('institutions').select('*', { count: 'exact', head: true }).eq('is_super_admin', false),
@@ -646,7 +647,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       voiceRevenue: voiceRev,
       subscriptionRevenue: subRev,
       totalRevenue,
-      pendingApprovals: pendingRes.data?.filter(t => t.module !== 'subscription')?.length || pendingRes.count || 0,
+      pendingApprovals: pendingRes.count || 0,
       totalInstitutions: instsRes.count || 0,
       activeInstitutions: activeInsts,
       totalVoiceBalance,
@@ -961,32 +962,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         }
 
         const sendPromises = [];
+        const CHUNK_SIZE = 25; // Send in chunks to avoid browser/API rate limits
         
         if (smsTarget === 'admin') {
-          for (const inst of targets) {
-            const personalizedMsg = commMessage.replace(/{{name}}/g, inst.name || '');
-            sendPromises.push(smsApi.sendDirect(inst.phone!, personalizedMsg, madrasah?.id));
+          // Process in chunks
+          for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
+            const chunk = targets.slice(i, i + CHUNK_SIZE);
+            const chunkPromises = chunk.map(inst => {
+              const personalizedMsg = commMessage.replace(/{{name}}/g, inst.name || '');
+              return smsApi.sendDirect(inst.phone!, personalizedMsg, madrasah?.id);
+            });
+            await Promise.all(chunkPromises);
           }
         } else {
           // Chunked send to students
-          for (const student of allStudents) {
-            if (student.phone) {
-              const personalizedMsg = commMessage
-                .replace(/{{name}}/g, student.full_name || '')
-                .replace(/{{father}}/g, student.father_name || '');
-              sendPromises.push(smsApi.sendDirect(student.phone, personalizedMsg, madrasah?.id));
-            }
+          for (let i = 0; i < allStudents.length; i += CHUNK_SIZE) {
+            const chunk = allStudents.slice(i, i + CHUNK_SIZE);
+            const chunkPromises = chunk.map(student => {
+              if (student.phone) {
+                const personalizedMsg = commMessage
+                  .replace(/{{name}}/g, student.full_name || '')
+                  .replace(/{{father}}/g, student.father_name || '');
+                return smsApi.sendDirect(student.phone, personalizedMsg, madrasah?.id);
+              }
+              return Promise.resolve();
+            });
+            await Promise.all(chunkPromises);
           }
         }
 
-        await Promise.all(sendPromises);
         setStatusModal({ 
           show: true, 
           type: 'success', 
           title: 'সফল', 
           message: smsTarget === 'admin' 
             ? `${targets.length} টি প্রতিষ্ঠানে এসএমএস পাঠানো হয়েছে` 
-            : `${sendPromises.length} জন শিক্ষার্থীর কাছে এসএমএস পাঠানো হয়েছে`
+            : `${allStudents.length} জন শিক্ষার্থীর কাছে এসএমএস পাঠানো হয়েছে`
         });
       } else {
         // Voice Broadcast for multiple institutions
@@ -1717,30 +1728,58 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">পেইড হয়েছে</p>
                         <h5 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{globalStats.totalInstitutions - unpaidInstitutions.length}</h5>
                       </div>
-                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-red-50 border-red-100'} p-5 rounded-3xl border text-center`}>
+                      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-red-50 border-red-100'} p-5 rounded-3xl border text-center shadow-inner`}>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">বাকি আছে</p>
                         <h5 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-red-400' : 'text-red-600'}`}>{unpaidInstitutions.length}</h5>
                       </div>
                    </div>
 
                    {unpaidInstitutions.length > 0 && (
-                     <div className="flex gap-3">
+                     <div className="flex gap-3 relative z-[100]">
                        <button 
-                         onClick={() => {
-                           setCommsModal({ show: true, institutions: unpaidInstitutions, type: 'sms' });
-                           const [rYear, rMonth] = selectedMonthForReminder.split('-');
-                           setCommMessage(`আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${new Date(parseInt(rYear), parseInt(rMonth) - 1).toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' })} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`);
+                         type="button"
+                         onClick={(e) => {
+                           e.preventDefault();
+                           e.stopPropagation();
+                           if (!unpaidInstitutions || unpaidInstitutions.length === 0) return;
+                           
+                           let monthLabel = '';
+                           try {
+                              const [rYear, rMonth] = selectedMonthForReminder.split('-');
+                              const date = new Date(parseInt(rYear), parseInt(rMonth) - 1);
+                              monthLabel = date.toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' });
+                           } catch (e) {
+                              monthLabel = selectedMonthForReminder;
+                           }
+                           
+                           const msg = `আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${monthLabel} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`;
+                           
+                           if (onNavigateToSMSBroadcast) {
+                             onNavigateToSMSBroadcast(unpaidInstitutions.map(inst => inst.id), msg);
+                           } else {
+                             setCommMessage(msg);
+                             setCommsModal({ show: true, institutions: [...unpaidInstitutions], type: 'sms' });
+                           }
                          }}
-                         className="flex-1 py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                         className="flex-1 min-h-[56px] py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer relative z-[110]"
                        >
                          <MessageSquare size={16} /> SMS রিমাইন্ডার
                        </button>
                        <button 
-                         onClick={() => {
-                           if (awajVoices.length === 0) handleFetchAwajVoices();
-                           setCommsModal({ show: true, institutions: unpaidInstitutions, type: 'voice' });
+                         type="button"
+                         onClick={(e) => {
+                           e.preventDefault();
+                           e.stopPropagation();
+                           if (!unpaidInstitutions || unpaidInstitutions.length === 0) return;
+                           
+                           if (onNavigateToVoiceBroadcast) {
+                             onNavigateToVoiceBroadcast(unpaidInstitutions.map(inst => inst.id));
+                           } else {
+                             if (awajVoices.length === 0) handleFetchAwajVoices();
+                             setCommsModal({ show: true, institutions: [...unpaidInstitutions], type: 'voice' });
+                           }
                          }}
-                         className="flex-1 py-4 bg-orange-500 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                         className="flex-1 min-h-[56px] py-4 bg-orange-500 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer relative z-[110]"
                        >
                          <Mic size={16} /> ভয়েস রিমাইন্ডার
                        </button>
@@ -2424,6 +2463,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 >
                   Voice Recharge
                 </button>
+                <button 
+                  onClick={() => setPaymentTab('subscription')}
+                  className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${paymentTab === 'subscription' ? (madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400 shadow-sm' : 'bg-white text-blue-600 shadow-sm') : 'text-slate-400'}`}
+                >
+                  Subscription
+                </button>
               </div>
               
               <div className="space-y-6">
@@ -2433,10 +2478,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {pendingTrans.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
-                    return (paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice')) && !desc.includes('refund');
+                    const mod = (tr.module || '').toLowerCase();
+                    if (paymentTab === 'subscription') return mod === 'subscription' || desc.includes('subscription');
+                    if (paymentTab === 'voice') return (mod === 'voice' || desc.includes('voice')) && mod !== 'subscription';
+                    // SMS tab shows everything else that is not voice or subscription
+                    return mod !== 'voice' && mod !== 'subscription' && !desc.includes('voice') && !desc.includes('subscription') && !desc.includes('refund');
                   }).length > 0 ? pendingTrans.filter(tr => {
                     const desc = (tr.description || '').toLowerCase();
-                    return (paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice')) && !desc.includes('refund');
+                    const mod = (tr.module || '').toLowerCase();
+                    if (paymentTab === 'subscription') return mod === 'subscription' || desc.includes('subscription');
+                    if (paymentTab === 'voice') return (mod === 'voice' || desc.includes('voice')) && mod !== 'subscription';
+                    return mod !== 'voice' && mod !== 'subscription' && !desc.includes('voice') && !desc.includes('subscription') && !desc.includes('refund');
                   }).map(tr => (
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border space-y-5 animate-in slide-in-from-left-4`}>
                       <div className="flex items-center justify-between">
@@ -3355,48 +3407,50 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       )}
 
 
-      {showConfirm.show && createPortal(
-        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl text-center animate-in zoom-in-95 duration-500 border border-amber-50">
-              <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner border border-amber-100">
-                 <AlertCircle size={32} />
-              </div>
-              <h3 className="text-xl font-black text-[#1E3A8A] font-noto tracking-tight">{showConfirm.title}</h3>
-              <p className="text-[12px] font-bold text-slate-400 mt-2 font-noto leading-relaxed px-4">
-                 {showConfirm.message}
-              </p>
-              <div className="flex gap-3 mt-8">
-                 <button onClick={() => setShowConfirm({ ...showConfirm, show: false })} className="flex-1 py-4 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-[10px] uppercase tracking-widest">বাতিল</button>
-                 <button 
-                   onClick={() => {
-                     setShowConfirm({ ...showConfirm, show: false });
-                     showConfirm.onConfirm();
-                   }} 
-                   className="flex-1 py-4 bg-red-500 text-white font-black rounded-full shadow-lg shadow-red-100 active:scale-95 transition-all text-[10px] uppercase tracking-widest"
-                 >
-                    নিশ্চিত করুন
-                 </button>
-              </div>
-           </div>
-        </div>,
-        document.body
-      )}
+      <AnimatePresence>
+        {showConfirm.show && createPortal(
+          <div key="confirm-modal" className="fixed inset-0 z-[6000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-300">
+             <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl text-center animate-in zoom-in-95 duration-500 border border-amber-50 relative z-[6010]">
+                <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner border border-amber-100">
+                   <AlertCircle size={32} />
+                </div>
+                <h3 className="text-xl font-black text-[#1E3A8A] font-noto tracking-tight">{showConfirm.title}</h3>
+                <p className="text-[12px] font-bold text-slate-400 mt-2 font-noto leading-relaxed px-4">
+                   {showConfirm.message}
+                </p>
+                <div className="flex gap-3 mt-8">
+                   <button onClick={() => setShowConfirm({ ...showConfirm, show: false })} className="flex-1 py-4 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-[10px] uppercase tracking-widest">বাতিল</button>
+                   <button 
+                     onClick={() => {
+                       setShowConfirm({ ...showConfirm, show: false });
+                       showConfirm.onConfirm();
+                     }} 
+                     className="flex-1 py-4 bg-red-500 text-white font-black rounded-full shadow-lg shadow-red-100 active:scale-95 transition-all text-[10px] uppercase tracking-widest"
+                   >
+                      নিশ্চিত করুন
+                   </button>
+                </div>
+             </div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {commsModal.show && createPortal(
-          <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 sm:p-6 pb-28 sm:pb-4">
+          <div key="comms-modal" className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6 pb-28 sm:pb-4 pointer-events-auto">
              <motion.div 
                initial={{ opacity: 0 }} 
                animate={{ opacity: 1 }} 
                exit={{ opacity: 0 }}
-               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+               className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
                onClick={() => setCommsModal({ ...commsModal, show: false })}
              />
              <motion.div 
                initial={{ opacity: 0, scale: 0.9, y: 20 }}
                animate={{ opacity: 1, scale: 1, y: 0 }}
                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-               className="relative bg-white w-full max-w-md max-h-[85vh] sm:max-h-[90vh] flex flex-col rounded-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden"
+               className="relative bg-white w-full max-w-md max-h-[85vh] sm:max-h-[90vh] flex flex-col rounded-[2.5rem] sm:rounded-[3.5rem] shadow-2xl overflow-hidden z-[5010]"
              >
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600" />
                 
@@ -3559,9 +3613,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           </div>,
           document.body
         )}
+      </AnimatePresence>
 
+      <AnimatePresence mode="wait">
         {showRefreshPopup && createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+          <div key="refresh-popup" className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
             <motion.div 
               initial={{ opacity: 0, scale: 0.8, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -3594,10 +3650,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           </div>,
           document.body
         )}
+      </AnimatePresence>
 
-        {/* Quick Recharge Modal */}
+      <AnimatePresence mode="wait">
         {showRechargeModal.show && createPortal(
-          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+          <div key="recharge-modal" className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
              <motion.div 
                initial={{ opacity: 0 }} 
                animate={{ opacity: 1 }} 
