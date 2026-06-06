@@ -133,6 +133,9 @@ export default async function handler(req, res) {
           ...t,
           name: t.teacher_name,
           phone: t.mobile,
+          pin: parsedPermissions.raw_password,
+          address: parsedPermissions.address,
+          join_date: parsedPermissions.join_date,
           permissions: parsedPermissions
         };
       });
@@ -140,12 +143,14 @@ export default async function handler(req, res) {
     }
 
     if (action === 'create' && req.method === 'POST') {
-      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions } = body;
+      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions, address, join_date } = body;
       if (!institute_id || !name || !phone || !pin) return res.status(400).json({ error: 'Required fields missing' });
       
       console.log('Creating teacher:', { institute_id, name, phone, basic_salary });
 
       const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
+
+      const finalPermissions = { ...permissions, address, join_date, raw_password: pin };
 
       const { data: teacher, error: teacherError } = await supabase.from('teachers').insert({
         institution_id: institute_id,
@@ -155,19 +160,39 @@ export default async function handler(req, res) {
         designation,
         basic_salary: basic_salary ? Number(basic_salary) : null,
         photo_url,
-        permissions: permissions || {},
+        permissions: finalPermissions || {},
         is_active: true
       }).select().single();
       if (teacherError) throw teacherError;
-      return res.status(201).json({ success: true, teacher });
+      return res.status(201).json({ success: true, teacher: {
+        ...teacher,
+        name: teacher.teacher_name,
+        phone: teacher.mobile,
+        address,
+        join_date,
+        permissions: finalPermissions
+      }});
     }
 
     if (action === 'update-pin' && req.method === 'POST') {
       const { id, pin } = body;
       if (!id || !pin) return res.status(400).json({ error: 'ID and pin are required' });
       
+      const { data: currentTeacher } = await supabase.from('teachers').select('permissions').eq('id', id).single();
+      const currentPermissions = currentTeacher?.permissions || {};
+      let parsedPermissions = {};
+      if (typeof currentPermissions === 'string') {
+        try { parsedPermissions = JSON.parse(currentPermissions); } catch(e) {}
+      } else {
+        parsedPermissions = { ...currentPermissions };
+      }
+      parsedPermissions.raw_password = pin;
+
       const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
-      const { error: teacherError } = await supabase.from('teachers').update({ password_hash: passwordHash }).eq('id', id);
+      const { error: teacherError } = await supabase.from('teachers').update({ 
+        password_hash: passwordHash,
+        permissions: parsedPermissions 
+      }).eq('id', id);
       if (teacherError) throw teacherError;
       
       return res.status(200).json({ success: true });
@@ -231,9 +256,15 @@ export default async function handler(req, res) {
     }
 
     if (action === 'update' && req.method === 'PUT') {
-      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions } = body;
+      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions, address, join_date } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
-      const updateData: any = { teacher_name: name, mobile: phone, designation, basic_salary: basic_salary ? Number(basic_salary) : null, photo_url, is_active, permissions };
+      
+      const finalPermissions = { ...permissions, address, join_date };
+      if (pin) {
+        finalPermissions.raw_password = pin;
+      }
+
+      const updateData: any = { teacher_name: name, mobile: phone, designation, basic_salary: basic_salary ? Number(basic_salary) : null, photo_url, is_active, permissions: finalPermissions };
       if (pin) {
         updateData.password_hash = crypto.createHash('sha256').update(pin).digest('hex');
       }

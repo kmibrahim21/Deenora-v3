@@ -392,7 +392,10 @@ export interface Teacher {
   designation?: string;
   basic_salary?: number;
   monthly_salary?: number;
+  address?: string;
+  join_date?: string;
   is_active: boolean;
+  photo_url?: string;
   permissions?: TeacherPermissions;
   created_at: string;
 }

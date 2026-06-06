@@ -59,6 +59,8 @@ import { getEventsForDate, getTodayDateString, getTodayMonthString } from "../ut
 
 import { sortMadrasahClasses } from "pages/Classes";
 
+import { TeacherProfile } from '../components/TeacherProfile';
+
 interface TeacherManagementProps {
   lang: Language;
   madrasah: Institution | null;
@@ -127,7 +129,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     teacherId: string | null;
   }>({ show: false, teacherId: null });
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
+  const [viewProfile, setViewProfile] = useState<Teacher | null>(null);
+  const [showPassword, setShowPassword] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,6 +141,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     pin: "",
     designation: "",
     basic_salary: "",
+    address: "",
+    join_date: getTodayDateString(),
     is_active: true,
   });
 
@@ -654,10 +659,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       pin: "",
       designation: "",
       basic_salary: "",
+      address: "",
+      join_date: getTodayDateString(),
       is_active: true,
     });
     setPermissions(initialPermissions);
-    setShowPassword(false);
+    setShowPassword(true);
   };
 
   const openEditModal = (teacher: Teacher) => {
@@ -665,14 +672,18 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     setFormData({
       name: teacher.name || "",
       phone: teacher.phone || "",
-      pin: "", // Don't show pin
+      pin: teacher.pin || "", 
       designation: teacher.designation || "",
       basic_salary: (teacher.basic_salary || teacher.monthly_salary) ? (teacher.basic_salary || teacher.monthly_salary)!.toString() : "",
+      address: teacher.address || "",
+      join_date: teacher.join_date || getTodayDateString(),
       is_active: teacher.is_active,
     });
     setPermissions({ ...initialPermissions, ...(teacher.permissions || {}) });
+    setShowPassword(true);
     setShowEditModal(true);
   };
+
 
   const filteredTeachers = React.useMemo(() => {
     return teachers.filter(
@@ -731,8 +742,27 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       </div>
 
       <div className="max-w-5xl mx-auto p-4 space-y-6">
-        {/* Tabs */}
-        <div className={`p-1 flex gap-1 rounded-xl w-fit mx-auto sm:mx-0 ${isDark ? "bg-slate-900 border border-slate-800" : "bg-slate-100 border border-slate-200/50"}`}>
+        {viewProfile ? (
+          <TeacherProfile 
+            teacher={viewProfile} 
+            madrasah={madrasah!} 
+            lang={lang} 
+            onBack={() => setViewProfile(null)} 
+            onTeacherUpdate={(updatedTeacher) => {
+              setTeachers(prev => prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t));
+              setViewProfile(updatedTeacher);
+            }} 
+            onEdit={(teacher) => {
+              openEditModal(teacher);
+            }}
+            onDelete={(teacherId) => {
+              setDeleteModal({ show: true, teacherId });
+            }}
+          />
+        ) : (
+          <>
+            {/* Tabs */}
+            <div className={`p-1 flex gap-1 rounded-xl w-fit mx-auto sm:mx-0 ${isDark ? "bg-slate-900 border border-slate-800" : "bg-slate-100 border border-slate-200/50"}`}>
           <button
             onClick={() => setActiveTab('teachers')}
             className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'teachers' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
@@ -789,98 +819,40 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 key={teacher.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`border rounded-2xl p-3 shadow-sm hover:shadow-md transition-all group ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}
+                onClick={() => setViewProfile(teacher)}
+                className={`border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all group flex items-center justify-between cursor-pointer ${isDark ? "bg-slate-900 border-slate-800 hover:border-slate-700" : "bg-white border-slate-200 hover:border-blue-200"}`}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center border ${isDark ? "bg-blue-900/20 text-blue-400 border-blue-900/30" : "bg-blue-50 text-blue-600 border-blue-100"}`}
-                    >
-                      <User size={20} />
-                    </div>
-                    <div>
-                      <h3
-                        className={`text-xs font-black font-noto leading-tight ${isDark ? "text-white" : "text-slate-900"}`}
-                      >
-                        {teacher.name}
-                      </h3>
-                      <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                        {teacher.designation ||
-                          (lang === "bn" ? "শিক্ষক" : "Teacher")}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {teacher.phone && (
-                      <a
-                        href={`tel:${teacher.phone}`}
-                        className={`p-1.5 rounded-md font-black flex items-center justify-center transition-all ${isDark ? "bg-blue-900/30 text-blue-400 hover:bg-blue-900/50" : "bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
-                      >
-                        <Phone size={12} />
-                      </a>
-                    )}
-                    <button
-                      onClick={() => openEditModal(teacher)}
-                      className={`p-1.5 rounded-md font-black text-[9px] uppercase tracking-widest flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600 transition-all ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"}`}
-                    >
-                      <Edit3 size={12} />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setDeleteModal({ show: true, teacherId: teacher.id })
-                      }
-                      className={`p-1.5 rounded-md flex items-center justify-center hover:bg-red-500 hover:text-white transition-all ${isDark ? "bg-red-900/20 text-red-400" : "bg-red-50 text-red-600"}`}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-4">
                   <div
-                    className={`flex items-center gap-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center border overflow-hidden shrink-0 ${isDark ? "bg-blue-900/20 text-blue-400 border-blue-900/30" : "bg-blue-50 text-blue-600 border-blue-100"}`}
                   >
-                    <Smartphone size={14} />
-                    <span className="text-xs font-bold">{teacher.phone}</span>
+                    {teacher.photo_url ? (
+                       <img src={teacher.photo_url} alt={teacher.name} className="w-full h-full object-cover" />
+                    ) : (
+                       <User size={24} />
+                    )}
                   </div>
-                  {teacher.basic_salary ? (
-                    <div className={`flex items-center gap-2 ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
-                      <span className="text-xs font-black">৳ {teacher.basic_salary}</span>
-                      <span className="text-[10px] font-bold text-slate-400">({lang === 'bn' ? 'বেসিক স্যালারি' : 'Basic'})</span>
-                    </div>
-                  ) : null}
-                  <div className="flex flex-wrap gap-1.5">
-                    {teacher.permissions &&
-                      Object.entries(teacher.permissions)
-                        .filter(
-                          ([key, val]) =>
-                            key.startsWith("can_") && val === true,
-                        )
-                        .map(([key]) => (
-                          <div
-                            key={key}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[8px] font-bold ${isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"}`}
-                          >
-                            <Shield size={8} />
-                            {key
-                              .replace("can_manage_", "")
-                              .replace("can_send_", "")
-                              .replace("can_use_", "")
-                              .replace("_", " ")}
-                          </div>
-                        ))}
-                    {teacher.permissions?.allowed_classes &&
-                      teacher.permissions.allowed_classes.length > 0 && (
-                        <div
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[8px] font-bold ${isDark ? "bg-blue-900/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}
-                        >
-                          <BookOpen size={8} />
-                          {teacher.permissions.allowed_classes.length}{" "}
-                          {lang === "bn" ? "টি শ্রেণি" : "Classes"}
-                        </div>
-                      )}
+                  <div>
+                    <h3
+                      className={`text-[15px] font-black font-noto leading-tight group-hover:text-blue-500 transition-colors ${isDark ? "text-white" : "text-slate-900"}`}
+                    >
+                      {teacher.name}
+                    </h3>
+                    <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1.5">
+                      <Briefcase size={12} /> {teacher.designation || (lang === "bn" ? "শিক্ষক" : "Teacher")}
+                    </p>
                   </div>
                 </div>
+                
+                {teacher.phone && (
+                  <a
+                    href={`tel:${teacher.phone}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`p-3 rounded-2xl flex items-center justify-center transition-all shrink-0 ${isDark ? "bg-blue-900/30 text-blue-400 hover:bg-blue-900/50" : "bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
+                  >
+                    <Phone size={18} className="animate-pulse" />
+                  </a>
+                )}
               </motion.div>
             ))}
           </div>
@@ -1327,6 +1299,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
             </div>
           </div>
         )}
+        </>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
@@ -1394,131 +1368,156 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                   </div>
                 )}
 
-                <div className="space-y-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">
-                    Basic Information
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                          {t("teacher_name", lang)}
-                        </label>
-                        <div className="relative">
-                          <User
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                            size={16}
-                          />
-                          <input
-                            type="text"
-                            required
-                            className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-100 text-slate-700"}`}
-                            value={formData.name || ""}
-                            onChange={(e) =>
-                              setFormData({ ...formData, name: e.target.value })
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                          {t("designation", lang)}
-                        </label>
-                        <div className="relative">
-                          <Briefcase
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                            size={16}
-                          />
-                          <input
-                            type="text"
-                            className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-100 text-slate-700"}`}
-                            value={formData.designation || ""}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                designation: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                          {lang === 'bn' ? 'বেসিক স্যালারি' : 'Basic Salary'}
-                        </label>
-                        <div className="relative">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
-                            ৳
-                          </div>
-                          <input
-                            type="number"
-                            className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-100 text-slate-700"}`}
-                            value={formData.basic_salary || ""}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                basic_salary: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                          {t("phone", lang)}
-                        </label>
-                        <div className="relative">
-                          <Smartphone
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                            size={16}
-                          />
-                          <input
-                            type="tel"
-                            required
-                            className={`w-full pl-11 pr-4 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-100 text-slate-700"}`}
-                            value={formData.phone || ""}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                phone: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                          {t("password", lang)}
-                        </label>
-                        <div className="relative">
-                          <Lock
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                            size={16}
-                          />
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            required={showAddModal}
-                            placeholder={
-                              showEditModal ? "Leave blank to keep current" : ""
-                            }
-                            className={`w-full pl-11 pr-12 py-3 border rounded-xl outline-none text-sm font-bold transition-all focus:border-blue-500/50 ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-slate-50 border-slate-100 text-slate-700"}`}
-                            value={formData.pin || ""}
-                            onChange={(e) =>
-                              setFormData({ ...formData, pin: e.target.value })
-                            }
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                          >
-                            {showPassword ? (
-                              <EyeOff size={16} />
-                            ) : (
-                              <Eye size={16} />
-                            )}
-                          </button>
-                        </div>
+                <div className="space-y-5">
+                  <div className="flex items-center gap-3 px-2">
+                    <div className="w-1.5 h-5 bg-[#2563EB] rounded-full" />
+                    <h3 className={`text-[11px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'} uppercase tracking-widest`}>
+                      {lang === 'bn' ? 'প্রাথমিক তথ্য' : 'Basic Information'}
+                    </h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <User size={11} className="text-[#2563EB]" /> 
+                        {t("teacher_name", lang)}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Full Name"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.name || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, name: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <Briefcase size={11} className="text-[#2563EB]" /> 
+                        {t("designation", lang)}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Senior Teacher"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.designation || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            designation: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <span className="font-bold text-[#2563EB]">৳</span> 
+                        {lang === 'bn' ? 'বেসিক স্যালারি' : 'Basic Salary'}
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.basic_salary || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            basic_salary: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <Smartphone size={11} className="text-[#2563EB]" /> 
+                        {t("phone", lang)}
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="Mobile Number"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.phone || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            phone: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <Check size={11} className="text-[#2563EB]" /> 
+                        {lang === 'bn' ? 'ঠিকানা' : 'Address'}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Full Address"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.address || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            address: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <Calendar size={11} className="text-[#2563EB]" /> 
+                        {lang === 'bn' ? 'জয়েন ডেট' : 'Join Date'}
+                      </label>
+                      <input
+                        type="date"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.join_date || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            join_date: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <Lock size={11} className="text-[#2563EB]" /> 
+                        {t("password", lang)}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required={showAddModal}
+                          placeholder={
+                            showEditModal ? "Leave blank to keep current" : "Set password"
+                          }
+                          className={`w-full h-[54px] px-5 pr-12 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                          value={formData.pin || ""}
+                          onChange={(e) =>
+                            setFormData({ ...formData, pin: e.target.value })
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className={`absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1.5 transition-colors ${isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-400 hover:bg-slate-200'}`}
+                        >
+                          {showPassword ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
