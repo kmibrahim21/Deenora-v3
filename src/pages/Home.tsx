@@ -96,7 +96,10 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     if (typeof config === 'string') {
       try { config = JSON.parse(config); } catch (e) { config = {}; }
     }
-    return config?.active_academic_year_id;
+    const yearId = config?.active_academic_year_id;
+    // Basic UUID validation (8-4-4-4-12 hex chars)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(yearId) ? yearId : null;
   }, [madrasah]);
 
   const [isRevalidating, setIsRevalidating] = useState(false);

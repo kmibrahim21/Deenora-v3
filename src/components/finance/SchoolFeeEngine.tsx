@@ -32,6 +32,17 @@ export const clearGlobalSchoolFeeCache = () => {
 export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey, triggerRefresh }) => {
   const isDark = madrasah.theme === 'dark';
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
+
+  const activeYearId = React.useMemo(() => {
+    if (!madrasah?.config_json) return null;
+    let config = madrasah.config_json as any;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const yearId = config?.active_academic_year_id;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(yearId) ? yearId : null;
+  }, [madrasah]);
   
   const selectedClassInitial = () => localStorage.getItem('school_fee_selectedClass') || '';
   const selectedMonthInitial = () => localStorage.getItem('school_fee_selectedMonth') || new Date().toISOString().slice(0, 7);
@@ -111,8 +122,6 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     }
     setFetchError(null);
     try {
-      const activeYearId = madrasah.config_json?.active_academic_year_id;
-      
       if (activeYearId) {
           const { data: yearData } = await requestManager.cachedFetch(
             'academic_years',
@@ -185,7 +194,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         
         if (error) throw error;
         
-        const data = studentsData.map((s: any) => ({
+        const data = (studentsData || []).map((s: any) => ({
           student_id: s.id,
           student_name: s.student_name,
           roll: s.roll,

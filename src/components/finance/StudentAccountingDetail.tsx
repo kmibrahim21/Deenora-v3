@@ -91,6 +91,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
             return set ? set.is_enabled : true;
         }).map(s => s.fee_name).join(', ');
 
+        const createdFeeIds = [];
+
         for (const monthStr of sortedMonths) {
             const due = getDueForMonth(monthStr);
             if (due <= 0) continue;
@@ -103,7 +105,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
             remainingPaid -= paidForMonth;
 
             if (paidForMonth > 0 || discountForMonth > 0) {
-                const feeData = {
+                const feeData: any = {
                     institution_id: madrasah.id,
                     student_id: student.student_id,
                     class_id: student.class_id,
@@ -114,10 +116,10 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     status: (paidForMonth + discountForMonth >= due) ? 'paid' : 'partial'
                 };
 
-                const { error } = await supabase.from('fees').insert(feeData);
+                const { data: insertedFee, error } = await supabase.from('fees').insert(feeData).select('id').single();
                 if (error) {
                     if (error.message.includes('column') || error.code === '42703') {
-                       const { error: retryErr } = await supabase.from('fees').insert({
+                       const { data: retryFee, error: retryErr } = await supabase.from('fees').insert({
                           institution_id: madrasah.id,
                           student_id: student.student_id,
                           class_id: student.class_id,
@@ -125,11 +127,14 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                           month: monthStr,
                           academic_year_id: activeYearId,
                           status: paidForMonth >= due ? 'paid' : 'partial'
-                       });
+                       }).select('id').single();
                        if (retryErr) throw retryErr;
+                       if (retryFee) createdFeeIds.push(retryFee.id);
                     } else {
                        throw error;
                     }
+                } else if (insertedFee) {
+                    createdFeeIds.push(insertedFee.id);
                 }
             }
         }
@@ -145,6 +150,10 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         const totalDisc = parseFloat(multiDiscount) || 0;
         
         let finalDescription = `${totalCategories} - ${student.student_name} (${classNameToSave} | Roll: ${roll} | Months: ${monthsNames})${totalDisc > 0 ? " (ছাড়: ৳" + totalDisc + ")" : ""}`;
+        
+        if (createdFeeIds.length > 0) {
+            finalDescription += createdFeeIds.map(id => ` || FEE_ID: ${id}`).join('');
+        }
 
         await bgInsertLedger(madrasah.id, totalPaid, finalDescription, activeYearId);
 
@@ -174,6 +183,47 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
           transaction_date: new Date().toISOString().split('T')[0],
           academic_year_id: yId
       });
+  };
+
+  const handleDeleteLedger = async (ledgerId: string) => {
+    if (!confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই লেনদেনটি মুছে ফেলতে চান? এটি সংশ্লিষ্ট সব ফি রেকর্ডও মুছে ফেলবে।' : 'Are you sure you want to delete this transaction? It will also remove associated fee records.')) return;
+    
+    setLoading(true);
+    try {
+      // Find the record to find FEE_IDs
+      const { data: ledgerRecord } = await supabase.from('ledger').select('description').eq('id', ledgerId).single();
+      
+      if (ledgerRecord?.description) {
+         const feeIds: string[] = [];
+         const regex = /FEE_ID:\s*([a-f0-9\-]+)/g;
+         let match;
+         while ((match = regex.exec(ledgerRecord.description)) !== null) {
+            feeIds.push(match[1]);
+         }
+
+         if (feeIds.length > 0) {
+            await supabase.from('fees').delete().in('id', feeIds);
+         }
+      }
+
+      const { error } = await supabase.from('ledger').delete().eq('id', ledgerId);
+      if (error) throw error;
+
+      // Invalidate Patterns
+      requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      requestManager.invalidatePattern(`stats:${madrasah.id}`);
+      requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
+      requestManager.invalidatePattern(`accounting-history-${student.student_id}`);
+      requestManager.invalidatePattern(`fetch:ledger:`);
+      clearGlobalSchoolFeeCache();
+      clearGlobalQawmiFeeCache();
+
+      fetchStudentAccountingData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -645,9 +695,17 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <p className={`text-xs font-black ${isDark ? 'text-slate-200' : 'text-[#1E293B]'}`}>৳{entry.amount}</p>
-                          <span className="text-[9px] font-bold text-slate-400">
-                            {entry.transaction_date ? new Date(entry.transaction_date.includes('T') ? entry.transaction_date : entry.transaction_date + 'T00:00:00').toLocaleDateString('bn-BD') : ''}
-                          </span>
+                          <div className="flex items-center gap-2">
+                             <span className="text-[9px] font-bold text-slate-400">
+                               {entry.transaction_date ? new Date(entry.transaction_date.includes('T') ? entry.transaction_date : entry.transaction_date + 'T00:00:00').toLocaleDateString('bn-BD') : ''}
+                             </span>
+                             <button
+                               onClick={() => handleDeleteLedger(entry.id)}
+                               className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-slate-500 hover:text-red-400 hover:bg-red-400/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
+                             >
+                                <Trash2 size={12} />
+                             </button>
+                          </div>
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium leading-relaxed whitespace-pre-wrap">
                           {(entry.description || '').split(' || FEE_ID: ')[0].split(' | Month: ')[0].split(' | মাস: ')[0]}

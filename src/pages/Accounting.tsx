@@ -2,11 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, LedgerEntry, Language, UserRole, Class, Profile, AcademicYear } from 'types';
-import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2 } from 'lucide-react';
+import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2, Filter, ChevronDown, Check } from 'lucide-react';
 import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import { SchoolFeeEngine, clearGlobalSchoolFeeCache } from 'components/finance/SchoolFeeEngine';
 import { QawmiFeeEngine, clearGlobalQawmiFeeCache } from 'components/finance/QawmiFeeEngine';
 import StudentAccountingDetail from 'components/finance/StudentAccountingDetail';
+import { motion, AnimatePresence } from 'motion/react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { getTodayDateString } from '../utils/calendarUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
@@ -42,6 +43,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, ids: string[]}>({show: false, ids: []});
   const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>('student_history');
+  const [selectedHistoryClass, setSelectedHistoryClass] = useState<string>('all');
+  const [showClassFilterMenu, setShowClassFilterMenu] = useState(false);
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
   const isDark = madrasah?.theme === 'dark';
   const isOnline = useOfflineStatus();
@@ -96,6 +99,17 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     }
   };
 
+  const activeYearId = React.useMemo(() => {
+    if (!madrasah?.config_json) return null;
+    let config = madrasah.config_json as any;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const yearId = config?.active_academic_year_id;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(yearId) ? yearId : null;
+  }, [madrasah]);
+
   const fetchData = async (force = false) => {
     if (!madrasah?.id) return;
     
@@ -104,12 +118,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       try {
         if (!isOnline) {
           const cachedLedger = await CacheService.getCachedData('fees', madrasah.id);
-          setLedger(cachedLedger);
+          setLedger(cachedLedger || []);
           if (ledger.length === 0) setLoading(false);
           return;
         }
 
-        const activeYearId = madrasah.config_json?.active_academic_year_id;
         const cacheKey = `ledger:${madrasah.id}:${activeYearId || 'current'}`;
 
         const { data } = await requestManager.cachedFetch(
@@ -119,7 +132,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             if (activeYearId) {
               query = query.eq('academic_year_id', activeYearId);
             } else {
-              const yearStart = madrasah.config_json?.academic_year_start;
+              let config = madrasah.config_json as any;
+              if (typeof config === 'string') {
+                try { config = JSON.parse(config); } catch (e) { config = {}; }
+              }
+              const yearStart = config?.academic_year_start;
               if (yearStart) query = query.gte('transaction_date', yearStart);
             }
             return query.order('transaction_date', { ascending: false }).limit(2000);
@@ -448,26 +465,96 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 </div>
               </div>
               
-              {/* Primary Tabs */}
-              <div className="flex overflow-x-auto no-scrollbar pb-1 sm:pb-0 w-full sm:w-auto snap-x justify-start sm:justify-end">
-                <div className={`flex p-1 rounded-2xl border snap-start w-max ${isDark ? 'bg-slate-800 border-slate-700 shadow-inner' : 'bg-slate-100 border-slate-200/50 shadow-inner'}`}>
+              {/* Primary Tabs & Class Filter */}
+              <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+                <div className={`flex p-1 rounded-2xl border shrink-0 ${isDark ? 'bg-slate-800 border-slate-700 shadow-inner' : 'bg-slate-100 border-slate-200/50 shadow-inner'}`}>
                   <button 
                     onClick={() => setHistoryTab('student_history')}
-                    className={`px-5 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'student_history' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 sm:px-5 py-2 sm:py-1.5 rounded-xl text-[10px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'student_history' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     শিক্ষার্থী ইতিহাস
                   </button>
                   <button 
                     onClick={() => setHistoryTab('income_expense')}
-                    className={`px-5 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'income_expense' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`px-3 sm:px-5 py-2 sm:py-1.5 rounded-xl text-[10px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'income_expense' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     আয় ব্যয় ইতিহাস
                   </button>
                 </div>
+
+                {historyTab === 'student_history' && (
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setShowClassFilterMenu(!showClassFilterMenu)}
+                      className={`flex items-center gap-2 h-9 px-4 rounded-xl text-[10px] font-black tracking-wider transition-all border outline-none shadow-sm ${
+                        isDark 
+                          ? 'bg-slate-900/50 border-slate-700/50 text-slate-400 hover:text-slate-200' 
+                          : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      <Filter size={12} className={selectedHistoryClass !== 'all' ? 'text-blue-500' : ''} />
+                      <span className="truncate max-w-[80px] sm:max-w-[120px]">
+                        {selectedHistoryClass === 'all' ? 'সব ক্লাস' : classes.find(c => c.id === selectedHistoryClass)?.class_name}
+                      </span>
+                      <ChevronDown size={12} className={`transition-transform duration-300 ${showClassFilterMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {showClassFilterMenu && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-[60]" 
+                            onClick={() => setShowClassFilterMenu(false)}
+                          />
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className={`absolute right-0 top-full mt-2 w-48 sm:w-56 z-[70] rounded-2xl border shadow-2xl overflow-hidden ${
+                              isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-blue-900/10'
+                            }`}
+                          >
+                            <div className="p-1.5 max-h-64 overflow-y-auto no-scrollbar">
+                              <button
+                                onClick={() => { setSelectedHistoryClass('all'); setShowClassFilterMenu(false); }}
+                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all mb-1 ${
+                                  selectedHistoryClass === 'all' 
+                                    ? (isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600 font-black')
+                                    : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50')
+                                }`}
+                              >
+                                সব ক্লাস
+                                {selectedHistoryClass === 'all' && <Check size={12} />}
+                              </button>
+                              
+                              <div className={`h-px my-1 mx-2 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`} />
+                              
+                              {classes.map(cls => (
+                                <button
+                                  key={cls.id}
+                                  onClick={() => { setSelectedHistoryClass(cls.id); setShowClassFilterMenu(false); }}
+                                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${
+                                    selectedHistoryClass === cls.id 
+                                      ? (isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600 font-black')
+                                      : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50')
+                                  }`}
+                                >
+                                  {cls.class_name}
+                                  {selectedHistoryClass === cls.id && <Check size={12} />}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Sub Filters */}
+            {/* Sub Filters - Income/Expense Only */}
             {historyTab === 'income_expense' && (
               <div className="flex justify-start sm:justify-end pt-2 sm:border-t border-slate-200 dark:border-slate-800">
                 <div className={`flex p-1 rounded-2xl border w-full sm:w-auto overflow-x-auto no-scrollbar snap-x ${isDark ? 'bg-slate-800 border-slate-700 shadow-inner' : 'bg-slate-100 border-slate-200/50 shadow-inner'}`}>
@@ -500,7 +587,17 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {ledger.filter(e => {
                 const isStudent = e.category === 'Student Fee' || e.category?.includes('Fee') || e.category?.includes('ফি');
-                if (historyTab === 'student_history') return isStudent;
+                if (historyTab === 'student_history') {
+                   if (!isStudent) return false;
+                   if (selectedHistoryClass !== 'all') {
+                      const className = classes.find(c => c.id === selectedHistoryClass)?.class_name;
+                      if (className && !e.description?.includes(`${className} |`)) { 
+                        // Exact match for class name within the identifier section
+                        return false; 
+                      }
+                   }
+                   return true;
+                }
                 if (historyTab === 'income_expense') {
                    if (isStudent) return false;
                    if (ledgerFilter !== 'all' && e.type !== ledgerFilter) return false;

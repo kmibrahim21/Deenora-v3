@@ -58,6 +58,17 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   }, [institutionId]);
 
   // Paginated Fetching
+  const activeYearId = useMemo(() => {
+    if (!madrasah?.config_json) return null;
+    let config = madrasah.config_json as any;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const yearId = config?.active_academic_year_id;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(yearId) ? yearId : null;
+  }, [madrasah]);
+
   const fetchStudents = useCallback(async (reset = false) => {
     if (!institutionId) return;
     if (reset) { setLoading(true); setPage(0); } else { setLoadingMore(true); }
@@ -84,7 +95,6 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             .order('id', { ascending: true })
             .range(from, to);
 
-          const activeYearId = madrasah?.config_json?.active_academic_year_id;
           if (activeYearId) {
             query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
           }
@@ -136,7 +146,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [institutionId, selectedClass.id, page, searchQuery, madrasah?.config_json?.active_academic_year_id]);
+  }, [institutionId, selectedClass.id, page, searchQuery, activeYearId]);
 
   useEffect(() => {
     const timer = setTimeout(() => fetchStudents(true), 400);

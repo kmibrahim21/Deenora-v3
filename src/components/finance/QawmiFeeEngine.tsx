@@ -31,6 +31,17 @@ export const clearGlobalQawmiFeeCache = () => {
 
 export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey, triggerRefresh }) => {
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
+
+  const activeYearId = React.useMemo(() => {
+    if (!madrasah?.config_json) return null;
+    let config = madrasah.config_json as any;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const yearId = config?.active_academic_year_id;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(yearId) ? yearId : null;
+  }, [madrasah]);
   
   const selectedClassInitial = () => localStorage.getItem('qawmi_fee_selectedClass') || '';
   const selectedMonthInitial = () => localStorage.getItem('qawmi_fee_selectedMonth') || new Date().toISOString().slice(0, 7);
@@ -109,8 +120,6 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     }
     setFetchError(null);
     try {
-      const activeYearId = madrasah.config_json?.active_academic_year_id;
-      
       if (activeYearId) {
           const { data: yearData } = await requestManager.cachedFetch(
             'academic_years',
@@ -183,7 +192,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         
         if (error) throw error;
         
-        const data = studentsData.map((s: any) => ({
+        const data = (studentsData || []).map((s: any) => ({
           student_id: s.id,
           student_name: s.student_name,
           roll: s.roll,
