@@ -20,7 +20,7 @@ export const useAuth = () => {
     try {
       const { data: year } = await requestManager.cachedFetch(
         'academic_years',
-        (q) => q.select().eq('institution_id', institutionId).eq('status', 'active'),
+        (q) => q.select('id, year_name, start_date, end_date, status').eq('institution_id', institutionId).eq('status', 'active'),
         `active_year:${institutionId}`
       );
       
@@ -65,7 +65,7 @@ export const useAuth = () => {
       // 1. Get the profile (Cached with Revalidation)
       const { data: profileData, error: profileError } = await requestManager.cachedFetch(
         'profiles',
-        (q) => q.select().eq('id', userId),
+        (q) => q.select('id, institution_id, full_name, role, is_active, created_at, permissions').eq('id', userId),
         `profile:${userId}`
       );
       
@@ -86,7 +86,7 @@ export const useAuth = () => {
         if (isValidUUID(finalProfile.institution_id)) {
           const { data: institutionData, error: mError } = await requestManager.cachedFetch(
             'institutions',
-            (q) => q.select().eq('id', finalProfile.institution_id),
+            (q) => q.select('id, name, address, phone, logo_url, institution_type, config_json, theme, status, is_active, is_super_admin, created_at, email, balance, sms_balance, subscription_end, voice_sender_id, sms_rate, voice_rate').eq('id', finalProfile.institution_id),
             `institution:${finalProfile.institution_id}`
           );
 
@@ -453,8 +453,11 @@ export const useAuth = () => {
         console.warn("Could not start realtime subscription:", e);
       }
 
-      // Fallback Polling (Every 15 Seconds) for Balance Updates
+      // Fallback Polling (Every 6 Seconds) for Balance Updates
+      // background-aware: only poll if tab is visible
       pollInterval = setInterval(async () => {
+         if (document.visibilityState !== 'visible') return;
+         
          try {
            const { data } = await supabase.from('institutions').select('balance, sms_balance').eq('id', profile.institution_id!).single();
            if (data) {
@@ -472,7 +475,7 @@ export const useAuth = () => {
              });
            }
          } catch (e) {}
-      }, 15000);
+      }, 6000);
     }
 
     return () => {

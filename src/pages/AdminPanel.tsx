@@ -230,7 +230,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     try {
       const { data, error } = await supabase
         .from('subscription_packages')
-        .select('*')
+        .select('name, rate, sort_order')
         .order('sort_order', { ascending: true });
       
       if (error) throw error;

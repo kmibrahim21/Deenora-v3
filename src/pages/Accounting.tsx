@@ -81,7 +81,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     try {
       const { data } = await requestManager.cachedFetch(
         'classes',
-        (q) => q.select().eq('institution_id', madrasah.id),
+        (q) => q.select('id, class_name, sort_order').eq('institution_id', madrasah.id),
         `classes:${madrasah.id}`,
         CACHE_TTLS.LONG
       );
@@ -128,7 +128,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         const { data } = await requestManager.cachedFetch(
           'ledger',
           (q) => {
-            let query = q.select('*').eq('institution_id', madrasah.id);
+            let query = q.select('id, institution_id, academic_year_id, type, amount, category, description, transaction_date, created_at').eq('institution_id', madrasah.id);
             if (activeYearId) {
               query = query.eq('academic_year_id', activeYearId);
             } else {
@@ -292,7 +292,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         category: category.trim(),
         description: desc.trim(),
         transaction_date: transactionDate || new Date().toISOString().split('T')[0]
-      }).select().single();
+      }).select('id, institution_id, academic_year_id, type, amount, category, description, transaction_date, created_at').single();
 
       if (error) throw error;
       if (data) {

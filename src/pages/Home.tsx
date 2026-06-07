@@ -131,7 +131,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const stdProm = requestManager.cachedFetch(
         'students',
         (q) => {
-          let query = q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
+          let query = q.select('id', { count: 'exact', head: true }).eq('institution_id', institutionId);
           if (activeYearId) {
             query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
           }
@@ -146,7 +146,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const clsProm = requestManager.cachedFetch(
         'classes',
         (q) => {
-          let query = q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId);
+          let query = q.select('id', { count: 'exact', head: true }).eq('institution_id', institutionId);
           if (isTeacher && allowedClasses?.length) query = query.in('id', allowedClasses);
           return query;
         },
@@ -157,7 +157,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       // 3. Teachers Count (Cached)
       const teacherProm = requestManager.cachedFetch(
         'teachers',
-        (q) => q.select('*', { count: 'exact', head: true }).eq('institution_id', institutionId),
+        (q) => q.select('id', { count: 'exact', head: true }).eq('institution_id', institutionId),
         `dashboard_teachers:${institutionId}`,
         CACHE_TTLS.LONG
       );
@@ -170,7 +170,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         0
       );
 
-      // 5. Ledger (Current Month)
+      // 5. Ledger (Current Month) - Optimized to only fetch required columns
       const ledgerProm = requestManager.cachedFetch(
         'ledger',
         (q) => {
@@ -240,6 +240,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       const THROTTLE = 30000;
 
       const throttledRefresh = () => {
+        if (document.visibilityState !== 'visible') return;
         const now = Date.now();
         if (now - lastRevalidate > THROTTLE) {
           lastRevalidate = now;

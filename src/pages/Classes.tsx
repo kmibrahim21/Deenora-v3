@@ -178,7 +178,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
             class_name: payload.class_name,
             institution_id: payload.institution_id,
             sort_order: payload.sort_order
-          }).select().single();
+          }).select('id, class_name, institution_id, sort_order, created_at').single();
           if (error) throw error;
           
           if (data) {

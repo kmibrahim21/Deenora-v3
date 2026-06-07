@@ -33,6 +33,9 @@ export class SyncEngine {
     if (this.syncInterval) clearInterval(this.syncInterval);
     
     this.syncInterval = setInterval(async () => {
+      // background-aware: only sync periodically if tab is visible
+      if (document.visibilityState !== 'visible') return;
+
       if (navigator.onLine && this.failureCount < this.CIRCUIT_BREAKER_THRESHOLD) {
         await this.sync();
       }

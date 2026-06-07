@@ -230,7 +230,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     try {
       const { data: customEvents } = await supabase
         .from('calendar_events')
-        .select('*')
+        .select('id, institution_id, event_date, title, type')
         .eq('institution_id', madrasah.id)
         .eq('event_date', attendanceDate);
       
