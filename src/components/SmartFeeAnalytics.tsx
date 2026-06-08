@@ -104,8 +104,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [voiceRate, setVoiceRate] = useState(0.85);
 
+  const passedClassesLength = classes?.length;
+  const allowedClassesJson = JSON.stringify(profile?.permissions?.allowed_classes || []);
+
   useEffect(() => {
-    if (classes.length > 0) {
+    if (classes && classes.length > 0) {
       setLocalClasses(classes);
     } else if (isValidUUID(institutionId)) {
       requestManager.cachedFetch(
@@ -122,7 +125,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         }
       });
     }
-  }, [institutionId, classes, role, profile]);
+  }, [institutionId, passedClassesLength, role, allowedClassesJson]);
 
   const [isRevalidating, setIsRevalidating] = useState(false);
 
