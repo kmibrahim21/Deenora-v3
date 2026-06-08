@@ -582,6 +582,20 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       if (isOnline) {
         try {
           await SyncEngine.sync();
+          
+          // Manually update existing state to prevent race condition if fetch is slightly fast
+          const newAttArray = Array.from(Object.entries(attendance)).map(([sid, status]) => ({
+            student_id: sid,
+            status,
+            date,
+            session: selectedSession,
+            arrival_time: status === 'late' ? arrivalTime[sid] : null,
+            late_minutes: status === 'late' ? computeLateMins(arrivalTime[sid]) : null
+          }));
+          setExistingAttRecords(newAttArray as any);
+
+          // Add a small delay to ensure DB consistency / propagation before re-fetching
+          await new Promise(resolve => setTimeout(resolve, 800));
           await fetchStudents(selectedClass.id);
         } catch (syncErr) {
           console.error("Immediate sync error:", syncErr);

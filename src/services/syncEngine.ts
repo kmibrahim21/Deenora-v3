@@ -4,6 +4,7 @@ import { requestManager } from './RequestManager';
 
 export class SyncEngine {
   private static isSyncing = false;
+  private static currentSyncPromise: Promise<void> | null = null;
   private static syncInterval: NodeJS.Timeout | null = null;
   private static lastCleanup = 0;
   private static failureCount = 0;
@@ -42,78 +43,89 @@ export class SyncEngine {
     }, interval);
   }
 
-  static async sync() {
-    if (this.isSyncing || !navigator.onLine) return;
-    this.isSyncing = true;
-
-    try {
-      const allPending = await OfflineQueue.getPendingActions();
-      
-      // Filter by backoff
-      const now = Date.now();
-      const pending = allPending.filter(action => {
-        if (!action.last_attempt) return true;
-        const delay = Math.min(3600000, 5000 * Math.pow(2, action.retry_count));
-        return now - action.last_attempt > delay;
-      });
-
-      if (pending.length === 0) {
-        this.isSyncing = false;
-        return;
-      }
-
-      console.log(`[SyncEngine] Processing ${pending.length} of ${allPending.length} pending actions`);
-
-      // 1. Group actions by table and type for batching
-      const groups: Record<string, { inserts: any[], updates: any[], deletes: any[] }> = {};
-      
-      pending.forEach(action => {
-        if (!groups[action.table]) {
-          groups[action.table] = { inserts: [], updates: [], deletes: [] };
-        }
-        if (action.action === 'INSERT' || action.action === 'UPSERT') {
-          groups[action.table].inserts.push(action);
-        } else if (action.action === 'UPDATE') {
-          groups[action.table].updates.push(action);
-        } else if (action.action === 'DELETE') {
-          groups[action.table].deletes.push(action);
-        }
-      });
-
-      // 2. Process groups
-      for (const table in groups) {
-        const { inserts, updates, deletes } = groups[table];
-
-        // Batch Inserts (Most effective IO reduction)
-        if (inserts.length > 0) {
-          await this.processBatch(table, 'UPSERT', inserts);
-        }
-
-        // Updates (Harder to batch in one call unless using upsert with IDs)
-        for (const action of updates) {
-          await this.processSingleAction(action);
-        }
-
-        // Deletes
-        for (const action of deletes) {
-          await this.processSingleAction(action);
-        }
-      }
-
-      // Cleanup
-      if (now - this.lastCleanup > 600000) {
-        await OfflineQueue.cleanupSynced();
-        this.lastCleanup = now;
-      }
-      
-      this.failureCount = 0; // Reset on successful pass
-    } catch (err) {
-      console.error('[SyncEngine] Sync cycle error', err);
-      this.failureCount++;
-      this.setupAdaptiveSync();
-    } finally {
-      this.isSyncing = false;
+  static async sync(): Promise<void> {
+    if (!navigator.onLine) return;
+    
+    // If already syncing, wait for that sync to finish and then trigger another one 
+    // to ensure any actions added while we were waiting are also processed
+    if (this.isSyncing && this.currentSyncPromise) {
+      await this.currentSyncPromise;
+      return this.sync(); 
     }
+
+    this.isSyncing = true;
+    this.currentSyncPromise = (async () => {
+      try {
+        const allPending = await OfflineQueue.getPendingActions();
+        
+        // Filter by backoff
+        const now = Date.now();
+        const pending = allPending.filter(action => {
+          if (!action.last_attempt) return true;
+          const delay = Math.min(3600000, 5000 * Math.pow(2, action.retry_count));
+          return now - action.last_attempt > delay;
+        });
+
+        if (pending.length === 0) {
+          return;
+        }
+
+        console.log(`[SyncEngine] Processing ${pending.length} of ${allPending.length} pending actions`);
+
+        // 1. Group actions by table and type for batching
+        const groups: Record<string, { inserts: any[], updates: any[], deletes: any[] }> = {};
+        
+        pending.forEach(action => {
+          if (!groups[action.table]) {
+            groups[action.table] = { inserts: [], updates: [], deletes: [] };
+          }
+          if (action.action === 'INSERT' || action.action === 'UPSERT') {
+            groups[action.table].inserts.push(action);
+          } else if (action.action === 'UPDATE') {
+            groups[action.table].updates.push(action);
+          } else if (action.action === 'DELETE') {
+            groups[action.table].deletes.push(action);
+          }
+        });
+
+        // 2. Process groups
+        for (const table in groups) {
+          const { inserts, updates, deletes } = groups[table];
+
+          // Batch Inserts (Most effective IO reduction)
+          if (inserts.length > 0) {
+            await this.processBatch(table, 'UPSERT', inserts);
+          }
+
+          // Updates (Harder to batch in one call unless using upsert with IDs)
+          for (const action of updates) {
+            await this.processSingleAction(action);
+          }
+
+          // Deletes
+          for (const action of deletes) {
+            await this.processSingleAction(action);
+          }
+        }
+
+        // Cleanup
+        if (now - this.lastCleanup > 600000) {
+          await OfflineQueue.cleanupSynced();
+          this.lastCleanup = now;
+        }
+        
+        this.failureCount = 0; // Reset on successful pass
+      } catch (err) {
+        console.error('[SyncEngine] Sync cycle error', err);
+        this.failureCount++;
+        this.setupAdaptiveSync();
+      } finally {
+        this.isSyncing = false;
+        this.currentSyncPromise = null;
+      }
+    })();
+
+    return this.currentSyncPromise;
   }
 
   private static async processBatch(table: string, type: 'UPSERT', actions: any[]) {
