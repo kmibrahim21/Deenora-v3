@@ -339,7 +339,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   };
 
-  const handleDeleteHistory = async (transaction: any) => {
+  const handleDeleteHistory = async (transaction: any, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setShowConfirm({
       show: true,
       title: 'ইতিহাস মুছে ফেলুন',
@@ -365,14 +369,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     });
   };
 
-  const handleDownloadReceipt = async (transaction: any) => {
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    
-    const ReceiptComponent = () => {
+  const handleDownloadReceipt = async (transaction: any, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      document.body.appendChild(container);
+      const root = createRoot(container);
+      
+      const ReceiptComponent = () => {
       const metadata = transaction.metadata || {};
       const months = metadata.months || [];
       const isCustomPayment = !metadata.package_name && !transaction.description?.includes('Package');
@@ -502,18 +511,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       height: 1123,
     });
 
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-    
-    root.unmount();
-    document.body.removeChild(container);
-    
-    const pdfBlob = doc.output('blob');
-    const blobUrl = URL.createObjectURL(pdfBlob);
-    window.open(blobUrl, '_blank');
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+      
+      root.unmount();
+      document.body.removeChild(container);
+      
+      const pdfBlob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      window.open(blobUrl, '_blank');
+    } catch(err: any) {
+      console.error(err);
+      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message || 'Failed to download receipt' });
+    }
   };
 
   const [editPassword, setEditPassword] = useState('');
@@ -3268,13 +3281,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                               </p>
                                               <div className="flex items-center gap-2">
                                                 <button 
-                                                  onClick={() => handleDownloadReceipt(tr)}
+                                                  onClick={(e) => handleDownloadReceipt(tr, e)}
                                                   className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
                                                 >
                                                   <Download size={14} /> Receipt
                                                 </button>
                                                 <button 
-                                                  onClick={() => handleDeleteHistory(tr)}
+                                                  onClick={(e) => handleDeleteHistory(tr, e)}
                                                   className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
                                                   title="Delete history"
                                                 >
@@ -3407,10 +3420,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       )}
 
 
-      <AnimatePresence>
-        {showConfirm.show && createPortal(
-          <div key="confirm-modal" className="fixed inset-0 z-[6000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-300">
-             <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl text-center animate-in zoom-in-95 duration-500 border border-amber-50 relative z-[6010]">
+      {showConfirm.show && (
+          <div key="confirm-modal" className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-300">
+             <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl text-center animate-in zoom-in-95 duration-500 border border-amber-50 relative z-[10000]">
                 <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner border border-amber-100">
                    <AlertCircle size={32} />
                 </div>
@@ -3431,10 +3443,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                    </button>
                 </div>
              </div>
-          </div>,
-          document.body
-        )}
-      </AnimatePresence>
+          </div>
+      )}
 
       <AnimatePresence>
         {commsModal.show && createPortal(
