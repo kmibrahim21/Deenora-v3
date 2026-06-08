@@ -331,7 +331,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       // Also fetch attendance with institution_id and session
       const { data: attData, error: attError } = await requestManager.cachedFetch(
         'attendance',
-        (q) => q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).eq('date', date).eq('session', selectedSession),
+        (q) => {
+          let query = q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).eq('date', date);
+          // We fetch all records for the date to avoid duplicate key issues on INSERT
+          // because a student might have a record in a different session
+          return query.order('created_at', { ascending: false });
+        },
         `attendance:${madrasah.id}:${cid}:${date}:${selectedSession}`,
         CACHE_TTLS.SHORT
       );
@@ -524,7 +529,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const updates = [];
       const payload: any[] = [];
       
-      const existingMap = new Map(existingAttRecords.map(r => [r.student_id, r]));
+      const existingMap = new Map();
+      // process backwards so the first element (latest via created_at desc) overwrites any older duplicates
+      [...existingAttRecords].reverse().forEach(r => existingMap.set(r.student_id, r));
 
       for (const [sid, status] of Object.entries(attendance)) {
         const arrTime = status === 'late' ? arrivalTime[sid] : null;
@@ -582,20 +589,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       if (isOnline) {
         try {
           await SyncEngine.sync();
-          
-          // Manually update existing state to prevent race condition if fetch is slightly fast
-          const newAttArray = Array.from(Object.entries(attendance)).map(([sid, status]) => ({
-            student_id: sid,
-            status,
-            date,
-            session: selectedSession,
-            arrival_time: status === 'late' ? arrivalTime[sid] : null,
-            late_minutes: status === 'late' ? computeLateMins(arrivalTime[sid]) : null
-          }));
-          setExistingAttRecords(newAttArray as any);
-
-          // Add a small delay to ensure DB consistency / propagation before re-fetching
-          await new Promise(resolve => setTimeout(resolve, 800));
           await fetchStudents(selectedClass.id);
         } catch (syncErr) {
           console.error("Immediate sync error:", syncErr);

@@ -2,8 +2,6 @@ import { supabase } from 'lib/supabase';
 import { OfflineQueue } from './offlineQueue';
 
 const HIGH_PRESSURE_TABLES = [
-  'attendance',
-  'student_attendance',
   'fees',
   'ledger',
   'transactions',
