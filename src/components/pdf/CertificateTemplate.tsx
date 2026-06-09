@@ -107,15 +107,19 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
         <div className="absolute top-[50px] left-[65px] z-30">
           <div className="text-slate-600 font-semibold text-[13px] tracking-wider uppercase flex items-end">
              <span className="w-20">{isBn ? 'রেজি: নং :' : 'Reg. No:'}</span>
-             <span className="text-[#a41717] font-bold border-b border-dotted border-slate-300 w-28 text-center pb-[2px]">{student.registration_number || student.admission_number || ''}</span>
+             <span className="text-[#a41717] font-bold border-b border-dotted border-slate-300 w-28 text-center pb-[2px]">
+               {isBn ? enToBnNumber(student.registration_number || student.admission_number || '') : (student.registration_number || student.admission_number || '')}
+             </span>
           </div>
         </div>
 
         {/* Absolute Header Layer: Date */}
         <div className="absolute top-[50px] right-[65px] z-30">
           <div className="text-slate-600 font-semibold text-[13px] tracking-wider uppercase flex items-end">
-             <span className="w-16">{isBn ? 'তারিখ :' : 'Date:'}</span>
-             <span className="text-[#a41717] font-bold border-b border-dotted border-slate-300 w-28 text-center pb-[2px]">{dateStr}</span>
+              <span className="w-16">{isBn ? 'তারিখ :' : 'Date:'}</span>
+              <span className="text-[#a41717] font-bold border-b border-dotted border-slate-300 w-28 text-center pb-[2px]">
+                {isBn ? enToBnNumber(dateStr) : dateStr}
+              </span>
           </div>
         </div>
 
@@ -174,17 +178,17 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <span>, জেলা:</span>
                    <Field value={district} minWidth="160px" />
                    <span>। রোল নং:</span>
-                   <Field value={String(student.roll || '')} minWidth="90px" />
+                   <Field value={isBn ? enToBnNumber(String(student.roll || '')) : String(student.roll || '')} minWidth="90px" />
                    <span>। সে অত্র প্রতিষ্ঠান হতে ২০</span>
                    <Field value={bnYearSuffix} minWidth="60px" />
                    <span>সালের শিক্ষাবর্ষে</span>
                    <Field value={student.className || ''} minWidth="180px" />
                    <span>শ্রেণির চূড়ান্ত পরীক্ষায় অংশগ্রহণ করে জি.পি.এ ৫.০০ এর মধ্যে</span>
-                   <Field value={student.gpa || ''} minWidth="90px" />
+                   <Field value={student.gpa ? enToBnNumber(student.gpa) : ''} minWidth="90px" />
                    <span>অর্জন করে কৃতিত্বের সাথে উত্তীর্ণ হয়েছে।</span><br/>
 
                    <span className="mr-2 mt-4 inline-block">তার শিখন মূল্যায়ন ও মেধা অত্যন্ত প্রশংসনীয়। তাহার জন্ম তারিখ:</span>
-                   <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="160px" />
+                   <Field value={student.date_of_birth ? (isBn ? enToBnNumber(new Date(student.date_of_birth).toLocaleDateString('en-GB')) : new Date(student.date_of_birth).toLocaleDateString('en-GB')) : ''} minWidth="160px" />
                    <span>। অত্র প্রতিষ্ঠানে অধ্যয়নকালে সে কোনো রাষ্ট্র বা শৃঙ্খলা বিরোধী কাজে অংশগ্রহণ করেনি। আমি তার সর্বাঙ্গীন উন্নতি ও উজ্জ্বল ভবিষ্যৎ কামনা করি।</span>
                  </p>
                  </div>
@@ -245,7 +249,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <span>, জেলা:</span>
                    <Field value={district} minWidth="160px" />
                    <span>। রোল নং:</span>
-                   <Field value={String(student.roll || '')} minWidth="90px" />
+                   <Field value={isBn ? enToBnNumber(String(student.roll || '')) : String(student.roll || '')} minWidth="90px" />
                    <span>। সে অত্র প্রতিষ্ঠানে ২০</span>
                    <Field value={bnYearSuffix} minWidth="60px" />
                    <span>সালের শিক্ষাবর্ষে</span>
@@ -253,7 +257,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <span>শ্রেণির একজন নিয়মিত শিক্ষার্থী।</span><br/>
 
                    <span className="mr-2 mt-4 inline-block">সে অত্যন্ত নম্র, ভদ্র ও মেধাবী শিক্ষার্থী। প্রাতিষ্ঠানিক ও সহশিক্ষা কার্যক্রমে তার অংশগ্রহণ অত্যন্ত সন্তোষজনক। তাহার জন্ম তারিখ:</span>
-                   <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="160px" />
+                   <Field value={student.date_of_birth ? (isBn ? enToBnNumber(new Date(student.date_of_birth).toLocaleDateString('en-GB')) : new Date(student.date_of_birth).toLocaleDateString('en-GB')) : ''} minWidth="160px" />
                    <span>। আমি তার সুন্দর, সমৃদ্ধ ও আলোকিত জীবনের সার্বিক সাফল্য কামনা করি।</span>
                  </p>
                  </div>
@@ -314,13 +318,13 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <span>, জেলা:</span>
                    <Field value={district} minWidth="160px" />
                    <span>। রোল নং:</span>
-                   <Field value={String(student.roll || '')} minWidth="90px" />
+                   <Field value={isBn ? enToBnNumber(String(student.roll || '')) : String(student.roll || '')} minWidth="90px" />
                    <span>। সে অত্র প্রতিষ্ঠানের</span>
                    <Field value={student.className || ''} minWidth="180px" />
                    <span>শ্রেণির একজন নিয়মিত শিক্ষার্থী। </span><br/>
 
                    <span className="mr-2 mt-4 inline-block">আমার জানা মতে, তার স্বভাব-চরিত্র, আচার-আচরণ ও নৈতিকতা চমৎকার এবং সে একজন সৎ শিক্ষার্থী। তাহার জন্ম তারিখ:</span>
-                   <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="160px" />
+                   <Field value={student.date_of_birth ? (isBn ? enToBnNumber(new Date(student.date_of_birth).toLocaleDateString('en-GB')) : new Date(student.date_of_birth).toLocaleDateString('en-GB')) : ''} minWidth="160px" />
                    <span>। অত্র প্রতিষ্ঠানে অধ্যয়নকালে সে কোনো রাষ্ট্র, সমাজ বা শৃঙ্খলা বিরোধী কার্যকলাপে জড়িত ছিল না। আমি তার ভবিষ্যৎ জীবনের উন্নতি ও মঙ্গল কামনা করি।</span>
                  </p>
                  </div>
@@ -381,13 +385,13 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <span>। অত্র প্রতিষ্ঠানের</span>
                    <Field value={student.className || ''} minWidth="180px" />
                    <span>শ্রেণির একজন নিয়মিত শিক্ষার্থী ছিল। তার রোল নং:</span>
-                   <Field value={String(student.roll || '')} minWidth="120px" />
+                   <Field value={isBn ? enToBnNumber(String(student.roll || '')) : String(student.roll || '')} minWidth="120px" />
                    <span>।</span><br/>
 
                    <span className="mr-2 mt-4 inline-block">সে অদ্য</span>
-                   <Field value={dateStr} minWidth="160px" />
+                   <Field value={isBn ? enToBnNumber(dateStr) : dateStr} minWidth="160px" />
                    <span>তারিখ পর্যন্ত প্রতিষ্ঠানের যাবতীয় পাওনা পরিশোধ করেছে। ভর্তির রেজিষ্টার অনুযায়ী তাঁর জন্ম তারিখ</span>
-                   <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="160px" />
+                   <Field value={student.date_of_birth ? (isBn ? enToBnNumber(new Date(student.date_of_birth).toLocaleDateString('en-GB')) : new Date(student.date_of_birth).toLocaleDateString('en-GB')) : ''} minWidth="160px" />
                    <span>। </span>
                    <span>তার চরিত্র ও আচরণ ভালো। আমরা তার ভবিষ্যৎ জীবনের সাফল্য কামনা করি।</span>
                  </p>
