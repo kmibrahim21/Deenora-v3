@@ -30,6 +30,52 @@ const DEFAULT_DAYS = [
   { id: 'Thursday', bn: 'বৃহস্পতিবার', en: 'Thursday' },
 ];
 
+const RoutineCell = ({ value, onChange, theme, placeholder = '-' }: { value: string, onChange: (val: string) => void, theme: any, placeholder?: string }) => {
+  const [editing, setEditing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        className="w-full h-full min-h-[50px] bg-white text-center text-[10px] font-black font-noto resize-none border-none outline-none focus:ring-1 focus:ring-blue-400 rounded p-1 leading-normal absolute inset-0 z-50 shadow-lg"
+        style={{ color: theme.primary }}
+      />
+    );
+  }
+
+  const lines = (value || '').split('\n').filter(l => l.trim().length > 0);
+  
+  return (
+    <div 
+      onClick={() => setEditing(true)}
+      className="w-full min-h-[50px] flex flex-col justify-center items-center cursor-pointer p-1 hover:bg-black/5 transition-colors rounded-sm"
+    >
+      {lines.length > 0 ? (
+        <>
+          <span className="text-[12px] font-black leading-tight" style={{ color: theme.primary }}>{lines[0]}</span>
+          {lines.length > 1 && (
+            <span className="text-[8.5px] font-bold opacity-80 leading-tight mt-0.5 italic" style={{ color: theme.primary }}>
+              {lines.slice(1).join(' / ')}
+            </span>
+          )}
+        </>
+      ) : (
+        <span className="text-slate-300">{placeholder}</span>
+      )}
+    </div>
+  );
+};
+
 const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, profile }) => {
 
   const [activeTab, setActiveTab] = useState<'general' | 'classwise' | 'saved'>('general');
@@ -57,6 +103,9 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
   ]);
   const [routinePrincipalName, setRoutinePrincipalName] = useState('');
   const [routinePrincipalMobile, setRoutinePrincipalMobile] = useState('');
+  
+  const [layoutType, setLayoutType] = useState<'day_left' | 'period_left' | 'class_left'>('day_left');
+  const [selectedDay, setSelectedDay] = useState(DEFAULT_DAYS[0].id);
   
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{show: boolean, msg: string, type: 'success' | 'error' | 'info'}>({show: false, msg: '', type: 'info'});
@@ -136,6 +185,8 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         id: Date.now().toString(),
         title: routineTitle,
         classId: selectedClassId,
+        layoutType,
+        selectedDay,
         themeColor: routineThemeColor,
         periods: periods,
         matrix: routineMatrix,
@@ -196,12 +247,10 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
     setEditingRoutineId(routine.id);
     setRoutineTitle(routine.title);
     setSelectedClassId(routine.classId || 'all');
-    if (routine.classId && routine.classId !== 'all') {
-      setActiveTab('classwise');
-    } else {
-      setActiveTab('general');
-    }
+    setActiveTab('general');
     setRoutineThemeColor(routine.themeColor);
+    setLayoutType(routine.layoutType || 'day_left');
+    setSelectedDay(routine.selectedDay || DEFAULT_DAYS[0].id);
     setPeriods(routine.periods);
     setRoutineMatrix(routine.matrix);
     setRoutineInstructions(routine.instructions || []);
@@ -219,18 +268,29 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
 
     try {
       const element = targetRef.current;
-      
+      const rect = element.getBoundingClientRect();
+      // Calculate the actual height at 1:1 scale
+      // rect.height is seasonally affected by previewScale and userZoom
+      const actualHeight = rect.height / (previewScale * userZoom);
+      const actualWidth = 1123; // Fixed width
+
       // Import html-to-image dynamically to ensure it's available
       const { toJpeg } = await import('html-to-image');
       
-      // We need to capture the PDF content at its original size 1123x794
-      // html-to-image is generally more robust for this
+      // We need to capture the PDF content
       const dataUrl = await toJpeg(element, {
         quality: 1,
         pixelRatio: 2,
         backgroundColor: '#ffffff',
+        width: actualWidth,
+        height: actualHeight,
         filter: (node: any) => {
-          if (node.getAttribute && node.getAttribute('data-html2canvas-ignore') === 'true') return false;
+          // Hide elements with specific attributes or classes
+          if (node.getAttribute) {
+            const ignore = node.getAttribute('data-html2canvas-ignore');
+            if (ignore === 'true' || ignore === true) return false;
+          }
+          if (node.classList && node.classList.contains('download-hide')) return false;
           return true;
         },
         style: {
@@ -240,14 +300,48 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         }
       });
       
-      const pdf = new jsPDF({ 
-        orientation: 'landscape', 
-        unit: 'px', 
-        format: [1123, 794] 
-      });
+      if (layoutType === 'day_left') {
+        const pdf = new jsPDF({ 
+          orientation: 'portrait', 
+          unit: 'px', 
+          format: 'a4' 
+        });
+        
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        
+        // Scale to fit half page
+        const maxWidth = pageWidth - 60;
+        const maxHeight = (pageHeight / 2) - 40;
+        const scale = Math.min(maxWidth / actualWidth, maxHeight / actualHeight);
+        
+        const drawWidth = actualWidth * scale;
+        const drawHeight = actualHeight * scale;
+        const xOffset = (pageWidth - drawWidth) / 2;
+
+        // Top copy
+        pdf.addImage(dataUrl, 'JPEG', xOffset, 20, drawWidth, drawHeight);
+        
+        // Dashed divider
+        (pdf as any).setLineDash([10, 10], 0);
+        pdf.setDrawColor(200, 200, 200);
+        pdf.line(20, pageHeight / 2, pageWidth - 20, pageHeight / 2);
+        
+        // Bottom copy
+        pdf.addImage(dataUrl, 'JPEG', xOffset, (pageHeight / 2) + 20, drawWidth, drawHeight);
+        
+        pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+      } else {
+        const pdf = new jsPDF({ 
+          orientation: 'landscape', 
+          unit: 'px', 
+          format: [actualWidth, Math.max(794, actualHeight)] 
+        });
+        
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, actualWidth, actualHeight);
+        pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+      }
       
-      pdf.addImage(dataUrl, 'JPEG', 0, 0, 1123, 794);
-      pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
       showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড হয়েছে!' : 'PDF downloaded!', 'success');
     } catch (error) {
       console.error('PDF Generation Error:', error);
@@ -323,28 +417,24 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
       </div>
 
       {/* Navigation Tabs - Compact & Non-scrolling */}
-      <div className="flex justify-center mb-4 print:hidden animate-in fade-in slide-in-from-top-1 duration-500">
-         <div className={`p-1 rounded-2xl border shadow-sm flex flex-wrap items-center justify-center gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'}`}>
-            <button onClick={() => setActiveTab('general')} className={`px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 ${activeTab === 'general' ? 'bg-[#2563EB] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
-              <LayoutGrid size={12} />
-              <span>{lang === 'bn' ? 'সাধারণ' : 'General'}</span>
+      <div className="flex justify-center mb-6 print:hidden animate-in fade-in slide-in-from-top-1 duration-500 overflow-x-auto pb-2 scrollbar-hide">
+         <div className={`p-1.25 rounded-[1.1rem] border shadow-sm flex flex-nowrap items-center justify-center gap-1.5 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <button onClick={() => setActiveTab('general')} className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'general' ? 'bg-[#2563EB] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
+              <LayoutGrid size={14} />
+              <span>{lang === 'bn' ? 'রুটিন এডিটর' : 'Routine Editor'}</span>
             </button>
-            <button onClick={() => setActiveTab('classwise')} className={`px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 ${activeTab === 'classwise' ? 'bg-[#2563EB] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
-              <Users size={12} />
-              <span>{lang === 'bn' ? 'শ্রেনী ভিত্তিক' : 'Class-wise'}</span>
-            </button>
-            <button onClick={() => setActiveTab('saved')} className={`px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 ${activeTab === 'saved' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
-              <Save size={12} />
+            <button onClick={() => setActiveTab('saved')} className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'saved' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
+              <Save size={14} />
               <span>{lang === 'bn' ? 'সেভ করা' : 'Saved'}</span>
             </button>
-            <div className="w-px h-4 bg-slate-300 mx-0.5"></div>
+            <div className="w-px h-5 bg-slate-300 mx-0.5"></div>
             <button onClick={() => {
                setEditingRoutineId(null);
-               setRoutineTitle(activeTab === 'general' ? (lang === 'bn' ? 'সাধারণ ক্লাস রুটিন' : 'General Class Routine') : (lang === 'bn' ? 'শ্রেনী ভিত্তিক রুটিন' : 'Class Routine'));
+               setRoutineTitle(lang === 'bn' ? 'সাধারণ ক্লাস রুটিন' : 'General Class Routine');
                setRoutineMatrix({});
-               if (activeTab === 'saved') setActiveTab('general');
-            }} className="px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center gap-1.5">
-              <Plus size={14} /> <span>{lang === 'bn' ? 'নতুন' : 'New'}</span>
+               setActiveTab('general');
+            }} className="px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all whitespace-nowrap text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center gap-1.5">
+              <Plus size={16} /> <span>{lang === 'bn' ? 'নতুন' : 'New'}</span>
             </button>
          </div>
       </div>
@@ -379,8 +469,8 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
            {/* Editor Tools */}
            <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                 {/* Class Selector - only if Class-wise tab */}
-                 {activeTab === 'classwise' && (
+                 {/* Class Selector - only if not class_left layout */}
+                 {layoutType !== 'class_left' && (
                    <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'শ্রেনী নির্বাচন' : 'Select Class'}</label>
                       <select 
@@ -388,6 +478,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                          onChange={e => setSelectedClassId(e.target.value)}
                          className={`w-full h-12 rounded-xl px-4 font-bold outline-none border focus:ring-2 appearance-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800 focus:ring-blue-500'}`}
                       >
+                         <option value="all">{lang === 'bn' ? 'সকল শ্রেণী' : 'All Classes'}</option>
                          {classes.map(c => (
                            <option key={c.id} value={c.id}>{c.class_name}</option>
                          ))}
@@ -396,7 +487,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                  )}
                  
                  {/* Title */}
-                 <div className={`space-y-2 ${activeTab === 'classwise' ? 'lg:col-span-1' : 'md:col-span-2'}`}>
+                 <div className={`space-y-2 ${layoutType !== 'class_left' ? 'lg:col-span-1' : 'md:col-span-2'}`}>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'রুটিনের শিরোনাম' : 'Routine Title'}</label>
                     <input 
                        type="text" 
@@ -426,6 +517,41 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                       ))}
                     </div>
                  </div>
+
+                 {/* Layout Type Selection */}
+                 <div className="space-y-2 md:col-span-2 lg:col-span-1">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><LayoutGrid size={14}/> {lang === 'bn' ? 'রুটিন লেআউট' : 'Routine Layout'}</label>
+                   <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl">
+                     <button 
+                       onClick={() => setLayoutType('day_left')}
+                       className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center gap-1 ${layoutType === 'day_left' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                     >
+                       <Calendar size={12} /> {lang === 'bn' ? 'দিন বামে' : 'Day-wise'}
+                     </button>
+                     <button 
+                       onClick={() => setLayoutType('class_left')}
+                       className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center gap-1 ${layoutType === 'class_left' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                     >
+                       <Users size={12} /> {lang === 'bn' ? 'শ্রেণী বামে' : 'Class-wise'}
+                     </button>
+                   </div>
+                 </div>
+
+                 {/* Day Selection (Hiding as requested) */}
+                 {layoutType === 'period_left' && (
+                   <div className="space-y-2">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'বারের তালিকা' : 'Select Day'}</label>
+                     <select 
+                       value={selectedDay} 
+                       onChange={e => setSelectedDay(e.target.value)}
+                       className={`w-full h-11 rounded-xl px-4 font-bold outline-none border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800 focus:ring-blue-500'}`}
+                     >
+                       {DEFAULT_DAYS.map(d => (
+                         <option key={d.id} value={d.id}>{lang === 'bn' ? d.bn : d.en}</option>
+                       ))}
+                     </select>
+                   </div>
+                 )}
 
                  {/* Action Buttons */}
                  <div className="space-y-2 flex flex-col justify-end lg:col-span-1">
@@ -590,92 +716,161 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
 
                           {/* Routine Table Container */}
                           <div className="flex-1 mt-2 overflow-x-auto pb-4 custom-scrollbar relative">
-                            <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center table-fixed" style={{ borderColor: rtTheme.primary }}>
-                              <thead>
-                                 <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
-                                    <th className="border-r px-2 py-1.5 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
-                                       <div className="flex flex-col items-center justify-center leading-tight">
-                                          <span className="text-[11px] tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent }}>{lang === 'bn' ? 'দিন / বার' : 'DAYS'}</span>
-                                          <Clock size={10} className="opacity-50" />
-                                       </div>
-                                    </th>
-                                    {periods.map((p, idx) => (
-                                      <th key={p.id} className={`border-r p-1 text-[11px] font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
-                                         {!p.isBreak ? (
-                                           <div className="flex flex-col items-center gap-0.5 font-noto">
-                                              <input 
-                                                type="text"
-                                                value={p.title}
-                                                onChange={(e) => {
-                                                  const newPeriods = [...periods];
-                                                  newPeriods[idx].title = e.target.value;
-                                                  setPeriods(newPeriods);
-                                                }}
-                                                className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[10px] font-black placeholder-white/50"
-                                              />
-                                              <input 
-                                                type="text"
-                                                value={p.time}
-                                                onChange={(e) => {
-                                                  const newPeriods = [...periods];
-                                                  newPeriods[idx].time = e.target.value;
-                                                  setPeriods(newPeriods);
-                                                }}
-                                                className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[8px] opacity-70 font-bold placeholder-white/30"
-                                              />
-                                           </div>
-                                         ) : (
-                                           <div className="flex flex-col items-center py-1 font-noto">
-                                              <textarea 
-                                                value={p.title}
-                                                onChange={(e) => {
-                                                  const newPeriods = [...periods];
-                                                  newPeriods[idx].title = e.target.value;
-                                                  setPeriods(newPeriods);
-                                                }}
-                                                className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-slate-400/30 rounded p-0 text-[8px] font-black uppercase tracking-widest opacity-80 resize-none h-12"
-                                                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-                                              />
-                                           </div>
-                                         )}
-                                         <button 
-                                           onClick={() => removePeriod(p.id)} 
-                                           data-html2canvas-ignore="true"
-                                           className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg z-30 hover:scale-125 active:scale-95 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 border-2 border-white"
-                                         >
-                                           <X size={12}/>
-                                         </button>
+                            {layoutType === 'day_left' ? (
+                              <table className="w-full border-collapse border-2 rounded-xl shadow-sm text-center table-fixed" style={{ borderColor: rtTheme.primary }}>
+                                <thead>
+                                   <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
+                                      <th className="border-r px-2 py-1.5 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                         <div className="flex flex-col items-center justify-center leading-tight">
+                                            <span className="text-[11px] tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent }}>{lang === 'bn' ? 'দিন / বার' : 'DAYS'}</span>
+                                            <Clock size={10} className="opacity-50" />
+                                         </div>
                                       </th>
-                                    ))}
-                                 </tr>
-                              </thead>
-                              <tbody>
-                                 {DEFAULT_DAYS.map((day, dIdx) => (
-                                   <tr key={day.id} className="border-b h-[2.75rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
-                                     <td className="border-r p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
-                                       {lang === 'bn' ? day.bn : day.en}
-                                     </td>
-                                     {periods.map((p, idx) => (
-                                       <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
-                                          {!p.isBreak ? (
-                                            <textarea 
-                                               value={routineMatrix[`${day.id}_${p.id}`] || ''}
-                                               onChange={(e) => handleCellChange(day.id, p.id, e.target.value)}
-                                               placeholder="-"
-                                               className={`w-full min-h-[50px] bg-transparent text-center text-[10px] font-black font-noto resize-none border-none outline-none focus:ring-1 focus:ring-blue-400 rounded p-1 leading-normal`}
-                                               style={{ color: rtTheme.primary }}
-                                            />
-                                          ) : (
-                                            <div className="w-full h-full flex flex-col items-center justify-center opacity-10 gap-1">
-                                               <Coffee size={18} style={{ color: rtTheme.primary }} />
-                                            </div>
-                                          )}
-                                       </td>
-                                     ))}
+                                      {periods.map((p, idx) => (
+                                        <th key={p.id} className={`border-r p-1 text-[11px] font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
+                                           {!p.isBreak ? (
+                                             <div className="flex flex-col items-center gap-0.5 font-noto">
+                                                <input 
+                                                  type="text"
+                                                  value={p.title}
+                                                  onChange={(e) => {
+                                                    const newPeriods = [...periods];
+                                                    newPeriods[idx].title = e.target.value;
+                                                    setPeriods(newPeriods);
+                                                  }}
+                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[10px] font-black placeholder-white/50"
+                                                />
+                                                <input 
+                                                  type="text"
+                                                  value={p.time}
+                                                  onChange={(e) => {
+                                                    const newPeriods = [...periods];
+                                                    newPeriods[idx].time = e.target.value;
+                                                    setPeriods(newPeriods);
+                                                  }}
+                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[8px] opacity-70 font-bold placeholder-white/30"
+                                                />
+                                             </div>
+                                           ) : (
+                                             <div className="flex flex-col items-center py-1 font-noto">
+                                                <textarea 
+                                                  value={p.title}
+                                                  onChange={(e) => {
+                                                    const newPeriods = [...periods];
+                                                    newPeriods[idx].title = e.target.value;
+                                                    setPeriods(newPeriods);
+                                                  }}
+                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-slate-400/30 rounded p-0 text-[8px] font-black uppercase tracking-widest opacity-80 resize-none h-12"
+                                                  style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                                                />
+                                             </div>
+                                           )}
+                                           <button 
+                                             onClick={() => removePeriod(p.id)} 
+                                             data-html2canvas-ignore="true"
+                                             className="download-hide absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg z-30 hover:scale-125 active:scale-95 transition-all border-2 border-white"
+                                           >
+                                             <X size={12}/>
+                                           </button>
+                                        </th>
+                                      ))}
                                    </tr>
-                                 ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                   {DEFAULT_DAYS.map((day, dIdx) => (
+                                     <tr key={day.id} className="border-b h-[2.75rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
+                                       <td className="border-r p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
+                                         {lang === 'bn' ? day.bn : day.en}
+                                       </td>
+                                       {periods.map((p, idx) => (
+                                         <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
+                                            {!p.isBreak ? (
+                                              <RoutineCell 
+                                                 value={routineMatrix[`${day.id}_${p.id}`] || ''}
+                                                 onChange={(val) => handleCellChange(day.id, p.id, val)}
+                                                 theme={rtTheme}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-10 gap-1">
+                                                 <Coffee size={18} style={{ color: rtTheme.primary }} />
+                                              </div>
+                                            )}
+                                         </td>
+                                       ))}
+                                     </tr>
+                                   ))}
+                                </tbody>
+                              </table>
+                            ) : (
+                              /* Old Layout: Class Wise (Classes on Left) */
+                              <table className="w-full border-collapse border-2 rounded-xl shadow-sm text-center table-fixed shrink-0" style={{ borderColor: rtTheme.primary }}>
+                                <thead>
+                                   <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
+                                      <th className="border-r px-2 py-1.5 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                         <div className="flex flex-col items-center justify-center leading-tight">
+                                            <span className="text-[11px] tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent }}>
+                                              {lang === 'bn' ? 'শ্রেণী' : 'Class'}
+                                            </span>
+                                            <span className="text-[9px] opacity-70">{lang === 'bn' ? 'রুটিন' : 'Routine'}</span>
+                                         </div>
+                                      </th>
+                                      {periods.map((p, idx) => (
+                                        <th key={p.id} className={`border-r p-1 text-[11px] font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
+                                           {!p.isBreak ? (
+                                             <div className="flex flex-col items-center gap-0.5 font-noto">
+                                                <span className="text-[10px] font-black">{p.title}</span>
+                                                <span className="text-[8px] opacity-70 font-bold">{p.time}</span>
+                                             </div>
+                                           ) : (
+                                             <div className="flex flex-col items-center py-1 font-noto">
+                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-80" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                                                  {p.title}
+                                                </span>
+                                             </div>
+                                           )}
+                                           <button 
+                                             onClick={() => removePeriod(p.id)} 
+                                             data-html2canvas-ignore="true"
+                                             className="download-hide absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg z-30 hover:scale-125 active:scale-95 transition-all border-2 border-white"
+                                           >
+                                             <X size={12}/>
+                                           </button>
+                                        </th>
+                                      ))}
+                                   </tr>
+                                </thead>
+                                <tbody>
+                                   {classes.length > 0 ? classes.map((cls, cIdx) => (
+                                     <tr key={cls.id} className="border-b h-[2.75rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: cIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
+                                       <td className="border-r p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
+                                         {cls.class_name}
+                                       </td>
+                                       {periods.map((p, idx) => (
+                                         <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
+                                            {!p.isBreak ? (
+                                              <RoutineCell 
+                                                 value={routineMatrix[`${cls.id}_${p.id}_${selectedDay}`] || routineMatrix[`${cls.id}_${p.id}`] || (selectedClassId === cls.id ? routineMatrix[`${selectedDay}_${p.id}`] : '')}
+                                                 onChange={(val) => handleCellChange(`${cls.id}_${p.id}`, selectedDay, val)}
+                                                 theme={rtTheme}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-10 gap-1">
+                                                 <Coffee size={18} style={{ color: rtTheme.primary }} />
+                                              </div>
+                                            )}
+                                         </td>
+                                       ))}
+                                     </tr>
+                                   )) : (
+                                      <tr>
+                                        <td colSpan={periods.length + 1} className="py-10 text-center font-bold text-slate-400 bg-slate-50">
+                                          {lang === 'bn' ? 'কোনো শ্রেণী পাওয়া যায়নি' : 'No classes found'}
+                                        </td>
+                                      </tr>
+                                   )}
+                                </tbody>
+                              </table>
+                            )}
 
                             {/* Watermark */}
                             <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none -rotate-12 select-none">
