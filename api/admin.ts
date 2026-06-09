@@ -174,6 +174,7 @@ async function setupInstitution(supabase, userId, body, res) {
         academic_year_promotion: true,
         voice_broadcast: true,
         sms: true,
+        messages: false,
         certificates: true,
         exam_routine: true,
         class_routine: true

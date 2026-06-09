@@ -136,7 +136,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     academic_year_promotion: true,
     voice_broadcast: false,
     sms: true,
-    messages: true,
+    messages: false,
     class_routine: true,
     certificates: false,
     student_photo: false,
@@ -1143,14 +1143,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       academic_year_promotion: true,
       voice_broadcast: true,
       sms: true,
-      messages: true,
+      messages: false,
       class_routine: false,
       certificates: true,
       id_cards: false,
       exam_routine: true,
       student_photo: false,
-      ...userModules,
-      class_routine: true
+      ...userModules
     });
 
     const createdAtDate = new Date(user.created_at);
