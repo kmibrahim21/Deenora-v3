@@ -137,7 +137,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     voice_broadcast: false,
     sms: true,
     messages: true,
-    class_routine: false,
+    class_routine: true,
     certificates: false,
     student_photo: false,
     id_cards: false,
@@ -1149,7 +1149,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       id_cards: false,
       exam_routine: true,
       student_photo: false,
-      ...userModules
+      ...userModules,
+      class_routine: true
     });
 
     const createdAtDate = new Date(user.created_at);
@@ -1546,6 +1547,40 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
     } finally {
       setIsSyncingSheet(false);
+    }
+  };
+
+  const activateRoutineForAll = async () => {
+    if (!confirm('Are you sure you want to activate Class Routine for ALL institutions?')) return;
+    setIsRefreshing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'activate_module_for_all',
+          module_name: 'class_routine'
+        })
+      });
+  
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to activate module');
+      
+      setStatusModal({ 
+        show: true, 
+        type: 'success', 
+        title: 'সফল', 
+        message: `সবার জন্য ক্লাস রুটিন মডিউল অ্যাক্টিভ করা হয়েছে। (আপডেট করা হয়েছে: ${result.updated} টি প্রতিষ্ঠান)` 
+      });
+      initData(true);
+    } catch (err: any) {
+       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
+    } finally {
+       setIsRefreshing(false);
     }
   };
 

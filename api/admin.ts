@@ -56,6 +56,30 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, count: formattedInsts.length });
     }
 
+    if (action === 'activate_module_for_all') {
+      const { module_name } = body;
+      if (!module_name) return res.status(400).json({ error: 'Module name is required' });
+
+      // Get all institutions
+      const { data: allInsts, error: fetchErr } = await supabase.from('institutions').select('id, config_json');
+      if (fetchErr) throw fetchErr;
+
+      let count = 0;
+      for (const inst of allInsts) {
+        const config = typeof inst.config_json === 'string' ? JSON.parse(inst.config_json) : (inst.config_json || {});
+        if (!config.modules) config.modules = {};
+        
+        // Only update if it's not already true to avoid unnecessary writes
+        if (config.modules[module_name] !== true) {
+          config.modules[module_name] = true;
+          await supabase.from('institutions').update({ config_json: config }).eq('id', inst.id);
+          count++;
+        }
+      }
+
+      return res.status(200).json({ success: true, updated: count, total: allInsts.length });
+    }
+
     if (action === 'create_institution') {
       const { name, phone, email, password, institution_type } = body;
 
@@ -151,7 +175,8 @@ async function setupInstitution(supabase, userId, body, res) {
         voice_broadcast: true,
         sms: true,
         certificates: true,
-        exam_routine: true
+        exam_routine: true,
+        class_routine: true
       },
       result_engine: 'school',
       result_system: 'grading',
