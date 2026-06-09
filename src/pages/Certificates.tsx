@@ -37,6 +37,7 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('testimonial');
   const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [gpa, setGpa] = useState<string>('');
   
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -57,6 +58,94 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
       setStudents([]);
     }
   }, [selectedClassId]);
+
+  useEffect(() => {
+    if (selectedStudentId && selectedClassId) {
+      const fetchStudentGpa = async () => {
+        if (!madrasah) return;
+        try {
+          setGpa(''); // Reset
+          const { data: latestExam } = await supabase
+            .from('exams')
+            .select('*')
+            .eq('class_id', selectedClassId)
+            .order('exam_date', { ascending: false })
+            .limit(1)
+            .single();
+            
+          if (!latestExam) return;
+          
+          const { data: subjects } = await supabase
+            .from('exam_subjects')
+            .select('*')
+            .eq('exam_id', latestExam.id);
+            
+          if (!subjects || subjects.length === 0) return;
+          
+          const { data: marks } = await supabase
+            .from('exam_marks')
+            .select('*')
+            .eq('exam_id', latestExam.id)
+            .eq('student_id', selectedStudentId);
+            
+          if (!marks || marks.length === 0) return;
+          
+          let passStatus = true;
+          let pointsSum = 0;
+          let numMainSubjects = 0;
+          const rs = (madrasah.config_json as any)?.result_system || 'grading';
+
+          subjects.forEach(sub => {
+            const mark = marks.find(m => m.subject_id === sub.id)?.marks_obtained || 0;
+            const score = typeof mark === 'string' ? parseFloat(mark) : mark;
+            const passMarks = sub.pass_marks || 33;
+            const fullMarks = sub.full_marks || 100;
+            const failed = score < passMarks;
+            const isOptionalEffectively = !!sub.is_optional && rs === 'grading_optional';
+            
+            if (!isOptionalEffectively && failed) passStatus = false;
+            
+            const pct = (score / fullMarks) * 100;
+            
+            let gp = 0;
+            if (!failed) {
+              if (pct >= 80) gp = 5.00;
+              else if (pct >= 70) gp = 4.00;
+              else if (pct >= 60) gp = 3.50;
+              else if (pct >= 50) gp = 3.00;
+              else if (pct >= 40) gp = 2.00;
+              else if (pct >= 33) gp = 1.00;
+            }
+            
+            if (rs === 'grading_optional') {
+              if (!isOptionalEffectively) {
+                pointsSum += gp;
+                numMainSubjects++;
+              } else {
+                 if (gp > 2) pointsSum += (gp - 2);
+              }
+            } else {
+                pointsSum += gp;
+                numMainSubjects++;
+            }
+          });
+          
+          if (!passStatus) {
+             setGpa('0.00');
+             return;
+          }
+          
+          const finalGpa = numMainSubjects > 0 ? Math.min(5.00, pointsSum / numMainSubjects) : 0;
+          setGpa(finalGpa.toFixed(2));
+          
+        } catch (err) {
+           console.error("Error computing GPA:", err);
+        }
+      };
+
+      fetchStudentGpa();
+    }
+  }, [selectedStudentId, selectedClassId, madrasah]);
 
   useEffect(() => {
     const updateScale = () => {
@@ -144,7 +233,8 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
     if (!student) return null;
     return {
        ...student,
-       className: selectedClassMap[selectedStudentId] || classes.find(c => c.id === selectedClassId)?.class_name || ''
+       className: selectedClassMap[selectedStudentId] || classes.find(c => c.id === selectedClassId)?.class_name || '',
+       gpa: gpa
     };
   };
 

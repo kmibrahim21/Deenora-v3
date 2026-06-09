@@ -4,6 +4,7 @@ import { Institution, Student } from '../../types';
 interface ExtendedStudent extends Student {
   className?: string;
   name_en?: string;
+  gpa?: string;
 }
 
 interface CertificateTemplateProps {
@@ -105,8 +106,8 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
         {/* Absolute Header Layer: Serial */}
         <div className="absolute top-[50px] left-[65px] z-30">
           <div className="text-slate-600 font-semibold text-[13px] tracking-wider uppercase flex items-end">
-             <span className="w-20">{isBn ? 'ক্রমিক নং :' : 'Serial No:'}</span>
-             <span className="text-[#a41717] font-bold border-b border-dotted border-slate-300 w-28 text-center pb-[2px]">1001</span>
+             <span className="w-20">{isBn ? 'রেজি: নং :' : 'Reg. No:'}</span>
+             <span className="text-[#a41717] font-bold border-b border-dotted border-slate-300 w-28 text-center pb-[2px]">{student.registration_number || student.admission_number || ''}</span>
           </div>
         </div>
 
@@ -179,7 +180,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    <span>সালের শিক্ষাবর্ষে</span>
                    <Field value={student.className || ''} minWidth="180px" />
                    <span>শ্রেণির চূড়ান্ত পরীক্ষায় অংশগ্রহণ করে জি.পি.এ ৫.০০ এর মধ্যে</span>
-                   <Field value="" minWidth="90px" />
+                   <Field value={student.gpa || ''} minWidth="90px" />
                    <span>অর্জন করে কৃতিত্বের সাথে উত্তীর্ণ হয়েছে।</span><br/>
 
                    <span className="mr-2 mt-4 inline-block">তার শিখন মূল্যায়ন ও মেধা অত্যন্ত প্রশংসনীয়। তাহার জন্ম তারিখ:</span>
@@ -205,10 +206,10 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    
                    <span>. He/She appeared in the final examination of class</span>
                    <Field value={student.className || ''} minWidth="180px" />
-                   <span>from this institution. His/Her Roll No is</span>
-                   <Field value={String(student.roll || '')} minWidth="120px" />
+                   <span>from this institution. His/Her Reg. No is</span>
+                   <Field value={student.registration_number || student.admission_number || ''} minWidth="120px" />
                    <span>and achieved GPA</span>
-                   <Field value="" minWidth="80px" />
+                   <Field value={student.gpa || ''} minWidth="80px" />
                    <span>. According to the admission register, his/her date of birth is</span>
                    <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="180px" />
                    <span>.</span><br/>
