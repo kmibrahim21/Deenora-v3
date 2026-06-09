@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, Plus, Trash2, Loader2, Calendar, Clock, BookOpen, User, Book, MapPin, Coffee, Printer, Download, Copy, Check, LayoutGrid, List, CreditCard, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronLeft, Plus, Trash2, Calendar, LayoutGrid, Users, Clock, Copy, Save, Loader2, Download, CheckCircle, AlertCircle, Edit3, Palette, X, Check, Coffee, Info, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { supabase } from 'supabase';
-import { Institution, Language, Class, Teacher, ClassRoutine as ClassRoutineType, Profile } from 'types';
-import { generateClassRoutinePDF, generateMasterClassRoutinePDF } from '../utils/pdfGenerator';
+import { Institution, Language, Profile } from 'types';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
-import { requestManager } from 'services/RequestManager';
 
 interface ClassRoutineProps {
   lang: Language;
@@ -13,123 +13,156 @@ interface ClassRoutineProps {
   profile?: Profile | null;
 }
 
-type ViewFormat = 'grid' | 'list' | 'cards';
+const routineThemes = {
+  'emerald': { primary: '#013c28', secondary: '#023c28', light: '#E6F4EA', accent: '#EAF7EE', border: '#10b981', shadow: 'rgba(1,60,40,0.1)' },
+  'blue': { primary: '#1e3a8a', secondary: '#1e40af', light: '#eff6ff', accent: '#f8fafc', border: '#3b82f6', shadow: 'rgba(30,58,138,0.1)' },
+  'slate': { primary: '#334155', secondary: '#475569', light: '#f1f5f9', accent: '#f8fafc', border: '#64748b', shadow: 'rgba(51,65,85,0.1)' },
+  'purple': { primary: '#581c87', secondary: '#6b21a8', light: '#faf5ff', accent: '#fdf4ff', border: '#a855f7', shadow: 'rgba(88,28,135,0.1)' },
+  'rose': { primary: '#881337', secondary: '#9f1239', light: '#fff1f2', accent: '#fff5f5', border: '#f43f5e', shadow: 'rgba(136,19,55,0.1)' }
+};
 
-const DAYS = [
+const DEFAULT_DAYS = [
   { id: 'Saturday', bn: 'শনিবার', en: 'Saturday' },
   { id: 'Sunday', bn: 'রবিবার', en: 'Sunday' },
   { id: 'Monday', bn: 'সোমবার', en: 'Monday' },
   { id: 'Tuesday', bn: 'মঙ্গলবার', en: 'Tuesday' },
   { id: 'Wednesday', bn: 'বুধবার', en: 'Wednesday' },
   { id: 'Thursday', bn: 'বৃহস্পতিবার', en: 'Thursday' },
-  { id: 'Friday', bn: 'শুক্রবার', en: 'Friday' },
 ];
 
-import { sortMadrasahClasses } from 'pages/Classes';
-
 const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, profile }) => {
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [routines, setRoutines] = useState<ClassRoutineType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
-  const [masterDownloading, setMasterDownloading] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<'general' | 'classwise' | 'saved'>('general');
+  const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
-  const [isAdding, setIsAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [format, setFormat] = useState<ViewFormat>('grid');
-  const [deleteModal, setDeleteModal] = useState<{show: boolean, id: string | null}>({show: false, id: null});
-  const [toast, setToast] = useState<{show: boolean, message: string, type: 'success' | 'error' | 'info'}>({show: false, message: '', type: 'info'});
-
   
-  // Form state
-  const [formData, setFormData] = useState<Partial<ClassRoutineType>>({
-    day: 'Saturday',
-    start_time: '08:00',
-    end_time: '09:00',
-    is_break: false
-  });
-
+  // Editor States
+  const [routineTitle, setRoutineTitle] = useState(lang === 'bn' ? 'সাধারণ ক্লাস রুটিন' : 'General Class Routine');
+  const [routineThemeColor, setRoutineThemeColor] = useState('blue');
+  const [periods, setPeriods] = useState<any[]>([
+    { id: 'p1', title: lang === 'bn' ? '১ম ঘণ্টা' : '1st Period', time: '08:00 - 08:45' },
+    { id: 'p2', title: lang === 'bn' ? '২য় ঘণ্টা' : '2nd Period', time: '08:45 - 09:30' },
+    { id: 'p3', title: lang === 'bn' ? '৩য় ঘণ্টা' : '3rd Period', time: '09:30 - 10:15' },
+    { id: 'break1', title: lang === 'bn' ? 'বিরতি' : 'Break', time: '10:15 - 10:45', isBreak: true },
+    { id: 'p4', title: lang === 'bn' ? '৪র্থ ঘণ্টা' : '4th Period', time: '10:45 - 11:30' },
+  ]);
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
+  const [routineMatrix, setRoutineMatrix] = useState<Record<string, string>>({});
+  const [routineInstructions, setRoutineInstructions] = useState<string[]>([
+    lang === 'bn' ? 'মাদরাসার নির্ধারিত পোশাক পরে উপস্থিত থাকতে হবে।' : 'Students must attend in formal madrasah uniform.',
+    lang === 'bn' ? 'সময়মতো ক্লাস শুরু হওয়ার ১০ মিনিট পূর্বে মাদরাসায় অবস্থান করতে হবে।' : 'Be at madrasah 10 minutes before classes start.',
+    lang === 'bn' ? 'ডায়েরি ও প্রয়োজনীয় শিক্ষা উপকরণ সাথে রাখতে হবে।' : 'Bring diary and necessary educational supplies.',
+    lang === 'bn' ? 'অনুপস্থিতির জন্য যথাযথ কারণ দর্শাতে হবে।' : 'Valid reason must be provided for absence.'
+  ]);
+  const [routinePrincipalName, setRoutinePrincipalName] = useState('');
+  const [routinePrincipalMobile, setRoutinePrincipalMobile] = useState('');
+  
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{show: boolean, msg: string, type: 'success' | 'error' | 'info'}>({show: false, msg: '', type: 'info'});
+  
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState<number>(1);
+  const [userZoom, setUserZoom] = useState<number>(1);
+  const [downloading, setDownloading] = useState(false);
+  
   const canManage = profile?.role !== 'teacher' || profile?.permissions?.can_manage_classes;
 
   useEffect(() => {
-    if (madrasah) {
-      fetchData();
+    if (madrasah?.id) {
+       if (madrasah.config_json && (madrasah.config_json as any).saved_class_routines) {
+         setSavedRoutines((madrasah.config_json as any).saved_class_routines);
+       }
+       fetchClasses();
     }
-  }, [madrasah]);
+  }, [madrasah?.id]);
 
-  const fetchData = async () => {
+  const fetchClasses = async () => {
     if (!madrasah) return;
-    setLoading(true);
-    try {
-      const clsProm = requestManager.cachedFetch(
-        'classes',
-        (q) => q.select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true }),
-        `classes:${madrasah.id}`,
-        30 * 60 * 1000 // 30 mins
-      );
-      
-      const [clsRes, teaRes, rouRes] = await Promise.all([
-        clsProm,
-        supabase.from('teachers').select('*').eq('institution_id', madrasah.id).eq('is_active', true),
-        supabase.from('class_routines').select('*, classes(class_name), teachers(teacher_name)').eq('institution_id', madrasah.id).order('start_time', { ascending: true })
-      ]);
+    const { data, error } = await supabase.from('classes').select('*').eq('institution_id', madrasah.id).order('sort_order', { ascending: true });
+    if (!error && data) setClasses(data);
+  };
 
-      if (clsRes.data) {
-        let filteredClasses = clsRes.data;
-        if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
-          filteredClasses = clsRes.data.filter(cls => profile.permissions?.allowed_classes?.includes(cls.id));
-        }
-        setClasses(sortMadrasahClasses(filteredClasses));
+  useEffect(() => {
+    if (activeTab === 'general') {
+      setSelectedClassId('all');
+      setRoutineTitle(lang === 'bn' ? 'সাধারণ ক্লাস রুটিন' : 'General Class Routine');
+    } else if (activeTab === 'classwise' && selectedClassId === 'all' && classes.length > 0) {
+      setSelectedClassId(classes[0].id);
+    }
+  }, [activeTab, lang]);
+
+  useEffect(() => {
+    if (selectedClassId !== 'all') {
+      const cls = classes.find(c => c.id === selectedClassId);
+      if (cls) {
+        setRoutineTitle(lang === 'bn' ? `${cls.class_name} - এর ক্লাস রুটিন` : `Class Routine for ${cls.class_name}`);
       }
-      if (teaRes.data) setTeachers(teaRes.data.map(t => ({ ...t, name: t.teacher_name, phone: t.mobile })));
-      if (rouRes.data) setRoutines(rouRes.data);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    } finally {
-      setLoading(false);
     }
+  }, [selectedClassId, classes, lang]);
+
+  useEffect(() => {
+    if (!previewContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        const isMobile = window.innerWidth < 768;
+        const targetWidth = 1123;
+        const s = Math.min(1.2, isMobile ? (width / 1160) : (width / (targetWidth + 40)));
+        setPreviewScale(s);
+      }
+    });
+    observer.observe(previewContainerRef.current);
+    return () => observer.disconnect();
+  }, [activeTab]);
+
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({show: true, msg, type});
+    setTimeout(() => setToast(prev => ({...prev, show: false})), 3000);
   };
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToast({show: true, message, type});
-    setTimeout(() => {
-      setToast(prev => ({...prev, show: false}));
-    }, 3000);
+  const rtTheme = routineThemes[routineThemeColor as keyof typeof routineThemes] || routineThemes.blue;
+
+  const handleCellChange = (dayId: string, periodId: string, value: string) => {
+    setRoutineMatrix(prev => ({ ...prev, [`${dayId}_${periodId}`]: value }));
   };
 
-  const handleSave = async () => {
-    if (!madrasah || !formData.class_id || (!formData.subject_name && !formData.is_break) || !formData.day || !formData.start_time || !formData.end_time) {
-      showToast(lang === 'bn' ? 'সবগুলো ঘর পূরণ করুন' : 'Please fill all required fields', 'error');
-      return;
-    }
-
+  const handleSaveRoutine = async () => {
+    if (!madrasah) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from('class_routines').insert({
-        institution_id: madrasah.id,
-        class_id: formData.class_id,
-        subject_name: formData.is_break ? (formData.subject_name || (lang === 'bn' ? 'বিরতি' : 'Break')) : formData.subject_name,
-        teacher_id: formData.teacher_id || null,
-        day: formData.day,
-        start_time: formData.start_time,
-        end_time: formData.end_time,
-        room_number: formData.room_number || null,
-        is_break: formData.is_break || false,
-        note: formData.note || null
-      });
+      const newRoutine = {
+        id: Date.now().toString(),
+        title: routineTitle,
+        classId: selectedClassId,
+        themeColor: routineThemeColor,
+        periods: periods,
+        matrix: routineMatrix,
+        instructions: routineInstructions,
+        principalName: routinePrincipalName,
+        principalMobile: routinePrincipalMobile,
+        createdAt: new Date().toISOString()
+      };
+      
+      const currentConfig = madrasah.config_json || {};
+      let updatedRoutines = ((currentConfig as any).saved_class_routines || []);
+      
+      if (editingRoutineId) {
+         updatedRoutines = updatedRoutines.map((r: any) => r.id === editingRoutineId ? { ...newRoutine, id: editingRoutineId } : r);
+      } else {
+         updatedRoutines = [...updatedRoutines, newRoutine];
+      }
+      
+      const updatedConfig = { ...currentConfig, saved_class_routines: updatedRoutines };
+      
+      const { error } = await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah.id);
       if (error) throw error;
       
-      setIsAdding(false);
-      setFormData(prev => ({
-        ...prev,
-        start_time: prev.end_time,
-        end_time: '',
-        subject_name: '',
-        is_break: false
-      }));
-      fetchData();
-      showToast(lang === 'bn' ? 'সফলভাবে সংরক্ষণ করা হয়েছে' : 'Saved successfully', 'success');
+      setSavedRoutines(updatedRoutines);
+      (madrasah as any).config_json = updatedConfig;
+      showToast(lang === 'bn' ? 'সফলভাবে সংরক্ষিত!' : 'Successfully saved!', 'success');
+      setActiveTab('saved');
     } catch (err: any) {
       showToast(err.message, 'error');
     } finally {
@@ -137,91 +170,140 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
     }
   };
 
-  const confirmDelete = (id: string) => {
-    if (!id) {
-      showToast('Error: Routine ID missing', 'error');
-      return;
-    }
-    setDeleteModal({show: true, id});
-  };
-
-  const executeDelete = async () => {
-    const id = deleteModal.id;
-    if (!id) return;
-    
+  const handleDeleteSaved = async (id: string) => {
+    if (!madrasah) return;
+    if (!window.confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত?' : 'Are you sure?')) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from('class_routines').delete().eq('id', id);
-      if (error) {
-        console.error('Delete error:', error);
-        showToast('Delete failed: ' + error.message, 'error');
-        return;
-      }
-      showToast(lang === 'bn' ? 'সফলভাবে ডিলিট হয়েছে' : 'Deleted successfully', 'success');
-      setDeleteModal({show: false, id: null});
-      fetchData();
+       const currentConfig = madrasah.config_json || {};
+       const updatedRoutines = ((currentConfig as any).saved_class_routines || []).filter((r: any) => r.id !== id);
+       const updatedConfig = { ...currentConfig, saved_class_routines: updatedRoutines };
+       
+       const { error } = await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah.id);
+       if (error) throw error;
+       
+       setSavedRoutines(updatedRoutines);
+       (madrasah as any).config_json = updatedConfig;
+       showToast(lang === 'bn' ? 'ডিলিট সম্পন্ন!' : 'Deleted successfully!', 'success');
     } catch (err: any) {
-      showToast(err.message || 'Error deleting routine', 'error');
+      showToast(err.message, 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCopy = (routine: ClassRoutineType) => {
-    if (!routine) return;
-    console.log('Copying routine:', routine);
-    
-    try {
-      const startTime = routine.start_time ? routine.start_time.slice(0, 5) : '08:00';
-      const endTime = routine.end_time ? routine.end_time.slice(0, 5) : '09:00';
-      
-      setFormData({
-        class_id: routine.class_id,
-        subject_name: routine.subject_name,
-        teacher_id: routine.teacher_id,
-        day: routine.day,
-        start_time: startTime,
-        end_time: endTime,
-        room_number: routine.room_number,
-        is_break: routine.is_break,
-        note: routine.note
-      });
-      setIsAdding(true);
-      showToast(lang === 'bn' ? 'তথ্য কপি হয়েছে, এবার সংরক্ষণ করুন' : 'Data copied, now save it', 'success');
-    } catch (err) {
-      console.error('Copy error:', err);
-      showToast('Error copying data', 'error');
+  const loadSavedRoutine = (routine: any) => {
+    setEditingRoutineId(routine.id);
+    setRoutineTitle(routine.title);
+    setSelectedClassId(routine.classId || 'all');
+    if (routine.classId && routine.classId !== 'all') {
+      setActiveTab('classwise');
+    } else {
+      setActiveTab('general');
     }
+    setRoutineThemeColor(routine.themeColor);
+    setPeriods(routine.periods);
+    setRoutineMatrix(routine.matrix);
+    setRoutineInstructions(routine.instructions || []);
+    setRoutinePrincipalName(routine.principalName || '');
+    setRoutinePrincipalMobile(routine.principalMobile || '');
+    showToast(lang === 'bn' ? 'রুটিন এডিট মোডে আনা হয়েছে' : 'Loaded in editor', 'info');
   };
 
-  const handleDownloadAllPDF = async () => {
+  const handleDownloadPDF = async (targetRef: React.RefObject<HTMLElement>) => {
+    if (!targetRef.current) return;
     setDownloading(true);
+    
+    // Show info toast
+    showToast(lang === 'bn' ? 'পিডিএফ তৈরি হচ্ছে...' : 'Generating PDF...', 'info');
+
     try {
-      await generateClassRoutinePDF(madrasah, routines, classes, DAYS, lang);
-    } catch (err) {
-      console.error('PDF generation error:', err);
-      showToast('Error generating PDF', 'error');
+      const element = targetRef.current;
+      
+      // Import html-to-image dynamically to ensure it's available
+      const { toJpeg } = await import('html-to-image');
+      
+      // We need to capture the PDF content at its original size 1123x794
+      // html-to-image is generally more robust for this
+      const dataUrl = await toJpeg(element, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        filter: (node: any) => {
+          if (node.getAttribute && node.getAttribute('data-html2canvas-ignore') === 'true') return false;
+          return true;
+        },
+        style: {
+          transform: 'none',
+          borderRadius: '0',
+          margin: '0'
+        }
+      });
+      
+      const pdf = new jsPDF({ 
+        orientation: 'landscape', 
+        unit: 'px', 
+        format: [1123, 794] 
+      });
+      
+      pdf.addImage(dataUrl, 'JPEG', 0, 0, 1123, 794);
+      pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+      showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড হয়েছে!' : 'PDF downloaded!', 'success');
+    } catch (error) {
+      console.error('PDF Generation Error:', error);
+      
+      // Fallback to html2canvas if html-to-image fails
+      try {
+        const canvas = await html2canvas(targetRef.current, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: 1123,
+          height: 794
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1123, 794] });
+        pdf.addImage(imgData, 'JPEG', 0, 0, 1123, 794);
+        pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+        showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড হয়েছে (অল্টারনেট পদ্ধতি)!' : 'PDF downloaded (fallback)!', 'success');
+      } catch (fbError) {
+        showToast(lang === 'bn' ? 'ডাউনলোড করতে সমস্যা হয়েছে' : 'Error generating PDF', 'error');
+      }
     } finally {
       setDownloading(false);
     }
   };
 
-  const handleDownloadMasterPDF = async () => {
-    setMasterDownloading(true);
-    try {
-      await generateMasterClassRoutinePDF(madrasah, routines, classes, DAYS, lang);
-    } catch (err) {
-      console.error('Master PDF generation error:', err);
-      alert('Error generating Master PDF');
-    } finally {
-      setMasterDownloading(false);
-    }
+  const addPeriod = (isBreak = false) => {
+    setPeriods([...periods, { 
+      id: `p${Date.now()}`, 
+      title: isBreak ? (lang === 'bn' ? 'বিরতি' : 'Break') : (lang === 'bn' ? 'নতুন ঘণ্টা' : 'New Period'), 
+      time: '00:00 - 00:00',
+      isBreak 
+    }]);
   };
 
+  const removePeriod = (id: string) => {
+    if (periods.length <= 1) return;
+    setPeriods(periods.filter(p => p.id !== id));
+  };
+
+  // Convert numbers to bangla
   const getBanglaNumber = (str: string) => {
     const englishDigits: { [key: string]: string } = { '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪', '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯' };
     return str.replace(/[0-9]/g, d => englishDigits[d]);
   };
+
+  if (!canManage) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
+        <AlertCircle size={48} className="text-red-500 mb-4" />
+        <h2 className="text-xl font-black text-slate-800">{lang === 'bn' ? 'অনুমতি নেই' : 'Access Denied'}</h2>
+        <button onClick={onBack} className="mt-4 px-6 py-2 bg-slate-900 text-white rounded-xl font-bold">Back</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 print:p-0">
@@ -232,576 +314,443 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
             <ChevronLeft size={20} />
           </button>
           <div className="text-left">
-            <h1 className={`text-xl font-black font-noto tracking-tight flex items-center gap-2 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+            <h1 className={`text-xl font-black font-noto tracking-tight flex items-center gap-2 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1e3a8a]'}`}>
               <Calendar className="text-[#2563EB]" size={24} />
               {lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
             </h1>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-          {canManage && (
-            <button 
-              onClick={() => setIsAdding(true)}
-              className="h-10 px-4 bg-[#2563EB] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 flex items-center gap-2"
-            >
-              <Plus size={16} />
-              {lang === 'bn' ? 'এড' : 'Add'}
-            </button>
-          )}
-
-          <button 
-            onClick={handleDownloadAllPDF}
-            disabled={downloading || masterDownloading}
-            title={lang === 'bn' ? 'আলাদা আলাদা ক্লাস ডাউনলোড (PDF)' : 'Download Individual Classes (PDF)'}
-            className="h-10 px-3 bg-white border border-slate-100 text-slate-600 rounded-2xl flex items-center gap-1.5 shadow-sm active:scale-90 font-bold text-[9px] uppercase tracking-wider disabled:opacity-50"
-          >
-            {downloading ? (
-              <Loader2 size={16} className="animate-spin text-[#2563EB]" />
-            ) : (
-              <Download size={16} className="text-[#2563EB]" />
-            )}
-            <span className="hidden sm:inline">{downloading ? (lang === 'bn' ? 'অপেক্ষা...' : 'Wait...') : (lang === 'bn' ? 'আলাদা PDF' : 'Individual PDF')}</span>
-          </button>
-
-          <button 
-            onClick={handleDownloadMasterPDF}
-            disabled={downloading || masterDownloading}
-            title={lang === 'bn' ? 'মাস্টার রুটিন ডাউনলোড (একসাথে)' : 'Download Master Routine'}
-            className="h-10 px-3 bg-[#2563EB] border border-[#2563EB] text-white rounded-2xl flex items-center gap-1.5 shadow-sm active:scale-90 font-bold text-[9px] uppercase tracking-wider disabled:opacity-50"
-          >
-            {masterDownloading ? (
-              <Loader2 size={16} className="animate-spin text-white" />
-            ) : (
-              <LayoutGrid size={16} className="text-white" />
-            )}
-            <span className="hidden sm:inline">{masterDownloading ? (lang === 'bn' ? 'অপেক্ষা...' : 'Wait...') : (lang === 'bn' ? 'মাস্টার PDF' : 'Master PDF')}</span>
-          </button>
-        </div>
       </div>
 
-      {/* Controls: Class & Format Switcher */}
-      <div className="space-y-4 print:hidden">
-        {/* Class Selector */}
-        <div className={`p-4 rounded-[2rem] border shadow-sm flex items-center gap-4 sticky top-14 z-20 overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-          <div className="flex items-center gap-2 min-w-max">
-             <BookOpen size={18} className="text-slate-400" />
-             <span className="text-[10px] font-black text-slate-400 uppercase">ক্লাস:</span>
-          </div>
-          <div className="flex overflow-x-auto gap-2 no-scrollbar pb-1 flex-1">
-            <button 
-              onClick={() => setSelectedClassId('all')}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all ${selectedClassId === 'all' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}
-            >
-              সকল ক্লাস
+      {/* Navigation Tabs - Compact & Non-scrolling */}
+      <div className="flex justify-center mb-4 print:hidden animate-in fade-in slide-in-from-top-1 duration-500">
+         <div className={`p-1 rounded-2xl border shadow-sm flex flex-wrap items-center justify-center gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <button onClick={() => setActiveTab('general')} className={`px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 ${activeTab === 'general' ? 'bg-[#2563EB] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
+              <LayoutGrid size={12} />
+              <span>{lang === 'bn' ? 'সাধারণ' : 'General'}</span>
             </button>
-            {classes.map(cls => (
-              <button 
-                key={cls.id}
-                onClick={() => setSelectedClassId(cls.id)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-500'}`}
-              >
-                {cls.class_name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* View Switcher */}
-        <div className="flex items-center justify-center gap-2">
-           <button onClick={() => setFormat('grid')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${format === 'grid' ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
-              <LayoutGrid size={16} /> Grid View
-           </button>
-           <button onClick={() => setFormat('list')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${format === 'list' ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
-              <List size={16} /> List View
-           </button>
-           <button onClick={() => setFormat('cards')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${format === 'cards' ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
-              <CreditCard size={16} /> Card View
-           </button>
-        </div>
+            <button onClick={() => setActiveTab('classwise')} className={`px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 ${activeTab === 'classwise' ? 'bg-[#2563EB] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
+              <Users size={12} />
+              <span>{lang === 'bn' ? 'শ্রেনী ভিত্তিক' : 'Class-wise'}</span>
+            </button>
+            <button onClick={() => setActiveTab('saved')} className={`px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all flex items-center gap-1.5 ${activeTab === 'saved' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
+              <Save size={12} />
+              <span>{lang === 'bn' ? 'সেভ করা' : 'Saved'}</span>
+            </button>
+            <div className="w-px h-4 bg-slate-300 mx-0.5"></div>
+            <button onClick={() => {
+               setEditingRoutineId(null);
+               setRoutineTitle(activeTab === 'general' ? (lang === 'bn' ? 'সাধারণ ক্লাস রুটিন' : 'General Class Routine') : (lang === 'bn' ? 'শ্রেনী ভিত্তিক রুটিন' : 'Class Routine'));
+               setRoutineMatrix({});
+               if (activeTab === 'saved') setActiveTab('general');
+            }} className="px-3 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase transition-all text-blue-600 bg-blue-50 hover:bg-blue-100 flex items-center gap-1.5">
+              <Plus size={14} /> <span>{lang === 'bn' ? 'নতুন' : 'New'}</span>
+            </button>
+         </div>
       </div>
 
-      {/* Routine Display */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-          <Loader2 className="animate-spin mb-4" size={32} />
-          <p className="font-bold text-xs uppercase tracking-widest">লোড হচ্ছে...</p>
+      {activeTab === 'saved' ? (
+        <div className="bg-white p-6 rounded-[2.5rem] shadow-premium border">
+           <h3 className="text-lg font-black text-slate-800 mb-6 font-noto">{lang === 'bn' ? 'সংরক্ষিত রুটিন সমূহ' : 'Saved Routines'}</h3>
+           {savedRoutines.length === 0 ? (
+              <div className="text-center py-10 bg-slate-50 rounded-3xl border border-dashed text-slate-400">
+                 <Calendar className="mx-auto mb-3 opacity-50" size={32} />
+                 <p className="font-bold">{lang === 'bn' ? 'কোনো রুটিন পাওয়া যায়নি' : 'No saved routines found'}</p>
+              </div>
+           ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {savedRoutines.map(r => (
+                   <div key={r.id} className="p-5 rounded-2xl border flex items-center justify-between" style={{ borderColor: routineThemes[r.themeColor as keyof typeof routineThemes]?.border || '#e2e8f0', backgroundColor: routineThemes[r.themeColor as keyof typeof routineThemes]?.light || '#f8fafc' }}>
+                      <div>
+                         <h4 className="font-black font-noto text-lg" style={{ color: routineThemes[r.themeColor as keyof typeof routineThemes]?.primary || '#1e293b' }}>{r.title}</h4>
+                         <p className="text-xs font-bold text-slate-500 mt-1">{lang === 'bn' ? new Date(r.createdAt || Date.now()).toLocaleDateString('bn-BD') : new Date(r.createdAt || Date.now()).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                         <button onClick={() => loadSavedRoutine(r)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm hover:scale-105 transition-all"><Edit3 size={18}/></button>
+                         <button onClick={() => handleDeleteSaved(r.id)} disabled={saving} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-red-500 shadow-sm hover:scale-105 transition-all"><Trash2 size={18}/></button>
+                      </div>
+                   </div>
+                 ))}
+              </div>
+           )}
         </div>
       ) : (
-        <div className="space-y-12">
-          {selectedClassId === 'all' && format === 'grid' ? (
-             <MasterRoutineGrid 
-               routines={routines}
-               classes={classes}
-               madrasah={madrasah}
-               getBanglaNumber={getBanglaNumber}
-             />
-          ) : (
-            classes.filter(c => selectedClassId === 'all' || selectedClassId === c.id).map(cls => {
-              const classRoutines = routines.filter(r => r.class_id === cls.id);
-              if (classRoutines.length === 0 && selectedClassId === 'all') return null;
-
-              return (
-                <div key={cls.id} className="space-y-4">
-                  {selectedClassId === 'all' && (
-                    <div className="flex items-center gap-2 px-4 print:hidden">
-                      <div className="w-1 h-6 bg-[#2563EB] rounded-full" />
-                      <h2 className="text-xl font-black font-noto text-slate-800">{cls.class_name}</h2>
+        <div className="space-y-6">
+           {/* Editor Tools */}
+           <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-6 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                 {/* Class Selector - only if Class-wise tab */}
+                 {activeTab === 'classwise' && (
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'শ্রেনী নির্বাচন' : 'Select Class'}</label>
+                      <select 
+                         value={selectedClassId} 
+                         onChange={e => setSelectedClassId(e.target.value)}
+                         className={`w-full h-12 rounded-xl px-4 font-bold outline-none border focus:ring-2 appearance-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800 focus:ring-blue-500'}`}
+                      >
+                         {classes.map(c => (
+                           <option key={c.id} value={c.id}>{c.class_name}</option>
+                         ))}
+                      </select>
+                   </div>
+                 )}
+                 
+                 {/* Title */}
+                 <div className={`space-y-2 ${activeTab === 'classwise' ? 'lg:col-span-1' : 'md:col-span-2'}`}>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'রুটিনের শিরোনাম' : 'Routine Title'}</label>
+                    <input 
+                       type="text" 
+                       value={routineTitle} 
+                       onChange={e => setRoutineTitle(e.target.value)}
+                       className={`w-full h-12 rounded-xl px-4 font-bold outline-none border focus:ring-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800 focus:ring-blue-500'}`}
+                    />
+                 </div>
+                 
+                 {/* Theme Color */}
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Palette size={14}/> {lang === 'bn' ? 'থিম কালার' : 'Theme Color'}</label>
+                    <div className="flex gap-2">
+                      {Object.keys(routineThemes).map((colorKey) => (
+                        <button
+                          key={colorKey}
+                          onClick={() => setRoutineThemeColor(colorKey)}
+                          className={`w-10 h-10 rounded-xl border-2 transition-all active:scale-95 flex items-center justify-center ${routineThemeColor === colorKey ? 'scale-110 shadow-lg' : 'hover:scale-105'}`}
+                          style={{
+                            backgroundColor: routineThemes[colorKey as keyof typeof routineThemes].primary,
+                            borderColor: routineThemeColor === colorKey ? routineThemes[colorKey as keyof typeof routineThemes].border : 'transparent',
+                            boxShadow: routineThemeColor === colorKey ? `0 4px 12px ${routineThemes[colorKey as keyof typeof routineThemes].shadow}` : 'none'
+                          }}
+                        >
+                           {routineThemeColor === colorKey && <Check size={16} className="text-white" strokeWidth={3} />}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                  
-                  {format === 'grid' ? (
-                    <RoutineGrid 
-                      routines={classRoutines} 
-                      madrasah={madrasah} 
-                      days={DAYS} 
-                      className={cls.class_name} 
-                      getBanglaNumber={getBanglaNumber}
-                      canManage={canManage}
-                      handleDelete={confirmDelete}
-                      handleCopy={handleCopy}
-                    />
-                  ) : format === 'list' ? (
-                    <RoutineList 
-                      routines={classRoutines} 
-                      days={DAYS} 
-                      getBanglaNumber={getBanglaNumber}
-                      canManage={canManage}
-                      handleDelete={confirmDelete}
-                      handleCopy={handleCopy}
-                    />
-                  ) : (
-                    <RoutineCards 
-                      routines={classRoutines} 
-                      days={DAYS} 
-                      getBanglaNumber={getBanglaNumber}
-                      canManage={canManage}
-                      handleDelete={confirmDelete}
-                      handleCopy={handleCopy}
-                    />
-                  )}
-                  <div className="page-break" />
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
+                 </div>
 
-      {/* Add/Edit Modal */}
-      {isAdding && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 pb-24 sm:pb-4 animate-in fade-in duration-300">
-          <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-7 shadow-2xl space-y-6 overflow-y-auto max-h-[80vh] no-scrollbar relative overflow-hidden">
-             
-             {/* Decorative Background */}
-             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
-             <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl" />
+                 {/* Action Buttons */}
+                 <div className="space-y-2 flex flex-col justify-end lg:col-span-1">
+                    <div className="flex gap-2">
+                       <button onClick={handleSaveRoutine} disabled={saving} className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                         {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16}/>}
+                         {lang === 'bn' ? 'সেভ' : 'Save'}
+                       </button>
+                       <button onClick={() => handleDownloadPDF(pdfContentRef)} disabled={downloading} className="flex-1 h-12 bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                         {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16}/>}
+                         {lang === 'bn' ? 'ডাউনলোড' : 'Download'}
+                       </button>
+                    </div>
+                 </div>
+              </div>
 
-             <div className="flex items-center gap-4 border-b-2 border-slate-50 pb-5 relative z-10">
-               <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-[1rem] flex items-center justify-center shadow-sm">
-                 <Plus size={24} strokeWidth={2.5} />
-               </div>
-               <h3 className="font-black font-noto text-xl text-slate-800 tracking-tight">রুটিন এড করুন</h3>
-             </div>
-
-             <div className="space-y-4 relative z-10">
-                <div className="flex bg-slate-100 p-1.5 rounded-2xl shadow-inner">
-                   <button onClick={() => setFormData({...formData, is_break: false})} className={`flex-1 py-2.5 text-[11px] font-black uppercase rounded-xl transition-all ${!formData.is_break ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>ক্লাস</button>
-                   <button onClick={() => setFormData({...formData, is_break: true})} className={`flex-1 py-2.5 text-[11px] font-black uppercase rounded-xl transition-all ${formData.is_break ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}>বিরতি</button>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">ক্লাস</label>
-                  <select 
-                    className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white hover:bg-slate-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[right_16px_center] bg-no-repeat"
-                    value={formData.class_id || ''}
-                    onChange={e => setFormData({...formData, class_id: e.target.value})}
-                  >
-                    <option value="">ক্লাস পছন্দ করুন</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">{formData.is_break ? 'বিরতির বিষয়' : 'বিষয়ের নাম'}</label>
-                  <input 
-                    type="text"
-                    className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white placeholder-slate-300"
-                    value={formData.subject_name || ''}
-                    onChange={e => setFormData({...formData, subject_name: e.target.value})}
-                    placeholder={formData.is_break ? "যেমন: টিফিন, নামায" : "যেমন: আরবী"}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">বার</label>
-                  <select 
-                    className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white hover:bg-slate-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[right_16px_center] bg-no-repeat"
-                    value={formData.day || ''}
-                    onChange={e => setFormData({...formData, day: e.target.value as any})}
-                  >
-                    {DAYS.map(d => <option key={d.id} value={d.id}>{d.bn}</option>)}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">শুরু</label>
-                    <input type="time" className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white" value={formData.start_time} onChange={e => setFormData({...formData, start_time: e.target.value})} />
+              {/* Instructions Section */}
+              <div className="grid grid-cols-1 gap-8 pt-4 border-t border-slate-100 font-noto">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}</h4>
+                    <button onClick={() => setRoutineInstructions([...routineInstructions, ''])} className="text-blue-600 font-bold text-[10px] uppercase tracking-wider hover:underline flex items-center gap-1">
+                      <Plus size={14}/> {lang === 'bn' ? 'যোগ করুন' : 'Add New'}
+                    </button>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">শেষ</label>
-                    <input type="time" className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white" value={formData.end_time} onChange={e => setFormData({...formData, end_time: e.target.value})} />
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {routineInstructions.map((inst, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <input 
+                          type="text" 
+                          value={inst} 
+                          onChange={e => {
+                            const newInst = [...routineInstructions];
+                            newInst[idx] = e.target.value;
+                            setRoutineInstructions(newInst);
+                          }}
+                          className={`flex-1 h-10 rounded-lg px-3 text-sm font-medium border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-600'}`}
+                          placeholder={lang === 'bn' ? `${idx + 1} । নির্দেশনা লিখুন` : `Instruction ${idx + 1}`}
+                        />
+                        <button onClick={() => setRoutineInstructions(routineInstructions.filter((_, i) => i !== idx))} className="w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-colors">
+                          <Trash2 size={14}/>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              </div>
+           </div>
 
-                {!formData.is_break && (
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">শিক্ষক</label>
-                    <select 
-                      className="w-full h-12 border-2 border-slate-100 rounded-[1rem] px-4 font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-colors bg-white hover:bg-slate-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:16px_16px] bg-[right_16px_center] bg-no-repeat"
-                      value={formData.teacher_id || ''}
-                      onChange={e => setFormData({...formData, teacher_id: e.target.value})}
-                    >
-                      <option value="">শিক্ষক পছন্দ করুন (ঐচ্ছিক)</option>
-                      {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                  </div>
-                )}
-             </div>
 
-             <div className="flex gap-3 pt-6 relative z-10">
-                <button onClick={() => setIsAdding(false)} className="flex-1 h-12 md:h-14 bg-slate-100 text-slate-600 font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase hover:bg-slate-200 transition-colors">বাতিল</button>
-                <button onClick={handleSave} disabled={saving} className="flex-[2] h-12 md:h-14 bg-[#2563EB] text-white font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase shadow-lg shadow-blue-500/20 flex items-center justify-center hover:bg-blue-700 transition-colors active:scale-95">
-                  {saving ? <Loader2 className="animate-spin" size={18} /> : 'সংরক্ষণ করুন'}
-                </button>
-             </div>
-          </div>
-        </div>
-      )}
+           {/* Live Preview / Builder Area */}
+           <div className="space-y-4">
+              <div className="flex justify-between items-center px-2">
+                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">{lang === 'bn' ? 'লাইভ প্রিভিউ' : 'Live Preview'}</h3>
+                 <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">
+                      <button onClick={() => setUserZoom(z => Math.max(0.5, z - 0.2))} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'জুম আউট' : 'Zoom Out'}><ZoomOut size={16} /></button>
+                      <span className="text-[11px] font-black text-slate-700 min-w-[44px] text-center">{Math.round(userZoom * 100)}%</span>
+                      <button onClick={() => setUserZoom(z => Math.min(3, z + 0.2))} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'জুম ইন' : 'Zoom In'}><ZoomIn size={16} /></button>
+                      <div className="w-[1px] h-4 bg-slate-300 mx-0.5"></div>
+                      <button onClick={() => setUserZoom(1)} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'রিসেট জুম' : 'Reset Zoom'}><Maximize size={14} /></button>
+                    </div>
+                    <div className="hidden sm:block text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-blue-50/50 border border-blue-100 text-blue-800 px-2 py-1.5 rounded-lg whitespace-nowrap">
+                      {lang === 'bn' ? 'এ৪ সাইজ (ল্যান্ডস্কেপ)' : 'A4 Size (Landscape)'}
+                    </div>
+                 </div>
+              </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteModal.show && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 pb-24 sm:pb-4 animate-in fade-in zoom-in-95 duration-300">
-          <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl space-y-6 text-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
-            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full mx-auto flex items-center justify-center mb-6 relative">
-              <div className="absolute inset-0 border-4 border-white rounded-full"></div>
-              <Trash2 size={32} strokeWidth={2} />
-            </div>
-            <div className="space-y-2 relative z-10">
-              <h3 className="text-2xl font-black font-noto tracking-tight text-slate-800">আপনি কি নিশ্চিত?</h3>
-              <p className="text-sm font-medium text-slate-500 leading-relaxed">এই রুটিনটি স্থায়ীভাবে মুছে ফেলা হবে। এই কাজ আর বাতিল করা যাবে না।</p>
-            </div>
-            <div className="flex gap-3 pt-4 relative z-10">
-               <button onClick={() => setDeleteModal({show: false, id: null})} className="flex-1 h-12 md:h-14 bg-slate-100 text-slate-600 font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase hover:bg-slate-200 transition-colors">না, বাতিল</button>
-               <button onClick={executeDelete} disabled={saving} className="flex-1 h-12 md:h-14 bg-red-500 text-white font-black rounded-2xl md:rounded-[1.25rem] text-[11px] md:text-xs uppercase shadow-lg shadow-red-500/20 flex items-center justify-center hover:bg-red-600 transition-colors active:scale-95">
-                 {saving ? <Loader2 className="animate-spin" size={18} /> : 'হ্যাঁ, ডিলিট'}
-               </button>
-            </div>
-          </div>
+              <div 
+                ref={previewContainerRef}
+                className="w-full py-8 px-2 sm:px-8 bg-slate-100/50 rounded-[2.8rem] border border-slate-200/50 overflow-auto custom-scrollbar text-center"
+                style={{ minHeight: `${794 * previewScale * userZoom + 40}px`, maxHeight: '75vh' }}
+              >
+                 <div 
+                   className="relative shrink-0 inline-flex items-start text-left mx-auto"
+                   style={{ 
+                     width: `${1123 * previewScale * userZoom}px`,
+                     height: `${794 * previewScale * userZoom}px`
+                   }}
+                 >
+                   <div 
+                     className="shadow-3xl origin-top-left transition-transform duration-200 bg-white font-noto rounded-lg absolute top-0 left-0"
+                     style={{ 
+                       transform: `scale(${previewScale * userZoom})`,
+                       width: '1123px',
+                       height: '794px'
+                     }}
+                   >
+                     {/* The Container to capture for PDF */}
+                     <div ref={pdfContentRef} className="text-slate-800 w-[1123px] min-h-[794px] p-10 bg-white relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                        
+                        {/* Frame Design corners */}
+                        <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                        <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 rounded-tr-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                        <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 rounded-bl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                        <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 rounded-br-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+
+                        <div className="flex-1 flex flex-col justify-between relative z-10">
+                          {/* Banner Block */}
+                          <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
+                            
+                            {/* Left Column: Logotype */}
+                            <div className="flex-shrink-0 flex items-center justify-center pl-4">
+                              <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
+                                {madrasah?.logo_url ? (
+                                  <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain rounded-full bg-white" alt="Logo" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                ) : (
+                                  <div className="w-[85px] h-[85px] bg-slate-50 rounded-full border border-slate-100 flex items-center justify-center text-slate-400 font-black text-[10px]">LOGO</div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Center Column: Madrasah Title, location, etc */}
+                            <div className="flex-1 text-center px-3 leading-normal">
+                              <h1 className="text-[32px] font-black tracking-tight leading-none mb-1 font-noto" style={{ color: rtTheme.primary }}>
+                                {madrasah?.name || 'মাদরাসার নাম'}
+                              </h1>
+                              
+                              <div className="flex items-center justify-center gap-2 text-[12px] font-bold text-[#475569] leading-tight flex-wrap font-noto">
+                                <span className="inline-flex items-center gap-0.5 italic" style={{ color: rtTheme.primary }}>
+                                  {madrasah?.address || 'ঠিকানা'}
+                                </span>
+                                {(madrasah?.phone || madrasah?.phone) && (
+                                  <>
+                                    <span className="text-slate-300">|</span>
+                                    <span className="inline-flex items-center gap-0.5" style={{ color: rtTheme.primary }}>
+                                      {lang === 'bn' ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Center pill badge */}
+                              <div className="mt-2 inline-block">
+                                <div className="text-white px-8 py-2 rounded-2xl shadow-sm text-[14px] font-black tracking-wide border flex items-center gap-2" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}80` }}>
+                                  <LayoutGrid size={16} />
+                                  {routineTitle}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right Column: Solid Premium Box */}
+                            <div className="flex-shrink-0 w-[160px] h-[105px] text-white rounded-2xl flex flex-col justify-center p-3 border shadow mr-4" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
+                              <div className="flex items-center justify-center mb-1">
+                                <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center font-black text-sm" style={{ color: rtTheme.primary }}>
+                                  📅
+                                </div>
+                              </div>
+                              <div className="text-center leading-tight">
+                                <p className="text-[11px] font-black mb-0.5 uppercase tracking-widest" style={{ color: rtTheme.accent }}>
+                                  Class Routine
+                                </p>
+                                <p className="text-[11px] font-extrabold block mb-0.5" style={{ color: `${rtTheme.accent}cc` }}>
+                                  {lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Session'}
+                                </p>
+                                <p className="text-[10px] font-semibold text-white/70 block">
+                                  {new Date().getFullYear()} - {new Date().getFullYear() + 1}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Routine Table Container */}
+                          <div className="flex-1 mt-2 overflow-x-auto pb-4 custom-scrollbar relative">
+                            <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center table-fixed" style={{ borderColor: rtTheme.primary }}>
+                              <thead>
+                                 <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
+                                    <th className="border-r px-2 py-1.5 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                       <div className="flex flex-col items-center justify-center leading-tight">
+                                          <span className="text-[11px] tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent }}>{lang === 'bn' ? 'দিন / বার' : 'DAYS'}</span>
+                                          <Clock size={10} className="opacity-50" />
+                                       </div>
+                                    </th>
+                                    {periods.map((p, idx) => (
+                                      <th key={p.id} className={`border-r p-1 text-[11px] font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
+                                         {!p.isBreak ? (
+                                           <div className="flex flex-col items-center gap-0.5 font-noto">
+                                              <input 
+                                                type="text"
+                                                value={p.title}
+                                                onChange={(e) => {
+                                                  const newPeriods = [...periods];
+                                                  newPeriods[idx].title = e.target.value;
+                                                  setPeriods(newPeriods);
+                                                }}
+                                                className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[10px] font-black placeholder-white/50"
+                                              />
+                                              <input 
+                                                type="text"
+                                                value={p.time}
+                                                onChange={(e) => {
+                                                  const newPeriods = [...periods];
+                                                  newPeriods[idx].time = e.target.value;
+                                                  setPeriods(newPeriods);
+                                                }}
+                                                className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[8px] opacity-70 font-bold placeholder-white/30"
+                                              />
+                                           </div>
+                                         ) : (
+                                           <div className="flex flex-col items-center py-1 font-noto">
+                                              <textarea 
+                                                value={p.title}
+                                                onChange={(e) => {
+                                                  const newPeriods = [...periods];
+                                                  newPeriods[idx].title = e.target.value;
+                                                  setPeriods(newPeriods);
+                                                }}
+                                                className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-slate-400/30 rounded p-0 text-[8px] font-black uppercase tracking-widest opacity-80 resize-none h-12"
+                                                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                                              />
+                                           </div>
+                                         )}
+                                         <button 
+                                           onClick={() => removePeriod(p.id)} 
+                                           data-html2canvas-ignore="true"
+                                           className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg z-30 hover:scale-125 active:scale-95 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 border-2 border-white"
+                                         >
+                                           <X size={12}/>
+                                         </button>
+                                      </th>
+                                    ))}
+                                 </tr>
+                              </thead>
+                              <tbody>
+                                 {DEFAULT_DAYS.map((day, dIdx) => (
+                                   <tr key={day.id} className="border-b h-[2.75rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
+                                     <td className="border-r p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
+                                       {lang === 'bn' ? day.bn : day.en}
+                                     </td>
+                                     {periods.map((p, idx) => (
+                                       <td key={p.id} className={`border-r p-1 align-middle text-center relative ${p.isBreak ? 'bg-slate-50/50' : ''}`} style={{ borderColor: `${rtTheme.primary}26` }}>
+                                          {!p.isBreak ? (
+                                            <textarea 
+                                               value={routineMatrix[`${day.id}_${p.id}`] || ''}
+                                               onChange={(e) => handleCellChange(day.id, p.id, e.target.value)}
+                                               placeholder="-"
+                                               className={`w-full min-h-[50px] bg-transparent text-center text-[10px] font-black font-noto resize-none border-none outline-none focus:ring-1 focus:ring-blue-400 rounded p-1 leading-normal`}
+                                               style={{ color: rtTheme.primary }}
+                                            />
+                                          ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center opacity-10 gap-1">
+                                               <Coffee size={18} style={{ color: rtTheme.primary }} />
+                                            </div>
+                                          )}
+                                       </td>
+                                     ))}
+                                   </tr>
+                                 ))}
+                              </tbody>
+                            </table>
+
+                            {/* Watermark */}
+                            <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none -rotate-12 select-none">
+                              {madrasah?.logo_url ? (
+                                <img src={madrasah.logo_url} className="w-[330px] h-[330px] object-contain" alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                              ) : (
+                                <div className="text-9xl font-black" style={{ color: rtTheme.primary }}>{madrasah?.name?.slice(0, 1) || 'ম'}</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Footer Block */}
+                          <div className="mt-2 flex justify-between items-end pt-3 border-t" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                            {/* Left Column: Instructions */}
+                            <div className="max-w-[430px] text-left leading-relaxed">
+                               <div className="text-white px-3 py-1 rounded-lg inline-flex items-center gap-1.5 text-[11px] font-black mb-1.5 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary }}>
+                                 <span>📖</span>
+                                 {lang === 'bn' ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
+                               </div>
+                               <ul className="space-y-0.5 max-h-[105px] overflow-hidden pr-2">
+                                  {routineInstructions.filter(Boolean).map((inst, i) => (
+                                    <li key={i} className="flex gap-1.5 text-[10px] font-bold text-slate-600 leading-normal">
+                                      <span className="font-extrabold" style={{ color: rtTheme.primary }}>{i + 1} ।</span>
+                                      <span>{inst}</span>
+                                    </li>
+                                  ))}
+                               </ul>
+                            </div>
+
+                            {/* Right Column: Signature */}
+                            <div className="text-center min-w-[200px]">
+                              <div className="relative pt-8">
+                                <div className="h-px bg-slate-300 w-full mb-1"></div>
+                                <p className="text-[11px] font-black" style={{ color: rtTheme.primary }}>
+                                  {lang === 'bn' ? 'অধ্যক্ষ / পরিচালক' : 'Principal / Director'}
+                                </p>
+                                <p className="text-[9px] font-bold text-slate-400 mt-1">{madrasah?.name}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Deenora Portal bottom tagline */}
+                          <div className="text-center mt-3 pt-1 text-[8px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
+                             {lang === 'bn' ? 'মাদরাসা ম্যানেজমেন্ট সিস্টেম ২০২৬ • ডিজিটাল প্রযুক্তি সহায়িকা' : 'MADRASAH MANAGEMENT SYSTEM • POWERED BY DEENORA'}
+                          </div>
+                        </div>
+                     </div>
+                   </div>
+                 </div>
+              </div>
+
+              {/* Add column controls outside the PDF visual layout */}
+              <div className="flex gap-2 justify-center mt-4">
+                 <button onClick={() => addPeriod(false)} className="px-4 py-2 bg-blue-50 text-blue-600 font-bold text-[10px] rounded-xl flex items-center gap-1 uppercase tracking-widest"><Plus size={14}/> {lang === 'bn' ? 'নতুন ক্লাস যোগ করুন' : 'Add Class Column'}</button>
+                 <button onClick={() => addPeriod(true)} className="px-4 py-2 bg-amber-50 text-amber-600 font-bold text-[10px] rounded-xl flex items-center gap-1 uppercase tracking-widest"><Plus size={14}/> {lang === 'bn' ? 'নতুন বিরতি যোগ করুন' : 'Add Break Column'}</button>
+              </div>
+           </div>
         </div>
       )}
 
       {/* Toast Notification */}
       {toast.show && (
-        <div className="fixed bottom-24 sm:bottom-10 left-1/2 -translate-x-1/2 z-[120] animate-in slide-in-from-bottom-5 fade-in duration-300">
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-5 fade-in duration-300">
           <div className={`px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 border backdrop-blur-md ${
             toast.type === 'success' ? 'bg-emerald-50/90 text-emerald-700 border-emerald-100' :
             toast.type === 'error' ? 'bg-red-50/90 text-red-700 border-red-100' :
             'bg-blue-50/90 text-blue-700 border-blue-100'
           }`}>
-            <div className="shrink-0 bg-white/50 p-1.5 rounded-full">
-              {toast.type === 'success' ? <CheckCircle size={20} strokeWidth={2.5} className="text-emerald-500" /> :
-               toast.type === 'error' ? <AlertCircle size={20} className="text-red-500" /> :
-               <Info size={20} className="text-blue-500" />}
-            </div>
-            <span className="font-bold text-sm tracking-wide">{toast.message}</span>
+             {toast.type === 'success' ? <CheckCircle size={20} className="text-emerald-500" /> :
+              toast.type === 'error' ? <AlertCircle size={20} className="text-red-500" /> :
+              <Info size={20} className="text-blue-500" />}
+            <span className="font-bold text-sm tracking-wide">{toast.msg}</span>
           </div>
         </div>
       )}
-    </div>
-  );
-};
-
-// --- Subcomponents for different views ---
-
-const RoutineGrid = ({ routines, madrasah, days, className, getBanglaNumber, canManage, handleDelete, handleCopy }: any) => {
-  const timeSlots = useMemo(() => {
-    const slots = Array.from(new Set(routines.map((r: any) => `${r.start_time.slice(0, 5)} - ${r.end_time.slice(0, 5)}`)));
-    return slots.sort();
-  }, [routines]);
-
-  return (
-    <div className="p-8 bg-white border-2 border-slate-900 rounded-[2.5rem] shadow-premium print:border-none print:shadow-none print:p-0">
-       <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-4 mb-4">
-             {madrasah?.logo_url && <img src={madrasah.logo_url} className="w-16 h-16 object-contain" alt="Logo" />}
-             <div className="text-left">
-                <h1 className="text-xl font-black font-noto text-blue-800">{madrasah?.name_english}</h1>
-                <h2 className="text-lg font-bold font-noto text-slate-800">{madrasah?.name}</h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{madrasah?.address}</p>
-             </div>
-          </div>
-          <div className="bg-slate-900 text-white px-8 py-1.5 rounded-full inline-block text-sm font-black font-noto">ক্লাস রুটিন - ২০২৫</div>
-          {className && <div className="mt-2 text-xl font-black font-noto text-slate-700">শ্রেণি: {className}</div>}
-       </div>
-
-       <div className="overflow-x-auto no-scrollbar">
-          <table className="w-full border-collapse border-2 border-slate-900 min-w-[700px]">
-            <thead>
-              <tr className="bg-slate-50 border-b-2 border-slate-900">
-                <th className="border-r-2 border-slate-900 p-3 text-sm font-black font-noto w-24">সময়</th>
-                {days.map((d: any) => d.id !== 'Friday' && (
-                  <th key={d.id} className="border-r-2 border-slate-900 p-3 text-sm font-black font-noto">{d.bn}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {timeSlots.map((slot: any) => (
-                <tr key={slot} className="border-b-2 border-slate-900 last:border-0">
-                  <td className="border-r-2 border-slate-900 p-3 text-center text-[11px] font-black bg-slate-50">{getBanglaNumber(slot)}</td>
-                  {days.map((d: any) => d.id !== 'Friday' && (
-                    <td key={d.id} className="border-r-2 border-slate-900 p-2 text-center relative group min-h-[60px]">
-                       {(() => {
-                         const r = routines.find((item: any) => item.day === d.id && `${item.start_time.slice(0, 5)} - ${item.end_time.slice(0, 5)}` === slot);
-                         if (!r) return null;
-                         return (
-                           <div className="space-y-0.5">
-                             <p className={`text-sm font-black font-noto ${r.is_break ? 'text-amber-600' : 'text-slate-900'}`}>{r.subject_name}</p>
-                             {!r.is_break && (r.teachers as any)?.teacher_name && (
-                               <p className="text-[10px] font-bold text-slate-400 capitalize">{(r.teachers as any).teacher_name}</p>
-                             )}
-                             {canManage && (
-                               <div className="flex items-center justify-center gap-1.5 mt-2 print:hidden">
-                                 <button 
-                                   onClick={(e) => { e.stopPropagation(); handleCopy(r); }} 
-                                   className="w-10 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center border border-blue-100 shadow-sm active:scale-95"
-                                   title="Copy"
-                                 >
-                                   <Copy size={12} />
-                                 </button>
-                                 <button 
-                                   onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} 
-                                   className="w-10 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center border border-red-100 shadow-sm active:scale-95"
-                                   title="Delete"
-                                 >
-                                   <Trash2 size={12} />
-                                 </button>
-                               </div>
-                             )}
-                           </div>
-                         );
-                       })()}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-       </div>
-
-       <div className="mt-8 flex justify-between items-end px-10">
-          <div className="text-center border-t border-slate-400 pt-1 min-w-[120px]">
-             <p className="text-[10px] font-bold font-noto">সহকারী শিক্ষক</p>
-          </div>
-          <div className="text-center border-t border-slate-400 pt-1 min-w-[120px]">
-             <p className="text-[10px] font-bold font-noto">অধ্যক্ষ / মুহতামিম</p>
-          </div>
-       </div>
-    </div>
-  );
-};
-
-const RoutineList = ({ routines, days, getBanglaNumber, canManage, handleDelete, handleCopy }: any) => {
-  return (
-    <div className="space-y-4">
-      {days.map((day: any) => {
-        const dayRoutines = routines.filter((r: any) => r.day === day.id);
-        if (dayRoutines.length === 0) return null;
-        return (
-          <div key={day.id} className="bg-white rounded-[2rem] border overflow-hidden">
-             <div className="bg-slate-50 px-6 py-3 border-b flex items-center justify-between">
-                <h4 className="font-black font-noto text-slate-700">{day.bn}</h4>
-                <div className="text-[10px] font-black text-slate-400 uppercase">{dayRoutines.length} পিরিয়ড</div>
-             </div>
-             <div className="divide-y">
-                {dayRoutines.map((r: any) => (
-                  <div key={r.id} className="p-4 flex items-center justify-between group">
-                    <div className="flex items-center gap-4">
-                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${r.is_break ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
-                          {r.is_break ? <Coffee size={18} /> : <BookOpen size={18} />}
-                       </div>
-                       <div>
-                          <p className="text-xs font-black text-slate-400">{getBanglaNumber(r.start_time.slice(0, 5))} - {getBanglaNumber(r.end_time.slice(0, 5))}</p>
-                          <h5 className={`font-black font-noto ${r.is_break ? 'text-amber-600' : 'text-slate-900'}`}>{r.subject_name}</h5>
-                          {!r.is_break && (r.teachers as any)?.teacher_name && (
-                            <p className="text-[10px] font-medium text-slate-400">{(r.teachers as any).teacher_name}</p>
-                          )}
-                       </div>
-                    </div>
-                    {canManage && (
-                       <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20">
-                         <button 
-                           onClick={(e) => { e.stopPropagation(); handleCopy(r); }} 
-                           className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100 active:scale-90 shadow-sm"
-                         >
-                           <Copy size={18} />
-                         </button>
-                         <button 
-                           onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} 
-                           className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center border border-red-100 active:scale-90 shadow-sm"
-                         >
-                           <Trash2 size={18} />
-                         </button>
-                       </div>
-                    )}
-                  </div>
-                ))}
-             </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-const RoutineCards = ({ routines, days, getBanglaNumber, canManage, handleDelete, handleCopy }: any) => {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {routines.map((r: any) => (
-        <div key={r.id} className="bg-white p-6 rounded-[2rem] border relative overflow-hidden group hover:shadow-lg transition-all border-l-4 border-l-[#2563EB]">
-           <div className="flex justify-between items-start mb-4">
-             <div className="bg-blue-50 text-[#2563EB] px-3 py-1 rounded-full text-[10px] font-black uppercase">
-               {DAYS.find(d => d.id === r.day)?.bn}
-             </div>
-             <div className="text-xs font-black text-slate-400 flex items-center gap-1">
-               <Clock size={14} /> {getBanglaNumber(r.start_time.slice(0, 5))} - {getBanglaNumber(r.end_time.slice(0, 5))}
-             </div>
-           </div>
-           
-           <div className="space-y-3">
-              <h4 className="text-xl font-black font-noto text-slate-900">{r.subject_name}</h4>
-              <div className="flex flex-wrap gap-4 pt-2">
-                 {!r.is_break && (r.teachers as any)?.teacher_name && (
-                   <div className="flex items-center gap-1.5 text-slate-500">
-                     <User size={14} /> <span className="text-xs font-bold">{(r.teachers as any).teacher_name}</span>
-                   </div>
-                 )}
-                 {r.room_number && (
-                   <div className="flex items-center gap-1.5 text-slate-500">
-                     <MapPin size={14} /> <span className="text-xs font-bold">{r.room_number}</span>
-                   </div>
-                 )}
-              </div>
-           </div>
-
-           {canManage && (
-             <div className="absolute bottom-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleCopy(r); }} 
-                  className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100 active:scale-90 shadow-sm"
-                >
-                  <Copy size={18} />
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} 
-                  className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center border border-red-100 active:scale-90 shadow-sm"
-                >
-                  <Trash2 size={18} />
-                </button>
-             </div>
-           )}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const MasterRoutineGrid = ({ routines, classes, madrasah, getBanglaNumber }: any) => {
-  const timeSlots = useMemo(() => {
-    const slots = Array.from(new Set(routines.map((r: any) => `${r.start_time.slice(0, 5)} - ${r.end_time.slice(0, 5)}`)));
-    return slots.sort();
-  }, [routines]);
-
-  return (
-    <div className="bg-white border-2 border-slate-900 rounded-[2.5rem] overflow-hidden shadow-premium p-6">
-       <div className="text-center mb-6">
-          <h1 className="text-2xl font-black font-noto text-slate-800">{madrasah?.name}</h1>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{madrasah?.address}</p>
-          <div className="mt-4 bg-slate-900 text-white px-8 py-1.5 rounded-full inline-block text-sm font-black font-noto uppercase tracking-widest">
-            মাস্টার ক্লাস রুটিন - ২০২৫
-          </div>
-       </div>
-
-       <div className="overflow-x-auto no-scrollbar pb-4">
-          <table className="w-full border-collapse border-[1px] border-slate-300 text-[10px]">
-             <thead>
-                <tr className="bg-slate-50 h-12">
-                   <th className="border-[1px] border-slate-300 p-2 font-black font-noto w-20 text-center">শ্রেণি</th>
-                   {(timeSlots as string[]).map((slot, index) => {
-                      const startTime = slot.split(' - ')[0];
-                      const endTime = slot.split(' - ')[1];
-                      return (
-                         <React.Fragment key={slot}>
-                            <th className="border-[1px] border-slate-300 p-1 font-black font-noto min-w-[100px] text-center">
-                               <div className="text-[11px]">{getBanglaNumber((index + 1).toString())}ম ঘণ্টা</div>
-                               <div className="text-[9px] font-bold text-slate-400">({getBanglaNumber(startTime)}-{getBanglaNumber(endTime)})</div>
-                            </th>
-                            {index === 2 && <th className="border-[1px] border-slate-300 p-1 font-black font-noto w-8 bg-slate-100">বিরতি</th>}
-                            {index === 5 && <th className="border-[1px] border-slate-300 p-1 font-black font-noto w-8 bg-slate-100">বিরতি</th>}
-                         </React.Fragment>
-                      );
-                   })}
-                </tr>
-             </thead>
-             <tbody>
-                {classes.map(cls => {
-                  const classRoutines = routines.filter((r: any) => r.class_id === cls.id);
-                  if (classRoutines.length === 0) return null;
-
-                  return (
-                    <tr key={cls.id} className="h-16 group hover:bg-slate-50 transition-colors">
-                       <td className="border-[1px] border-slate-300 p-2 font-black font-noto text-center bg-slate-50/50">
-                          {cls.class_name}
-                       </td>
-                       {(timeSlots as string[]).map((slot, index) => {
-                          const r = classRoutines.find((item: any) => `${item.start_time.slice(0, 5)} - ${item.end_time.slice(0, 5)}` === slot);
-                          return (
-                            <React.Fragment key={slot}>
-                               <td className="border-[1px] border-slate-300 p-2 text-center align-middle whitespace-normal">
-                                  {r ? (
-                                    <div className="space-y-0.5">
-                                       <p className="font-black font-noto text-slate-900 text-[11px]">{r.subject_name}</p>
-                                       {!r.is_break && (r.teachers as any)?.teacher_name && (
-                                         <p className="text-[9px] font-bold text-slate-400 leading-tight">মো: {(r.teachers as any).teacher_name}</p>
-                                       )}
-                                    </div>
-                                  ) : <span className="text-slate-200">---</span>}
-                               </td>
-                               {index === 2 && (
-                                  <td className="border-[1px] border-slate-300 p-0 text-center align-middle bg-slate-50/50 relative">
-                                     <div className="[writing-mode:vertical-lr] rotate-180 text-[8px] font-black tracking-widest text-slate-400 mx-auto">
-                                        পানি বিরতি
-                                     </div>
-                                  </td>
-                               )}
-                               {index === 5 && (
-                                  <td className="border-[1px] border-slate-300 p-0 text-center align-middle bg-slate-50/50 relative">
-                                     <div className="[writing-mode:vertical-lr] rotate-180 text-[7px] font-black leading-tight text-slate-400 mx-auto">
-                                        দুপুরের বিরতি
-                                     </div>
-                                  </td>
-                               )}
-                            </React.Fragment>
-                          );
-                       })}
-                    </tr>
-                  );
-                })}
-             </tbody>
-          </table>
-       </div>
     </div>
   );
 };

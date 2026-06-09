@@ -354,7 +354,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         const initialArrival: Record<string, string> = {};
         
         finalStdData.forEach(s => {
-          const existing = attData?.find(a => a.student_id === s.id);
+          const existing = attData?.find(a => a.student_id === s.id && (a.session === selectedSession || (!a.session && selectedSession === 'daily')));
           initial[s.id] = existing ? (existing.status as any) : 'present';
           if (existing?.arrival_time) initialArrival[s.id] = existing.arrival_time;
         });
@@ -531,7 +531,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       
       const existingMap = new Map();
       // process backwards so the first element (latest via created_at desc) overwrites any older duplicates
-      [...existingAttRecords].reverse().forEach(r => existingMap.set(r.student_id, r));
+      // match by student_id AND session to prevent overwriting different sessions
+      [...existingAttRecords].reverse().forEach(r => existingMap.set(`${r.student_id}_${r.session || 'daily'}`, r));
 
       for (const [sid, status] of Object.entries(attendance)) {
         const arrTime = status === 'late' ? arrivalTime[sid] : null;
@@ -552,14 +553,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         
         payload.push(record);
 
-        const existing = existingMap.get(sid);
+        const existing = existingMap.get(`${sid}_${selectedSession}`);
         if (existing) {
           // Check if changed
           if (
             existing.status !== status ||
             existing.arrival_time !== arrTime ||
-            existing.late_minutes !== mins ||
-            existing.session !== selectedSession
+            existing.late_minutes !== mins
           ) {
             updates.push({ ...record, id: existing.id });
           }
