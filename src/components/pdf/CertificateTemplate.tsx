@@ -293,75 +293,77 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
             )}
 
                        {type === 'attestation' && (
-             <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
-               {isBn ? (
-                 <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-baseline pb-1">
-                     <span className="mr-2">এই মর্মে প্রত্যয়ন করা যাচ্ছে যে,</span>
-                     <Field value={student.student_name} minWidth="320px" stretch />
-                   </div>
-                   <div className="flex w-full items-baseline pb-1">
-                     <span>পিতা:</span>
-                     <Field value={student.guardian_name || ''} minWidth="260px" stretch />
-                     <span>, মাতা:</span>
-                     <Field value={student.mother_name || ''} minWidth="260px" stretch />
-                   </div>
-                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
-                     <span>গ্রাম/এলাকা:</span>
-                   <Field value={villageOrArea} minWidth="220px" />
-                   <span>, ডাকঘর:</span>
-                   <Field value={postOffice} minWidth="160px" />
-                   <span>, উপজেলা:</span>
-                   <Field value={upazila} minWidth="160px" />
-                   <span>, জেলা:</span>
-                   <Field value={district} minWidth="160px" />
-                   <span>। রোল নং:</span>
-                   <Field value={isBn ? enToBnNumber(String(student.roll || '')) : String(student.roll || '')} minWidth="90px" />
-                   <span>। সে অত্র প্রতিষ্ঠানে ২০</span>
-                   <Field value={bnYearSuffix} minWidth="60px" />
-                   <span>সালের শিক্ষাবর্ষে</span>
-                   <Field value={student.className || ''} minWidth="180px" />
-                   <span>শ্রেণির একজন নিয়মিত শিক্ষার্থী।</span><br/>
+              <div className="font-medium w-full text-justify animate-fadeIn" style={{ lineHeight: '1.85' }}>
+                {isBn ? (
+                  <div className="flex flex-col gap-y-1 w-full text-justify mt-2">
+                    <div className="flex w-full items-baseline pb-1">
+                      <span className="mr-2 text-lg">এই মর্মে প্রত্যয়ন করা যাচ্ছে যে,</span>
+                      <Field value={student.student_name} minWidth="340px" stretch />
+                    </div>
+                    <div className="flex w-full items-baseline pb-1">
+                      <span>পিতা:</span>
+                      <Field value={student.guardian_name || ''} minWidth="280px" stretch />
+                      <span>, মাতা:</span>
+                      <Field value={student.mother_name || ''} minWidth="280px" stretch />
+                    </div>
+                    <p className="text-justify mt-1" style={{ lineHeight: '1.85' }}>
+                      <span>গ্রাম/এলাকা:</span>
+                      <Field value={villageOrArea} minWidth="240px" />
+                      <span>, ডাকঘর:</span>
+                      <Field value={postOffice} minWidth="160px" />
+                      <span>, উপজেলা:</span>
+                      <Field value={upazila} minWidth="160px" />
+                      <span>, জেলা:</span>
+                      <Field value={district} minWidth="160px" />
+                      <span>। রোল নং:</span>
+                      <Field value={isBn ? enToBnNumber(String(student.roll || '')) : String(student.roll || '')} minWidth="90px" />
+                      <span>। সে অত্র প্রতিষ্ঠানে ২০</span>
+                      <Field value={bnYearSuffix} minWidth="60px" />
+                      <span>সালের শিক্ষাবর্ষে</span>
+                      <Field value={student.className || ''} minWidth="180px" />
+                      <span>শ্রেণির একজন নিয়মিত শিক্ষার্থী। </span>
+                      <span>সে অত্যন্ত নম্র, ভদ্র ও মেধাবী শিক্ষার্থী। প্রাতিষ্ঠানিক ও সহশিক্ষা কার্যক্রমে তার অংশগ্রহণ অত্যন্ত সন্তোষজনক। তাহার জন্ম তারিখ:</span>
+                      <Field value={student.date_of_birth ? (isBn ? enToBnNumber(new Date(student.date_of_birth).toLocaleDateString('en-GB')) : new Date(student.date_of_birth).toLocaleDateString('en-GB')) : ''} minWidth="165px" />
+                      <span>।</span>
+                    </p>
+                    <p className="mt-2 font-bold select-none text-center text-[#0f2c59]">
+                      আমি তার সুন্দর, সমৃদ্ধ ও আলোকিত জীবনের সার্বিক সাফল্য কামনা করি।
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-y-1 w-full text-justify mt-2">
+                    <div className="flex w-full items-baseline pb-1">
+                      <span className="mr-2 text-lg">This is to certify that</span>
+                      <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
+                    </div>
+                    <div className="flex w-full items-baseline pb-1">
+                      <span>son/daughter of</span>
+                      <Field value={student.guardian_name || ''} minWidth="300px" stretch />
+                      <span>and</span>
+                      <Field value={student.mother_name || ''} minWidth="300px" stretch />
+                    </div>
+                    <p className="text-justify mt-1" style={{ lineHeight: '1.85' }}>
+                      <span>Address:</span>
+                      <Field value={student.address || ''} minWidth="340px" />
+                      <span>. He/She is a regular student of class</span>
+                      <Field value={student.className || ''} minWidth="180px" />
+                      <span>in this institution for the academic year 20</span>
+                      <Field value={currentYearSuffix} minWidth="60px" />
+                      <span>. His/Her Roll No is</span>
+                      <Field value={String(student.roll || '')} minWidth="90px" />
+                      <span>. According to the admission register, his/her date of birth is</span>
+                      <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="180px" />
+                      <span>. He/She is a polite, obedient and brilliant student. His/Her participation in academic and co-curricular activities is satisfactory.</span>
+                    </p>
+                    <p className="mt-2 font-bold select-none text-center text-[#0f2c59]">
+                      I wish him/her success in all future endeavors.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
-                   <span className="mr-2 mt-4 inline-block">সে অত্যন্ত নম্র, ভদ্র ও মেধাবী শিক্ষার্থী। প্রাতিষ্ঠানিক ও সহশিক্ষা কার্যক্রমে তার অংশগ্রহণ অত্যন্ত সন্তোষজনক। তাহার জন্ম তারিখ:</span>
-                   <Field value={student.date_of_birth ? (isBn ? enToBnNumber(new Date(student.date_of_birth).toLocaleDateString('en-GB')) : new Date(student.date_of_birth).toLocaleDateString('en-GB')) : ''} minWidth="160px" />
-                   <span>। আমি তার সুন্দর, সমৃদ্ধ ও আলোকিত জীবনের সার্বিক সাফল্য কামনা করি।</span>
-                 </p>
-                 </div>
-               ) : (
-                 <div className="flex flex-col gap-y-1 w-full text-justify">
-                   <div className="flex w-full items-baseline pb-1">
-                     <span className="mr-2">This is to certify that</span>
-                     <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
-                   </div>
-                   <div className="flex w-full items-baseline pb-1">
-                     <span>son/daughter of</span>
-                     <Field value={student.guardian_name || ''} minWidth="300px" stretch />
-                     <span>and</span>
-                     <Field value={student.mother_name || ''} minWidth="300px" stretch />
-                   </div>
-                   <p className="text-justify mt-2" style={{ lineHeight: '1.9' }}>
-                     <span>address:</span>
-                   <Field value={student.address || ''} minWidth="340px" />
-                   
-                   <span>, is a regular student of class</span>
-                   <Field value={student.className || ''} minWidth="180px" />
-                   <span>in this institution for the academic year 20</span>
-                   <Field value={currentYearSuffix} minWidth="60px" />
-                   <span>. His/Her Roll No is</span>
-                   <Field value={String(student.roll || '')} minWidth="120px" />
-                   <span>. According to the admission register, his/her date of birth is</span>
-                   <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="180px" />
-                   <span>.</span><br/>
-
-                   <span className="mr-2 mt-4 inline-block">He/She is a polite, obedient and brilliant student. His/Her participation in academic and co-curricular activities is satisfactory. I wish him/her success in all future endeavors.</span>
-                 </p>
-                 </div>
-               )}
-             </div>
-           )}
-
-           {type === 'character' && (
+                       {type === 'character' && (
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
