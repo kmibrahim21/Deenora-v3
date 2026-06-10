@@ -20,7 +20,8 @@ interface CertificatesProps {
 const certificateTypes = [
   { id: 'tc', label: 'Transfer Certificate (TC)', labelBn: 'ট্রান্সফার সার্টিফিকেট (টিসি)' },
   { id: 'testimonial', label: 'Testimonial', labelBn: 'প্রশংসাপত্র' },
-  { id: 'certificate', label: 'General Certificate', labelBn: 'সাধারণ সনদপত্র' },
+  { id: 'exam_cert', label: 'General Certificate', labelBn: 'সনদপত্র' },
+  { id: 'attestation', label: 'Attestation Certificate', labelBn: 'প্রত্যয়ন পত্র' },
   { id: 'character', label: 'Character Certificate', labelBn: 'চারিত্রিক সনদপত্র' },
 ];
 

@@ -21,7 +21,8 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
   let title = isBn ? 'সনদপত্র' : 'Certificate';
   if (type === 'tc') title = isBn ? 'ছাড়পত্র (TC)' : 'Transfer Certificate';
   if (type === 'testimonial') title = isBn ? 'প্রশংসাপত্র' : 'Testimonial';
-  if (type === 'certificate') title = isBn ? 'সনদপত্র' : 'Certificate';
+  if (type === 'exam_cert') title = isBn ? 'সনদপত্র' : 'Certificate';
+  if (type === 'attestation') title = isBn ? 'প্রত্যয়ন পত্র' : 'Attestation Certificate';
   if (type === 'character') title = isBn ? 'চারিত্রিক সনদপত্র' : 'Character Certificate';
 
   const dateStr = issueDate ? issueDate : new Date().toLocaleDateString('en-GB');
@@ -210,22 +211,88 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                    
                    <span>. He/She appeared in the final examination of class</span>
                    <Field value={student.className || ''} minWidth="180px" />
-                   <span>from this institution. His/Her Reg. No is</span>
-                   <Field value={student.registration_number || student.admission_number || ''} minWidth="120px" />
-                   <span>and achieved GPA</span>
-                   <Field value={student.gpa || ''} minWidth="80px" />
-                   <span>. According to the admission register, his/her date of birth is</span>
-                   <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="180px" />
-                   <span>.</span><br/>
+                    <span>. During his/her stay in this institution, his/her character and academic performance were found to be very good. I wish him/her every success in life.</span>
+                  </p>
+                  </div>
+                )}
+              </div>
+            )}
 
-                   <span className="mr-2 mt-4 inline-block">His/Her academic performance and merit were highly commendable. During his/her stay, he/she did not take part in any activity subversive to the state or discipline. I wish him/her a very bright and prosperous future.</span>
-                 </p>
-                 </div>
-               )}
-             </div>
-           )}
+           {type === 'exam_cert' && (
+              <div className="font-medium w-full text-justify animate-fadeIn" style={{ lineHeight: '1.85' }}>
+                {isBn ? (
+                  <div className="flex flex-col gap-y-1 w-full text-justify mt-2">
+                    <div className="flex w-full items-baseline pb-1">
+                      <span className="mr-2 text-lg">এই মর্মে প্রত্যয়ন করা যাচ্ছে যে,</span>
+                      <Field value={student.student_name} minWidth="340px" stretch />
+                    </div>
+                    <div className="flex w-full items-baseline pb-1">
+                      <span>পিতা:</span>
+                      <Field value={student.guardian_name || ''} minWidth="280px" stretch />
+                      <span>, মাতা:</span>
+                      <Field value={student.mother_name || ''} minWidth="280px" stretch />
+                    </div>
+                    <p className="text-justify mt-1" style={{ lineHeight: '1.85' }}>
+                      <span>স্থায়ী ঠিকানা - গ্রাম/মহল্লা:</span>
+                      <Field value={villageOrArea} minWidth="240px" />
+                      <span>, ডাকঘর:</span>
+                      <Field value={postOffice} minWidth="160px" />
+                      <span>, উপজেলা:</span>
+                      <Field value={upazila} minWidth="160px" />
+                      <span>, জেলা:</span>
+                      <Field value={district} minWidth="160px" />
+                      <span>। সে অত্র প্রতিষ্ঠান হতে ২০</span>
+                      <Field value={bnYearSuffix} minWidth="60px" />
+                      <span>সালের শিক্ষাবর্ষে</span>
+                      <Field value={student.className || ''} minWidth="180px" />
+                      <span>শ্রেণির চূড়ান্ত পরীক্ষায় অংশগ্রহণ করে এবং জিপিএ ৫.০০ এর মধ্যে</span>
+                      <Field value={student.gpa ? enToBnNumber(student.gpa) : ''} minWidth="90px" />
+                      <span>অর্জন করে কৃতিত্বের সাথে উত্তীর্ণ হয়েছে। তার রোল নম্বর ছিল</span>
+                      <Field value={isBn ? enToBnNumber(String(student.roll || '')) : String(student.roll || '')} minWidth="90px" />
+                      <span>। অত্র প্রতিষ্ঠানে অধ্যয়নকালে তাহার আচরণ ও শিখন মূল্যায়ন অত্যন্ত সন্তোষজনক ছিল। তাহার জন্ম তারিখ:</span>
+                      <Field value={student.date_of_birth ? (isBn ? enToBnNumber(new Date(student.date_of_birth).toLocaleDateString('en-GB')) : new Date(student.date_of_birth).toLocaleDateString('en-GB')) : ''} minWidth="165px" />
+                      <span>।</span>
+                    </p>
+                    <p className="mt-2 font-bold select-none text-center text-[#0f2c59]">
+                      আমি তাহার উজ্জ্বল ভবিষ্যৎ ও সার্বিক সাফল্য কামনা করি।
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-y-1 w-full text-justify mt-2">
+                    <div className="flex w-full items-baseline pb-1">
+                      <span className="mr-2 text-lg">This is to certify that</span>
+                      <Field value={student.name_en || student.student_name} minWidth="380px" stretch />
+                    </div>
+                    <div className="flex w-full items-baseline pb-1">
+                      <span>son/daughter of</span>
+                      <Field value={student.guardian_name || ''} minWidth="300px" stretch />
+                      <span>and</span>
+                      <Field value={student.mother_name || ''} minWidth="300px" stretch />
+                    </div>
+                    <p className="text-justify mt-1" style={{ lineHeight: '1.85' }}>
+                      <span>Permanent Address - Village/Area:</span>
+                      <Field value={student.address || ''} minWidth="360px" />
+                      <span>. He/She has successfully completed the final examination of Class</span>
+                      <Field value={student.className || ''} minWidth="180px" />
+                      <span>from this institution in the academic year 20</span>
+                      <Field value={currentYearSuffix} minWidth="60px" />
+                      <span>. He/She has achieved GPA</span>
+                      <Field value={student.gpa || ''} minWidth="90px" />
+                      <span> out of 5.00. His/Her Roll Number was</span>
+                      <Field value={String(student.roll || '')} minWidth="90px" />
+                      <span>. During his/her stay in this institution, his/her character and academic performance were found to be very good. According to the admission register, his/her date of birth is</span>
+                      <Field value={student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('en-GB') : ''} minWidth="180px" />
+                      <span>.</span>
+                    </p>
+                    <p className="mt-2 font-bold select-none text-center text-[#0f2c59]">
+                      I wish him/her every success in life.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
-           {type === 'certificate' && (
+                       {type === 'attestation' && (
              <div className="font-medium w-full text-justify" style={{ lineHeight: '1.9' }}>
                {isBn ? (
                  <div className="flex flex-col gap-y-1 w-full text-justify">
