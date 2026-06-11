@@ -254,43 +254,51 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         subjectList.forEach(sub => {
           let weightedSum = 0;
           let subjectMaxMarks = 0;
-          let weightUsed = 0;
+          let subjectPassMarks = 0;
           let isOptional = false;
 
           examsData.forEach(exam => {
+            const subjectMarkEntryFromAnyStudent = exam.marks.find((m: any) => m.exam_subjects?.subject_name === sub);
+            if (!subjectMarkEntryFromAnyStudent) return;
+
+            const fullMarks = subjectMarkEntryFromAnyStudent.exam_subjects?.full_marks || 100;
+            const passMarks = subjectMarkEntryFromAnyStudent.exam_subjects?.pass_marks || 33;
+            if (subjectMarkEntryFromAnyStudent.exam_subjects?.is_optional) {
+              isOptional = true;
+            }
+
+            const maxContribution = fullMarks * (exam.weight / 100);
+            const passContribution = passMarks * (exam.weight / 100);
+            
+            subjectMaxMarks += maxContribution;
+            subjectPassMarks += passContribution;
+
             const markEntry = exam.marks.find((m: any) => 
               m.student_id === student.id && 
               m.exam_subjects?.subject_name === sub
             );
 
-            if (markEntry) {
-              const obtained = parseFloat(markEntry.marks_obtained);
-              const fullMarks = markEntry.exam_subjects?.full_marks || 100;
-              const passMarks = markEntry.exam_subjects?.pass_marks || 33;
-              if (markEntry.exam_subjects?.is_optional) {
-                isOptional = true;
-              }
-              
-              const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
-
-              // Actual weighted marks calculation based on total marks
-              const contribution = obtained * (exam.weight / 100);
-              const maxContribution = fullMarks * (exam.weight / 100);
-              
-              weightedSum += contribution;
-              subjectMaxMarks += maxContribution;
-              weightUsed += exam.weight;
-              
-              // Pass status: if the component score was less than pass pct
-              if (!isOptionalEffectively && (obtained / fullMarks) * 100 < (passMarks / fullMarks) * 100) {
-                  hasFailedAny = true;
-              }
+            let obtained = 0;
+            if (markEntry && markEntry.marks_obtained !== '') {
+               obtained = parseFloat(markEntry.marks_obtained) || 0;
             }
+            
+            const contribution = obtained * (exam.weight / 100);
+            weightedSum += contribution;
           });
 
           if (subjectMaxMarks > 0) {
             const pct = (weightedSum / subjectMaxMarks) * 100;
-            const { gpa: gpStr } = getGradeInfo(pct, pct < 33); // Individual subject grade
+            
+            const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+            const failedCombined = weightedSum < subjectPassMarks;
+            
+            if (!isOptionalEffectively && failedCombined) {
+                hasFailedAny = true;
+            }
+
+            // In getGradeInfo, pass literal failed combined status
+            const { gpa: gpStr } = getGradeInfo(pct, failedCombined);
             const gp = parseFloat(gpStr);
             
             if (resultSystem === 'grading_optional') {

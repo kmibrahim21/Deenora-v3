@@ -692,7 +692,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
             
             if (['pending', 'queued', 'scheduled'].includes(providerStatus)) {
               newStatus = 'pending';
-            } else if (['sending', 'processing', 'running'].includes(providerStatus)) {
+            } else if (['sending', 'processing', 'running', 'broadcasting'].includes(providerStatus)) {
               newStatus = 'sending';
             } else if (['failed', 'error', 'cancelled'].includes(providerStatus)) {
               newStatus = 'failed';
@@ -1948,6 +1948,20 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                           </div>
                                         );
                                       })
+                                    ) : historyDetails?.broadcast && !historyDetails.isComplete ? (
+                                      <div className="bg-amber-50 p-6 border border-amber-100 rounded-2xl text-center space-y-3">
+                                        <div className="text-amber-500 font-black mb-1">
+                                          <Loader2 className="w-8 h-8 mx-auto animate-spin" />
+                                        </div>
+                                        <p className="text-amber-700 font-bold text-sm">
+                                          {lang === 'bn' ? 'ব্রডকাস্টটি এখনও চলছে...' : 'Broadcast is still in progress...'}
+                                        </p>
+                                        {historyDetails.broadcast.listenerCount !== undefined && (
+                                          <div className="text-amber-800 text-xs font-black bg-amber-100/50 inline-block px-3 py-1.5 rounded-full">
+                                            {historyDetails.broadcast.completeCount} / {historyDetails.broadcast.listenerCount} {lang === 'bn' ? 'কল সম্পন্ন হয়েছে' : 'calls completed'}
+                                          </div>
+                                        )}
+                                      </div>
                                     ) : (
                                       <div className="text-center py-6 text-slate-400 text-[10px] font-black uppercase tracking-widest">
                                         {t('no_logs', lang)}

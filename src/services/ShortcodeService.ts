@@ -255,13 +255,72 @@ export const ShortcodeService = {
     const combinedData = students.map(s => {
       const balance = studentBalances[s.id] || { due: 0, paid: 0 };
       
+      const classStudentsMarks = marks.filter(m => {
+        const sm = students.find(st => st.id === m.student_id);
+        return sm?.class_id === s.class_id;
+      });
+
+      const uniqueSubjectsMap = new Map();
+      classStudentsMarks.forEach(m => {
+        if (m.exam_subjects && m.exam_subjects.subject_name) {
+          if (!uniqueSubjectsMap.has(m.exam_subjects.subject_name)) {
+            uniqueSubjectsMap.set(m.exam_subjects.subject_name, m.exam_subjects);
+          }
+        }
+      });
+      const allClassSubjects = Array.from(uniqueSubjectsMap.values());
+
       const studentMarks = marks.filter(m => m.student_id === s.id);
+      
       let totalObtained = 0;
       let totalFull = 0;
-      studentMarks.forEach(m => {
-        totalObtained += Number(m.marks_obtained);
-        totalFull += Number(m.exam_subjects?.full_marks || 100);
+      
+      let pointsSum = 0;
+      let numMainSubjects = 0;
+      let hasFailedSub = false;
+      const resultSystem = inst?.config_json?.result_system || 'grading';
+
+      allClassSubjects.forEach(sub => {
+         const m = studentMarks.find(sm => sm.exam_subjects?.subject_name === sub.subject_name);
+         const obtained = m ? Number(m.marks_obtained || 0) : 0;
+         const full = Number(sub.full_marks || 100);
+         const pass = Number(sub.pass_marks || 33);
+         const isOptional = Boolean(sub.is_optional);
+         const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+
+         totalObtained += obtained;
+         totalFull += full;
+
+         const pct = full > 0 ? (obtained / full) * 100 : 0;
+         const failed = obtained < pass;
+
+         if (!isOptionalEffectively && failed) {
+           hasFailedSub = true;
+         }
+
+         let gp = 0.00;
+         if (!failed) {
+           if (pct >= 80) gp = 5.00;
+           else if (pct >= 70) gp = 4.00;
+           else if (pct >= 60) gp = 3.50;
+           else if (pct >= 50) gp = 3.00;
+           else if (pct >= 40) gp = 2.00;
+           else if (pct >= 33) gp = 1.00;
+         }
+
+         if (resultSystem === 'grading_optional') {
+           if (!isOptional) {
+             pointsSum += gp;
+             numMainSubjects++;
+           } else {
+             if (gp > 2) pointsSum += (gp - 2);
+           }
+         } else {
+           pointsSum += gp;
+           numMainSubjects++;
+         }
       });
+
       const percentage = totalFull > 0 ? (totalObtained / totalFull) * 100 : 0;
       
       let grade = '-';
@@ -276,12 +335,8 @@ export const ShortcodeService = {
           else grade = 'রাসিব';
         } else {
           // School system logic
-          const resultSystem = inst?.config_json?.result_system || 'grading';
-          
           if (resultSystem === 'hifz' || resultSystem === 'marks') {
-            const hasFailed = studentMarks.some(m => Number(m.marks_obtained) < Number(m.exam_subjects?.pass_marks || 33) && !m.exam_subjects?.is_optional);
-            
-            if (hasFailed) {
+            if (hasFailedSub) {
               grade = 'F';
               gpa = '0.00';
             } else {
@@ -294,47 +349,6 @@ export const ShortcodeService = {
               else { grade = 'F'; gpa = '0.00'; }
             }
           } else { // grading or grading_optional
-            let pointsSum = 0;
-            let numMainSubjects = 0;
-            let hasFailedSub = false;
-
-            studentMarks.forEach(m => {
-              const obtained = Number(m.marks_obtained);
-              const full = Number(m.exam_subjects?.full_marks || 100);
-              const pass = Number(m.exam_subjects?.pass_marks || 33);
-              const isOptional = Boolean(m.exam_subjects?.is_optional);
-              const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
-              
-              const pct = full > 0 ? (obtained / full) * 100 : 0;
-              const failed = obtained < pass;
-
-              if (!isOptionalEffectively && failed) {
-                hasFailedSub = true;
-              }
-
-              let gp = 0.00;
-              if (!failed) {
-                if (pct >= 80) gp = 5.00;
-                else if (pct >= 70) gp = 4.00;
-                else if (pct >= 60) gp = 3.50;
-                else if (pct >= 50) gp = 3.00;
-                else if (pct >= 40) gp = 2.00;
-                else if (pct >= 33) gp = 1.00;
-              }
-
-              if (resultSystem === 'grading_optional') {
-                if (!isOptional) {
-                  pointsSum += gp;
-                  numMainSubjects++;
-                } else {
-                  if (gp > 2) pointsSum += (gp - 2);
-                }
-              } else {
-                pointsSum += gp;
-                numMainSubjects++;
-              }
-            });
-
             if (numMainSubjects > 0) {
               if (hasFailedSub) {
                 grade = 'F';
