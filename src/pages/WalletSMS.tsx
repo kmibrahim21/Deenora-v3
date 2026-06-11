@@ -77,6 +77,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [isDeleting, setIsDeleting] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
   const [tempBody, setTempBody] = useState('');
+  const [tempSystemEvent, setTempSystemEvent] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showShortcodes, setShowShortcodes] = useState(false);
 
@@ -243,9 +244,30 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         const { error } = await supabase.from('sms_templates').insert({ institution_id: madrasah.id, title: tempTitle, body: tempBody });
         if (error) throw error;
       }
+      
+      // Update config_json if a system event is selected
+      if (tempSystemEvent) {
+         const { requestManager } = await import('../services/RequestManager');
+         const updatedConfig = {
+           ...madrasah.config_json,
+           features: {
+             ...((madrasah.config_json as any)?.features || {}),
+             sms_templates: {
+               ...((madrasah.config_json as any)?.features?.sms_templates || {}),
+               [tempSystemEvent]: tempBody
+             }
+           }
+         };
+         
+         requestManager.invalidatePattern(`institution:${madrasah.id}`);
+         await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah.id);
+         if (triggerRefresh) triggerRefresh();
+      }
+      
       setShowAddModal(false);
       setTempTitle('');
       setTempBody('');
+      setTempSystemEvent('');
       setEditingId(null);
       fetchTemplates();
     } catch (e: any) { 
@@ -459,7 +481,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
           <div className="space-y-5 animate-in slide-in-from-bottom-5">
             <div className="flex items-center justify-between px-2">
               <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('saved_templates', lang)}</h2>
-              <button onClick={() => { setEditingId(null); setTempTitle(''); setTempBody(''); setShowAddModal(true); }} className="bg-[#2563EB] text-white px-4 py-2 rounded-2xl text-[10px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 shadow-premium">
+              <button onClick={() => { setEditingId(null); setTempTitle(''); setTempBody(''); setTempSystemEvent(''); setShowAddModal(true); }} className="bg-[#2563EB] text-white px-4 py-2 rounded-2xl text-[10px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100 shadow-premium">
                  <Plus size={14} strokeWidth={4} /> {t('new_template', lang)}
               </button>
             </div>
@@ -478,7 +500,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                              <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto line-clamp-1">{tmp.title}</h4>
                           </div>
                           <div className="flex gap-1.5 shrink-0">
-                             <button onClick={() => { setEditingId(tmp.id); setTempTitle(tmp.title || ''); setTempBody(tmp.body || ''); setShowAddModal(true); }} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Edit3 size={14}/></button>
+                             <button onClick={() => { setEditingId(tmp.id); setTempTitle(tmp.title || ''); setTempBody(tmp.body || ''); setTempSystemEvent(''); setShowAddModal(true); }} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Edit3 size={14}/></button>
                              <button onClick={() => setShowDeleteConfirm(tmp)} className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Trash2 size={14}/></button>
                           </div>
                        </div>
@@ -934,6 +956,24 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                  <div className="space-y-2 px-1">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block px-1">{t('name', lang)}</label>
                     <input type="text" className="w-full h-14 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 font-black text-[#2E0B5E] font-noto outline-none focus:border-[#8D30F4]/30" placeholder={t('name', lang)} value={tempTitle} onChange={(e) => setTempTitle(e.target.value)} />
+                 </div>
+                 
+                 <div className="space-y-2 px-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block px-1">
+                      {lang === 'bn' ? 'সিস্টেম টেমপ্লেট হিসেবে সেট করুন (ঐচ্ছিক)' : 'Set as System Template (Optional)'}
+                    </label>
+                    <select 
+                      value={tempSystemEvent} 
+                      onChange={(e) => setTempSystemEvent(e.target.value)}
+                      className="w-full h-14 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 font-black text-slate-600 outline-none focus:border-[#8D30F4]/30"
+                    >
+                      <option value="">{lang === 'bn' ? '-- নির্বাচন করুন --' : '-- Select --'}</option>
+                      <option value="attendance_present">{lang === 'bn' ? 'উপস্থিত SMS' : 'Attendance Present SMS'}</option>
+                      <option value="attendance_absent">{lang === 'bn' ? 'অনুপস্থিত SMS' : 'Attendance Absent SMS'}</option>
+                      <option value="attendance_late">{lang === 'bn' ? 'বিলম্ব SMS' : 'Attendance Late SMS'}</option>
+                      <option value="fee_collection">{lang === 'bn' ? 'বেতন আদায় SMS' : 'Fee Collection SMS'}</option>
+                      <option value="teacher_salary">{lang === 'bn' ? 'শিক্ষক বেতন SMS' : 'Teacher Salary SMS'}</option>
+                    </select>
                  </div>
                  <div className="space-y-2 px-1 relative">
                     <div className="flex items-center justify-between px-1">

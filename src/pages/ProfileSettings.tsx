@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Edit3, Loader2, Key, Image as ImageIcon, Upload } from 'lucide-react';
+import { ChevronLeft, Edit3, Loader2, Key, Image as ImageIcon, Upload, MessageSquare } from 'lucide-react';
 import { supabase } from '../supabase';
 import { Institution, Language } from '../types';
+import { requestManager } from '../services/RequestManager';
 
 interface Props {
   madrasah: Institution | null;
@@ -21,6 +22,10 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [saving, setSaving] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState(madrasah?.config_json?.signature_url || '');
   const [signatureHeight, setSignatureHeight] = useState(madrasah?.config_json?.signature_height || 30);
+
+  const [featureStudentAttSms, setFeatureStudentAttSms] = useState((madrasah?.config_json as any)?.features?.student_attendance_sms ?? false);
+  const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
+  const [featureTeacherDeduction, setFeatureTeacherDeduction] = useState((madrasah?.config_json as any)?.features?.teacher_attendance_deduction ?? false);
 
   const modules = madrasah?.config_json?.modules;
   const packageRaw = madrasah?.config_json?.package_name || madrasah?.config_json?.subscription?.package_name || '1';
@@ -69,8 +74,17 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         ...madrasah.config_json, 
         user_pin: newPin.trim(), 
         signature_url: signatureUrl,
-        signature_height: signatureHeight
+        signature_height: signatureHeight,
+        features: {
+          ...((madrasah.config_json as any)?.features || {}),
+          student_attendance_sms: featureStudentAttSms,
+          fee_collection_sms: featureFeeSms,
+          teacher_attendance_deduction: featureTeacherDeduction
+        }
       };
+      
+      requestManager.invalidatePattern(`institution:${madrasah.id}`);
+      
       const { error } = await supabase.from('institutions').update({ 
         name: newName.trim(), 
         address: newAddress.trim() || null,
@@ -81,6 +95,16 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
       }).eq('id', madrasah.id);
       
       if (error) throw error;
+      
+      // Update local cache so UI doesn't bounce
+      try {
+         const { OfflineService } = await import('../services/OfflineService');
+         const cachedMadrasah = OfflineService.getCache('profile');
+         if (cachedMadrasah && cachedMadrasah.id === madrasah.id) {
+           OfflineService.setCache('profile', { ...cachedMadrasah, name: newName.trim(), address: newAddress.trim(), phone: newPhone.trim(), config_json: updatedConfig });
+         }
+      } catch(e) {}
+
       if (onProfileUpdate) onProfileUpdate();
       setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: 'Profile updated successfully' });
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
@@ -175,6 +199,85 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none cursor-not-allowed font-mono ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`} 
                   value={madrasah?.config_json?.user_pin || ''} 
                 />
+              </div>
+
+               {/* Feature Toggles */}
+              <div className={`mt-4 p-5 rounded-[1.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'} space-y-4`}>
+                 <h4 className={`text-xs font-black uppercase tracking-widest mb-3 ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
+                   {lang === 'bn' ? 'অতিরিক্ত ফিচার সমূহ' : 'Extra Features'}
+                 </h4>
+                 
+                 <label className="flex items-start gap-4 cursor-pointer p-2 rounded-xl hover:bg-slate-500/5 dark:hover:bg-slate-400/5 transition-colors">
+                   <div className="mt-0.5 relative flex items-center shrink-0">
+                     <input
+                       type="checkbox"
+                       className="peer sr-only"
+                       checked={featureStudentAttSms}
+                       onChange={(e) => setFeatureStudentAttSms(e.target.checked)}
+                     />
+                     <div className="w-5 h-5 rounded border-2 border-slate-300 peer-checked:bg-[#2563EB] peer-checked:border-[#2563EB] flex items-center justify-center transition-all bg-white dark:bg-slate-900 shadow-sm">
+                       {featureStudentAttSms && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5 text-white"><polyline points="20 6 9 17 4 12" /></svg>}
+                     </div>
+                   </div>
+                   <div className="flex-1">
+                     <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>
+                       {lang === 'bn' ? 'হাজিরা SMS' : 'Attendance SMS'}
+                     </p>
+                     <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                       {lang === 'bn' ? 'শিক্ষার্থীদের হাজিরা নেওয়ার সাথে সাথে অভিভাবকদের নাম্বারে SMS যাবে' : 'Send SMS to parents on student attendance'}
+                     </p>
+                   </div>
+                 </label>
+                 
+                 {/* Removed custom text-areas so users can set them up from SMS templates instead */}
+
+                 <label className="flex items-start gap-4 cursor-pointer p-2 rounded-xl hover:bg-slate-500/5 dark:hover:bg-slate-400/5 transition-colors">
+                   <div className="mt-0.5 relative flex items-center shrink-0">
+                     <input
+                       type="checkbox"
+                       className="peer sr-only"
+                       checked={featureFeeSms}
+                       onChange={(e) => setFeatureFeeSms(e.target.checked)}
+                     />
+                     <div className="w-5 h-5 rounded border-2 border-slate-300 peer-checked:bg-[#2563EB] peer-checked:border-[#2563EB] flex items-center justify-center transition-all bg-white dark:bg-slate-900 shadow-sm">
+                       {featureFeeSms && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5 text-white"><polyline points="20 6 9 17 4 12" /></svg>}
+                     </div>
+                   </div>
+                   <div className="flex-1">
+                     <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>
+                       {lang === 'bn' ? 'বেতন আদায় SMS' : 'Fee Collection SMS'}
+                     </p>
+                     <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                       {lang === 'bn' ? 'শিক্ষার্থীদের বেতন নেওয়ার সাথে সাথে নাম্বারে SMS যাবে' : 'Send SMS on fee collection'}
+                     </p>
+                   </div>
+                 </label>
+                 
+                 {/* Removed fee collection text area */}
+
+                 <label className="flex items-start gap-4 cursor-pointer p-2 rounded-xl hover:bg-slate-500/5 dark:hover:bg-slate-400/5 transition-colors">
+                   <div className="mt-0.5 relative flex items-center shrink-0">
+                     <input
+                       type="checkbox"
+                       className="peer sr-only"
+                       checked={featureTeacherDeduction}
+                       onChange={(e) => setFeatureTeacherDeduction(e.target.checked)}
+                     />
+                     <div className="w-5 h-5 rounded border-2 border-slate-300 peer-checked:bg-[#2563EB] peer-checked:border-[#2563EB] flex items-center justify-center transition-all bg-white dark:bg-slate-900 shadow-sm">
+                       {featureTeacherDeduction && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5 text-white"><polyline points="20 6 9 17 4 12" /></svg>}
+                     </div>
+                   </div>
+                   <div className="flex-1">
+                     <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>
+                       {lang === 'bn' ? 'শিক্ষক বেতন SMS / কর্তন' : 'Teacher Salary SMS / Deduction'}
+                     </p>
+                     <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                       {lang === 'bn' ? 'শিক্ষক বেতন প্রদান করলে SMS যাবে ও হাজিরার উপর ভিত্তি করে বেতন কর্তন হবে' : 'Send SMS on salary payment and deduct based on attendance'}
+                     </p>
+                   </div>
+                 </label>
+                 
+                 {/* Removed teacher salary text area */}
               </div>
             </div>
           </div>

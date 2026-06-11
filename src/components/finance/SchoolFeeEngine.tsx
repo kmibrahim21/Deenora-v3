@@ -456,6 +456,26 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       requestManager.invalidatePattern(`accounting-fees-${selectedStudent.student_id}`);
       requestManager.invalidatePattern(`accounting-history-${selectedStudent.student_id}`);
       requestManager.invalidatePattern(`fetch:ledger:`);
+
+      // Auto Send SMS
+      if (madrasah?.config_json?.features?.fee_collection_sms) {
+        try {
+          const smsApiModule = await import('supabase').then(res => res.smsApi);
+          
+          const templates = (madrasah?.config_json as any)?.features?.sms_templates || {};
+          let template = templates.fee_collection || (lang === 'bn' 
+            ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
+            : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
+          
+          let collectMsg = template
+             .replace(/\{student_name\}/g, selectedStudent.student_name)
+             .replace(/\{amount\}/g, totalAmt.toString());
+            
+          await smsApiModule.sendBulk(madrasah.id, [selectedStudent], collectMsg);
+        } catch (smsError) {
+          console.error("Fee SMS error: ", smsError);
+        }
+      }
       
       if (triggerRefresh) triggerRefresh();
       fetchData();

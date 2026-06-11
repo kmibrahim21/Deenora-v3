@@ -172,9 +172,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     fetchClasses();
   }, [madrasah?.id]);
 
+  const [salaryMonthAttendance, setSalaryMonthAttendance] = useState<Record<string, Record<string, string>>>({});
+
   useEffect(() => {
     if (activeTab === 'salary' && madrasah?.id) {
        fetchPaidSalaries();
+       fetchSalaryMonthAttendance();
     }
     if (activeTab === 'attendance' && attendanceSubTab === 'take' && madrasah?.id) {
        fetchTeacherAttendance();
@@ -184,6 +187,15 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
        fetchAttendanceReport();
     }
   }, [salaryMonth, attendanceDate, attendanceMonth, activeTab, attendanceSubTab, reportType, reportYear, reportDate, madrasah?.id]);
+
+  const fetchSalaryMonthAttendance = async () => {
+    try {
+      const res = await fetch(`/api/teachers/attendance-report?institute_id=${madrasah!.id}&month=${salaryMonth}`);
+      const data = await res.json();
+      if (data.report) setSalaryMonthAttendance(data.report);
+      else setSalaryMonthAttendance({});
+    } catch(err) {}
+  };
 
   const fetchAttendanceReport = async () => {
     let filter = '';
@@ -438,6 +450,26 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           ...prev,
           [key]: [...(prev[key] || []), data[0]]
         }));
+      }
+
+      // Auto Send SMS
+      if ((madrasah.config_json as any)?.features?.teacher_attendance_deduction) {
+        try {
+          const smsApiModule = await import('../supabase').then(res => res.smsApi);
+          const templates = (madrasah.config_json as any)?.features?.sms_templates || {};
+          let template = templates.teacher_salary || (lang === 'bn' 
+            ? `আস-সালামু আলাইকুম, আপনার {month} মাসের বেতন বাবদ {amount} টাকা প্রদান করা হয়েছে।`
+            : `As-salamu Alaikum, {amount} BDT has been paid as your salary for {month}.`);
+          
+          let smsText = template
+             .replace(/\{month\}/g, salaryMonth)
+             .replace(/\{amount\}/g, amountToPay.toString());
+             
+          // smsApiModule.sendBulk expects students but we can trick it with teacher Object since it only needs id & phone usually, but let's see. Wait, `sendBulk` signature is `students: Student[]`. Teacher doesn't have student properties. I can just map it to { id, phone: teacher.phone, student_name: teacher.name, ... }
+          await smsApiModule.sendBulk(madrasah.id, [{ id: teacher.id, phone: teacher.phone, student_name: teacher.name } as any], smsText);
+        } catch (smsError) {
+          console.error("Teacher salary SMS error:", smsError);
+        }
       }
 
       setPaymentModal({show: false, teacher: null, amount: ""});
@@ -1143,7 +1175,26 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
               {teachers.map(teacher => {
                 const paidKey = `${teacher.id}_${salaryMonth}`;
                 const paidSoFar = paidSalaries[paidKey] || 0;
-                const totalSalary = Number(teacher.basic_salary) || Number(teacher.monthly_salary) || 0;
+                let totalSalary = Number(teacher.basic_salary) || Number(teacher.monthly_salary) || 0;
+                
+                let absentCount = 0;
+                let deductionAmt = 0;
+                const isDeductionEnabled = (madrasah as any)?.config_json?.features?.teacher_attendance_deduction;
+                if (isDeductionEnabled) {
+                   const attData = salaryMonthAttendance;
+                   Object.keys(attData).forEach(dateStr => {
+                       if (dateStr.startsWith(salaryMonth)) {
+                          if (attData[dateStr][teacher.id] === 'absent') absentCount++;
+                       }
+                   });
+                   if (absentCount > 0 && totalSalary > 0) {
+                      const [yearStr, monthStr] = salaryMonth.split('-');
+                      const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
+                      deductionAmt = Math.round((totalSalary / daysInMonth) * absentCount);
+                      totalSalary = Math.max(0, totalSalary - deductionAmt);
+                   }
+                }
+
                 const due = Math.max(0, totalSalary - paidSoFar);
                 const percentage = totalSalary > 0 ? Math.min(100, (paidSoFar / totalSalary) * 100) : 0;
                 const isFullyPaid = paidSoFar >= totalSalary && totalSalary > 0;
@@ -1165,6 +1216,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                               <span className={`px-2 py-0.5 rounded-md text-[9px] font-black border ${isDark ? 'bg-blue-900/30 border-blue-800 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
                                 ৳{totalSalary}
                               </span>
+                            )}
+                            {deductionAmt > 0 && (
+                               <span className={`px-2 py-0.5 rounded-md text-[8px] font-black border ${isDark ? 'bg-rose-900/30 border-rose-800 text-rose-400' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
+                                 - ৳{deductionAmt} ({absentCount}d)
+                               </span>
                             )}
                           </div>
                           <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>

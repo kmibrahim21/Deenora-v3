@@ -128,6 +128,10 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [voiceSenderId, setVoiceSenderId] = useState(initialMadrasah?.voice_sender_id || '');
   const [newPin, setNewPin] = useState((initialMadrasah?.config_json as any)?.user_pin || '');
   const [logoUrl, setLogoUrl] = useState(initialMadrasah?.logo_url || '');
+
+  const [featureStudentAttSms, setFeatureStudentAttSms] = useState((initialMadrasah?.config_json as any)?.features?.student_attendance_sms ?? false);
+  const [featureFeeSms, setFeatureFeeSms] = useState((initialMadrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
+  const [featureTeacherDeduction, setFeatureTeacherDeduction] = useState((initialMadrasah?.config_json as any)?.features?.teacher_attendance_deduction ?? false);
   
   const [copiedId, setCopiedId] = useState(false);
   const [rechargeTrx, setRechargeTrx] = useState('');
@@ -385,7 +389,16 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     setSaving(true);
     try {
       const currentConfig = (madrasah.config_json as any) || {};
-      const updatedConfig = { ...currentConfig, user_pin: newPin.trim() };
+      const updatedConfig = { 
+        ...currentConfig, 
+        user_pin: newPin.trim(),
+        features: {
+          ...(currentConfig.features || {}),
+          student_attendance_sms: featureStudentAttSms,
+          fee_collection_sms: featureFeeSms,
+          teacher_attendance_deduction: featureTeacherDeduction
+        }
+      };
       
       if (madrasah?.id) {
         requestManager.invalidatePattern(`institution:${madrasah.id}`);
@@ -1328,6 +1341,79 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                       className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none cursor-not-allowed ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`} 
                       value={newPin || ''} 
                     />
+                 </div>
+
+                 {/* Feature Toggles */}
+                 <div className={`mt-4 p-4 rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'} space-y-3`}>
+                    <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
+                      {lang === 'bn' ? 'অতিরিক্ত ফিচার সমূহ' : 'Extra Features'}
+                    </h4>
+                    
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <div className="mt-0.5 relative flex items-center">
+                        <input
+                          type="checkbox"
+                          className="peer sr-only"
+                          checked={featureStudentAttSms}
+                          onChange={(e) => setFeatureStudentAttSms(e.target.checked)}
+                        />
+                        <div className="w-5 h-5 rounded border-2 border-slate-300 peer-checked:bg-blue-600 peer-checked:border-blue-600 flex items-center justify-center transition-all">
+                          {featureStudentAttSms && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>
+                          {lang === 'bn' ? 'হাজিরা SMS' : 'Attendance SMS'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          {lang === 'bn' ? 'শিক্ষার্থীদের হাজিরা নেওয়ার সাথে সাথে অভিভাবকদের নাম্বারে SMS যাবে' : 'Send SMS to parents on student attendance'}
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <div className="mt-0.5 relative flex items-center">
+                        <input
+                          type="checkbox"
+                          className="peer sr-only"
+                          checked={featureFeeSms}
+                          onChange={(e) => setFeatureFeeSms(e.target.checked)}
+                        />
+                        <div className="w-5 h-5 rounded border-2 border-slate-300 peer-checked:bg-blue-600 peer-checked:border-blue-600 flex items-center justify-center transition-all">
+                          {featureFeeSms && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>
+                          {lang === 'bn' ? 'বেতন আদায় SMS' : 'Fee Collection SMS'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          {lang === 'bn' ? 'শিক্ষার্থীদের বেতন নেওয়ার সাথে সাথে নাম্বারে SMS যাবে' : 'Send SMS on fee collection'}
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <div className="mt-0.5 relative flex items-center">
+                        <input
+                          type="checkbox"
+                          className="peer sr-only"
+                          checked={featureTeacherDeduction}
+                          onChange={(e) => setFeatureTeacherDeduction(e.target.checked)}
+                        />
+                        <div className="w-5 h-5 rounded border-2 border-slate-300 peer-checked:bg-blue-600 peer-checked:border-blue-600 flex items-center justify-center transition-all">
+                          {featureTeacherDeduction && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>
+                          {lang === 'bn' ? 'অনুপস্থিতিতে বেতন কর্তন' : 'Deduct Salary on Absence'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          {lang === 'bn' ? 'শিক্ষকদের হাজিরার উপর ভিত্তি করে বেতন কর্তন হবে' : 'Deduct teacher salary based on attendance'}
+                        </p>
+                      </div>
+                    </label>
                  </div>
               </div>
               <div className="flex gap-2 pt-2 shrink-0">

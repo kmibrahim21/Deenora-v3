@@ -34,8 +34,13 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
         currentRank++;
     });
 
-    // Sort back by roll
+    // Sort back by class serial then roll
     calculatedData.sort((a, b) => {
+        const orderA = a.class_sort_order ?? 999999;
+        const orderB = b.class_sort_order ?? 999999;
+        
+        if (orderA !== orderB) return orderA - orderB;
+
         const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || parseInt(a.roll?.replace(/\D/g,'')) || 0 : (a.roll || 0);
         const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || parseInt(b.roll?.replace(/\D/g,'')) || 0 : (b.roll || 0);
         return rollA - rollB;

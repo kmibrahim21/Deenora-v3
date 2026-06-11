@@ -428,8 +428,29 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
              classes: { class_name: r.class_name }
            }));
            
-           setDailyAbsentees(absents);
-           await CacheService.cacheData('attendance_daily', madrasah?.id || '', absents);
+           // Sort absents by class sort_order
+           const sortedAbsents = [...absents].sort((a, b) => {
+             const clsA = classes.find(c => c.id === a.class_id || c.class_name === a.class_name);
+             const clsB = classes.find(c => c.id === b.class_id || c.class_name === b.class_name);
+             
+             const orderA = clsA?.sort_order ?? 999999;
+             const orderB = clsB?.sort_order ?? 999999;
+             
+             if (orderA !== orderB) return orderA - orderB;
+             
+             // Secondary sort by roll
+             const parseRoll = (r: any) => {
+               if (typeof r === 'string') return parseInt(r) || parseInt(r.replace(/\D/g, '')) || 999999;
+               return Number(r) || 999999;
+             };
+             
+             const rollA = parseRoll(a.roll);
+             const rollB = parseRoll(b.roll);
+             return rollA - rollB;
+           });
+           
+           setDailyAbsentees(sortedAbsents);
+           await CacheService.cacheData('attendance_daily', madrasah?.id || '', sortedAbsents);
         }
       } else {
         let startDate, endDate;
@@ -454,7 +475,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               p_end_date: endDate,
               p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
             });
-            results.push({ data, error });
+            // Inject class_id to help with sorting if not already present
+            const dataWithClass = (data || []).map((d: any) => ({ ...d, class_id: c.id, class_sort_order: c.sort_order }));
+            results.push({ data: dataWithClass, error });
             // Small delay to prevent rate limit triggers if many classes
             if (classes.length > 5) await new Promise(r => setTimeout(r, 50));
           }
@@ -470,11 +493,31 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
           });
           if (error) throw error;
-          if (data) finalData = data;
+          if (data) {
+            const cls = classes.find(c => c.id === cid);
+            finalData = data.map((d: any) => ({ ...d, class_id: cid, class_sort_order: cls?.sort_order }));
+          }
         }
 
-        setReportData(finalData);
-        await CacheService.cacheData('attendance', madrasah?.id || '', finalData);
+        // Sort finalData by class serial and then by roll
+        const sortedFinalData = [...finalData].sort((a, b) => {
+          const orderA = a.class_sort_order ?? 999999;
+          const orderB = b.class_sort_order ?? 999999;
+          
+          if (orderA !== orderB) return orderA - orderB;
+          
+          const parseRoll = (r: any) => {
+            if (typeof r === 'string') return parseInt(r) || parseInt(r.replace(/\D/g, '')) || 999999;
+            return Number(r) || 999999;
+          };
+          
+          const rollA = parseRoll(a.roll);
+          const rollB = parseRoll(b.roll);
+          return rollA - rollB;
+        });
+
+        setReportData(sortedFinalData);
+        await CacheService.cacheData('attendance', madrasah?.id || '', sortedFinalData);
       }
     } catch (e: any) { 
       console.error(e);
@@ -528,6 +571,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const inserts = [];
       const updates = [];
       const payload: any[] = [];
+      const smsEligibleStudentIds = new Set<string>();
       
       const existingMap = new Map();
       // process backwards so the first element (latest via created_at desc) overwrites any older duplicates
@@ -555,16 +599,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
         const existing = existingMap.get(`${sid}_${selectedSession}`);
         if (existing) {
-          // Check if changed
-          if (
-            existing.status !== status ||
-            existing.arrival_time !== arrTime ||
-            existing.late_minutes !== mins
-          ) {
+          // Check if status changed
+          if (existing.status !== status) {
             updates.push({ ...record, id: existing.id });
+            smsEligibleStudentIds.add(sid);
+          } else if (existing.arrival_time !== arrTime || existing.late_minutes !== mins) {
+            updates.push({ ...record, id: existing.id });
+            // Don't add to smsEligibleStudentIds if status is same to avoid duplicate SMS
+            // unless we want to resend on time change. Let's keep it status-only for now.
           }
         } else {
           inserts.push(record);
+          smsEligibleStudentIds.add(sid);
         }
       }
 
@@ -617,13 +663,74 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             roll: student?.roll, 
             guardian_phone: student?.guardian_phone 
           },
-          classes: { class_name: cls?.class_name }
+          classes: { class_name: cls?.class_name },
+          class_sort_order: cls?.sort_order
         };
+      });
+
+      // Sort currentAttendanceData by class sort order and roll
+      const sortedCurrentData = [...currentAttendanceData].sort((a, b) => {
+        const orderA = a.class_sort_order ?? 999999;
+        const orderB = b.class_sort_order ?? 999999;
+        
+        if (orderA !== orderB) return orderA - orderB;
+        
+        const parseRoll = (r: any) => {
+          if (typeof r === 'string') return parseInt(r) || parseInt(r.replace(/\D/g, '')) || 999999;
+          return Number(r) || 999999;
+        };
+        
+        const rollA = parseRoll(a.students?.roll);
+        const rollB = parseRoll(b.students?.roll);
+        return rollA - rollB;
       });
       
       if (date === reportDate) {
-        setDailyAbsentees(currentAttendanceData as any);
-        await CacheService.cacheData('attendance_daily', madrasah.id, currentAttendanceData);
+        setDailyAbsentees(sortedCurrentData as any);
+        await CacheService.cacheData('attendance_daily', madrasah.id, sortedCurrentData);
+      }
+      
+      // Auto-send SMS if configured
+      if (madrasah?.config_json?.features?.student_attendance_sms) {
+        try {
+          const smsPromises = [];
+          
+          const templates = (madrasah?.config_json as any)?.features?.sms_templates || {};
+          let presentMsgEn = templates.attendance_present || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় উপস্থিত হয়েছে।` : `As-salamu Alaikum, {student_name} is present at madrasah today.`);
+          let absentMsgEn = templates.attendance_absent || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় অনুপস্থিত। অনুগ্রহ করে কারণ জানান।` : `As-salamu Alaikum, {student_name} is absent today. Please inform us.`);
+          let lateMsgEn = templates.attendance_late || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় দেরিতে উপস্থিত হয়েছে।` : `As-salamu Alaikum, {student_name} arrived late today.`);
+
+          const msgMap: Record<string, string> = {
+            'present': presentMsgEn,
+            'absent': absentMsgEn,
+            'late': lateMsgEn,
+          };
+
+          const sids = Array.from(smsEligibleStudentIds);
+          const activeStudents = students.filter(s => sids.includes(s.id));
+          
+          // Group by status
+          const grouped = activeStudents.reduce((acc, student) => {
+            const st = attendance[student.id];
+            if (st === 'present' || st === 'absent' || st === 'late') {
+              if (!acc[st]) acc[st] = [];
+              acc[st].push(student);
+            }
+            return acc;
+          }, {} as Record<string, any[]>);
+
+          for (const st of Object.keys(grouped)) {
+            if (grouped[st].length > 0) {
+              smsPromises.push(smsApi.sendBulk(madrasah.id, grouped[st], msgMap[st]));
+            }
+          }
+          
+          if (smsPromises.length > 0) {
+            Promise.all(smsPromises).catch(e => console.error("Auto SMS failed", e));
+          }
+        } catch (autoSmsErr) {
+          console.error("Auto SMS error: ", autoSmsErr);
+        }
       }
 
       setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
@@ -970,11 +1077,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       </div>
 
       <div className={`p-6 rounded-[2.5rem] border shadow-bubble space-y-4 transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-        <div className={activeTab === 'daily' ? "grid grid-cols-2 gap-3" : "space-y-4"}>
+        <div className={activeTab === 'daily' ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "space-y-4"}>
           <div className="relative">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{t('class_select', lang)}</label>
             <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-14 px-4 rounded-2xl border-2 flex items-center justify-between group active:scale-[0.99] transition-all ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
-              <span className="font-black font-noto truncate text-sm">{selectedClass ? (selectedClass.id === 'all' ? (lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)') : selectedClass.class_name) : t('class_choose', lang)}</span>
+              <span className="font-black font-noto truncate text-[13px] sm:text-sm">{selectedClass ? (selectedClass.id === 'all' ? (lang === 'bn' ? 'সকল ক্লাস (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Classes (Entire Institution)') : selectedClass.class_name) : t('class_choose', lang)}</span>
               <ChevronDown size={18} className="text-slate-300 transition-transform duration-300 group-focus:rotate-180" />
             </button>
             {showClassDropdown && (
@@ -1140,32 +1247,32 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                    </div>
                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
                    {students.map(s => (
-                     <div key={s.id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                            <span className="text-[8px] font-black opacity-40 leading-none">ROLL</span>
-                            <span className="text-base font-black leading-none mt-1">{s.roll || '-'}</span>
+                     <div key={s.id} className={`p-3 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                          <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                            <span className="text-[7px] sm:text-[8px] font-black opacity-40 leading-none">ROLL</span>
+                            <span className="text-sm sm:text-base font-black leading-none mt-0.5 sm:mt-1">{s.roll || '-'}</span>
                           </div>
-                          <div>
-                            <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
+                          <div className="min-w-0">
+                            <h5 className={`font-black font-noto text-[13px] sm:text-sm line-clamp-2 leading-tight ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
                           </div>
                         </div>
-                        <div className="flex gap-2 shrink-0 items-start">
-                           <button onClick={() => setStatus(s.id, 'present')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_present', lang, madrasah?.institution_type)}><CheckCircle size={20}/></button>
-                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_absent', lang, madrasah?.institution_type)}><XCircle size={20}/></button>
+                        <div className="flex gap-1.5 sm:gap-2 shrink-0 items-center">
+                           <button onClick={() => setStatus(s.id, 'present')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_present', lang, madrasah?.institution_type)}><CheckCircle size={18} className="sm:w-5 sm:h-5" /></button>
+                           <button onClick={() => setStatus(s.id, 'absent')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_absent', lang, madrasah?.institution_type)}><XCircle size={18} className="sm:w-5 sm:h-5" /></button>
                            <div className="flex flex-col items-center">
-                             <button onClick={() => setStatus(s.id, 'late')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_late', lang, madrasah?.institution_type)}>
+                             <button onClick={() => setStatus(s.id, 'late')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_late', lang, madrasah?.institution_type)}>
                                 {attendance[s.id] === 'late' ? (
-                                 <span className="text-base font-black">{computeLateMins(arrivalTime[s.id])}</span>
-                                ) : <Clock size={20}/>}
+                                 <span className="text-[13px] sm:text-base font-black">{computeLateMins(arrivalTime[s.id])}</span>
+                                ) : <Clock size={18} className="sm:w-5 sm:h-5" />}
                              </button>
                              {attendance[s.id] === 'late' && (
-                               <span className="text-[8px] font-black uppercase tracking-wider text-amber-500 mt-1 whitespace-nowrap animate-in fade-in slide-in-from-top-1">
+                               <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-wider text-amber-500 mt-1 whitespace-nowrap animate-in fade-in slide-in-from-top-1">
                                  {lang === 'bn' ? 'মিনিট' : 'MIN'}
                                </span>
                              )}
                            </div>
-                           <button onClick={() => setStatus(s.id, 'leave')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_leave', lang, madrasah?.institution_type)}><CalendarOff size={20}/></button>
+                           <button onClick={() => setStatus(s.id, 'leave')} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${attendance[s.id] === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title={t('mark_leave', lang, madrasah?.institution_type)}><CalendarOff size={18} className="sm:w-5 sm:h-5" /></button>
                         </div>
                      </div>
                    ))}
@@ -1334,13 +1441,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                  {dailyAbsentees.length > 0 ? (
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                      {dailyAbsentees.map(a => (
-                       <div key={a.id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-4 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                       <div key={a.id} className={`p-2.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-2.5 sm:gap-4 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
                           <div className="flex items-center gap-4 min-w-0">
                             <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 ${isDark ? 'bg-slate-900 text-red-400 border-slate-700' : 'bg-red-50 text-red-500 border-red-100'}`}>
-                              <XCircle size={20} />
+                              <XCircle size={16} className="sm:w-5 sm:h-5" />
                             </div>
                             <div className="min-w-0">
-                              <h5 className={`font-black font-noto text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{a.students?.student_name}</h5>
+                              <h5 className={`font-black font-noto text-xs sm:text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{a.students?.student_name}</h5>
                               <div className="mt-1 space-y-0.5">
                                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.classes?.class_name || 'Class'}</p>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Roll: {a.students?.roll}</p>
@@ -1349,7 +1456,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           </div>
                           {a.students?.guardian_phone && (
                             <a href={`tel:${a.students.guardian_phone}`} className={`shrink-0 w-11 h-11 rounded-[1.1rem] flex items-center justify-center border transition-all active:scale-95 ${isDark ? 'bg-blue-900/30 text-blue-400 border-blue-900/50 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'}`}>
-                              <Phone size={18} />
+                              <Phone size={16} className="sm:w-[18px] sm:h-[18px]" />
                             </a>
                           )}
                        </div>
@@ -1542,21 +1649,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                         const pct = item.total_days > 0 ? Math.round(((item.present_days + late) / item.total_days) * 100) : 0;
                         
                         return (
-                            <div key={item.student_id} className={`p-6 rounded-[2.5rem] border shadow-lg space-y-4 group ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/95 border-white'}`}>
+                            <div key={item.student_id} className={`p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border shadow-lg space-y-3 sm:space-y-4 group ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/95 border-white'}`}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4 min-w-0">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black border shadow-inner shrink-0 ${isDark ? 'bg-slate-900 text-[#A179FF] border-slate-700' : 'bg-slate-50 text-[#A179FF] border-slate-100'}`}>#{item.roll || '-'}</div>
+                                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center font-black border shadow-inner shrink-0 ${isDark ? 'bg-slate-900 text-[#A179FF] border-slate-700' : 'bg-slate-50 text-[#A179FF] border-slate-100'}`}>#{item.roll || '-'}</div>
                                         <div className="min-w-0">
-                                            <h5 className={`font-black font-noto text-[17px] truncate leading-tight mb-0.5 ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.student_name}</h5>
+                                            <h5 className={`font-black font-noto text-sm sm:text-[17px] truncate leading-tight mb-0 sm:mb-0.5 ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.student_name}</h5>
                                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Attendance Status</p>
                                         </div>
                                     </div>
                                     <div className={`text-2xl font-black ${pct >= 90 ? 'text-green-500' : pct >= 75 ? 'text-amber-500' : 'text-red-500'}`}>{pct}%</div>
                                 </div>
-                                <div className={`w-full h-3 rounded-full overflow-hidden border flex shadow-inner ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                                <div className={`w-full h-2 sm:h-3 rounded-full overflow-hidden border flex shadow-inner ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                                     <div className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)]" style={{ width: `${pct}%` }}></div>
                                 </div>
-                                <div className="grid grid-cols-5 gap-2">
+                                <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}><p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">{lang === 'bn' ? 'মোট' : 'Total'}</p><p className={`font-black text-sm ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.total_days}</p></div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-green-900/10 border-green-900/20' : 'bg-green-50/50 border-green-50'}`}><p className="text-[8px] font-black text-green-400 uppercase mb-0.5">{t('mark_present', lang, madrasah?.institution_type)}</p><p className="font-black text-green-600 text-sm">{item.present_days}</p></div>
                                    <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[8px] font-black text-red-400 uppercase mb-0.5">{t('mark_absent', lang, madrasah?.institution_type)}</p><p className="font-black text-red-600 text-sm">{item.absent_days}</p></div>

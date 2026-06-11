@@ -65,6 +65,11 @@ export interface Institution {
     signature_url?: string;
     signature_height?: number;
     package_name?: string;
+    features?: {
+      student_attendance_sms?: boolean;
+      fee_collection_sms?: boolean;
+      teacher_attendance_deduction?: boolean;
+    };
   };
   theme: string;
   status: 'active' | 'suspended' | 'trial';

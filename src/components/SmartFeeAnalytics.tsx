@@ -632,7 +632,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       
       {/* Filters */}
       <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-2xl border shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center justify-between`}>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'} p-1 rounded-xl flex overflow-x-auto no-scrollbar w-full md:w-auto shrink-0`}>
                 <button 
                     onClick={() => setViewMode('daily')}
@@ -659,18 +659,20 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     কাস্টম
                 </button>
             </div>
-            
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end">
             {viewMode === 'daily' && (
                 <input 
                     type="date" 
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-full md:w-auto shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 flex-1 sm:flex-none sm:w-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
                 />
             )}
             
             {viewMode === 'custom' && (
-                <div className="flex items-center gap-1 w-full md:w-auto shrink-0">
+                <div className="flex items-center gap-1 flex-1 sm:flex-none sm:w-auto">
                     <input 
                         type="date" 
                         value={dateRange.start}
@@ -694,42 +696,44 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     onChange={(e) => setSelectedMonth(e.target.value)}
                     min={activeYear?.start_date ? activeYear.start_date.slice(0, 7) : undefined}
                     max={activeYear?.end_date ? activeYear.end_date.slice(0, 7) : undefined}
-                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 flex-1 sm:flex-none sm:w-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
                 />
             )}
             {viewMode === 'yearly' && (
                 <select 
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(e.target.value)}
-                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 flex-1 sm:flex-none sm:w-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
                 >
                     {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
                         <option key={y} value={y}>{y}</option>
                     ))}
                 </select>
             )}
-        </div>
 
-        <div className="flex items-center gap-2">
-            <Filter size={16} className="text-slate-400" />
-            <select 
-                value={selectedClassId}
-                onChange={(e) => setSelectedClassId(e.target.value)}
-                className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 min-w-[150px] ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
-            >
-                <option value="all">{localT.allClasses[lang]}</option>
-                {localClasses.map(c => (
-                    <option key={c.id} value={c.id}>{c.class_name}</option>
-                ))}
-            </select>
-            <button 
-              onClick={handleDownloadPDF}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'}`}
-              title={lang === 'bn' ? 'সারাংশ রিপোর্ট ডাউনলোড' : 'Download Summary Report'}
-            >
-              <Download size={16} />
-              <span className="hidden lg:inline">{lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-1 sm:flex-none justify-between sm:justify-end">
+                <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                    <Filter size={16} className="text-slate-400 shrink-0" />
+                    <select 
+                        value={selectedClassId}
+                        onChange={(e) => setSelectedClassId(e.target.value)}
+                        className={`px-4 py-2 border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 flex-1 sm:flex-none sm:min-w-[150px] ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+                    >
+                        <option value="all">{localT.allClasses[lang]}</option>
+                        {localClasses.map(c => (
+                            <option key={c.id} value={c.id}>{c.class_name}</option>
+                        ))}
+                    </select>
+                </div>
+                <button 
+                onClick={handleDownloadPDF}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shrink-0 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'}`}
+                title={lang === 'bn' ? 'সারাংশ রিপোর্ট ডাউনলোড' : 'Download Summary Report'}
+                >
+                <Download size={16} />
+                <span className="hidden lg:inline">{lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report'}</span>
+                </button>
+            </div>
         </div>
       </div>
 
