@@ -1,4 +1,6 @@
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
+import { createPortal } from "react-dom";
+import ReactMarkdown from "react-markdown";
 import { OfflineService } from "services/OfflineService";
 import { useSyncEngine } from "hooks/useOffline";
 import { useAndroidBackHandler } from "hooks/useAndroidBackHandler";
@@ -17,8 +19,6 @@ import {
   Globe,
   RefreshCw
 } from "lucide-react";
-import { createPortal } from "react-dom";
-
 import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
 import { useGlobalUpdate } from "hooks/useGlobalUpdate";
 import { requestManager } from "services/RequestManager";
@@ -833,8 +833,12 @@ const App: React.FC = () => {
               {lang === 'bn' ? 'নতুন আপডেট উপলব্ধ!' : 'Update Available!'}
             </h3>
             
-            <div className={`mt-4 p-5 rounded-2xl text-[13px] font-bold font-noto leading-relaxed break-words whitespace-normal border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700 text-slate-300' : 'bg-orange-50/30 border-orange-100 text-slate-600'}`}>
-              {globalUpdate.global_update_message || (lang === 'bn' ? 'সিস্টেমে নতুন কিছু পরিবর্তন করা হয়েছে। আরও ভালো অভিজ্ঞতার জন্য এখনই আপডেট করুন।' : 'Some changes have been made to the system. Update now for a better experience.')}
+            <div className={`mt-4 p-5 rounded-2xl text-[13px] font-bold font-noto leading-relaxed break-words whitespace-normal border text-left ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700 text-slate-300' : 'bg-orange-50/30 border-orange-100 text-slate-600'}`}>
+              <article className="prose prose-sm max-w-none dark:prose-invert font-noto">
+                <ReactMarkdown>
+                  {globalUpdate.global_update_message || (lang === 'bn' ? 'সিস্টেমে নতুন কিছু পরিবর্তন করা হয়েছে। আরও ভালো অভিজ্ঞতার জন্য এখনই আপডেট করুন।' : 'Some changes have been made to the system. Update now for a better experience.')}
+                </ReactMarkdown>
+              </article>
             </div>
 
             <div className="flex flex-col gap-3 mt-8">

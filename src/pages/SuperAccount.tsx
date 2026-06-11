@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, View, SubscriptionPackage } from 'types';
 import { t } from 'translations';
@@ -699,15 +700,74 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     </div>
 
                     <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-slate-400 uppercase px-1">{lang === 'bn' ? 'আপডেট মেসেজ' : 'Update Message'}</label>
+                       <div className="flex items-center justify-between px-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">{lang === 'bn' ? 'আপডেট মেসেজ' : 'Update Message'}</label>
+                          <div className="flex items-center gap-1.5">
+                             <button 
+                                onClick={() => {
+                                   const start = '**';
+                                   const end = '**';
+                                   const msg = globalSettings.global_update_message;
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg && !msg.endsWith(' ') ? ' ' : '') + start + (lang === 'bn' ? 'বোল্ড' : 'Bold') + end});
+                                }}
+                                className="w-8 h-8 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center text-xs font-black shadow-sm hover:scale-105 transition-all font-serif" title="Bold"
+                             >
+                                B
+                             </button>
+                             <button 
+                                onClick={() => {
+                                   const start = '*';
+                                   const end = '*';
+                                   const msg = globalSettings.global_update_message;
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg && !msg.endsWith(' ') ? ' ' : '') + start + (lang === 'bn' ? 'ইটালিক' : 'Italic') + end});
+                                }}
+                                className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-xs italic shadow-sm hover:scale-105 transition-all font-serif" title="Italic"
+                             >
+                                I
+                             </button>
+                             <button 
+                                onClick={() => {
+                                   const start = '# ';
+                                   const msg = globalSettings.global_update_message;
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + "\n" + start + (lang === 'bn' ? 'বড় হেডলাইন' : 'Big Heading')});
+                                }}
+                                className="w-9 h-8 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm hover:scale-105 transition-all" title="Large Text"
+                             >
+                                BIG
+                             </button>
+                             <button 
+                                onClick={() => {
+                                   const start = '##### ';
+                                   const msg = globalSettings.global_update_message;
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + "\n" + start + (lang === 'bn' ? 'ছোট লেখা' : 'Small text')});
+                                }}
+                                className="w-9 h-8 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-lg flex items-center justify-center text-[8px] font-black shadow-sm hover:scale-105 transition-all" title="Small Text"
+                             >
+                                SML
+                             </button>
+                          </div>
+                       </div>
                        <textarea 
-                          rows={4} 
-                          className={`w-full rounded-2xl p-4 font-bold outline-none border resize-none text-xs ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
+                          rows={6} 
+                          className={`w-full rounded-2xl p-4 font-bold outline-none border resize-none text-xs leading-relaxed ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
                           value={globalSettings.global_update_message} 
                           onChange={(e) => setGlobalSettings({...globalSettings, global_update_message: e.target.value})}
-                          placeholder={lang === 'bn' ? 'এখানে মেসেজ লিখুন...' : 'Write message here...'}
+                          placeholder={lang === 'bn' ? 'এখানে মেসেজ লিখুন (Markdown সাপোর্ট করে)...' : 'Write message here (Markdown supported)...'}
                        />
                     </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase px-1 flex items-center gap-2">
+                          <Type size={12} />
+                          {lang === 'bn' ? 'লাইভ প্রিভিউ' : 'Live Preview'}
+                       </label>
+                       <div className={`p-4 rounded-2xl border text-[11px] leading-relaxed break-words font-noto ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700 text-slate-400' : 'bg-orange-50/20 border-orange-100 text-slate-600'}`}>
+                          <article className="prose prose-xs dark:prose-invert max-w-none">
+                             <ReactMarkdown>{globalSettings.global_update_message || '...'}</ReactMarkdown>
+                          </article>
+                       </div>
+                    </div>
+
 
                     <div className="space-y-1.5">
                        <div className="flex items-center justify-between px-1">

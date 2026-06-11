@@ -56,6 +56,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [bulkMessage, setBulkMessage] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [sendingBulk, setSendingBulk] = useState(false);
   const isSendingBulkRef = useRef(false);
   const [bulkSuccess, setBulkSuccess] = useState(false);
@@ -500,7 +501,16 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                              <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto line-clamp-1">{tmp.title}</h4>
                           </div>
                           <div className="flex gap-1.5 shrink-0">
-                             <button onClick={() => { setEditingId(tmp.id); setTempTitle(tmp.title || ''); setTempBody(tmp.body || ''); setTempSystemEvent(''); setShowAddModal(true); }} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Edit3 size={14}/></button>
+                             <button onClick={() => { 
+                               setEditingId(tmp.id); 
+                               setTempTitle(tmp.title || ''); 
+                               setTempBody(tmp.body || ''); 
+                               // Find if this is a system template
+                               const sysTemplates = (madrasah?.config_json as any)?.features?.sms_templates || {};
+                               const eventKey = Object.keys(sysTemplates).find(k => sysTemplates[k] === tmp.id || sysTemplates[k] === tmp.body);
+                               setTempSystemEvent(eventKey || '');
+                               setShowAddModal(true); 
+                             }} className="w-8 h-8 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Edit3 size={14}/></button>
                              <button onClick={() => setShowDeleteConfirm(tmp)} className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center active:scale-90 transition-all"><Trash2 size={14}/></button>
                           </div>
                        </div>
@@ -600,14 +610,20 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       <button onClick={() => setShowTemplateDropdownBulk(!showTemplateDropdownBulk)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <BookOpen size={18} className="text-[#2563EB]" />
-                          <span className="text-base font-black font-noto text-slate-400">{t('template_title', lang)}</span>
+                          <span className={`text-base font-black font-noto ${selectedTemplateId ? 'text-[#1E3A8A]' : 'text-slate-400'}`}>
+                            {selectedTemplateId ? (templates.find(t => t.id === selectedTemplateId)?.title || t('template_title', lang)) : t('template_title', lang)}
+                          </span>
                         </div>
                         <ChevronDown className={`text-slate-300 transition-all ${showTemplateDropdownBulk ? 'rotate-180' : ''}`} size={20} />
                       </button>
                       {showTemplateDropdownBulk && (
                         <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto animate-in slide-in-from-top-2">
                           {templates.length > 0 ? templates.map(tmp => (
-                            <button key={tmp.id} onClick={() => { setBulkMessage(tmp.body); setShowTemplateDropdownBulk(false); }} className="w-full text-left px-5 py-3.5 rounded-xl mb-1 hover:bg-slate-50">
+                            <button key={tmp.id} onClick={() => { 
+                              setBulkMessage(tmp.body); 
+                              setSelectedTemplateId(tmp.id);
+                              setShowTemplateDropdownBulk(false); 
+                            }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 transition-all ${selectedTemplateId === tmp.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}>
                               <p className="text-[10px] font-black text-[#2563EB] uppercase mb-0.5">{tmp.title}</p>
                               <p className="text-xs font-bold text-[#1E3A8A] truncate">{tmp.body}</p>
                             </button>
@@ -657,7 +673,10 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                     )}
 
                     <div className="relative flex-1 flex flex-col">
-                      <textarea className="w-full flex-1 min-h-[128px] px-5 py-5 bg-slate-50 border-2 border-slate-100 rounded-[1.8rem] text-[#1E3A8A] font-bold outline-none font-noto resize-none" placeholder={t('sms', lang) + "..."} value={bulkMessage} onChange={(e) => setBulkMessage(e.target.value)} />
+                      <textarea className="w-full flex-1 min-h-[128px] px-5 py-5 bg-slate-50 border-2 border-slate-100 rounded-[1.8rem] text-[#1E3A8A] font-bold outline-none font-noto resize-none" placeholder={t('sms', lang) + "..."} value={bulkMessage} onChange={(e) => {
+                        setBulkMessage(e.target.value);
+                        setSelectedTemplateId(null);
+                      }} />
                       <div className="absolute bottom-4 right-5 bg-white px-2 py-0.5 rounded-lg border border-slate-100 shadow-sm flex gap-2">
                          {(() => {
                             const info = getSmsLengthInfo(bulkMessage);
