@@ -653,7 +653,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       }
 
       // Update Local Cache for offline consistency
-      const currentAttendanceData = payload.filter(p => p.status === 'absent').map(p => {
+      const currentAttendanceData = payload.filter(p => p.status !== 'present').map(p => {
         const student = students.find(s => s.id === p.student_id);
         const cls = classes.find(c => c.id === p.class_id);
         return {
@@ -699,11 +699,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           let presentMsgEn = templates.attendance_present || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় উপস্থিত হয়েছে।` : `As-salamu Alaikum, {student_name} is present at madrasah today.`);
           let absentMsgEn = templates.attendance_absent || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় অনুপস্থিত। অনুগ্রহ করে কারণ জানান।` : `As-salamu Alaikum, {student_name} is absent today. Please inform us.`);
           let lateMsgEn = templates.attendance_late || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় দেরিতে উপস্থিত হয়েছে।` : `As-salamu Alaikum, {student_name} arrived late today.`);
+          let leaveMsgEn = templates.attendance_leave || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ ছুটিতে আছে।` : `As-salamu Alaikum, {student_name} is on leave today.`);
 
           const msgMap: Record<string, string> = {
             'present': presentMsgEn,
             'absent': absentMsgEn,
             'late': lateMsgEn,
+            'leave': leaveMsgEn,
           };
 
           const sids = Array.from(smsEligibleStudentIds);
@@ -712,7 +714,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           // Group by status
           const grouped = activeStudents.reduce((acc, student) => {
             const st = attendance[student.id];
-            if (st === 'present' || st === 'absent' || st === 'late') {
+            if (st === 'present' || st === 'absent' || st === 'late' || st === 'leave') {
               if (!acc[st]) acc[st] = [];
               acc[st].push(student);
             }
@@ -1435,9 +1437,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   </div>
             ) : reportType === 'daily' ? (
               <div className="space-y-6 animate-in slide-in-from-bottom-5">
-                 <div className="flex items-center gap-2 mb-2 mt-2">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'অনুপস্থিত শিক্ষার্থী তালিকা' : 'Absent Students'} ({dailyAbsentees.length})</h4>
-                 </div>
+                  <div className="flex items-center gap-2 mb-2 mt-2">
+                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'অনুপস্থিত/দেরি/ছুটি শিক্ষার্থী তালিকা' : 'Absent/Late/Leave Students'} ({dailyAbsentees.length})</h4>
+                  </div>
                  {dailyAbsentees.length > 0 ? (
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                      {dailyAbsentees.map(a => (

@@ -21,6 +21,7 @@ interface AttendanceReportEntry {
   absent_days: number;
   late_days: number;
   half_days: number;
+  leave_days: number;
   total_days: number;
 }
 
@@ -192,7 +193,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
             </h3>
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0 }))}>
+                <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0, Leave: d.leave_days || 0 }))}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={madrasah?.theme === 'dark' ? '#334155' : '#f1f5f9'} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
@@ -200,6 +201,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                   <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
                   <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
+                  <Bar dataKey="Leave" stackId="a" fill="#6366f1" />
                   <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

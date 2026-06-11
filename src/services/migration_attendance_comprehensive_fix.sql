@@ -34,6 +34,7 @@ BEGIN
                 WHEN bool_or(a.status = 'present') THEN 'present'
                 WHEN bool_or(a.status = 'late') THEN 'late'
                 WHEN bool_or(a.status = 'half_day') THEN 'half_day'
+                WHEN bool_or(a.status = 'leave') THEN 'leave'
                 WHEN bool_or(a.status = 'absent') THEN 'absent'
                 ELSE NULL
             END as aggregated_status,
@@ -76,6 +77,7 @@ RETURNS TABLE (
     absent_days BIGINT,
     late_days BIGINT,
     half_days BIGINT,
+    leave_days BIGINT,
     total_days BIGINT
 ) 
 LANGUAGE plpgsql
@@ -91,6 +93,7 @@ BEGIN
                 WHEN bool_or(a.status = 'present') THEN 'present'
                 WHEN bool_or(a.status = 'late') THEN 'late'
                 WHEN bool_or(a.status = 'half_day') THEN 'half_day'
+                WHEN bool_or(a.status = 'leave') THEN 'leave'
                 WHEN bool_or(a.status = 'absent') THEN 'absent'
                 ELSE NULL
             END as final_status
@@ -108,6 +111,7 @@ BEGIN
         COUNT(CASE WHEN ds.final_status = 'absent' THEN 1 END)::BIGINT as absent_days,
         COUNT(CASE WHEN ds.final_status = 'late' THEN 1 END)::BIGINT as late_days,
         COUNT(CASE WHEN ds.final_status = 'half_day' THEN 1 END)::BIGINT as half_days,
+        COUNT(CASE WHEN ds.final_status = 'leave' THEN 1 END)::BIGINT as leave_days,
         COUNT(ds.date)::BIGINT as total_days
     FROM students s
     LEFT JOIN daily_status ds ON s.id = ds.student_id 
@@ -137,7 +141,7 @@ BEGIN
     JOIN students s ON a.student_id = s.id
     WHERE a.institution_id = p_institution_id
       AND a.date = p_date
-      AND a.status = 'present'
+      AND (a.status = 'present' OR a.status = 'late' OR a.status = 'half_day')
       AND (p_academic_year_id IS NULL OR s.academic_year_id = p_academic_year_id OR s.academic_year_id IS NULL)
       AND (p_allowed_classes IS NULL OR s.class_id = ANY(p_allowed_classes));
       
