@@ -762,7 +762,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                           {lang === 'bn' ? 'লাইভ প্রিভিউ' : 'Live Preview'}
                        </label>
                        <div className={`p-5 rounded-2xl border text-[11px] min-h-[100px] leading-relaxed break-words font-noto overflow-hidden transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900 shadow-inner'}`}>
-                          <article className="prose prose-sm dark:prose-invert max-w-none font-noto">
+                          <article className="prose prose-sm dark:prose-invert max-w-none font-noto prose-p:my-0.5 prose-headings:my-1 prose-ul:my-1 prose-li:my-0 prose-p:text-inherit">
                              <ReactMarkdown>{globalSettings.global_update_message || (lang === 'bn' ? '*মেসেজ লিখলে এখানে প্রিভিউ দেখা যাবে...*' : '*Write message to see preview...*')}</ReactMarkdown>
                           </article>
                        </div>

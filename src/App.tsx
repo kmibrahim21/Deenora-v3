@@ -833,8 +833,8 @@ const App: React.FC = () => {
               {lang === 'bn' ? 'নতুন আপডেট উপলব্ধ!' : 'Update Available!'}
             </h3>
             
-            <div className={`mt-4 p-5 rounded-2xl text-[13px] font-bold font-noto leading-relaxed break-words whitespace-normal border text-left max-h-[350px] overflow-y-auto custom-scrollbar transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700 text-slate-300' : 'bg-orange-50/30 border-orange-100 text-slate-600 shadow-inner'}`}>
-              <article className="prose prose-sm max-w-none dark:prose-invert font-noto prose-p:my-1.5 prose-headings:my-2 prose-headings:text-sm prose-ul:my-2 prose-li:my-0.5">
+            <div className={`mt-4 p-5 rounded-2xl text-[13px] font-bold font-noto leading-relaxed break-words whitespace-normal border text-left max-h-[350px] overflow-y-auto custom-scrollbar transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-orange-50/30 border-orange-100 text-slate-600 shadow-inner'}`}>
+              <article className="prose prose-sm max-w-none dark:prose-invert font-noto prose-p:my-0.5 prose-headings:my-1 prose-headings:text-sm prose-ul:my-1 prose-li:my-0 prose-p:text-inherit">
                 <ReactMarkdown>
                   {globalUpdate.global_update_message || (lang === 'bn' ? 'সিস্টেমে নতুন কিছু পরিবর্তন করা হয়েছে। আরও ভালো অভিজ্ঞতার জন্য এখনই আপডেট করুন।' : 'Some changes have been made to the system. Update now for a better experience.')}
                 </ReactMarkdown>
