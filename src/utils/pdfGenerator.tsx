@@ -698,19 +698,36 @@ export const generateAccountingReportPDF = async (
         setTimeout(resolve, 800);
     });
 
-    const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
+    const rootEl = container.firstElementChild as HTMLElement;
+    rootEl.style.height = 'auto'; // allow natural expansion
+    const scrollHeight = rootEl.scrollHeight;
+
+    const imgData = await toJpeg(rootEl, {
         pixelRatio: 1.5,
         quality: 0.8,
         backgroundColor: '#ffffff',
         width: 794,
-        height: 1123,
     });
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    const pxToMm = pageWidth / 794;
+    const totalPdfHeight = scrollHeight * pxToMm;
+
+    let heightLeft = totalPdfHeight;
+    let position = 0;
+
+    doc.addImage(imgData, 'JPEG', 0, position, pageWidth, totalPdfHeight, undefined, 'FAST');
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+        position -= pageHeight;
+        doc.addPage();
+        doc.addImage(imgData, 'JPEG', 0, position, pageWidth, totalPdfHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+    }
     
     root.unmount();
     document.body.removeChild(container);
