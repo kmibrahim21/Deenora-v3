@@ -258,6 +258,23 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             };
         });
 
+        // Sort students by roll in continuous numeric order, placing empty or non-numeric roll at the end
+        if (correctedData) {
+            correctedData.sort((a, b) => {
+                const rA = a.roll != null && a.roll !== '' ? Number(a.roll) : 999999;
+                const rB = b.roll != null && b.roll !== '' ? Number(b.roll) : 999999;
+                if (isNaN(rA) && isNaN(rB)) {
+                    return String(a.roll || '').localeCompare(String(b.roll || ''));
+                }
+                if (isNaN(rA)) return 1;
+                if (isNaN(rB)) return -1;
+                if (rA !== rB) {
+                    return rA - rB;
+                }
+                return String(a.student_name || '').localeCompare(String(b.student_name || ''));
+            });
+        }
+
         setFeesReport(correctedData || []);
         const cacheKeyCurrent = `${madrasah.id}_${selectedMonth}_${selectedClass}`;
         globalQawmiFeesReport[cacheKeyCurrent] = correctedData || [];
