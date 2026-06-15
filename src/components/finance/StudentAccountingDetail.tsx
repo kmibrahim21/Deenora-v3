@@ -41,8 +41,12 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         const isEnabled = setting ? setting.is_enabled : true;
         const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
         const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
+        
+        const yearStart = madrasah.config_json?.academic_year_start;
+        const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
+        
         const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
-        return (isEnabled && !isMonthExpired && !isMonthNotStarted) ? sum + amountToCharge : sum;
+        return (isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart) ? sum + amountToCharge : sum;
       }, 0);
       
       return Math.max(0, monthPayable - paidAmt);
@@ -368,6 +372,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       requestManager.invalidatePattern(`settings:${madrasah.id}`);
       requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
       requestManager.invalidatePattern(`student_settings:${student.student_id}`);
+      requestManager.invalidatePattern(`student_fee_settings:${madrasah.id}`);
       clearGlobalSchoolFeeCache();
       clearGlobalQawmiFeeCache();
 
@@ -408,6 +413,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       requestManager.invalidatePattern(`settings:${madrasah.id}`);
       requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
       requestManager.invalidatePattern(`student_settings:${student.student_id}`);
+      requestManager.invalidatePattern(`student_fee_settings:${madrasah.id}`);
       clearGlobalSchoolFeeCache();
       clearGlobalQawmiFeeCache();
       
@@ -438,16 +444,15 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   // Use fees table for total paid as it's more accurate (linked by student_id)
   const totalPaid = fees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
   
-  // Calculate total due for the year up to current month mapping over months properly 
-  const currentMonthIdx = now.getMonth() + 1;
-  const yearStr = now.getFullYear().toString();
+  // Calculate total due for the year
+  const maxMonthIdx = 12;
   const academicYearStart = madrasah.config_json?.academic_year_start;
-  const acStart = academicYearStart ? new Date(academicYearStart) : new Date(now.getFullYear(), 0, 1);
-  const startMonthIdx = acStart.getFullYear() === now.getFullYear() ? acStart.getMonth() + 1 : 1;
+  const acStart = academicYearStart ? new Date(academicYearStart) : null;
+  const startMonthIdx = acStart && acStart.getFullYear().toString() === selectedYear ? acStart.getMonth() + 1 : 1;
 
   let totalPayableYearToDate = 0;
-  for (let m = startMonthIdx; m <= currentMonthIdx; m++) {
-      const monthStr = `${yearStr}-${String(m).padStart(2, '0')}`;
+  for (let m = startMonthIdx; m <= maxMonthIdx; m++) {
+      const monthStr = `${selectedYear}-${String(m).padStart(2, '0')}`;
       structures.forEach(s => {
           const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
           const isEnabled = setting ? setting.is_enabled : true;
@@ -455,8 +460,9 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
           
           const isExpired = s.due_date && s.due_date.slice(0, 7) < monthStr;
           const isNotStarted = s.start_date && s.start_date.slice(0, 7) > monthStr;
+          const isBeforeYearStart = academicYearStart && monthStr < academicYearStart.slice(0, 7);
           
-          if (!isExpired && !isNotStarted) {
+          if (!isExpired && !isNotStarted && !isBeforeYearStart) {
              const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
              totalPayableYearToDate += amountToCharge;
           }

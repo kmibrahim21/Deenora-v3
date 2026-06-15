@@ -972,7 +972,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
                                 return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart;
                             });
-                            const totalPayable = studentFeeStructures.reduce((sum, fs) => sum + Number(fs.amount), 0);
+                            const totalPayable = studentFeeStructures.reduce((sum, fs) => {
+                                const setting = studentSettings?.find(ss => ss.fee_structure_id === fs.id);
+                                const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(fs.amount);
+                                return sum + amountToCharge;
+                            }, 0);
 
                             if (recordsForMonth.length > 0) {
                                 totalPaid = recordsForMonth.reduce((sum, r) => sum + (Number(r.amount_paid) || 0) + (Number(r.discount) || 0), 0);
