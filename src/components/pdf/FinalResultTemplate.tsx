@@ -98,19 +98,19 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                 {t.page} {pageIndex + 1} / {totalPages}
               </div>
 
-              <div className="flex gap-12">
-                <div className="text-center">
-                  <div className="w-32 border-t border-slate-200 pt-1">
+              <div className="flex gap-12 items-end">
+                <div className="text-center flex flex-col items-center">
+                  <div className="w-32 border-t border-slate-400 pt-1">
                     <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{t.examController}</div>
                   </div>
                 </div>
-                <div className="text-center relative">
-                  <div className="w-32 border-t border-slate-200 pt-1 relative">
-                    <div className="flex items-center justify-center relative mb-1" style={{ height: `${config.signature_height || 20}px` }}>
-                        {config.signature_url && (
-                            <img src={config.signature_url} style={{ height: `${config.signature_height || 20}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
-                        )}
-                    </div>
+                <div className="text-center flex flex-col items-center">
+                  <div className="flex items-center justify-center relative mb-1 w-32" style={{ height: `${config.signature_height || 30}px` }}>
+                      {config.signature_url && (
+                          <img src={config.signature_url} style={{ height: `${config.signature_height || 30}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
+                      )}
+                  </div>
+                  <div className="w-32 border-t border-slate-400 pt-1">
                     <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{t.principal}</div>
                   </div>
                 </div>

@@ -137,19 +137,19 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                  {isBangla ? 'পৃষ্ঠা' : 'Page'} {pageIndex + 1} / {totalPages}
               </div>
 
-              <div className="flex gap-20">
-                <div className="text-center">
-                  <div className="w-44 border-t border-slate-200 pt-2">
+              <div className="flex gap-20 items-end">
+                <div className="text-center flex flex-col items-center">
+                  <div className="w-44 border-t border-slate-400 pt-2">
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t.examController}</div>
                   </div>
                 </div>
-                <div className="text-center relative">
-                  <div className="w-44 border-t border-slate-200 pt-2 relative">
-                    <div className="flex items-center justify-center relative mb-1" style={{ height: `${config.signature_height || 22}px` }}>
-                        {config.signature_url && (
-                            <img src={config.signature_url} style={{ height: `${config.signature_height || 22}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
-                        )}
-                    </div>
+                <div className="text-center flex flex-col items-center">
+                  <div className="flex items-center justify-center relative mb-1 w-44" style={{ height: `${config.signature_height || 30}px` }}>
+                      {config.signature_url && (
+                          <img src={config.signature_url} style={{ height: `${config.signature_height || 30}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
+                      )}
+                  </div>
+                  <div className="w-44 border-t border-slate-400 pt-2">
                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t.principal}</div>
                   </div>
                 </div>
