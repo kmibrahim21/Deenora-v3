@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
-import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen } from 'lucide-react';
+import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
@@ -108,6 +108,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     smsRevenue: 0,
     voiceRevenue: 0,
     subscriptionRevenue: 0,
+    monthlySubscriptionRevenue: {} as Record<string, number>,
     totalRevenue: 0,
     pendingApprovals: 0,
     totalInstitutions: 0,
@@ -116,8 +117,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     adminSMSStock: 0,
     typeBreakdown: { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 }
   });
+  const [detailedFilterMode, setDetailedFilterMode] = useState<'monthly' | 'yearly'>('monthly');
+  const [detailedMonth, setDetailedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [detailedYear, setDetailedYear] = useState(new Date().getFullYear().toString());
+  const [detailedReport, setDetailedReport] = useState({
+    smsRechargeTotal: 0,
+    voiceRechargeTotal: 0,
+    subRechargeTotal: 0,
+    smsSentNum: 0,
+    voiceCallsNum: 0,
+    loading: false
+  });
   const [recentInstitutions, setRecentInstitutions] = useState<Institution[]>([]);
   const [selectedUser, setSelectedUser] = useState<InstitutionWithStats | null>(null);
+  const [selectedRevMonth, setSelectedRevMonth] = useState<string>('all');
   const [userStats, setUserStats] = useState({ students: 0, classes: 0 });
   
   const [editName, setEditName] = useState('');
@@ -616,13 +629,82 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [newInstType, setNewInstType] = useState<'madrasah' | 'school' | 'kindergarten' | 'choching'>('madrasah');
   const [isCreatingInst, setIsCreatingInst] = useState(false);
 
+  const fetchDetailedReport = async () => {
+    setDetailedReport(prev => ({ ...prev, loading: true }));
+    let startDate: Date;
+    let endDate: Date;
+    
+    if (detailedFilterMode === 'monthly') {
+      const [year, month] = detailedMonth.split('-');
+      startDate = new Date(Number(year), Number(month) - 1, 1);
+      endDate = new Date(Number(year), Number(month), 0, 23, 59, 59);
+    } else {
+      startDate = new Date(Number(detailedYear), 0, 1);
+      endDate = new Date(Number(detailedYear), 11, 31, 23, 59, 59);
+    }
+
+    const startISO = startDate.toISOString();
+    const endISO = endDate.toISOString();
+
+    const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
+      supabase.from('transactions').select('amount, description, module').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(10000),
+      supabase.from('sms_logs').select('*', { count: 'exact', head: true }).gte('created_at', startISO).lte('created_at', endISO),
+      supabase.from('voice_broadcasts').select('total_numbers').gte('created_at', startISO).lte('created_at', endISO).limit(10000)
+    ]);
+    
+    const transactions = txRes.data || [];
+    
+    // Sub/Packages
+    const subTransactions = transactions.filter(t => 
+      t.module === 'subscription' || 
+      (t.description?.toLowerCase().includes('subscription')) || 
+      (t.description?.toLowerCase().includes('package')) ||
+      (t.description?.toLowerCase().includes('renew')) ||
+      (t.description?.toLowerCase().includes('প্যাকেজ')) ||
+      (t.description?.toLowerCase().includes('সাবস্ক্রিপশন'))
+    );
+    const subRechargeTotal = subTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+
+    // SMS
+    const smsTransactions = transactions.filter(t => {
+      const isSmsModule = t.module === 'sms' || !t.module;
+      const desc = (t.description || '').toLowerCase();
+      const isVoice = desc.includes('voice');
+      const isSub = desc.includes('subscription') || desc.includes('package') || desc.includes('renew') || desc.includes('প্যাকেজ') || desc.includes('সাবস্ক্রিপশন');
+      return isSmsModule && !isVoice && !isSub;
+    });
+    const smsRechargeTotal = smsTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+
+    // Voice
+    const voiceTransactions = transactions.filter(t => t.module === 'voice' || (t.module === 'sms' || !t.module ? (t.description || '').toLowerCase().includes('voice') : false));
+    const voiceRechargeTotal = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+
+    const smsSentNum = smsLogsRes.count || 0;
+    const voiceCallsNum = (voiceBroadcastsRes.data || []).reduce((sum, t) => sum + (Number(t.total_numbers) || 0), 0) || 0;
+
+    setDetailedReport({
+      smsRechargeTotal,
+      voiceRechargeTotal,
+      subRechargeTotal,
+      smsSentNum,
+      voiceCallsNum,
+      loading: false
+    });
+  };
+
+  useEffect(() => {
+    if (view === 'dashboard') {
+      fetchDetailedReport();
+    }
+  }, [detailedFilterMode, detailedMonth, detailedYear, view]);
+
   const fetchGlobalCounts = async () => {
     // Disabled RPC to use client-side aggregation since RPC schema is currently out of sync
     const [studentsRes, classesRes, teachersRes, smsAllocRes, currentBalRes, pendingRes, instsRes, stockRes] = await Promise.all([
       supabase.from('students').select('*', { count: 'exact', head: true }),
       supabase.from('classes').select('*', { count: 'exact', head: true }),
       supabase.from('teachers').select('*', { count: 'exact', head: true }),
-      supabase.from('transactions').select('sms_count, amount, module, description').eq('status', 'approved').limit(10000),
+      supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(10000),
       supabase.from('institutions').select('sms_balance, balance, is_active, institution_type').eq('is_super_admin', false),
       supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('institutions').select('*', { count: 'exact', head: true }).eq('is_super_admin', false),
@@ -631,16 +713,40 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
     const totalAllocated = smsAllocRes.data?.reduce((sum, t) => sum + (Number(t.sms_count) || 0), 0) || 0;
     
-    // Calculate revenues per module
-    const smsRev = smsAllocRes.data?.filter(t => t.module === 'sms' || (!t.module && !t.description?.toLowerCase().includes('voice') && !t.description?.toLowerCase().includes('subscription'))).reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-    const voiceRev = smsAllocRes.data?.filter(t => t.module === 'voice' || (!t.module && t.description?.toLowerCase().includes('voice'))).reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-    const subRev = smsAllocRes.data?.filter(t => t.module === 'subscription' || (!t.module && t.description?.toLowerCase().includes('subscription'))).reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+    const subTransactions = smsAllocRes.data?.filter(t => 
+      t.module === 'subscription' || 
+      (t.description?.toLowerCase().includes('subscription')) || 
+      (t.description?.toLowerCase().includes('package')) ||
+      (t.description?.toLowerCase().includes('renew')) ||
+      (t.description?.toLowerCase().includes('প্যাকেজ')) ||
+      (t.description?.toLowerCase().includes('সাবস্ক্রিপশন'))
+    ) || [];
+    const subRev = subTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+    
+    // Revenue based on actual USAGE (Gross vs Net Profit)
+    // 1 SMS sent = 0.10 TK Net Profit (User charges 0.35, buys at 0.25)
+    // 1 Voice call sent = 0.15 TK Net Profit (User charges 0.50, buys at 0.35) -> which is 30% of total Voice Tk spent
+    const totalInWallets = currentBalRes.data?.reduce((sum, m) => sum + (Number(m.sms_balance) || 0), 0) || 0;
+    const sentCount = Math.max(0, totalAllocated - totalInWallets);
+    
+    const voiceTransactions = smsAllocRes.data?.filter(t => t.module === 'voice' || (t.module === 'sms' || !t.module ? (t.description || '').toLowerCase().includes('voice') : false)) || [];
+    const totalVoiceRecharged = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+    const totalVoiceBalance = currentBalRes.data?.reduce((sum, m) => sum + (Number(m.balance) || 0), 0) || 0;
+    const spentVoiceTk = Math.max(0, totalVoiceRecharged - totalVoiceBalance);
+    
+    const smsRev = Math.round(sentCount * 0.10); // Net Profit from used SMS
+    const voiceRev = Math.round((spentVoiceTk / 0.5) * 0.15); // Net Profit from used Voice Calls
+    
+    const monthlySubscriptionRevenue = subTransactions.reduce((acc: Record<string, number>, t) => {
+      const date = new Date(t.created_at);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      acc[monthKey] = (acc[monthKey] || 0) + (Number(t.amount) || 0);
+      return acc;
+    }, {});
+
     const totalRevenue = smsRev + voiceRev + subRev;
 
-    const totalInWallets = currentBalRes.data?.reduce((sum, m) => sum + (Number(m.sms_balance) || 0), 0) || 0;
-    const totalVoiceBalance = currentBalRes.data?.reduce((sum, m) => sum + (Number(m.balance) || 0), 0) || 0;
     const activeInsts = currentBalRes.data?.filter(m => m.is_active).length || 0;
-    const sentCount = Math.max(0, totalAllocated - totalInWallets);
     const adminStock = stockRes.data?.remaining_sms || 0;
 
     const typeBreakdown = currentBalRes.data?.reduce((acc: any, m) => {
@@ -659,6 +765,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       smsRevenue: smsRev,
       voiceRevenue: voiceRev,
       subscriptionRevenue: subRev,
+      monthlySubscriptionRevenue,
       totalRevenue,
       pendingApprovals: pendingRes.count || 0,
       totalInstitutions: instsRes.count || 0,
@@ -1673,86 +1780,197 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                  </button>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-blue-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <Users2 size={24} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalInstitutions}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Portals</p>
+              {/* Core System-wide Entity Metrics (All At Top) */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {/* Portals count */}
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-blue-500/30 transition-all duration-300`}>
+                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <Building2 size={24} />
+                   </div>
+                   <div>
+                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Portals</p>
+                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalInstitutions.toLocaleString('bn-BD')}</h4>
+                   </div>
                 </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-emerald-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <Activity size={24} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.activeInstitutions}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Active Portals</p>
+
+                {/* Active count */}
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-emerald-500/30 transition-all duration-300`}>
+                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <Activity size={24} />
+                   </div>
+                   <div>
+                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Active</p>
+                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.activeInstitutions.toLocaleString('bn-BD')}</h4>
+                   </div>
                 </div>
-                <div onClick={() => setView('approvals')} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-yellow-900' : 'bg-white border-slate-100 shadow-premium hover:border-yellow-200'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center cursor-pointer transition-all active:scale-95 group`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <CreditCard size={24} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.pendingApprovals}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Pending Approvals</p>
+
+                {/* Total System Students */}
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-blue-500/30 transition-all duration-300`}>
+                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <GraduationCap size={24} />
+                   </div>
+                   <div>
+                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Students</p>
+                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalStudents.toLocaleString('bn-BD')}</h4>
+                   </div>
                 </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-purple-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <Banknote size={24} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalRevenue?.toLocaleString('bn-BD') || 0}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Revenue (৳)</p>
+
+                {/* Total Classrooms */}
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-orange-500/30 transition-all duration-300`}>
+                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <Layers size={24} />
+                   </div>
+                   <div>
+                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Classrooms</p>
+                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalClasses.toLocaleString('bn-BD')}</h4>
+                   </div>
+                </div>
+
+                {/* Registered Teachers */}
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 col-span-2 md:col-span-1 group hover:border-emerald-500/30 transition-all duration-300`}>
+                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <BookOpen size={24} />
+                   </div>
+                   <div>
+                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Registered Teachers</p>
+                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalTeachers.toLocaleString('bn-BD')}</h4>
+                   </div>
                 </div>
               </div>
 
-              {/* Revenue Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-purple-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <MessageSquare size={24} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.smsRevenue?.toLocaleString('bn-BD') || 0}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">SMS Revenue (৳)</p>
+              {/* Bento Grid layout for Revenu and Approvals */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
+                {/* Revenue Overview - Span 8 */}
+                <div className={`lg:col-span-8 ${madrasah?.theme === 'dark' ? 'bg-gradient-to-br from-slate-900 to-slate-800 border-slate-800' : 'bg-gradient-to-br from-blue-900 to-[#1E3A8A] border-blue-800 shadow-xl'} p-8 rounded-[3rem] border flex flex-col justify-between overflow-hidden relative group`}>
+                   {/* Decorative circle */}
+                   <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white opacity-5 group-hover:scale-110 transition-transform duration-700 pointer-events-none"></div>
+                   
+                   <div className="mb-8">
+                     <p className={`text-xs font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-blue-200'}`}>Total System Revenue (Net)</p>
+                     <h2 className={`text-4xl md:text-5xl font-black mt-2 text-white`}>৳ {globalStats.totalRevenue?.toLocaleString('bn-BD') || 0}</h2>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10 w-full">
+                      <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                         <div className="flex items-center gap-2 mb-2">
+                           <MessageSquare size={16} className={madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-300'} />
+                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">SMS Profit</p>
+                         </div>
+                         <h4 className="text-2xl font-bold text-white">৳ {globalStats.smsRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                      </div>
+                      <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                         <div className="flex items-center gap-2 mb-2">
+                           <Mic size={16} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-300'} />
+                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Voice Profit</p>
+                         </div>
+                         <h4 className="text-2xl font-bold text-white">৳ {globalStats.voiceRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                      </div>
+                      <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                         <div className="flex items-center gap-2 mb-2">
+                           <Banknote size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-300'} />
+                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Sub. Revenue</p>
+                         </div>
+                         <h4 className="text-2xl font-bold text-white">৳ {globalStats.subscriptionRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                      </div>
+                   </div>
                 </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-emerald-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <Mic size={24} />
+
+                {/* Approvals - Span 4 */}
+                <div className="lg:col-span-4 flex flex-col justify-stretch">
+                  <div onClick={() => setView('approvals')} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-yellow-900' : 'bg-white border-slate-100 shadow-premium hover:border-yellow-200 hover:shadow-xl'} p-8 rounded-[3rem] border flex flex-col justify-between cursor-pointer transition-all active:scale-95 group h-full`}>
+                      <div className="flex items-start justify-between w-full">
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Requests</p>
+                          <h4 className={`text-4xl md:text-5xl font-black ${globalStats.pendingApprovals > 0 ? 'text-yellow-500' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900')}`}>{globalStats.pendingApprovals}</h4>
+                        </div>
+                        <div className={`w-16 h-16 ${madrasah?.theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-500'} rounded-[1.5rem] flex items-center justify-center shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-all`}>
+                          <CreditCard size={28} />
+                        </div>
+                      </div>
+                      
+                      <div className="mt-6 pt-4 border-t border-dashed border-slate-200/50 w-full flex items-center justify-between text-slate-400 group-hover:text-amber-500 transition-colors">
+                        <span className="text-[10px] font-bold uppercase tracking-wider">পেন্ডিং পেমেন্ট আ্যপ্রুভ করুন</span>
+                        <ChevronRight size={16} className="transform group-hover:translate-x-1 transition-transform" />
+                      </div>
                   </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.voiceRevenue?.toLocaleString('bn-BD') || 0}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Voice Revenue (৳)</p>
-                </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-blue-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <Banknote size={24} />
-                  </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.subscriptionRevenue?.toLocaleString('bn-BD') || 0}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Sub. Revenue (৳)</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-blue-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <GraduationCap size={24} />
+              {/* Detailed Filter Section */}
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-8 rounded-[3rem] border space-y-6 mb-4`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="space-y-1 w-full md:w-auto text-center md:text-left">
+                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>বিস্তারিত যোগাযোগ রিপোর্ট</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center md:justify-start gap-1">
+                      {detailedReport.loading && <RefreshCw size={12} className="animate-spin text-blue-500" />}
+                      <span>Custom Communications Report</span>
+                    </p>
                   </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalStudents.toLocaleString('bn-BD')}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Students</p>
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <select
+                      value={detailedFilterMode}
+                      onChange={(e) => setDetailedFilterMode(e.target.value as 'monthly' | 'yearly')}
+                      className={`text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                    >
+                      <option value="monthly">মাসিক (Monthly)</option>
+                      <option value="yearly">বাৎসরিক (Yearly)</option>
+                    </select>
+
+                    {detailedFilterMode === 'monthly' ? (
+                      <input 
+                        type="month"
+                        value={detailedMonth}
+                        onChange={(e) => setDetailedMonth(e.target.value)}
+                        className={`text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                      />
+                    ) : (
+                      <select
+                        value={detailedYear}
+                        onChange={(e) => setDetailedYear(e.target.value)}
+                        className={`text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                      >
+                        {Array.from({ length: 5 }).map((_, i) => {
+                          const year = new Date().getFullYear() - i;
+                          return <option key={year} value={year}>{year}</option>;
+                        })}
+                      </select>
+                    )}
+                  </div>
                 </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-orange-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <Layers size={24} />
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center gap-2">
+                       <MessageSquare size={16} className="text-blue-500" />
+                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">SMS রিচার্জ</span>
+                    </div>
+                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>৳ {detailedReport.smsRechargeTotal.toLocaleString('bn-BD')}</p>
                   </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalClasses.toLocaleString('bn-BD')}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Classes</p>
-                </div>
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex flex-col items-center justify-center text-center group hover:border-emerald-500/30 transition-all duration-300`}>
-                  <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform`}>
-                    <BookOpen size={24} />
+                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center gap-2">
+                       <Mic size={16} className="text-emerald-500" />
+                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">VOICE রিচার্জ</span>
+                    </div>
+                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>৳ {detailedReport.voiceRechargeTotal.toLocaleString('bn-BD')}</p>
                   </div>
-                  <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalTeachers.toLocaleString('bn-BD')}</h4>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Teachers</p>
+                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center gap-2">
+                       <Activity size={16} className="text-purple-500" />
+                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">মোট পাঠানো SMS</span>
+                    </div>
+                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{detailedReport.smsSentNum.toLocaleString('bn-BD')}</p>
+                  </div>
+                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center gap-2">
+                       <Megaphone size={16} className="text-orange-500" />
+                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">মোট ভয়েস কল</span>
+                    </div>
+                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{detailedReport.voiceCallsNum.toLocaleString('bn-BD')}</p>
+                  </div>
                 </div>
               </div>
 
+              {/* Subscription tracking and SMS Inventory Row */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
                    <div className="flex items-center justify-between">
@@ -1834,6 +2052,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                    )}
                 </div>
 
+                {/* SMS Inventory */}
                 <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
                    <div className="flex items-center justify-between">
                      <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>SMS Inventory</h3>
@@ -1858,20 +2077,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     </div>
                   </div>
                 </div>
-
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
-                  <div className="flex items-center justify-between">
-                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>System Info</h3>
-                    <AlertCircle size={24} className="text-slate-300" />
-                  </div>
-                  <div className="flex flex-col justify-center h-full pb-8">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center">Total Institutions</p>
-                    <h5 className={`text-4xl font-black text-center ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{globalStats.totalInstitutions.toLocaleString('bn-BD')}</h5>
-                  </div>
-                </div>
               </div>
 
+              {/* Side-by-side Layout of System Breakdown and Monthly Income histories (With Recent Portals and Transactions cleanly removed) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* System Breakdown */}
                 <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
                   <div className="flex items-center justify-between">
                     <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>System Breakdown</h3>
@@ -1887,63 +2097,65 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                   </div>
                 </div>
 
+                {/* Monthly Subscription Income */}
                 <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
                   <div className="flex items-center justify-between">
-                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>Recent Portals</h3>
-                    <Building2 size={24} className="text-slate-300" />
+                    <div className="flex flex-col gap-1">
+                      <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>মাসিক সাবস্ক্রিপশন আয়</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">সাবস্ক্রিপশন পেমেন্ট হিস্ট্রি</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <select 
+                        value={selectedRevMonth}
+                        onChange={(e) => setSelectedRevMonth(e.target.value)}
+                        className={`text-[10px] font-black py-2 px-3 rounded-xl border appearance-none cursor-pointer transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                      >
+                        <option value="all">{lang === 'bn' ? 'সকল মাস' : 'All Months'}</option>
+                        {Object.keys(globalStats.monthlySubscriptionRevenue)
+                          .sort((a, b) => b.localeCompare(a))
+                          .map(monthKey => {
+                            const [year, month] = monthKey.split('-');
+                            const date = new Date(parseInt(year), parseInt(month) - 1);
+                            const monthName = date.toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' });
+                            return <option key={monthKey} value={monthKey}>{monthName}</option>;
+                          })
+                        }
+                      </select>
+                      <TrendingUp size={20} className="text-emerald-500" />
+                    </div>
                   </div>
                   <div className="space-y-3">
-                    {recentInstitutions.map(inst => (
-                      <div key={inst.id} className={`flex items-center justify-between p-4 rounded-2xl ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} border`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'}`}>
-                            <Building2 size={18} />
+                    {Object.entries(globalStats.monthlySubscriptionRevenue)
+                      .sort((a, b) => b[0].localeCompare(a[0]))
+                      .filter(([monthKey]) => selectedRevMonth === 'all' || monthKey === selectedRevMonth)
+                      .map(([monthKey, amount]) => {
+                        const [year, month] = monthKey.split('-');
+                        const date = new Date(parseInt(year), parseInt(month) - 1);
+                        const monthName = date.toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' });
+                        return (
+                          <div key={monthKey} className={`flex items-center justify-between p-4 rounded-2xl ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} border`}>
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
+                                <Calendar size={18} />
+                              </div>
+                              <p className={`text-xs font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>{monthName}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>৳ {amount.toLocaleString('bn-BD')}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className={`text-xs font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>{inst.name}</p>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{inst.institution_type === 'choching' ? 'Choching' : inst.institution_type}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[8px] font-bold text-slate-400">{new Date(inst.created_at).toLocaleDateString('bn-BD')}</p>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    {Object.keys(globalStats.monthlySubscriptionRevenue).length === 0 && (
+                      <p className="text-center py-10 text-slate-400 text-xs font-bold italic">কোন লেনদেন পাওয়া যায়নি</p>
+                    )}
+                    {selectedRevMonth !== 'all' && !globalStats.monthlySubscriptionRevenue[selectedRevMonth] && (
+                      <p className="text-center py-10 text-slate-400 text-xs font-bold italic">এই মাসের জন্য কোন ডাটা নেই</p>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
-                <div className="flex items-center justify-between">
-                  <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>সাম্প্রতিক লেনদেন</h3>
-                  <History size={24} className="text-slate-300" />
-                </div>
-                <div className="space-y-3">
-                  {transactionHistory.slice(0, 5).map(tr => (
-                    <div key={tr.id} className={`flex items-center justify-between p-4 rounded-2xl ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} border`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tr.status === 'approved' ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500'}`}>
-                          {tr.status === 'approved' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-                        </div>
-                        <div>
-                          <p className={`text-xs font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>{tr.institutions?.name || 'Unknown'}</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{tr.description}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>৳ {tr.amount}</p>
-                        <p className="text-[8px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {transactionHistory.length === 0 && (
-                    <p className="text-center py-10 text-slate-400 text-xs font-bold italic">কোন লেনদেন পাওয়া যায়নি</p>
-                  )}
-                </div>
-                <button onClick={() => setView('approvals')} className="w-full py-4 text-[10px] font-black uppercase tracking-widest text-blue-500 hover:bg-blue-50/50 rounded-2xl transition-colors">
-                  সকল লেনদেন দেখুন
-                </button>
-              </div>
             </div>
           )}
 

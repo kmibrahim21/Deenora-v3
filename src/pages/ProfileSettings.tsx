@@ -46,7 +46,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [featureTeacherDeduction, setFeatureTeacherDeduction] = useState((madrasah?.config_json as any)?.features?.teacher_attendance_deduction ?? false);
 
   const isDark = madrasah?.theme === 'dark';
-  const modules = madrasah?.config_json?.modules || {};
+  const modules = (madrasah?.config_json as any)?.modules || {};
   const packageRaw = madrasah?.config_json?.package_name || madrasah?.config_json?.subscription?.package_name || '1';
   const packageNumber = String(packageRaw);
 
