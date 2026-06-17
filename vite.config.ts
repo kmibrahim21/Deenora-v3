@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { VitePWA } from 'vite-plugin-pwa';
+import legacy from '@vitejs/plugin-legacy';
 
 // ESM environments do not have __dirname global variable. 
 // We define it manually for compatibility with path.resolve.
@@ -116,6 +117,10 @@ export default defineConfig(({ mode }) => {
         tailwindcss(), 
         tsconfigPaths(), 
         vercelApiPlugin(env),
+        legacy({
+          targets: ['defaults', 'not IE 11', 'Android >= 5'],
+          polyfills: true,
+        }),
         VitePWA({
           registerType: 'autoUpdate',
           injectRegister: 'auto',

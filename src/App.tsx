@@ -868,30 +868,34 @@ const App: React.FC = () => {
       {/* Status Modal - PORTALED */}
       {statusModal.show &&
         createPortal(
-          <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300 z-[100]">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xl animate-in fade-in duration-300 z-[100] flex items-center justify-center p-4">
             <div
-              className={`${madrasah?.theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-50"} w-full max-w-sm rounded-[3.5rem] p-10 text-center shadow-2xl border animate-in zoom-in-95 duration-500 relative overflow-hidden`}
+              className={`${madrasah?.theme === "dark" ? "bg-slate-900/95 border-slate-800 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)]" : "bg-white/95 border-white shadow-[0_20px_60px_-15px_rgba(37,99,235,0.15)]"} w-full max-w-sm rounded-[2.5rem] p-8 text-center border backdrop-blur-3xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 relative overflow-hidden`}
             >
+              {/* Top ambient highlight */}
+              <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 ${statusModal.type === "success" ? "bg-emerald-500" : "bg-red-500"} rounded-b-xl shadow-[0_0_20px_rgba(0,0,0,0.5)] shadow-${statusModal.type === "success" ? "emerald" : "red"}-500/50`}></div>
+
               <div
-                className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform duration-700 ${statusModal.type === "success" ? "bg-emerald-50 text-emerald-500 border-emerald-100" : "bg-red-50 text-red-500 border-red-100"} border-4 shadow-inner`}
+                className={`w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 transition-transform duration-700 ${statusModal.type === "success" ? "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-emerald-500/30" : "bg-gradient-to-br from-red-400 to-red-600 text-white shadow-red-500/30"} shadow-xl relative rotate-3`}
               >
+                <div className="absolute inset-0 bg-white/20 rounded-[2rem] blur animate-pulse"></div>
                 {statusModal.type === "success" ? (
-                  <CheckCircle2 size={40} strokeWidth={2.5} />
+                  <CheckCircle2 size={36} strokeWidth={2.5} className="relative z-10" />
                 ) : (
-                  <AlertCircle size={40} strokeWidth={2.5} />
+                  <AlertCircle size={36} strokeWidth={2.5} className="relative z-10" />
                 )}
               </div>
               <h3
-                className={`text-[22px] font-black font-noto leading-tight tracking-tight ${madrasah?.theme === "dark" ? "text-white" : "text-[#1E3A8A]"}`}
+                className={`text-2xl font-black font-noto leading-tight tracking-tight mt-2 ${madrasah?.theme === "dark" ? "text-white" : "text-slate-800"}`}
               >
                 {statusModal.title}
               </h3>
-              <p className="text-[13px] font-bold text-slate-400 mt-3 font-noto px-4 leading-relaxed">
+              <p className={`text-sm font-medium mt-3 font-noto leading-relaxed px-2 ${madrasah?.theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>
                 {statusModal.message}
               </p>
               <button
                 onClick={() => setStatusModal({ ...statusModal, show: false })}
-                className={`w-full mt-8 py-4 font-black rounded-full text-xs uppercase tracking-[0.2em] transition-all shadow-premium active:scale-95 ${statusModal.type === "success" ? "bg-[#2563EB] text-white" : "bg-red-500 text-white"}`}
+                className={`w-full mt-8 py-4 font-black rounded-2xl text-xs uppercase tracking-widest transition-all active:scale-[0.98] ${statusModal.type === "success" ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-[0_8px_20px_-6px_rgba(16,185,129,0.4)]" : "bg-red-500 hover:bg-red-600 text-white shadow-[0_8px_20px_-6px_rgba(239,68,68,0.4)]"}`}
               >
                 {lang === "bn" ? "ঠিক আছে" : "Continue"}
               </button>
