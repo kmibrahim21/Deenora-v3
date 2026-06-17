@@ -401,9 +401,10 @@ export const SMSService = {
         .order('created_at', { ascending: false })
         .limit(100);
         
-      if (error) throw error;
+      if (error && error.code !== '42P01') throw error; // Ignore table not found
       
-      return data.map(log => ({
+      const safeData = data || [];
+      return safeData.map(log => ({
         date: log.created_at,
         recipient: log.recipient,
         message: log.message,

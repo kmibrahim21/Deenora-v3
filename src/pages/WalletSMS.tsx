@@ -437,19 +437,17 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     setLoadingHistory(true);
     try {
       const history = await smsApi.getHistory(madrasah.id);
-      setSmsHistory(history);
+      setSmsHistory(history || []);
     } catch (err) {
       console.error("Failed to fetch SMS history:", err);
+      setSmsHistory([]);
     } finally {
       setLoadingHistory(false);
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'history') {
-      fetchSmsHistory();
-    }
-  }, [activeTab, madrasah?.id]);
+  // Removed redundant useEffect
+
 
   return (
     <>
