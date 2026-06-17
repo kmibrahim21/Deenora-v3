@@ -839,6 +839,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     for (const inst of allActive) {
       const config = typeof inst.config_json === 'string' ? JSON.parse(inst.config_json) : (inst.config_json || {});
       const paidMonths = config.paid_months || [];
+      const manualActivationMonth = config.manual_activation_month;
+
+      // Skip deactivation if manually activated this month
+      if (manualActivationMonth === currentMonthStr) {
+         continue;
+      }
+
       if (!paidMonths.includes(currentMonthStr)) {
          idsToDeactivate.push(inst.id);
       }
@@ -1325,6 +1332,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         try { latestConfig = JSON.parse(latestConfig); } catch (e) { latestConfig = {}; }
       }
       latestConfig = typeof latestConfig === 'object' && latestConfig !== null ? latestConfig : {};
+
+      if (!selectedUser.is_active && editActive) {
+         latestConfig.manual_activation_month = new Date().toISOString().slice(0, 7);
+      }
 
       console.log('Saving config_json:', {
         modules: editModules,
