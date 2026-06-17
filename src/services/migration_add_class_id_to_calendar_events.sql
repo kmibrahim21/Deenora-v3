@@ -1,0 +1,1 @@
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS class_id UUID REFERENCES classes(id) ON DELETE CASCADE;
