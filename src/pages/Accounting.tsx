@@ -164,12 +164,6 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     
     setIsSaving(true);
     
-    // Invalidate RequestManager pattern-based caches
-    requestManager.invalidatePattern('fetch:ledger:');
-    requestManager.invalidatePattern(`stats:${madrasah.id}`);
-    requestManager.invalidatePattern(`fees:${madrasah.id}`);
-    requestManager.invalidatePattern(`dashboard_`);
-
     try {
       // Optimistic Update
       const oldLedger = [...ledger];
@@ -187,6 +181,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
          const fallbackDeletions = [];
 
          for (const record of recordsToDelete) {
+            // Priority 1: Direct FEE_ID match (Global search for multi-month transactions)
             if (record.description?.includes('FEE_ID: ')) {
                const regex = /FEE_ID:\s*([a-f0-9\-]+)/g;
                let match;
@@ -194,10 +189,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   feeIdsToDelete.push(match[1]);
                }
             }
+            
+            // Priority 2: Fallback for older or multi-item records without IDs
             if (record.category === 'Student Fee' || record.category?.includes('Fee') || record.category?.includes('ফি')) {
-               // Fallback mechanism for older records before FEE_ID injection
-               const monthMatch = record.description?.match(/(Month|মাস):\s*([\d]{4}-[\d]{2})/);
-               const month = monthMatch ? monthMatch[2] : null;
+               // Extract all YYYY-MM patterns (handles both Month: and Months: formats)
+               const monthMatches = record.description?.match(/[\d]{4}-[\d]{2}/g) || [];
                
                let name = null;
                if (record.description?.includes(' - ')) {
@@ -206,8 +202,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   if (namePart) name = namePart.trim();
                }
 
-               if (month && name) {
-                  fallbackDeletions.push({ name, month });
+               if (name) {
+                  monthMatches.forEach(month => {
+                     fallbackDeletions.push({ name, month });
+                  });
                }
             }
          }
@@ -215,16 +213,16 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
          // Batch delete known fee IDs
          if (feeIdsToDelete.length > 0) {
             const { error: fErr } = await supabase.from('fees').delete().in('id', feeIdsToDelete);
-            if (fErr) throw fErr;
+            if (fErr) console.warn("Fee deletion error by ID:", fErr);
          }
 
-         // Perform fallback deletions
+         // Perform fallback deletions by name and month
          for (const del of fallbackDeletions) {
             const { data: students } = await supabase.from('students').select('id').eq('institution_id', madrasah.id).eq('student_name', del.name);
             if (students && students.length > 0) {
                const studentIds = students.map(s => s.id);
                const { error: fbErr } = await supabase.from('fees').delete().in('student_id', studentIds).eq('month', del.month);
-               if (fbErr) throw fbErr;
+               if (fbErr) console.warn("Fallback fee deletion error:", fbErr);
             }
          }
       }
@@ -234,6 +232,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       
       // Clear all relevant caches
       if (madrasah?.id) {
+        requestManager.invalidatePattern('fetch:ledger:');
+        requestManager.invalidatePattern(`stats:${madrasah.id}`);
+        requestManager.invalidatePattern(`fees:${madrasah.id}`);
+        requestManager.invalidatePattern(`dashboard_`);
         await CacheService.clearCache('stats', madrasah.id);
         await CacheService.clearCache('fees', madrasah.id);
         clearGlobalSchoolFeeCache();
@@ -259,11 +261,6 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     }
     setIsSaving(true);
     
-    // Invalidate RequestManager pattern-based caches
-    requestManager.invalidatePattern('fetch:ledger:');
-    requestManager.invalidatePattern(`stats:${madrasah.id}`);
-    requestManager.invalidatePattern(`dashboard_`);
-
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       const amountNum = parseFloat(amount);
@@ -305,6 +302,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
       // Clear relevant caches
       if (madrasah?.id) {
+        requestManager.invalidatePattern('fetch:ledger:');
+        requestManager.invalidatePattern(`stats:${madrasah.id}`);
+        requestManager.invalidatePattern(`dashboard_`);
         await CacheService.clearCache('stats', madrasah.id);
       }
       
@@ -319,9 +319,11 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     } finally { setIsSaving(false); }
   };
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const handleTriggerRefresh = () => {
     fetchData(true);
-    if (triggerRefresh) triggerRefresh();
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -403,14 +405,14 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           <div className={(activeTab === 'fees' || activeTab === 'structures') && madrasah ? 'block' : 'hidden'}>
             <>
               {feeEngine === 'school' && (
-                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} refreshKey={refreshKey} />
               )}
               {feeEngine === 'qawmi' && (
-                <QawmiFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} />
+                <QawmiFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} refreshKey={refreshKey} />
               )}
               {/* Default to School Engine for others for now */}
               {feeEngine !== 'school' && feeEngine !== 'qawmi' && (
-                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} />
+                <SchoolFeeEngine activeTab={activeTab === 'structures' ? 'structures' : 'fees'} madrasah={madrasah} lang={lang} classes={classes} onStudentClick={(student) => setSelectedStudentForDetail(student)} role={role} profile={profile} activeYear={activeYear} triggerRefresh={handleTriggerRefresh} refreshKey={refreshKey} />
               )}
             </>
           </div>

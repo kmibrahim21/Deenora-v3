@@ -72,7 +72,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   useEffect(() => {
       const totalSelectedDue = selectedMonthsToPay.reduce((sum, m) => sum + getDueForMonth(m), 0);
       const net = Math.max(0, totalSelectedDue - (parseFloat(multiDiscount) || 0));
-      if (net > 0) {
+      if (selectedMonthsToPay.length > 0) {
           setMultiPaidAmount(net.toString());
       } else {
           setMultiPaidAmount('');
@@ -80,13 +80,21 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   }, [selectedMonthsToPay, multiDiscount]);
 
   const handleMultiCollectFee = async () => {
-    if (selectedMonthsToPay.length === 0 || !multiPaidAmount) return;
+    if (selectedMonthsToPay.length === 0 || multiPaidAmount === '') return;
+    
+    let remainingPaid = parseFloat(multiPaidAmount) || 0;
+    let remainingDiscount = parseFloat(multiDiscount) || 0;
+    const totalSelectedDue = selectedMonthsToPay.reduce((sum, m) => sum + getDueForMonth(m), 0);
+    
+    if ((remainingPaid + remainingDiscount) > totalSelectedDue) {
+       setErrorMulti(lang === 'bn' ? 'নির্ধারিত পরিমাণের চেয়ে বেশি নেওয়া যাবে না।' : 'Cannot collect more than the total due amount.');
+       return;
+    }
+
     setIsSavingMulti(true);
     setErrorMulti('');
     try {
         const activeYearId = madrasah.config_json?.active_academic_year_id;
-        let remainingPaid = parseFloat(multiPaidAmount) || 0;
-        let remainingDiscount = parseFloat(multiDiscount) || 0;
 
         const sortedMonths = [...selectedMonthsToPay].sort();
 
@@ -130,7 +138,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                           amount_paid: paidForMonth,
                           month: monthStr,
                           academic_year_id: activeYearId,
-                          status: paidForMonth >= due ? 'paid' : 'partial'
+                          status: (paidForMonth + discountForMonth >= due) ? 'paid' : 'partial'
                        }).select('id').single();
                        if (retryErr) throw retryErr;
                        if (retryFee) createdFeeIds.push(retryFee.id);
@@ -207,6 +215,12 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
 
          if (feeIds.length > 0) {
             await supabase.from('fees').delete().in('id', feeIds);
+         } else {
+            // Robust Fallback: If no FEE_ID is found, parse description for months to clean up for this specific student
+            const monthMatches = ledgerRecord.description.match(/[\d]{4}-[\d]{2}/g) || [];
+            if (monthMatches.length > 0) {
+               await supabase.from('fees').delete().eq('student_id', student.student_id).in('month', monthMatches);
+            }
          }
       }
 
@@ -577,7 +591,9 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     const monthName = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'][i];
                     
                     const monthFees = fees.filter(f => f.month === monthStr);
-                    const paidAmt = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+                    const paidAmtTotal = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+                    const cashPaid = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
+                    const discountAmt = monthFees.reduce((sum, f) => sum + (Number(f.discount) || 0), 0);
                     
                     // Calculate payable for this specific month
                     const monthPayable = structures.reduce((sum, s) => {
@@ -591,22 +607,40 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
 
                     let status = 'unpaid';
                     if (monthPayable > 0) {
-                      if (paidAmt >= monthPayable) status = 'paid';
-                      else if (paidAmt > 0) status = 'partial';
+                      if (paidAmtTotal >= monthPayable) status = 'paid';
+                      else if (paidAmtTotal > 0) status = 'partial';
+                      else status = 'unpaid';
+                    } else if (paidAmtTotal > 0) {
+                      status = 'paid';
                     } else {
-                      status = paidAmt > 0 ? 'paid' : 'unpaid';
+                      status = 'no_fee';
                     }
 
                   return (
                     <div key={monthStr} className={`relative p-5 rounded-3xl border transition-all hover:scale-[1.02] ${status === 'paid' ? (isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100') : (isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
                       <div className="flex items-center justify-between mb-2">
                         <p className={`text-[11px] font-black ${status === 'paid' ? 'text-emerald-600' : status === 'partial' ? 'text-orange-600' : 'text-slate-400'}`}>{monthName}</p>
+                        {discountAmt > 0 && (
+                          <div className={`text-[8px] font-black px-1.5 py-0.5 rounded-md ${isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-600'}`}>
+                             -{discountAmt} ছাড়
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center justify-between mt-auto">
-                        <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full ${status === 'paid' ? 'bg-emerald-500 text-white' : status === 'partial' ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                          {status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid'}
+                        <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full ${
+                          status === 'paid' ? 'bg-emerald-500 text-white' : 
+                          status === 'partial' ? 'bg-orange-500 text-white' : 
+                          status === 'no_fee' ? 'bg-slate-500 text-white' :
+                          'bg-slate-200 text-slate-500'
+                        }`}>
+                          {status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : status === 'no_fee' ? (lang === 'bn' ? 'ফি নেই' : 'No Fee') : 'Unpaid'}
                         </span>
-                        {paidAmt > 0 && <span className={`text-[10px] font-black ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>৳{paidAmt}</span>}
+                        {(paidAmtTotal > 0 || status === 'paid') && (
+                          <div className="flex flex-col items-end">
+                            <span className={`text-[10px] font-black ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>৳{cashPaid}</span>
+                            {status === 'partial' && <span className="text-[7px] text-red-500 font-bold">বাকি: {Math.max(0, monthPayable - paidAmtTotal)}</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -810,9 +844,9 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
 
                 <button 
                    onClick={handleMultiCollectFee}
-                   disabled={isSavingMulti || selectedMonthsToPay.length === 0 || !multiPaidAmount}
+                   disabled={isSavingMulti || selectedMonthsToPay.length === 0 || multiPaidAmount === ''}
                    className={`w-full h-14 rounded-2xl flex items-center justify-center gap-3 font-black text-sm uppercase tracking-widest transition-all ${
-                       selectedMonthsToPay.length === 0 || !multiPaidAmount || isSavingMulti
+                       selectedMonthsToPay.length === 0 || multiPaidAmount === '' || isSavingMulti
                         ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                         : 'bg-[#2563EB] hover:bg-blue-600 text-white active:scale-95 shadow-lg shadow-blue-500/25'
                    }`}

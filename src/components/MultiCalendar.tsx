@@ -7,6 +7,7 @@ import {
   Moon,
   Sun,
   Flower,
+  Clock,
   X,
   Loader2,
   Trash2,
@@ -506,14 +507,25 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
       )}
 
       {/* Events List */}
-      <div className="mt-12">
-        <h3
-          className={`text-lg font-black font-noto mb-6 ${isDark ? "text-white" : "text-[#1E3A8A]"}`}
-        >
-          {lang === "bn" ? "ইভেন্ট ও ছুটিসমূহ" : "Events & Holidays"}
-        </h3>
+      <div className="mt-12 mb-10">
+        <div className="flex items-center justify-between mb-8 px-2">
+            <div>
+                <h3
+                    className={`text-2xl font-black font-noto ${isDark ? "text-white" : "text-[#1E3A8A]"}`}
+                >
+                    {lang === "bn" ? "ইভেন্ট ও ছুটিসমূহ" : "Events & Holidays"}
+                </h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                    {lang === "bn" ? "বিস্তারিত তালিকা" : "Detailed Schedule"}
+                </p>
+            </div>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isDark ? 'bg-indigo-900/20 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                <CalendarIcon size={24} />
+            </div>
+        </div>
+
         {events.length > 0 ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {events
               .sort(
                 (a, b) =>
@@ -522,101 +534,108 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
               )
               .map((event) => {
                 const eventType = event.event_type || (event as any).type;
+                const targetClass = event.class_id ? classes.find(c => c.id === event.class_id) : null;
+                
                 return (
                   <div
                     key={event.id}
-                    className={`flex items-center justify-between p-4 rounded-2xl border ${isDark ? "bg-slate-800 border-slate-700" : "bg-slate-50 border-slate-100"}`}
+                    className={`group relative p-6 rounded-[2rem] border transition-all hover:scale-[1.02] hover:shadow-xl ${isDark ? "bg-slate-800/40 border-slate-700 hover:bg-slate-800" : "bg-white border-slate-100 hover:shadow-slate-200/50"}`}
                   >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                          eventType === "holiday"
-                            ? isDark
-                              ? "bg-red-900/30 text-red-400"
-                              : "bg-red-100 text-red-600"
-                            : eventType === "closed"
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${
+                            eventType === "holiday"
                               ? isDark
-                                ? "bg-slate-700 text-slate-300"
-                                : "bg-slate-200 text-slate-700"
-                              : isDark
-                                ? "bg-blue-900/30 text-blue-400"
-                                : "bg-blue-100 text-blue-600"
-                        }`}
-                      >
-                        {eventType === "holiday" ? (
-                          <CalendarIcon size={18} />
-                        ) : eventType === "closed" ? (
-                          <Moon size={18} />
-                        ) : (
-                          <Sun size={18} />
-                        )}
-                      </div>
-                      <div>
-                        <h4
-                          className={`font-bold flex items-center gap-2 ${isDark ? "text-slate-200" : "text-slate-800"}`}
+                                ? "bg-red-900/30 text-red-400"
+                                : "bg-red-50 text-red-600"
+                              : eventType === "closed"
+                                ? isDark
+                                  ? "bg-slate-700 text-slate-300"
+                                  : "bg-slate-100 text-slate-700"
+                                : isDark
+                                  ? "bg-blue-900/30 text-blue-400"
+                                  : "bg-blue-50 text-blue-600"
+                          }`}
                         >
-                          {event.title}
-                          {event.class_id &&
-                            classes.find((c) => c.id === event.class_id)
-                              ?.class_name && (
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-black ${isDark ? "bg-indigo-500/20 text-indigo-300" : "bg-indigo-100 text-indigo-700"}`}
-                              >
-                                {
-                                  classes.find((c) => c.id === event.class_id)
-                                    ?.class_name
-                                }
-                              </span>
-                            )}
-                        </h4>
-                        <p className="text-xs font-bold text-slate-400 mt-0.5">
-                          {format(new Date(event.event_date), "d MMMM yyyy")}
-                          {event.end_date &&
-                            event.end_date !== event.event_date &&
-                            ` - ${format(new Date(event.end_date), "d MMMM yyyy")}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
-                          eventType === "holiday"
-                            ? isDark
-                              ? "bg-red-900/40 text-red-400"
-                              : "bg-red-100 text-red-700"
-                            : eventType === "closed"
-                              ? isDark
-                                ? "bg-slate-700 text-slate-300"
-                                : "bg-slate-200 text-slate-700"
-                              : isDark
-                                ? "bg-blue-900/40 text-blue-400"
-                                : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {eventType}
-                      </div>
-                      {isAdmin && (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => {
-                              setSelectedEvent(event);
-                              setSelectedDate(new Date(event.event_date));
-                              setShowEventModal(true);
-                            }}
-                            className={`p-2 rounded-lg transition-colors ${isDark ? "text-slate-400 hover:bg-slate-700 hover:text-blue-400" : "text-slate-400 hover:bg-slate-100 hover:text-blue-600"}`}
-                            title="Edit Event"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => setEventToDelete(event.id)}
-                            className={`p-2 rounded-lg transition-colors ${isDark ? "text-slate-400 hover:bg-slate-700 hover:text-red-400" : "text-slate-400 hover:bg-slate-100 hover:text-red-600"}`}
-                            title="Delete Event"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {eventType === "holiday" ? (
+                            <CalendarIcon size={22} />
+                          ) : eventType === "closed" ? (
+                            <Moon size={22} />
+                          ) : (
+                            <Flower size={22} />
+                          )}
                         </div>
-                      )}
+                        <div className="min-w-0">
+                          <h4
+                            className={`text-base font-black truncate leading-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}
+                          >
+                            {event.title}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                             <div className="flex items-center gap-1.5">
+                               <Clock size={12} className="text-slate-400" />
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                 {format(new Date(event.event_date), "d MMM yyyy")}
+                                 {event.end_date &&
+                                   event.end_date !== event.event_date &&
+                                   ` - ${format(new Date(event.end_date), "d MMM yyyy")}`}
+                               </p>
+                             </div>
+                             {targetClass && (
+                                <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full ${isDark ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "bg-indigo-50 text-indigo-700 border border-indigo-100"}`}>
+                                   <span className="w-1 h-1 rounded-full bg-current animate-pulse" />
+                                   <span className="text-[9px] font-black uppercase tracking-widest">{targetClass.class_name}</span>
+                                </div>
+                             )}
+                             {!targetClass && (
+                                <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full ${isDark ? "bg-slate-700 text-slate-400" : "bg-slate-50 text-slate-500"}`}>
+                                   <span className="text-[9px] font-black uppercase tracking-widest">{lang === 'bn' ? 'সকল ক্লাস' : 'All Classes'}</span>
+                                </div>
+                             )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2">
+                         <div
+                           className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] leading-none ${
+                             eventType === "holiday"
+                               ? isDark
+                                 ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                                 : "bg-red-50 text-red-700 border border-red-100"
+                               : eventType === "closed"
+                                 ? isDark
+                                   ? "bg-slate-700 text-slate-400 border border-slate-600"
+                                   : "bg-slate-50 text-slate-600 border border-slate-200"
+                                 : isDark
+                                   ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                   : "bg-blue-50 text-blue-700 border border-blue-100"
+                           }`}
+                         >
+                           {eventType}
+                         </div>
+                         {isAdmin && (
+                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                             <button
+                               onClick={() => {
+                                 setSelectedEvent(event);
+                                 setSelectedDate(new Date(event.event_date));
+                                 setShowEventModal(true);
+                               }}
+                               className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isDark ? "bg-slate-700 text-blue-400 hover:bg-blue-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white"}`}
+                             >
+                               <Edit2 size={14} />
+                             </button>
+                             <button
+                               onClick={() => setEventToDelete(event.id)}
+                               className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isDark ? "bg-slate-700 text-red-400 hover:bg-red-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:bg-red-600 hover:text-white"}`}
+                             >
+                               <Trash2 size={14} />
+                             </button>
+                           </div>
+                         )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -624,10 +643,13 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
           </div>
         ) : (
           <div
-            className={`text-center py-10 rounded-3xl border border-dashed ${isDark ? "bg-slate-800/50 border-slate-700" : "bg-slate-50 border-slate-100"}`}
+            className={`text-center py-20 rounded-[3rem] border-4 border-dashed animate-in fade-in duration-700 ${isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50/50 border-slate-100"}`}
           >
-            <p className="text-sm font-bold text-slate-400">
-              {lang === "bn" ? "কোনো ইভেন্ট পাওয়া যায়নি" : "No events found"}
+            <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 ${isDark ? 'bg-slate-800 text-slate-600' : 'bg-white text-slate-200'}`}>
+                <CalendarIcon size={32} />
+            </div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">
+              {lang === "bn" ? "কোনো ইভেন্ট পাওয়া যায়নি" : "No scheduled events"}
             </p>
           </div>
         )}

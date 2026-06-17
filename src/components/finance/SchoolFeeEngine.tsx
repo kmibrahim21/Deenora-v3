@@ -74,6 +74,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [collectAmount, setCollectAmount] = useState('');
   const [discount, setDiscount] = useState('');
+  const [collectError, setCollectError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [availableFeeItems, setAvailableFeeItems] = useState<any[]>([]);
   const [selectedFeeCategories, setSelectedFeeCategories] = useState<string[]>([]);
@@ -315,6 +316,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
   const initializeFeeCollection = async (student: any) => {
     setDiscount('');
+    setCollectError(null);
     
     // 1. Fetch structures
     const { data: structures } = await requestManager.cachedFetch(
@@ -400,15 +402,25 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     
     const disc = parseFloat(discountVal) || 0;
     const net = Math.max(0, gross - disc);
-    return net > 0 ? net.toString() : '';
+    return categories.length > 0 ? net.toString() : '';
   };
 
   const handleCollectFee = async () => {
-    if (!selectedStudent || !collectAmount) return;
+    if (!selectedStudent || collectAmount === '') return;
+    
+    const totalAmt = parseFloat(collectAmount) || 0;
+    const totalDueStr = calculateTotal(selectedFeeCategories, discount, availableFeeItems);
+    const maxAllowed = parseFloat(totalDueStr) || 0;
+    
+    if (totalAmt > maxAllowed) {
+        setCollectError(lang === 'bn' ? 'নির্ধারিত পরিমাণের চেয়ে বেশি নেওয়া যাবে না।' : 'Cannot collect more than the total due amount.');
+        return;
+    }
+
+    setCollectError(null);
     setIsSaving(true);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
-      const totalAmt = parseFloat(collectAmount);
       const totalDiscount = parseFloat(discount) || 0;
       
       const feeData = {
@@ -747,7 +759,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                           disabled={isFullyPaid || isNoFeeSet} 
                           className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all shadow-sm ${isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : isNoFeeSet ? (isDark ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : hasBalance ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 'bg-[#2563EB] text-white active:scale-95'}`}
                        >
-                          {isFullyPaid ? 'PAID' : 'ফি জমা'}
+                          {isFullyPaid ? 'PAID' : isNoFeeSet ? 'ফি নেই' : 'ফি জমা'}
                        </button>
                      </div>
                   </div>
@@ -920,7 +932,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                               <Tag className={`absolute left-4 top-4 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} size={20}/>
                             </div>
                         </div>
-                        <button onClick={handleCollectFee} disabled={isSaving || !collectAmount} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all text-base">
+                        {collectError && (
+                            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold text-center">
+                                {collectError}
+                            </div>
+                        )}
+                        <button onClick={handleCollectFee} disabled={isSaving || collectAmount === ''} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all text-base">
                             {isSaving ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20}/> পেমেন্ট নিশ্চিত করুন</>}
                         </button>
                     </div>
@@ -963,7 +980,9 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                             
                             const recordsForMonth = studentFeeHistory.filter(f => f.month === monthStr);
                             let status = 'unpaid';
-                            let totalPaid = 0;
+                            let totalProcessed = 0;
+                            let totalCash = 0;
+                            let totalDiscount = 0;
                             
                             const studentSettings = historyStudentSettings;
                             const now = new Date();
@@ -991,22 +1010,41 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                             }, 0);
 
                             if (recordsForMonth.length > 0) {
-                                totalPaid = recordsForMonth.reduce((sum, r) => sum + (Number(r.amount_paid) || 0) + (Number(r.discount) || 0), 0);
-                                if (totalPaid >= totalPayable && totalPayable > 0) status = 'paid';
-                                else if (totalPaid > 0) status = 'partial';
-                                else status = 'unpaid';
+                                totalCash = recordsForMonth.reduce((sum, r) => sum + (Number(r.amount_paid) || 0), 0);
+                                totalDiscount = recordsForMonth.reduce((sum, r) => sum + (Number(r.discount) || 0), 0);
+                                totalProcessed = totalCash + totalDiscount;
+                                
+                                if (totalPayable > 0) {
+                                    if (totalProcessed >= totalPayable) status = 'paid';
+                                    else if (totalProcessed > 0) status = 'partial';
+                                    else status = 'unpaid';
+                                } else {
+                                    status = totalProcessed > 0 ? 'paid' : 'no_fee';
+                                }
+                            } else if (totalPayable === 0) {
+                                status = 'no_fee';
+                            } else {
+                                status = 'unpaid';
                             }
 
                             return (
-                                <div key={monthStr} className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center gap-2 transition-all ${status === 'paid' ? (isDark ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (isDark ? 'bg-orange-500/20 border-orange-500/30' : 'bg-orange-50 border-orange-100') : (isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
+                                <div key={monthStr} className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center gap-1 transition-all ${status === 'paid' ? (isDark ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-emerald-50 border-emerald-100') : status === 'partial' ? (isDark ? 'bg-orange-500/20 border-orange-500/30' : 'bg-orange-50 border-orange-100') : (isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100')}`}>
                                     <span className={`text-sm font-black ${status === 'paid' ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : status === 'partial' ? (isDark ? 'text-orange-400' : 'text-orange-700') : 'text-slate-500'}`}>
                                         {monthName}
                                     </span>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${status === 'paid' ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : status === 'partial' ? (isDark ? 'bg-orange-500/30 text-orange-300' : 'bg-orange-200 text-orange-800') : (isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600')}`}>
-                                        {status === 'paid' ? 'পরিশোধিত' : status === 'partial' ? 'আংশিক' : 'বকেয়া'}
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                        status === 'paid' ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : 
+                                        status === 'partial' ? (isDark ? 'bg-orange-500/30 text-orange-300' : 'bg-orange-200 text-orange-800') : 
+                                        status === 'no_fee' ? (isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500') :
+                                        (isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600')
+                                    }`}>
+                                        {status === 'paid' ? 'পরিশোধিত' : status === 'partial' ? 'আংশিক' : status === 'no_fee' ? 'ফি নেই' : 'বকেয়া'}
                                     </span>
-                                    {totalPaid > 0 && (
-                                        <span className={`text-xs font-bold mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>৳{totalPaid}</span>
+                                    {totalProcessed > 0 && (
+                                        <div className="flex flex-col items-center mt-1">
+                                           <span className={`text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>৳{totalCash}</span>
+                                           {totalDiscount > 0 && <span className="text-[7px] font-bold text-orange-500 leading-none">(-৳{totalDiscount} ছাড়)</span>}
+                                        </div>
                                     )}
                                 </div>
                             );
