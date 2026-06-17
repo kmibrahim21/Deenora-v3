@@ -194,6 +194,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         
         const data = (studentsData || []).map((s: any) => ({
           student_id: s.id,
+          id: s.id, // required for shortcode parsing
           student_name: s.student_name,
           roll: s.roll,
           class_id: s.class_id,
@@ -491,8 +492,9 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
              .replace(/\{amount\}/g, totalAmt.toString());
             
           await smsApiModule.sendBulk(madrasah.id, [selectedStudent], collectMsg);
-        } catch (smsError) {
+        } catch (smsError: any) {
           console.error("Fee SMS error: ", smsError);
+          alert(lang === 'bn' ? `অটো এসএমএস পাঠানো সম্ভব হয়নি: ${smsError.message}` : `Auto SMS failed: ${smsError.message}`);
         }
       }
       

@@ -728,7 +728,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           }
           
           if (smsPromises.length > 0) {
-            Promise.all(smsPromises).catch(e => console.error("Auto SMS failed", e));
+            Promise.all(smsPromises).catch(e => {
+              console.error("Auto SMS failed", e);
+              alert(lang === 'bn' ? `অটো এসএমএস পাঠানো সম্ভব হয়নি: ${e.message}` : `Auto SMS failed: ${e.message}`);
+            });
           }
         } catch (autoSmsErr) {
           console.error("Auto SMS error: ", autoSmsErr);
