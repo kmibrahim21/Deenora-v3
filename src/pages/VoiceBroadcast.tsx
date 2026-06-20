@@ -632,7 +632,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     if (!madrasah) return;
 
     if (isSuperAdmin) {
-      const { data: insts } = await supabase.from('institutions').select('*').eq('is_active', true);
+      const { data: insts } = await supabase.from('institutions').select('*');
       if (insts) setAllInstitutions(insts);
     }
 

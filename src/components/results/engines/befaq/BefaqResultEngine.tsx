@@ -330,7 +330,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         
         if (error) {
             console.error('Error saving exam:', error);
-            if (error.message.includes('row-level security')) {
+            if (error.message.includes('academic_year_id') && (error.message.includes('Could not find') || error.message.includes('not exist'))) {
+              alert(lang === 'bn' 
+                ? 'ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_fix_befaq_academic_year.sql স্ক্রিপ্টটি রান করুন।' 
+                : 'Database update required: Please run the src/services/migration_fix_befaq_academic_year.sql script in your Supabase SQL Editor.');
+            } else if (error.message.includes('row-level security')) {
               alert('Permission denied: You do not have permission to add exams. Please run the SQL migration script.');
             } else {
               alert('Failed to save exam: ' + error.message);

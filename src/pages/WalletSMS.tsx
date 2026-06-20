@@ -184,7 +184,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     if (!madrasah) return;
     
     if (isSuperAdmin) {
-      const { data: insts } = await supabase.from('institutions').select('*').eq('is_active', true);
+      const { data: insts } = await supabase.from('institutions').select('*');
       if (insts) setAllInstitutions(insts);
     }
 

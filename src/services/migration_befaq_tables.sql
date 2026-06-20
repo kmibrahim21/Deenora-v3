@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS befaq_exams (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     institution_id UUID REFERENCES profiles(institution_id) ON DELETE CASCADE,
+    academic_year_id UUID REFERENCES academic_years(id) ON DELETE CASCADE,
     marhala_id UUID REFERENCES classes(id) ON DELETE CASCADE,
     class_name VARCHAR(255),
     exam_name VARCHAR(255) NOT NULL,
@@ -9,6 +10,9 @@ CREATE TABLE IF NOT EXISTS befaq_exams (
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
+
+-- Add Index for Academic Year
+CREATE INDEX IF NOT EXISTS idx_befaq_exams_academic_year_id ON befaq_exams(academic_year_id);
 
 -- Create Befaq Subjects Table
 CREATE TABLE IF NOT EXISTS befaq_subjects (
