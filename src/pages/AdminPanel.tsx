@@ -840,12 +840,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       const config = typeof inst.config_json === 'string' ? JSON.parse(inst.config_json) : (inst.config_json || {});
       const paidMonths = config.paid_months || [];
       const manualActivationMonth = config.manual_activation_month;
-      const isManualActive = config.manual_active === true;
-
-      // Skip deactivation if manual active flag is set
-      if (isManualActive) {
-         continue;
-      }
 
       // Skip deactivation if manually activated this month
       if (manualActivationMonth === currentMonthStr) {
@@ -1339,13 +1333,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
       latestConfig = typeof latestConfig === 'object' && latestConfig !== null ? latestConfig : {};
 
-      if (editActive) {
-        latestConfig.manual_active = true;
-        if (!selectedUser.is_active) {
-          latestConfig.manual_activation_month = new Date().toISOString().slice(0, 7);
-        }
-      } else {
-        latestConfig.manual_active = false;
+      if (!selectedUser.is_active && editActive) {
+         latestConfig.manual_activation_month = new Date().toISOString().slice(0, 7);
       }
 
       console.log('Saving config_json:', {
@@ -2030,6 +2019,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                            e.stopPropagation();
                            if (!unpaidInstitutions || unpaidInstitutions.length === 0) return;
                            
+                           const targetInsts = unpaidInstitutions.filter(inst => !inst.is_active);
+                           if (targetInsts.length === 0) {
+                              setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'কোনো ডিঅ্যাক্টিভেটেড প্রতিষ্ঠান পাওয়া যায়নি।' });
+                              return;
+                           }
+                           
                            let monthLabel = '';
                            try {
                               const [rYear, rMonth] = selectedMonthForReminder.split('-');
@@ -2042,10 +2037,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                            const msg = `আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${monthLabel} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`;
                            
                            if (onNavigateToSMSBroadcast) {
-                             onNavigateToSMSBroadcast(unpaidInstitutions.map(inst => inst.id), msg);
+                             onNavigateToSMSBroadcast(targetInsts.map(inst => inst.id), msg);
                            } else {
                              setCommMessage(msg);
-                             setCommsModal({ show: true, institutions: [...unpaidInstitutions], type: 'sms' });
+                             setCommsModal({ show: true, institutions: [...targetInsts], type: 'sms' });
                            }
                          }}
                          className="flex-1 min-h-[56px] py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer relative z-[110]"
@@ -2059,11 +2054,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                            e.stopPropagation();
                            if (!unpaidInstitutions || unpaidInstitutions.length === 0) return;
                            
+                           const targetInsts = unpaidInstitutions.filter(inst => !inst.is_active);
+                           if (targetInsts.length === 0) {
+                              setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'কোনো ডিঅ্যাক্টিভেটেড প্রতিষ্ঠান পাওয়া যায়নি।' });
+                              return;
+                           }
+                           
                            if (onNavigateToVoiceBroadcast) {
-                             onNavigateToVoiceBroadcast(unpaidInstitutions.map(inst => inst.id));
+                             onNavigateToVoiceBroadcast(targetInsts.map(inst => inst.id));
                            } else {
                              if (awajVoices.length === 0) handleFetchAwajVoices();
-                             setCommsModal({ show: true, institutions: [...unpaidInstitutions], type: 'voice' });
+                             setCommsModal({ show: true, institutions: [...targetInsts], type: 'voice' });
                            }
                          }}
                          className="flex-1 min-h-[56px] py-4 bg-orange-500 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer relative z-[110]"
