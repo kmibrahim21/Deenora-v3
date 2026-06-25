@@ -115,7 +115,7 @@ export default defineConfig(({ mode }) => {
       plugins: [
         react(), 
         tailwindcss(), 
-        tsconfigPaths(),
+        tsconfigPaths(), 
         vercelApiPlugin(env),
         legacy({
           targets: ['defaults', 'not IE 11', 'Android >= 5'],
