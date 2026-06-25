@@ -2,10 +2,24 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
-// fetch is global in Node 18+
+
+// Import API handlers statically for bundling compatibility
+import adminHandler from './api/admin.ts';
+import attendanceHandler from './api/attendance.ts';
+import awajHandler from './api/awaj.ts';
+import feesHandler from './api/fees.ts';
+import healthHandler from './api/health.ts';
+import messagesHandler from './api/messages.ts';
+import parentsHandler from './api/parents.ts';
+import proxyAudioHandler from './api/proxy-audio.ts';
+import resultsHandler from './api/results.ts';
+import smsHandler from './api/sms.ts';
+import studentHandler from './api/student.ts';
+import teachersHandler from './api/teachers.ts';
+import voiceRefundHandler from './api/voice-refund.ts';
 
 // Load environment variables
 dotenv.config();
@@ -13,32 +27,36 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Map of handlers for routing
+const handlers: Record<string, any> = {
+  admin: adminHandler,
+  attendance: attendanceHandler,
+  awaj: awajHandler,
+  fees: feesHandler,
+  health: healthHandler,
+  messages: messagesHandler,
+  parents: parentsHandler,
+  'proxy-audio': proxyAudioHandler,
+  results: resultsHandler,
+  sms: smsHandler,
+  student: studentHandler,
+  teachers: teachersHandler,
+  'voice-refund': voiceRefundHandler
+};
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Use body-parser for JSON. However, let the Vite ssrLoadModule handle the raw req if needed.
-  // Actually, standard express json is fine as long as we mock req.body.
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
   // Helper to run Vercel-style handlers
-  const runHandler = async (filePath: string, req: express.Request, res: express.Response) => {
+  const runHandler = async (handler: any, req: express.Request, res: express.Response) => {
     try {
-      // In dev mode, we use Vite's ssrLoadModule to support HMR and TS
-      let handler;
-      if (process.env.NODE_ENV !== 'production') {
-        const vite = await getViteInstance();
-        const module = await vite.ssrLoadModule(filePath);
-        handler = module.default;
-      } else {
-        // In production, we assume compiled or direct import
-        handler = (await import(pathToFileURL(filePath).href)).default;
-      }
-
       if (typeof handler === 'function') {
         // Add cache headers for GET requests securely
-        if (req.method === 'GET' && !filePath.includes('auth')) {
+        if (req.method === 'GET' && !req.url.includes('auth')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
 
@@ -82,7 +100,7 @@ async function startServer() {
         res.status(500).json({ error: 'Handler not found' });
       }
     } catch (error: any) {
-      console.error(`API Error (${filePath}):`, error);
+      console.error(`API Error:`, error);
       res.status(500).json({ 
         error: error.message,
         stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
@@ -101,35 +119,21 @@ async function startServer() {
     return viteInstance;
   };
 
-  // Specific Routes for Awaj
-  app.use('/api/awaj', async (req, res) => {
-    await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
-  });
-
-  // Specific Routes for Teachers
-  app.use('/api/teachers', async (req, res) => {
-    await runHandler(path.join(__dirname, 'api', 'teachers.ts'), req, res);
-  });
-
-  // Specific Routes for Parents
-  app.use('/api/parents', async (req, res) => {
-    await runHandler(path.join(__dirname, 'api', 'parents.ts'), req, res);
-  });
-
-  // Audio Proxy Route
-  app.all('/api/proxy-audio', async (req, res) => {
-    await runHandler(path.join(__dirname, 'api', 'proxy-audio.ts'), req, res);
-  });
-
-  // API Wildcard
+  // API Routes
   app.all('/api/:service', async (req, res) => {
     const service = req.params.service;
-    const filePath = path.join(__dirname, 'api', `${service}.ts`);
-    if (fs.existsSync(filePath)) {
-      await runHandler(filePath, req, res);
+    const handler = handlers[service];
+    
+    if (handler) {
+      await runHandler(handler, req, res);
     } else {
       res.status(404).json({ error: `API service ${service} not found` });
     }
+  });
+
+  // Handle specific paths that might not match :service exactly
+  app.all('/api/proxy-audio', async (req, res) => {
+    await runHandler(handlers['proxy-audio'], req, res);
   });
 
   // Vite middleware for development
@@ -141,7 +145,7 @@ async function startServer() {
     const distPath = path.join(__dirname, 'dist');
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
-      app.get('*all', (req, res) => {
+      app.get('*', (req, res) => {
         res.sendFile(path.join(distPath, 'index.html'));
       });
     }
