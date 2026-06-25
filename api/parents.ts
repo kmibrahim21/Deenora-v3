@@ -1,5 +1,5 @@
 
-import { getSupabaseAdmin } from '../lib/supabase-admin';
+import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
 export default async function handler(req, res) {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);

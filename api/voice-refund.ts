@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from '../lib/supabase-admin';
+import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 // fetch is now global in Node 18+
 
 const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
