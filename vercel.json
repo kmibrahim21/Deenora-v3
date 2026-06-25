@@ -20,6 +20,18 @@
       "destination": "/api/awaj.ts"
     },
     {
+      "source": "/api/health",
+      "destination": "/api/system.ts"
+    },
+    {
+      "source": "/api/proxy-audio",
+      "destination": "/api/system.ts"
+    },
+    {
+      "source": "/api/voice-refund",
+      "destination": "/api/awaj.ts?action=voice-refund"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
