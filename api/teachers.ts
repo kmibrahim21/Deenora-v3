@@ -1,5 +1,5 @@
 
-import { getSupabaseAdmin } from '../lib/supabase-admin.js';
+import { getSupabaseAdmin } from '../lib/supabase-admin';
 import * as crypto from 'crypto';
 
 export default async function handler(req, res) {
