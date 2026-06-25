@@ -115,7 +115,6 @@ export default defineConfig(({ mode }) => {
       plugins: [
         react(), 
         tailwindcss(), 
-        tsconfigPaths(), 
         vercelApiPlugin(env),
         legacy({
           targets: ['defaults', 'not IE 11', 'Android >= 5'],
@@ -197,6 +196,7 @@ export default defineConfig(({ mode }) => {
         'import.meta.env.VITE_VERCEL_URL': JSON.stringify(env.VERCEL_URL || env.VITE_VERCEL_URL)
       },
       resolve: {
+        tsconfigPaths: true,
         alias: {
           '@': path.resolve(__dirname, './src'),
         }
@@ -206,12 +206,15 @@ export default defineConfig(({ mode }) => {
         chunkSizeWarningLimit: 1000,
         rollupOptions: {
           output: {
-            manualChunks: {
-              'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-              'vendor-supabase': ['@supabase/supabase-js'],
-              'vendor-icons': ['lucide-react'],
-              'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'uuid'],
-              'vendor-ui': ['motion', 'recharts']
+            manualChunks(id) {
+              if (id.includes('node_modules')) {
+                if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
+                if (id.includes('@supabase')) return 'vendor-supabase';
+                if (id.includes('lucide-react')) return 'vendor-icons';
+                if (id.includes('date-fns') || id.includes('clsx') || id.includes('tailwind-merge') || id.includes('uuid')) return 'vendor-utils';
+                if (id.includes('motion') || id.includes('recharts')) return 'vendor-ui';
+                return 'vendor';
+              }
             }
           }
         }
