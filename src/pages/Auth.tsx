@@ -23,6 +23,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
   const [loginType, setLoginType] = useState<'admin' | 'teacher' | 'parent'>('admin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [supportPhone, setSupportPhone] = useState('');
   const [brandInfo, setBrandInfo] = useState({ name: 'দ্বীনোরা' });
 
   useEffect(() => {
@@ -59,9 +60,9 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         if (isValidUUID(data.user.id)) {
           const { data: profile } = await supabase.from('institutions').select('name').eq('id', data.user.id).maybeSingle();
           if (profile) localStorage.setItem('m_name', profile.name);
-          else localStorage.setItem('m_name', 'Super Admin');
+          else localStorage.setItem('m_name', 'সুপার অ্যাডমিন');
         } else {
-          localStorage.setItem('m_name', 'Super Admin');
+          localStorage.setItem('m_name', 'সুপার অ্যাডমিন');
         }
       }
     } catch (err: any) { 
@@ -89,9 +90,18 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         })
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error(lang === 'bn' ? 'সার্ভারে সমস্যা হচ্ছে, অনুগ্রহ করে পরে চেষ্টা করুন।' : 'Server error, please try again later.');
+      }
 
       if (!response.ok) {
+        if (data.institution_phone) setSupportPhone(data.institution_phone);
         throw new Error(data.error || 'Failed to login');
       }
 
@@ -111,9 +121,12 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
       }
     } catch (err: any) {
       console.error('Teacher login error:', err);
-      setError(err.message === 'Invalid mobile number or password' 
-        ? (lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN')
-        : (lang === 'bn' ? 'লগইন করতে সমস্যা হচ্ছে' : 'Error logging in'));
+      const msg = err.message || '';
+      if (msg.includes('Invalid mobile number or password')) {
+        setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
+      } else {
+        setError(lang === 'bn' ? `লগইন করতে সমস্যা হচ্ছে: ${msg}` : `Error logging in: ${msg}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -138,9 +151,18 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         })
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error(lang === 'bn' ? 'সার্ভারে সমস্যা হচ্ছে, অনুগ্রহ করে পরে চেষ্টা করুন।' : 'Server error, please try again later.');
+      }
 
       if (!response.ok) {
+        if (data.institution_phone) setSupportPhone(data.institution_phone);
         throw new Error(data.error || 'Failed to login');
       }
 
@@ -161,12 +183,13 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
       }
     } catch (err: any) {
       console.error('Parent login error:', err);
-      if (err.message === 'Student not found with provided credentials') {
+      const msg = err.message || '';
+      if (msg.includes('Student not found')) {
         setError(lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর' : 'Invalid phone number or registration number');
-      } else if (err.message === 'এই প্রতিষ্ঠানের জন্য প্যারেন্ট পোর্টাল বন্ধ রয়েছে।') {
-        setError(err.message);
+      } else if (msg.includes('প্যারেন্ট পোর্টাল বন্ধ')) {
+        setError(msg);
       } else {
-        setError(lang === 'bn' ? `লগইন করতে সমস্যা হচ্ছে: ${err.message}` : `Error logging in: ${err.message}`);
+        setError(lang === 'bn' ? `লগইন করতে সমস্যা হচ্ছে: ${msg}` : `Error logging in: ${msg}`);
       }
     } finally {
       setLoading(false);
@@ -244,7 +267,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
             </h1>
             <div className="flex items-center justify-center gap-2 text-blue-400/60">
               <Sparkles size={14} />
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em]">Secure Portal Login</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em]">সিকিউর পোর্টাল লগইন</p>
               <Sparkles size={14} />
             </div>
           </div>
@@ -280,19 +303,19 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
               onClick={() => { setLoginType('admin'); setError(''); }}
               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'admin' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
-              Admin
+              অ্যাডমিন
             </button>
             <button 
               onClick={() => { setLoginType('teacher'); setError(''); }}
               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'teacher' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
-              Teacher
+              শিক্ষক
             </button>
             <button 
               onClick={() => { setLoginType('parent'); setError(''); }}
               className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'parent' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
-              Parent
+              অভিভাবক
             </button>
           </div>
 
@@ -304,10 +327,42 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-3 text-red-400 font-bold text-xs"
+                    className="space-y-3"
                   >
-                    <AlertCircle size={18} />
-                    {error}
+                    <div className={`${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-red-500/10 border-red-500/20 text-red-400'} p-4 rounded-2xl flex items-start gap-3 font-semibold text-sm shadow-xl border border-white/10`}
+                    >
+                      <div className={`${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'bg-amber-500' : 'bg-red-500'} rounded-full p-1 mt-0.5 shrink-0`}>
+                        <AlertCircle className={`w-3.5 h-3.5 ${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'text-[#0F172A]' : 'text-white'}`} />
+                      </div>
+                      <span className="flex-1 leading-relaxed">{error}</span>
+                    </div>
+
+                    {(error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ')) && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col gap-2"
+                      >
+                        <a
+                          href="tel:+8801629780297"
+                          className="flex items-center justify-center gap-2 py-3 bg-slate-800 text-white rounded-xl font-bold text-xs border border-white/10 hover:bg-slate-700 transition-all shadow-lg"
+                        >
+                          <Smartphone size={16} className="text-blue-400" />
+                          +8801629780297
+                        </a>
+                        <a
+                          href="https://wa.me/8801629780297"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 py-3 bg-[#25D366] text-white rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                          </svg>
+                          হোয়াটসঅ্যাপ সাপোর্ট
+                        </a>
+                      </motion.div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -355,10 +410,42 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-3 text-red-400 font-bold text-xs"
+                    className="space-y-3"
                   >
-                    <AlertCircle size={18} />
-                    {error}
+                    <div className={`${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-red-500/10 border-red-500/20 text-red-400'} p-4 rounded-2xl flex items-start gap-3 font-semibold text-sm shadow-xl border border-white/10`}
+                    >
+                      <div className={`${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'bg-amber-500' : 'bg-red-500'} rounded-full p-1 mt-0.5 shrink-0`}>
+                        <AlertCircle className={`w-3.5 h-3.5 ${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'text-[#0F172A]' : 'text-white'}`} />
+                      </div>
+                      <span className="flex-1 leading-relaxed">{error}</span>
+                    </div>
+
+                    {(error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ')) && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col gap-2"
+                      >
+                        <a
+                          href={`tel:${(supportPhone || '8801629780297')}`}
+                          className="flex items-center justify-center gap-2 py-3 bg-slate-800 text-white rounded-xl font-bold text-xs border border-white/10 hover:bg-slate-700 transition-all shadow-lg"
+                        >
+                          <Smartphone size={16} className="text-blue-400" />
+                          {supportPhone || '+8801629780297'}
+                        </a>
+                        <a
+                          href={`https://wa.me/${(supportPhone || '8801629780297').replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 py-3 bg-[#25D366] text-white rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                          </svg>
+                          হোয়াটসঅ্যাপ সাপোর্ট
+                        </a>
+                      </motion.div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -406,10 +493,42 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-3 text-red-400 font-bold text-xs"
+                    className="space-y-3"
                   >
-                    <AlertCircle size={18} />
-                    {error}
+                    <div className={`${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-red-500/10 border-red-500/20 text-red-400'} p-4 rounded-2xl flex items-start gap-3 font-semibold text-sm shadow-xl border border-white/10`}
+                    >
+                      <div className={`${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'bg-amber-500' : 'bg-red-500'} rounded-full p-1 mt-0.5 shrink-0`}>
+                        <AlertCircle className={`w-3.5 h-3.5 ${error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ') ? 'text-[#0F172A]' : 'text-white'}`} />
+                      </div>
+                      <span className="flex-1 leading-relaxed">{error}</span>
+                    </div>
+
+                    {(error.includes('প্যারেন্ট পোর্টাল বন্ধ') || error.includes('অ্যাক্সেস বন্ধ')) && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col gap-2"
+                      >
+                        <a
+                          href={`tel:${(supportPhone || '8801629780297')}`}
+                          className="flex items-center justify-center gap-2 py-3 bg-slate-800 text-white rounded-xl font-bold text-xs border border-white/10 hover:bg-slate-700 transition-all shadow-lg"
+                        >
+                          <Smartphone size={16} className="text-blue-400" />
+                          {supportPhone || '+8801629780297'}
+                        </a>
+                        <a
+                          href={`https://wa.me/${(supportPhone || '8801629780297').replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 py-3 bg-[#25D366] text-white rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-green-500/20"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                          </svg>
+                          হোয়াটসঅ্যাপ সাপোর্ট
+                        </a>
+                      </motion.div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

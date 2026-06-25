@@ -16,6 +16,10 @@
       "destination": "/api/teachers.ts"
     },
     {
+      "source": "/api/parents/:path*",
+      "destination": "/api/parents.ts"
+    },
+    {
       "source": "/api/awaj/:path*",
       "destination": "/api/awaj.ts"
     },

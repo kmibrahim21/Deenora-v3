@@ -55,15 +55,29 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Student not found with provided credentials' });
     }
 
-    const config = student.institutions?.config_json as any || {};
+    if (student.institutions?.is_active === false) {
+      console.warn('Parents API: Institution is deactivated');
+      return res.status(401).json({ 
+        error: 'আপনার প্রতিষ্ঠানটির অ্যাক্সেস বন্ধ করা হয়েছে। দয়া করে অ্যাডমিনের সাথে যোগাযোগ করুন।',
+        code: 'INSTITUTION_DEACTIVATED',
+        institution_phone: student.institutions?.phone || '+8801629780297'
+      });
+    }
+
+    let config: any = student.institutions?.config_json || {};
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
     const modules = config.modules || {};
-    // Default to true if not explicitly false to be safe, but the user requested "ডিফল্ট ভাবে deactivated করে রাখো" (default deactivated).
-    // Let's check how many current apps rely on it. If we default to false, all current users. Wait! The user asked to add the feature in Super Admin and make it defaulted to deactivated.
-    // However, in `src/pages/AdminPanel.tsx` I placed `parent_portal: false` as default during creation and editing.
-    // So for login, we should probably check if it explicitly equals `true`. But standard is if it's not present, it's false? Let's assume it's explicitly enabled.
+    
     if (modules.parent_portal !== true) {
       console.warn('Parents API: Parent portal deactivated for this institution');
-      return res.status(400).json({ error: 'এই প্রতিষ্ঠানের জন্য প্যারেন্ট পোর্টাল বন্ধ রয়েছে।' });
+      const instPhone = student.institutions?.phone || '';
+      return res.status(400).json({ 
+        error: `এই প্রতিষ্ঠানের জন্য প্যারেন্ট পোর্টাল বন্ধ রয়েছে।${instPhone ? ` বিস্তারিত জানতে প্রতিষ্ঠানের সাথে যোগাযোগ করুন: ${instPhone}` : ''}`,
+        code: 'PORTAL_DEACTIVATED',
+        institution_phone: instPhone
+      });
     }
 
     console.log(`Parents API: Found student ${student.student_name} (${student.id})`);
