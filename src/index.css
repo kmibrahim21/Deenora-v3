@@ -11,7 +11,8 @@
   --color-brand-dark: #1E293B;
 
   --shadow-bubble: 0 20px 40px -15px rgba(37, 99, 235, 0.2);
-  --shadow-premium: 0 12px 28px -5px rgba(37, 99, 235, 0.3);
+  --shadow-premium: 0 20px 40px -12px rgba(0, 0, 0, 0.08), 0 8px 16px -8px rgba(0, 0, 0, 0.05);
+  --shadow-soft: 0 8px 24px -6px rgba(0, 0, 0, 0.04);
 
   --animate-mesh: mesh 15s ease infinite;
   --animate-float: float 3s ease-in-out infinite;

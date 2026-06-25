@@ -200,8 +200,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     setRequestingUpgrade(true);
     try {
       const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
-      const multiplier = stats.students > 0 && stats.students <= 200 ? 1 : stats.students;
-      const amount = (selectedPackage.rate * multiplier) * duration;
+      const effectiveRate = stats.students > 0 && stats.students <= 200 ? selectedPackage.rate : stats.students * 1;
+      const amount = effectiveRate * duration;
 
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth();
@@ -515,10 +515,10 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
 
   if (isEditingSubscription) {
-    const multiplier = stats.students > 0 && stats.students <= 200 ? 1 : stats.students;
     const currentRate = selectedPackage ? selectedPackage.rate : (Number((madrasah?.config_json as any)?.package_rate) || 0);
+    const effectiveRate = stats.students > 0 && stats.students <= 200 ? currentRate : stats.students * 1;
     const durationMonths = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
-    const calculatedFee = currentRate * multiplier * durationMonths;
+    const calculatedFee = effectiveRate * durationMonths;
 
     const formatSubscriptionEnd = (dateStr: string | null | undefined) => {
       if (!dateStr) return lang === 'bn' ? 'অনির্দিষ্ট' : 'N/A';
@@ -824,7 +824,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                   {calculatedFee.toLocaleString()} ৳
                 </h4>
                 <p className="text-[9px] font-bold text-slate-400 mt-1 leading-none">
-                  ({selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name} • {selectedPackage ? selectedPackage.rate : 0}৳ * {multiplier} {lang === 'bn' ? 'শিক্ষার্থী' : 'std'} * {durationMonths} {lang === 'bn' ? 'মাস' : 'months'})
+                  ({selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name} • {effectiveRate}৳ * {durationMonths} {lang === 'bn' ? 'মাস' : 'months'})
                 </p>
               </div>
 
@@ -1234,7 +1234,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                       <div className="space-y-0.5">
                         <p className="text-[9px] sm:text-[10px] font-bold text-blue-500 uppercase tracking-wider">Total Cost</p>
                         <p className={`text-xl sm:text-2xl font-black text-blue-600`}>
-                          {((Number((madrasah?.config_json as any)?.package_rate) || 0) * (stats.students > 0 && stats.students <= 200 ? 1 : stats.students) * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
+                          {((stats.students > 0 && stats.students <= 200 ? (Number((madrasah?.config_json as any)?.package_rate) || 0) : stats.students * 1) * (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12)).toLocaleString()} ৳
                         </p>
                       </div>
                     </div>

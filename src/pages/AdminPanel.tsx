@@ -141,9 +141,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editVoiceSenderId, setEditVoiceSenderId] = useState('');
   const [editModules, setEditModules] = useState<{ [key: string]: boolean }>({
     attendance: true,
-    results: true,
-    admit_card: true,
-    seat_plan: true,
+    exam: true,
     accounting: true,
     library: false,
     academic_year_promotion: true,
@@ -154,7 +152,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     certificates: false,
     student_photo: false,
     id_cards: false,
-    exam_routine: true
+    parent_portal: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -176,6 +174,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
   const [editPackageRate, setEditPackageRate] = useState<number>(0);
   const [editPackageName, setEditPackageName] = useState<string>('');
+  const [editSubscriptionNote, setEditSubscriptionNote] = useState<string>('');
+  const [editDueAmount, setEditDueAmount] = useState<number>(0);
   const [editStudentLimit, setEditStudentLimit] = useState<number>(0);
 
   const formatMonthsRange = (months: string[]) => {
@@ -497,6 +497,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
             <span style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a' }}>Total Paid</span>
             <span style={{ fontSize: '24px', fontWeight: 900, color: '#2563eb' }}>{transaction.amount.toLocaleString('bn-BD')} ৳</span>
           </div>
+
+          {metadata.due_amount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 20px', marginTop: '10px', color: '#dc2626', fontSize: '15px', border: '1px dashed #fca5a5', borderRadius: '10px' }}>
+              <span style={{ fontWeight: 700 }}>Due Amount (বকেয়া)</span>
+              <span style={{ fontWeight: 800 }}>{metadata.due_amount.toLocaleString('bn-BD')} ৳</span>
+            </div>
+          )}
           
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
             <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Payment Status</span>
@@ -1246,12 +1253,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
     const userModules = { ...(userConfig?.modules || {}) };
     delete userModules.fees;
+    delete userModules.results;
+    delete userModules.admit_card;
+    delete userModules.seat_plan;
+    delete userModules.exam_routine;
+
+    const isExamActive = 
+      userConfig?.modules?.exam ?? 
+      userConfig?.modules?.results ?? 
+      userConfig?.modules?.admit_card ?? 
+      userConfig?.modules?.seat_plan ?? 
+      userConfig?.modules?.exam_routine ?? 
+      true;
 
     setEditModules({
       attendance: true,
-      results: true,
-      admit_card: true,
-      seat_plan: true,
+      exam: isExamActive,
       accounting: true,
       library: false,
       academic_year_promotion: true,
@@ -1261,8 +1278,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       class_routine: false,
       certificates: true,
       id_cards: false,
-      exam_routine: true,
       student_photo: false,
+      parent_portal: false,
       ...userModules
     });
 
@@ -1289,6 +1306,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditPaidMonths(userConfig?.paid_months || []);
     setEditPackageRate(userConfig?.package_rate || 0);
     setEditPackageName(userConfig?.package_name || '');
+    setEditSubscriptionNote(userConfig?.subscription_note || '');
+    setEditDueAmount(userConfig?.due_amount || 0);
     setEditDiscount(0);
     setOverrideTotal('');
     
@@ -1337,8 +1356,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
          latestConfig.manual_activation_month = new Date().toISOString().slice(0, 7);
       }
 
+      const syncedModules = { ...editModules };
+      if (syncedModules.exam !== undefined) {
+        syncedModules.results = syncedModules.exam;
+        syncedModules.admit_card = syncedModules.exam;
+        syncedModules.seat_plan = syncedModules.exam;
+        syncedModules.exam_routine = syncedModules.exam;
+      }
+
       console.log('Saving config_json:', {
-        modules: editModules,
+        modules: syncedModules,
         result_engine: editResultEngine,
         result_system: editResultSystem,
         fee_structure: editFeeStructure,
@@ -1365,7 +1392,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         institute_code: editInstituteCode.trim(),
         config_json: {
           ...latestConfig,
-          modules: { ...editModules },
+          modules: syncedModules,
           result_engine: editResultEngine,
           result_system: editResultSystem,
           fee_structure: editFeeStructure,
@@ -1375,6 +1402,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           paid_months: editPaidMonths,
           package_rate: editPackageRate,
           package_name: editPackageName,
+          subscription_note: editSubscriptionNote,
+          due_amount: editDueAmount,
           student_limit: editStudentLimit,
           institute_code: editInstituteCode.trim(),
           user_pin: editPassword.trim()
@@ -2019,12 +2048,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                            e.stopPropagation();
                            if (!unpaidInstitutions || unpaidInstitutions.length === 0) return;
                            
-                           const targetInsts = unpaidInstitutions.filter(inst => !inst.is_active);
-                           if (targetInsts.length === 0) {
-                              setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'কোনো ডিঅ্যাক্টিভেটেড প্রতিষ্ঠান পাওয়া যায়নি।' });
-                              return;
-                           }
-                           
                            let monthLabel = '';
                            try {
                               const [rYear, rMonth] = selectedMonthForReminder.split('-');
@@ -2037,10 +2060,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                            const msg = `আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${monthLabel} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`;
                            
                            if (onNavigateToSMSBroadcast) {
-                             onNavigateToSMSBroadcast(targetInsts.map(inst => inst.id), msg);
+                             onNavigateToSMSBroadcast(unpaidInstitutions.map(inst => inst.id), msg);
                            } else {
                              setCommMessage(msg);
-                             setCommsModal({ show: true, institutions: [...targetInsts], type: 'sms' });
+                             setCommsModal({ show: true, institutions: [...unpaidInstitutions], type: 'sms' });
                            }
                          }}
                          className="flex-1 min-h-[56px] py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer relative z-[110]"
@@ -2054,17 +2077,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                            e.stopPropagation();
                            if (!unpaidInstitutions || unpaidInstitutions.length === 0) return;
                            
-                           const targetInsts = unpaidInstitutions.filter(inst => !inst.is_active);
-                           if (targetInsts.length === 0) {
-                              setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'কোনো ডিঅ্যাক্টিভেটেড প্রতিষ্ঠান পাওয়া যায়নি।' });
-                              return;
-                           }
-                           
                            if (onNavigateToVoiceBroadcast) {
-                             onNavigateToVoiceBroadcast(targetInsts.map(inst => inst.id));
+                             onNavigateToVoiceBroadcast(unpaidInstitutions.map(inst => inst.id));
                            } else {
                              if (awajVoices.length === 0) handleFetchAwajVoices();
-                             setCommsModal({ show: true, institutions: [...targetInsts], type: 'voice' });
+                             setCommsModal({ show: true, institutions: [...unpaidInstitutions], type: 'voice' });
                            }
                          }}
                          className="flex-1 min-h-[56px] py-4 bg-orange-500 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer relative z-[110]"
@@ -3374,7 +3391,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     <div className="text-right space-y-1">
                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Total Price</p>
                                        <p className={`text-4xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                                          {overrideTotal !== '' ? overrideTotal.toLocaleString('bn-BD') : Math.max(0, ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length) - editDiscount).toLocaleString('bn-BD')} ৳
+                                          {overrideTotal !== '' ? overrideTotal.toLocaleString('bn-BD') : Math.max(0, ((userStats.students > 0 && userStats.students <= 200 ? editPackageRate : userStats.students * 1) * selectedMonthsForPayment.length) - editDiscount).toLocaleString('bn-BD')} ৳
                                        </p>
                                        {editDiscount > 0 && (
                                          <p className="text-[10px] font-bold text-emerald-500">
@@ -3384,7 +3401,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     </div>
                                  </div>
 
-                                 <div className="mt-4 grid grid-cols-2 gap-4">
+                                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Discount (৳)</p>
                                        <input 
@@ -3394,6 +3411,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                            setEditDiscount(Number(e.target.value) || 0);
                                            setOverrideTotal('');
                                          }}
+                                         placeholder="0"
+                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
+                                       />
+                                    </div>
+                                    <div>
+                                       <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>বকেয়া (Due ৳)</p>
+                                       <input 
+                                         type="number" 
+                                         value={editDueAmount || ''} 
+                                         onChange={(e) => setEditDueAmount(Number(e.target.value))}
                                          placeholder="0"
                                          className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
                                        />
@@ -3414,10 +3441,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               {/* Payment Button */}
                               <button 
                                 onClick={async () => {
-                                  const effectiveStudents = userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students;
-                                  const baseAmount = effectiveStudents * editPackageRate * selectedMonthsForPayment.length;
+                                  const effectiveAmount = userStats.students > 0 && userStats.students <= 200 ? editPackageRate : userStats.students * 1;
+                                  const baseAmount = effectiveAmount * selectedMonthsForPayment.length;
                                   const calculatedAmount = Math.floor(Math.max(0, baseAmount - editDiscount));
-                                  const amount = overrideTotal !== '' ? overrideTotal : calculatedAmount;
+                                  const amount = overrideTotal !== '' ? Number(overrideTotal) : calculatedAmount;
                                   if (amount < 0) {
                                     setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'পেমেন্ট অ্যামাউন্ট ০ এর কম হতে পারে না।' });
                                     return;
@@ -3440,7 +3467,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                         package_name: editPackageName,
                                         subscription_type: editSubscriptionType,
                                         discount: editDiscount,
-                                        base_amount: baseAmount
+                                        base_amount: baseAmount,
+                                        due_amount: editDueAmount
                                       }
                                     });
                                     if (trError) throw trError;
@@ -3470,6 +3498,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                         paid_months: updatedPaidMonths,
                                         package_rate: editPackageRate,
                                         package_name: editPackageName,
+                                        subscription_note: editSubscriptionNote,
+                                        due_amount: editDueAmount,
                                         subscription_type: editSubscriptionType
                                       }
                                     }).eq('id', selectedUser.id);
@@ -3481,7 +3511,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                      if (selectedUser.phone) {
                                        const pkgName = getEnglishPkgName(editPackageName);
                                        const monthRange = formatMonthsRange(selectedMonthsForPayment);
-                                       const msg = `Assalamu Alaikum, Your payment for '${pkgName}' subscription ${monthRange ? '(' + monthRange + ') ' : ''}(${amount}tk) has been received and approved. Thank you.`;
+                                       const msg = `Assalamu Alaikum, Your payment for '${pkgName}' subscription ${monthRange ? '(' + monthRange + ') ' : ''}(${amount}tk) has been received and approved. ${editDueAmount > 0 ? `Due Amount: ${editDueAmount}tk. ` : ''}Thank you.`;
                                        smsApi.sendDirect(selectedUser.phone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
                                      }
 
@@ -3501,6 +3531,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               >
                                 <Banknote size={24} /> Receive Payment
                               </button>
+
+                                <div className="mt-8">
+                                  <label className={`block text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>সাবস্ক্রিপশন নোট (Subscription Note)</label>
+                                  <textarea 
+                                    value={editSubscriptionNote}
+                                    onChange={(e) => setEditSubscriptionNote(e.target.value)}
+                                    placeholder="এখানে কিছু লিখে রাখুন..."
+                                    className={`w-full h-32 rounded-2xl border p-5 font-bold text-sm outline-none transition-all resize-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500'}`}
+                                  />
+                                </div>
                            </div>
                         </div>
                       )}
@@ -3573,7 +3613,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         </div>
                       )}
 
-                      <button onClick={handleUserUpdate} disabled={isUpdatingUser} className={`w-full h-16 ${madrasah?.theme === 'dark' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black rounded-[2rem] shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 text-lg mt-8`}>
+                       <button onClick={handleUserUpdate} disabled={isUpdatingUser} className={`w-full h-16 ${madrasah?.theme === 'dark' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black rounded-[2rem] shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 text-lg mt-8`}>
                          {isUpdatingUser ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} /> Save Profile Changes</>}
                       </button>
                    </div>

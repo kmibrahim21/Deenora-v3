@@ -2,7 +2,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
 // fetch is global in Node 18+
@@ -33,7 +33,7 @@ async function startServer() {
         handler = module.default;
       } else {
         // In production, we assume compiled or direct import
-        handler = (await import(filePath)).default;
+        handler = (await import(pathToFileURL(filePath).href)).default;
       }
 
       if (typeof handler === 'function') {
@@ -109,6 +109,11 @@ async function startServer() {
   // Specific Routes for Teachers
   app.use('/api/teachers', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'teachers.ts'), req, res);
+  });
+
+  // Specific Routes for Parents
+  app.use('/api/parents', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'parents.ts'), req, res);
   });
 
   // Audio Proxy Route

@@ -62,6 +62,7 @@ const TutorialsManager = React.lazy(() =>
     default: module.TutorialsManager,
   })),
 );
+const ParentPortal = React.lazy(() => import("pages/ParentPortal"));
 
 const App: React.FC = () => {
   useSyncEngine();
@@ -147,7 +148,8 @@ const App: React.FC = () => {
     const isAuth = !session && !madrasah;
     const isDark = madrasah?.theme === 'dark';
     const isSplash = loading || (session && !madrasah);
-    const bgColor = (isSplash || isAuth || isDark) ? "#0F172A" : "#EBF5FF"; // Match Layout.tsx bg-[#EBF5FF]
+    const isParent = profile?.role === 'parent';
+    const bgColor = (isSplash || isAuth || isDark || isParent) ? "#0F172A" : "#EBF5FF"; // Match Layout.tsx bg-[#EBF5FF]
     
     if (themeColorMeta) {
       themeColorMeta.setAttribute("content", bgColor);
@@ -292,6 +294,17 @@ const App: React.FC = () => {
     const activeYearId = parsedConfig?.active_academic_year_id;
     
     const isAdmin = role === "madrasah_admin" || role === "super_admin";
+
+    if (role === "parent") {
+      const parentSession = JSON.parse(localStorage.getItem('parent_session') || '{}');
+      return (
+        <ParentPortal
+          lang={lang}
+          studentId={parentSession.student_id}
+          madrasah={madrasah}
+        />
+      );
+    }
 
     // Views that are allowed even without an academic year
     const allowedViews = [
@@ -810,8 +823,12 @@ const App: React.FC = () => {
       <OfflineIndicator />
       <Suspense
         fallback={
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
+            <div className="relative flex items-center justify-center mb-6">
+              <div className="absolute w-16 h-16 border-2 border-blue-500/20 rounded-full animate-spin"></div>
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" strokeWidth={3} />
+            </div>
+            <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] animate-pulse">লোড হচ্ছে...</p>
           </div>
         }
       >

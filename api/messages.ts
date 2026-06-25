@@ -11,6 +11,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    try {
+      const { id, class_name, title, message: msgBody, sender_name } = req.body;
+      if (!id) {
+        return res.status(400).json({ success: false, message: 'id is required for update' });
+      }
+
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        return res.status(500).json({ success: false, message: 'Server configuration error' });
+      }
+
+      const stringifiedMessage = typeof msgBody === 'string' ? msgBody : JSON.stringify(msgBody);
+
+      // Perform update using fetch with service role key to bypass RLS
+      const apiUrl = `${SUPABASE_URL}/rest/v1/messages?id=eq.${id}`;
+      const response = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          class_name,
+          title,
+          message: stringifiedMessage,
+          sender_name: sender_name || 'Admin',
+          updated_at: new Date().toISOString()
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ message: 'Failed to update message' }));
+        return res.status(response.status).json({ success: false, message: errData.message });
+      }
+
+      const data = await response.json();
+      return res.status(200).json({ success: true, data });
+    } catch (error: any) {
+      console.error('API Error updating message:', error);
+      return res.status(500).json({ success: false, message: error.message || 'Error updating message' });
+    }
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
@@ -21,9 +69,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!class_name) {
       return res.status(400).json({ success: false, message: 'class_name query parameter is required' });
     }
-
-    const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const SUPABASE_KEY = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!SUPABASE_URL || !SUPABASE_KEY) {
       return res.status(500).json({ success: false, message: 'Server configuration error' });

@@ -134,11 +134,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
   const inactiveColor = '#94A3B8';
 
   return (
-    <div className={`flex flex-col md:flex-row w-full h-full relative overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900 text-white' : 'bg-[#EBF5FF]'}`}>
+    <div className={`flex flex-col md:flex-row w-full h-full relative overflow-hidden ${(role === 'parent' || madrasah?.theme === 'dark') ? 'bg-[#0F172A] text-white' : 'bg-[#EBF5FF]'}`}>
       
       {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex flex-col w-72 border-r z-20 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'}`}>
-        <div className="p-6 flex items-center gap-4 border-b border-inherit">
+      {role !== 'parent' && (
+        <aside className={`hidden md:flex flex-col w-72 border-r z-20 shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'}`}>
+          <div className="p-6 flex items-center gap-4 border-b border-inherit">
           <div className="relative shrink-0">
             <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-sm border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
               {isSuperAdmin ? <ShieldCheck size={24} className="text-[#2563EB]" /> : (madrasah?.logo_url ? <img src={madrasah.logo_url} className="w-full h-full object-contain" alt="Logo" /> : <BookOpen size={24} className="text-[#2563EB]" />)}
@@ -258,11 +259,13 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
           )}
         </nav>
       </aside>
+      )}
 
       <div className="flex flex-col flex-1 w-full h-full relative overflow-hidden">
         {/* Mobile Header */}
-        <header className={`md:hidden flex-none px-6 pt-[calc(env(safe-area-inset-top)+8px)] pb-3 flex items-center justify-between relative z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-[#EBF5FF]/80 border-blue-100'} backdrop-blur-md border-b`}>
-          <div className="flex items-center gap-4 flex-1 min-w-0">
+        {role !== 'parent' && (
+          <header className={`md:hidden flex-none px-6 pt-[calc(env(safe-area-inset-top)+8px)] pb-3 flex items-center justify-between relative z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-[#EBF5FF]/80 border-blue-100'} backdrop-blur-md border-b`}>
+            <div className="flex items-center gap-4 flex-1 min-w-0">
             <div className="relative shrink-0">
               <div className={`w-11 h-11 rounded-full flex items-center justify-center shadow-sm border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                 {isSuperAdmin ? <ShieldCheck size={24} className="text-[#2563EB]" /> : (madrasah?.logo_url ? <img src={madrasah.logo_url} className="w-full h-full object-contain" alt="Logo" /> : <BookOpen size={22} className="text-[#2563EB]" />)}
@@ -288,10 +291,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             </button>
           </div>
         </header>
+        )}
 
         {/* Desktop Top Bar */}
-        <header className={`hidden md:flex flex-none h-20 px-8 items-center justify-between relative z-10 border-b ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-[#EBF5FF]/80 border-blue-100'} backdrop-blur-md`}>
-          <div className="flex-1">
+        {role !== 'parent' && (
+          <header className={`hidden md:flex flex-none h-20 px-8 items-center justify-between relative z-10 border-b ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-[#EBF5FF]/80 border-blue-100'} backdrop-blur-md`}>
+            <div className="flex-1">
              {/* Optional: Add breadcrumbs or page title here in the future */}
           </div>
           <div className="flex items-center gap-4">
@@ -304,16 +309,18 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             </button>
           </div>
         </header>
+        )}
 
-        {(currentView === 'home' || currentView === 'admin-dashboard') && <MultiCalendarHeader madrasah={madrasah} />}
+        {(currentView === 'home' || currentView === 'admin-dashboard') && role !== 'parent' && <MultiCalendarHeader madrasah={madrasah} />}
 
-        <main className="flex-1 overflow-y-auto px-5 md:px-8 pt-4 pb-44 md:pb-8 w-full scroll-smooth custom-scrollbar">
+        <main className={`flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar ${role === 'parent' ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`}>
           {children}
         </main>
 
         {/* Mobile Bottom Nav */}
-        <div className="fixed md:hidden bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md w-full z-[200]">
-        <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble flex justify-around items-center px-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+        {role !== 'parent' && (
+          <div className="fixed md:hidden bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md w-full z-[200]">
+            <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble flex justify-around items-center px-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
 
           {isSuperAdmin ? (
             <>
@@ -411,6 +418,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
         </nav>
       </div>
+      )}
 
       </div>
 

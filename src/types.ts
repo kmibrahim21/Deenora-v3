@@ -5,7 +5,7 @@
 
 export type Language = 'bn' | 'en';
 
-export type UserRole = 'super_admin' | 'madrasah_admin' | 'accountant' | 'teacher';
+export type UserRole = 'super_admin' | 'madrasah_admin' | 'accountant' | 'teacher' | 'parent';
 
 export interface Institution {
   id: string;
@@ -18,9 +18,10 @@ export interface Institution {
   config_json: {
     modules: {
       attendance: boolean;
-      results: boolean;
-      admit_card: boolean;
-      seat_plan: boolean;
+      exam?: boolean;
+      results?: boolean;
+      admit_card?: boolean;
+      seat_plan?: boolean;
       accounting: boolean;
       library?: boolean;
       academic_year_promotion?: boolean;
@@ -31,6 +32,7 @@ export interface Institution {
       student_photo?: boolean;
       id_cards?: boolean;
       exam_routine?: boolean;
+      parent_portal?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional';
@@ -270,6 +272,8 @@ export interface Attendance {
   session?: string;
   late_minutes?: number;
   arrival_time?: string;
+  check_in?: string;
+  note?: string;
   recorded_by: string;
   academic_year_id?: string;
   students?: Student;
@@ -308,6 +312,7 @@ export interface Fee {
   month: string; // YYYY-MM
   status: 'paid' | 'unpaid' | 'partial';
   paid_at?: string;
+  created_at?: string;
   academic_year_id?: string;
   students?: Student;
 }
@@ -471,6 +476,7 @@ export interface AppState {
   selectedClassId?: string;
   selectedStudent?: Student;
   isEditing?: boolean;
+  parentStudentId?: string;
 }
 
 export interface Transaction {

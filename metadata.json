@@ -1,6 +1,9 @@
 {
   "name": "Deenora V3 - Institute Management",
-  "description": "A comprehensive Institute management system (Deenora V3) with student tracking, attendance, exams, and accounting.",
+  "description": "A comprehensive Institute management system (Deenora V3) with student tracking, attendance, exams, accounting, and parent portal.",
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
   "requestFramePermissions": [
     "camera",
     "microphone"

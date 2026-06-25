@@ -1069,7 +1069,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     let count = 0;
     if (isTargetingInstitutions) {
       if (targetType === 'all_institutions') {
-        count = allInstitutions.filter(inst => inst.is_active).length;
+        count = allInstitutions.length;
       } else {
         count = selectedInstitutionIds.length; // Specific institutions
       }
@@ -1137,7 +1137,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       let phoneNumbers: string[] = [];
       if (isTargetingInstitutions) {
         if (targetType === 'all_institutions') {
-          phoneNumbers = allInstitutions.filter(inst => inst.is_active).map(inst => inst.phone);
+          phoneNumbers = allInstitutions.map(inst => inst.phone);
         } else {
           phoneNumbers = allInstitutions.filter(inst => selectedInstitutionIds.includes(inst.id)).map(inst => inst.phone);
         }

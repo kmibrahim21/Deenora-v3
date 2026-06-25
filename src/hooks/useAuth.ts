@@ -226,6 +226,7 @@ export const useAuth = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('teacher_session');
+    localStorage.removeItem('parent_session');
     OfflineService.removeCache('profile');
     hardReload();
   };
@@ -259,97 +260,61 @@ export const useAuth = () => {
           }
         }
 
+        const parentSessionStr = localStorage.getItem('parent_session');
+        const teacherSessionStr = localStorage.getItem('teacher_session');
+
         if (currentSession && currentSession.user) {
           setSession(currentSession);
-          console.log("Supabase Session active:", currentSession.user.id);
           
-          // Check if it's a teacher session
-          const teacherSessionStr = localStorage.getItem('teacher_session');
           if (teacherSessionStr) {
             try {
               const teacherData = JSON.parse(teacherSessionStr);
               if (teacherData && teacherData.id) {
-                // Fetch latest teacher data 
-                try {
-                  const { data: latestTeacher } = await supabase
-                    .from('teachers')
-                    .select('*')
-                    .eq('id', teacherData.id)
-                    .maybeSingle();
-
-                  if (latestTeacher) {
-                    if (!latestTeacher.is_active) {
-                      localStorage.removeItem('teacher_session');
-                      setProfile(null);
-                      setMadrasah(null);
-                      setLoading(false);
-                      return;
-                    }
-
-                    const profileObj = {
-                      id: latestTeacher.id,
-                      institution_id: latestTeacher.institution_id,
-                      full_name: latestTeacher.name,
-                      role: 'teacher' as const,
-                      is_active: latestTeacher.is_active,
-                      created_at: latestTeacher.created_at,
-                      permissions: latestTeacher.permissions
-                    };
-                    setProfile(profileObj);
-                    OfflineService.setCache('user_profile', profileObj);
-                    localStorage.setItem('teacher_session', JSON.stringify(latestTeacher));
-                    
-                    if (isValidUUID(latestTeacher.institution_id)) {
-                      const { data: institutionData } = await supabase
-                        .from('institutions')
-                        .select('*')
-                        .eq('id', latestTeacher.institution_id)
-                        .maybeSingle();
-                        
-                      if (institutionData) {
-                        setMadrasah(institutionData);
-                        OfflineService.setCache('profile', institutionData);
-                      }
-                    }
-                  } else {
-                    // Teacher was deleted or something
-                    localStorage.removeItem('teacher_session');
-                  }
-                } catch (fetchErr) {
-                  console.log("Teacher fetch failed (likely offline), using cached session...");
+                const { data: latestTeacher } = await supabase.from('teachers').select('*').eq('id', teacherData.id).maybeSingle();
+                if (latestTeacher && latestTeacher.is_active) {
                   const profileObj = {
-                    id: teacherData.id,
-                    institution_id: teacherData.institution_id,
-                    full_name: teacherData.name || teacherData.full_name,
+                    id: latestTeacher.id,
+                    institution_id: latestTeacher.institution_id,
+                    full_name: latestTeacher.name,
                     role: 'teacher' as const,
-                    is_active: teacherData.is_active,
-                    created_at: teacherData.created_at,
-                    permissions: teacherData.permissions
+                    is_active: latestTeacher.is_active,
+                    created_at: latestTeacher.created_at,
+                    permissions: latestTeacher.permissions
                   };
                   setProfile(profileObj);
-                  const cachedMadrasah = OfflineService.getCache('profile');
-                  if (cachedMadrasah) setMadrasah(cachedMadrasah);
+                  OfflineService.setCache('user_profile', profileObj);
+                  
+                  const { data: inst } = await supabase.from('institutions').select('*').eq('id', latestTeacher.institution_id).maybeSingle();
+                  if (inst) setMadrasah(inst);
+                  setLoading(false);
+                  return;
                 }
-                
-                setLoading(false);
-                return; 
               }
-            } catch (e) {
-              console.error("Error parsing teacher session:", e);
-            }
+            } catch (e) {}
           }
-          
           await fetchUserProfile(currentSession.user.id, currentSession.user.email);
+        } else if (parentSessionStr) {
+          try {
+            const parentData = JSON.parse(parentSessionStr);
+            if (parentData && parentData.student_id) {
+              const profileObj = {
+                id: parentData.student_id,
+                institution_id: parentData.institution_id,
+                full_name: 'Parent User',
+                role: 'parent' as const,
+                is_active: true,
+                created_at: new Date().toISOString()
+              };
+              setProfile(profileObj);
+              const { data: inst } = await supabase.from('institutions').select('*').eq('id', parentData.institution_id).maybeSingle();
+              if (inst) setMadrasah(inst);
+              setLoading(false);
+              return;
+            }
+          } catch (e) {}
         } else {
-          // If there's no Supabase session, verify if we have cached data before clearing
-          console.log("No Supabase session found.");
-          const hasAuthToken = !!localStorage.getItem('madrasah_auth_token');
-          const teacherSessionStr = localStorage.getItem('teacher_session');
-          
-          if (!hasAuthToken && teacherSessionStr) {
-             console.log("Clearing teacher session as no Supabase auth token exists.");
-             localStorage.removeItem('teacher_session');
-          }
+          localStorage.removeItem('teacher_session');
+          localStorage.removeItem('parent_session');
         }
       } catch (err: any) {
         console.error("Auth initialization error:", err);

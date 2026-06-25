@@ -676,6 +676,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [examName, setExamName] = useState('');
   const [examDate, setExamDate] = useState(activeYear?.start_date || new Date().toISOString().split('T')[0]);
   const [classId, setClassId] = useState('');
+  const [isPublished, setIsPublished] = useState(false);
   const [subName, setSubName] = useState('');
   const [fullMarks, setFullMarks] = useState('100');
   const [passMarks, setPassMarks] = useState('33');
@@ -1217,7 +1218,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null,
         class_id: classId,
         exam_name: examName,
-        exam_date: examDate
+        exam_date: examDate,
+        is_published: isPublished
       };
 
       let error;
@@ -1261,6 +1263,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         setEditingExam(null);
         setExamName('');
         setClassId('');
+        setIsPublished(false);
         fetchExams();
       }
     } catch (e) {
@@ -1276,6 +1279,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setExamName(exam.exam_name || '');
     setExamDate(exam.exam_date || '');
     setClassId(exam.class_id || '');
+    setIsPublished(exam.is_published || false);
     setShowAddExam(true);
   };
 
@@ -2714,7 +2718,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                             <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>{exam.exam_name}</h3>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{exam.classes?.class_name}</span>
-                                {exam.is_published && <span className="px-2 py-0.5 bg-green-50 text-green-500 rounded-full text-[8px] font-black uppercase">Published</span>}
+                                {exam.is_published ? (
+                                  <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded-full text-[8px] font-extrabold uppercase font-noto">প্রকাশিত</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full text-[8px] font-extrabold uppercase font-noto">অপ্রকাশিত</span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -3182,7 +3190,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95`}>
              <div className="flex items-center justify-between">
                <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{editingExam ? 'পরীক্ষা এডিট করুন' : 'নতুন পরীক্ষা যোগ করুন'}</h3>
-               <button onClick={() => { setShowAddExam(false); setEditingExam(null); setExamName(''); setClassId(''); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
+               <button onClick={() => { setShowAddExam(false); setEditingExam(null); setExamName(''); setClassId(''); setIsPublished(false); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
              </div>
              <div className="space-y-4">
                 <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পরীক্ষার নাম (যেমন: বার্ষিক পরীক্ষা)" value={examName} onChange={(e) => setExamName(e.target.value)} /><BookOpen className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
@@ -3200,6 +3208,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
                     </select>
                     <LayoutGrid className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/>
+                </div>
+                <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+                  <input 
+                    type="checkbox" 
+                    id="isPublishedInput" 
+                    checked={isPublished} 
+                    onChange={(e) => setIsPublished(e.target.checked)} 
+                    className="w-5 h-5 rounded-lg border-slate-300 text-[#2563EB] focus:ring-[#2563EB]" 
+                  />
+                  <label htmlFor="isPublishedInput" className={`text-xs font-bold ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'} font-noto cursor-pointer select-none`}>ফলাফল প্রকাশ করুন (Publish Results)</label>
                 </div>
                 <button onClick={handleAddExam} disabled={isSaving} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all">
                   {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={20}/> {editingExam ? 'আপডেট করুন' : 'পরীক্ষা তৈরি করুন'}</>}

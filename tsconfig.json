@@ -31,7 +31,10 @@
     "noEmit": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "api/**/*",
+    "lib/**/*",
+    "server.ts"
   ],
   "exclude": [
     "node_modules",

@@ -19,7 +19,8 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
   const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
-  const [loginType, setLoginType] = useState<'admin' | 'teacher'>('admin');
+  const [regNo, setRegNo] = useState('');
+  const [loginType, setLoginType] = useState<'admin' | 'teacher' | 'parent'>('admin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [brandInfo, setBrandInfo] = useState({ name: 'দ্বীনোরা' });
@@ -36,6 +37,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     
     try {
       localStorage.removeItem('teacher_session');
+      localStorage.removeItem('parent_session');
       const { data, error: signInError } = await (supabase.auth as any).signInWithPassword({ 
         email: email.trim(), 
         password: code 
@@ -75,6 +77,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
     setError('');
     
     try {
+      localStorage.removeItem('parent_session');
       const response = await fetch('/api/teachers/login', {
         method: 'POST',
         headers: {
@@ -111,6 +114,60 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
       setError(err.message === 'Invalid mobile number or password' 
         ? (lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN')
         : (lang === 'bn' ? 'লগইন করতে সমস্যা হচ্ছে' : 'Error logging in'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleParentAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      localStorage.removeItem('teacher_session');
+      
+      const response = await fetch('/api/parents/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          phone: phone.trim(),
+          reg_no: regNo.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to login');
+      }
+
+      if (data.student) {
+        localStorage.setItem('parent_session', JSON.stringify({
+          student_id: data.student.id,
+          guardian_phone: data.student.guardian_phone,
+          registration_number: data.student.registration_number,
+          institution_id: data.student.institution_id,
+          role: 'parent'
+        }));
+        if (data.institution?.name) {
+          localStorage.setItem('m_name', data.institution.name);
+        }
+        hardReload();
+      } else {
+        setError(lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর' : 'Invalid phone number or registration number');
+      }
+    } catch (err: any) {
+      console.error('Parent login error:', err);
+      if (err.message === 'Student not found with provided credentials') {
+        setError(lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর' : 'Invalid phone number or registration number');
+      } else if (err.message === 'এই প্রতিষ্ঠানের জন্য প্যারেন্ট পোর্টাল বন্ধ রয়েছে।') {
+        setError(err.message);
+      } else {
+        setError(lang === 'bn' ? `লগইন করতে সমস্যা হচ্ছে: ${err.message}` : `Error logging in: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -212,18 +269,30 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
           <div className="absolute -top-24 -left-24 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px] pointer-events-none" />
           
           <div className="flex p-1 bg-black/40 rounded-2xl border border-white/5 relative mb-6">
-            <div className={`absolute h-[calc(100%-8px)] w-[calc(50%-4px)] bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20 transition-transform duration-300 ${loginType === 'teacher' ? 'translate-x-full' : 'translate-x-0'}`} />
+            <div 
+              className={`absolute h-[calc(100%-8px)] w-[calc(33.33%-4px)] bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20 transition-transform duration-300 ${
+                loginType === 'teacher' ? 'translate-x-full' : 
+                loginType === 'parent' ? 'translate-x-[200%]' : 
+                'translate-x-0'
+              }`} 
+            />
             <button 
               onClick={() => { setLoginType('admin'); setError(''); }}
-              className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'admin' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'admin' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
               Admin
             </button>
             <button 
               onClick={() => { setLoginType('teacher'); setError(''); }}
-              className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'teacher' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'teacher' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
             >
               Teacher
+            </button>
+            <button 
+              onClick={() => { setLoginType('parent'); setError(''); }}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest relative z-10 transition-colors ${loginType === 'parent' ? 'text-white' : 'text-slate-400 hover:text-slate-300'}`}
+            >
+              Parent
             </button>
           </div>
 
@@ -278,7 +347,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                 {loading ? <Loader2 className="animate-spin" size={24} /> : 'লগইন করুন'}
               </motion.button>
             </form>
-          ) : (
+          ) : loginType === 'teacher' ? (
             <form onSubmit={handleTeacherAuth} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
               <AnimatePresence mode="wait">
                 {error && (
@@ -327,6 +396,57 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
                 className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all flex items-center justify-center gap-3 text-lg font-noto shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 className="animate-spin" size={24} /> : 'শিক্ষক লগইন'}
+              </motion.button>
+            </form>
+          ) : (
+            <form onSubmit={handleParentAuth} className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <AnimatePresence mode="wait">
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-3 text-red-400 font-bold text-xs"
+                  >
+                    <AlertCircle size={18} />
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="space-y-4">
+                <div className="group relative">
+                  <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                  <input
+                    type="tel"
+                    required
+                    placeholder="অভিভাবকের ফোন নম্বর"
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
+                <div className="group relative">
+                  <Key className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                  <input
+                    type="text"
+                    required
+                    placeholder="রেজিস্ট্রেশন নম্বর (Reg. No)"
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-2xl outline-none text-white font-bold text-sm focus:border-blue-500/50 focus:bg-white/10 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-600"
+                    value={regNo}
+                    onChange={(e) => setRegNo(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="submit"
+                disabled={loading}
+                className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all flex items-center justify-center gap-3 text-lg font-noto shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? <Loader2 className="animate-spin" size={24} /> : 'অভিভাবক লগইন'}
               </motion.button>
             </form>
           )}

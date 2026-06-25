@@ -167,16 +167,17 @@ async function setupInstitution(supabase, userId, body, res) {
       student_limit: 200,
       modules: {
         attendance: true,
+        exam: true,
         results: true,
         admit_card: true,
         seat_plan: true,
+        exam_routine: true,
         accounting: true,
         academic_year_promotion: true,
         voice_broadcast: true,
         sms: true,
         messages: false,
         certificates: true,
-        exam_routine: true,
         class_routine: true
       },
       result_engine: 'school',

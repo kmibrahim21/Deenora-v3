@@ -369,7 +369,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         // Super Admin Bulk Messaging to ALL INSTITUTIONS or SPECIFIC INSTITUTIONS
         let targets = allInstitutions;
         if (targetType === 'all_institutions') {
-          targets = allInstitutions.filter(inst => inst.is_active);
+          targets = allInstitutions;
         } else if (targetType === 'specific_institution') {
           targets = allInstitutions.filter(inst => selectedInstitutionIds.includes(inst.id));
         }

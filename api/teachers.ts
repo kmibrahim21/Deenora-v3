@@ -180,7 +180,7 @@ export default async function handler(req, res) {
       
       const { data: currentTeacher } = await supabase.from('teachers').select('permissions').eq('id', id).single();
       const currentPermissions = currentTeacher?.permissions || {};
-      let parsedPermissions = {};
+      let parsedPermissions: any = {};
       if (typeof currentPermissions === 'string') {
         try { parsedPermissions = JSON.parse(currentPermissions); } catch(e) {}
       } else {

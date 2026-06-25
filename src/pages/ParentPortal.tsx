@@ -1,0 +1,1885 @@
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { supabase } from '../supabase';
+import { 
+  User, 
+  Calendar, 
+  CreditCard, 
+  BarChart3, 
+  FileText, 
+  LogOut, 
+  Phone, 
+  MapPin, 
+  Hash, 
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Bell,
+  GraduationCap,
+  BookOpen,
+  MessageSquare,
+  RefreshCw,
+  Trophy,
+  Share2,
+  Download,
+  LayoutDashboard,
+  ClipboardList,
+  Banknote,
+  History as HistoryIcon,
+  Users,
+  AlertCircle,
+  Wallet,
+  WalletCards,
+  ReceiptText,
+  PhoneCall,
+  PieChart,
+  Info,
+  BellRing,
+  Heart,
+  Shield,
+  Smartphone,
+  Moon,
+  Sun,
+} from 'lucide-react';
+import { getBengaliDate, getHijriDate } from '../utils/calendarUtils';
+import { motion, AnimatePresence } from 'motion/react';
+import { Attendance, Fee, Language, Institution } from 'types';
+import { hardReload } from 'utils/reloadUtils';
+import { generateResultPDF } from 'utils/pdfGenerator';
+
+interface ParentPortalProps {
+  lang: Language;
+  studentId: string;
+  madrasah: Institution | null;
+}
+
+const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }) => {
+  const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'results' | 'fees' | 'notices' | 'profile'>('home');
+  const [activeNoticeTab, setActiveNoticeTab] = useState<'diary' | 'notice' | 'syllabus'>('notice');
+  const [student, setStudent] = useState<any>(null);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [fees, setFees] = useState<Fee[]>([]);
+  const [feeStructures, setFeeStructures] = useState<any[]>([]);
+  const [studentFeeSettings, setStudentFeeSettings] = useState<any[]>([]);
+  const [results, setResults] = useState<any[]>([]);
+  const [notices, setNotices] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
+  const [classTotal, setClassTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
+  const [showExamDropdown, setShowExamDropdown] = useState(false);
+  const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [viewMonth, setViewMonth] = useState(new Date().getMonth());
+  const [viewYear, setViewYear] = useState(new Date().getFullYear());
+
+  const CACHE_KEY = `parent_data_v2_${studentId}`;
+
+  useEffect(() => {
+    // Try to load from cache first
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData);
+        if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
+          applyData(parsed.data);
+          setLoading(false);
+        }
+      } catch (e) {}
+    }
+    fetchData();
+  }, [studentId]);
+
+  const applyData = useCallback((data: any) => {
+    setStudent(data.student);
+    setAttendance(data.attendance);
+    setFees(data.fees);
+    setFeeStructures(data.feeStructures || []);
+    setStudentFeeSettings(data.studentFeeSettings || []);
+    setResults(data.examResults);
+    setNotices(data.notices || []);
+    setEvents(data.events || []);
+    setClassTotal(data.classTotal || 0);
+  }, []);
+
+  const fetchData = async () => {
+    if (!loading) setRefreshing(true);
+    try {
+      const parentSession = JSON.parse(localStorage.getItem('parent_session') || '{}');
+      const phone = parentSession.guardian_phone;
+      const regNo = parentSession.registration_number;
+
+      if (!phone || !regNo) {
+        handleLogout();
+        return;
+      }
+
+      const response = await fetch(`/api/parents/data?phone=${phone}&reg_no=${regNo}`);
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error);
+
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        data,
+        timestamp: Date.now()
+      }));
+
+      applyData(data);
+    } catch (error) {
+      console.error('Error fetching parent data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('parent_session');
+    hardReload();
+  };
+
+  const isTabActive = (tab: string) => activeTab === tab;
+  const academicYearStart = madrasah?.config_json?.academic_year_start;
+
+  // Attendance Stats for the month
+  const today = useMemo(() => new Date(), []);
+  
+  const monthAttendance = useMemo(() => {
+    return attendance.filter(a => {
+      const d = new Date(a.date);
+      return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+    });
+  }, [attendance, viewMonth, viewYear]);
+
+  const filteredAttendance = useMemo(() => {
+    return attendanceFilter === 'all' 
+      ? monthAttendance 
+      : monthAttendance.filter(a => a.status === attendanceFilter);
+  }, [attendanceFilter, monthAttendance]);
+
+  const totalPaid = useMemo(() => {
+    return fees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+  }, [fees]);
+  
+  const feeStats = useMemo(() => {
+    const currentYearForFees = new Date().getFullYear().toString();
+    const acStart = academicYearStart ? new Date(academicYearStart) : null;
+    const startMonthIdx = acStart && acStart.getFullYear().toString() === currentYearForFees ? acStart.getMonth() + 1 : 1;
+
+    const currentMonthIdx = today.getMonth() + 1;
+    let totalPayableUpToNow = 0;
+    let totalPayableTotal = 0;
+
+    for (let m = startMonthIdx; m <= 12; m++) {
+        const monthStr = `${currentYearForFees}-${String(m).padStart(2, '0')}`;
+        feeStructures.forEach(s => {
+            const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+            const isEnabled = setting ? setting.is_enabled : true;
+            if (!isEnabled) return;
+            
+            const isExpired = s.due_date && s.due_date.slice(0, 7) < monthStr;
+            const isNotStarted = s.start_date && s.start_date.slice(0, 7) > monthStr;
+            const isBeforeYearStart = academicYearStart && monthStr < academicYearStart.slice(0, 7);
+            
+            if (!isExpired && !isNotStarted && !isBeforeYearStart) {
+               const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+               totalPayableTotal += amountToCharge;
+               if (m <= currentMonthIdx) {
+                  totalPayableUpToNow += amountToCharge;
+               }
+            }
+        });
+    }
+
+    const overallDueActual = Math.max(0, totalPayableUpToNow - totalPaid);
+    return {
+      pendingFees: overallDueActual,
+      totalPayable: totalPayableTotal
+    };
+  }, [madrasah, today, feeStructures, studentFeeSettings, totalPaid]);
+
+  const stats = useMemo(() => {
+    return {
+      present: monthAttendance.filter(a => a.status === 'present').length,
+      absent: monthAttendance.filter(a => a.status === 'absent').length,
+      late: monthAttendance.filter(a => a.status === 'late').length,
+      total: monthAttendance.length,
+      pendingFees: feeStats.pendingFees,
+      totalPayable: feeStats.totalPayable,
+      lastGpa: results.length > 0 ? (results[0].gpa || 'A-') : '--'
+    };
+  }, [monthAttendance, feeStats, results]);
+
+  const attendanceRate = useMemo(() => {
+    return stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+  }, [stats]);
+  
+  // Calculate average performance across all exams
+  const performanceRate = useMemo(() => {
+    let totalObtained = 0;
+    let totalFull = 0;
+    results.forEach(exam => {
+      exam.marks.forEach((m: any) => {
+        totalObtained += m.obtained || 0;
+        totalFull += m.full || 100;
+      });
+    });
+    return totalFull > 0 ? Math.round((totalObtained / totalFull) * 100) : 85;
+  }, [results]);
+
+  const recentActivities = useMemo(() => {
+    return [
+      ...(attendance.length > 0 ? [{
+        icon: CheckCircle2,
+        id: 'att',
+        title: 'উপস্থিতি রেকর্ড',
+        sub: new Date(attendance[0].date).toLocaleDateString('bn-BD'),
+        trail: attendance[0].status === 'present' ? 'উপস্থিত' : 'অনুপস্থিত',
+        color: attendance[0].status === 'present' ? 'emerald' : 'red',
+        timestamp: new Date(attendance[0].date).getTime()
+      }] : []),
+      ...(fees.length > 0 ? [{
+        icon: CreditCard,
+        id: 'fee',
+        title: 'ফি এর তথ্য',
+        sub: fees[0].month,
+        trail: fees[0].status === 'paid' ? 'পরিশোধিত' : 'বকেয়া',
+        color: fees[0].status === 'paid' ? 'blue' : 'orange',
+        timestamp: new Date(fees[0].created_at || '').getTime() || Date.now()
+      }] : []),
+      ...(results.length > 0 ? [{
+        icon: GraduationCap,
+        id: 'res',
+        title: 'পরীক্ষার ফলাফল',
+        sub: results[0].name,
+        trail: results[0].gpa || 'প্রকাশিত',
+        color: 'purple',
+        timestamp: new Date(results[0].date).getTime()
+      }] : []),
+      ...(notices.length > 0 ? [{
+        icon: Bell,
+        id: 'not',
+        title: 'নতুন নোটিশ',
+        sub: notices[0].title,
+        trail: 'দেখুন',
+        color: 'orange',
+        timestamp: new Date(notices[0].created_at).getTime()
+      }] : [])
+    ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 4);
+  }, [attendance, fees, results, notices]);
+
+  const currentExam = useMemo(() => {
+    return results.find(e => e.id === selectedExamId) || results[0] || null;
+  }, [results, selectedExamId]);
+
+  return (
+    <AnimatePresence mode="wait">
+      {loading ? (
+        <motion.div
+          key="loading-screen"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] relative overflow-hidden"
+        >
+          {/* Decorative Background */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute -top-20 -right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+            <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          </div>
+
+          <div className="flex flex-col items-center justify-center animate-in fade-in zoom-in duration-1000 z-10">
+            <div className="relative flex items-center justify-center mb-8">
+              {/* Outer glowing rings */}
+              <div className="absolute w-24 h-24 border border-blue-500/30 rounded-full animate-[spin_3s_linear_infinite]"></div>
+              <div className="absolute w-32 h-32 border border-indigo-500/20 rounded-full animate-[spin_4s_linear_infinite_reverse]"></div>
+              <div className="absolute w-16 h-16 bg-blue-500/20 rounded-full blur-xl animate-pulse"></div>
+              
+              {/* Center Icon */}
+              <div className="relative w-16 h-16 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 flex items-center justify-center shadow-2xl overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <BookOpen size={28} className="text-blue-400 animate-pulse" strokeWidth={1.5} />
+              </div>
+            </div>
+            
+            <div className="space-y-4 text-center">
+              <div className="space-y-2">
+                <h1 className="text-white font-black tracking-[0.5em] text-sm uppercase opacity-90">
+                  DEENORA
+                </h1>
+                <div className="flex items-center justify-center gap-1.5 opacity-60">
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
+              <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] animate-pulse">লোডিং হচ্ছে...</p>
+            </div>
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="main-portal"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="flex h-screen bg-[#0F172A] overflow-hidden"
+        >
+          <div className="flex flex-1 h-full bg-slate-50 overflow-hidden">
+
+      {/* Desktop Sidebar */}
+      <div className={`hidden lg:flex w-72 flex-col border-r h-screen fixed top-0 left-0 z-50 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'}`}>
+        <div className="p-6 border-b border-inherit flex flex-col justify-center">
+          <div className="flex items-center gap-4">
+             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+               {madrasah?.logo_url ? (
+                 <img src={madrasah.logo_url} className="w-full h-full object-contain" alt="Logo" />
+               ) : (
+                 <BookOpen size={24} className="text-blue-600" />
+               )}
+             </div>
+             <div className="min-w-0">
+               <h1 className={`text-lg font-black leading-tight tracking-tight font-noto line-clamp-3 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
+                 {madrasah?.name || 'Deenora'}
+               </h1>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 font-noto">
+                 Parent Portal
+               </p>
+             </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+           {[
+             { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড' },
+             { id: 'attendance', icon: ClipboardList, label: 'উপস্থিতি' },
+             { id: 'results', icon: GraduationCap, label: 'ফলাফল' },
+             { id: 'fees', icon: Banknote, label: 'ফি ও বকেয়া' },
+             { id: 'notices', icon: Bell, label: 'নোটিশ' },
+             { id: 'profile', icon: User, label: 'প্রোফাইল' }
+           ].map(tab => (
+             <button
+               key={tab.id}
+               onClick={() => setActiveTab(tab.id as any)}
+               className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full group ${
+                 isTabActive(tab.id) 
+                   ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') 
+                   : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')
+               }`}
+             >
+               <tab.icon 
+                 size={22} 
+                 strokeWidth={isTabActive(tab.id) ? 2.5 : 2} 
+                 className={`${isTabActive(tab.id) ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-700') : 'text-slate-400 group-hover:text-blue-500 transition-colors'}`}
+               />
+               <span className="text-sm font-bold font-noto">{tab.label}</span>
+             </button>
+           ))}
+        </nav>
+        <div className="p-4 border-t border-slate-800">
+           <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all w-full text-red-400 hover:bg-red-500/10">
+             <LogOut size={20} />
+             <span className="text-sm font-bold font-noto">লগ আউট</span>
+           </button>
+        </div>
+      </div>
+
+      <div className="flex-1 lg:ml-64 flex flex-col h-screen overflow-hidden bg-blue-50/50">
+        {/* Top Header */}
+        <header className="px-5 md:px-8 py-3 md:py-5 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-slate-100 z-40 sticky top-0">
+          <div className="flex items-center gap-3">
+            <div className="lg:hidden w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20">
+              <BookOpen size={20} />
+            </div>
+            <div>
+              <h1 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2 font-noto tracking-tight">
+                স্বাগতম, অভিভাবক 👋
+              </h1>
+              <p className="hidden md:block text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">আপনার সন্তানের সকল আপডেট জানুন</p>
+              <div className="md:hidden flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">লাইভ আপডেট</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 md:gap-3">
+            <button onClick={fetchData} className="p-2.5 md:p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all border border-slate-100 hover:border-blue-100 group">
+              <RefreshCw size={18} className={`${refreshing ? 'animate-spin' : ''} group-active:rotate-180 transition-transform`} />
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar px-5 md:px-8 pt-4 pb-44 md:pb-8">
+        {/* Date Display */}
+        {activeTab === 'home' && (
+          <div className="mb-4 animate-in fade-in duration-700">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft">
+                <Moon size={12} className="text-amber-500" />
+                <span className="text-[10px] md:text-xs font-black text-slate-700 font-noto whitespace-nowrap">
+                  {getHijriDate(new Date()).fullBn.split(',')[0]}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft">
+                <Calendar size={12} className="text-blue-500" />
+                <span className="text-[10px] md:text-xs font-black text-slate-700 font-noto whitespace-nowrap">
+                  {new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft">
+                <Sun size={12} className="text-emerald-500" />
+                <span className="text-[10px] md:text-xs font-black text-slate-700 font-noto whitespace-nowrap">
+                  {getBengaliDate(new Date()).fullBn.split(',')[0]}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Student Profile Card - Only on Home */}
+        {activeTab === 'home' && (
+          <div className="bg-white border border-slate-100 p-5 rounded-[2.5rem] flex items-center justify-between shadow-premium animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center gap-4 text-left">
+              <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center border border-blue-100 overflow-hidden">
+                {student?.photo_url ? (
+                  <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User size={28} className="text-blue-500" />
+                )}
+              </div>
+              <div>
+                <h2 className="font-black text-slate-900 text-base">{student?.student_name}</h2>
+                <p className="text-[10px] font-bold text-slate-500 flex items-center gap-2 uppercase">
+                  শ্রেণী: {student?.classes?.class_name || 'N/A'} <span className="w-1 h-1 bg-slate-300 rounded-full" /> আইডি: {student?.roll || 'N/A'}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <GraduationCap size={10} className="text-blue-600" />
+                  <span className="text-[9px] font-bold text-slate-400 truncate max-w-[120px]">{madrasah?.name || 'প্রতিষ্ঠানের নাম'}</span>
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setActiveTab('profile')} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20">
+              দেখুন <ChevronRight size={14} className="inline ml-1" />
+            </button>
+          </div>
+        )}
+
+        {/* Stats Grid - Only on Home */}
+        {activeTab === 'home' && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 animate-in fade-in slide-in-from-top-6 duration-700 delay-100">
+            {[
+              { id: 'attendance', icon: CheckCircle2, color: 'emerald', label: 'উপস্থিতি', value: `${stats.present}/${stats.total}`, sub: 'এই মাস' },
+              { id: 'results', icon: GraduationCap, color: 'blue', label: 'ফলাফল', value: stats.lastGpa, sub: 'সর্বশেষ' },
+              { id: 'fees', icon: CreditCard, color: 'orange', label: 'বকেয়া ফি', value: `৳${stats.pendingFees}`, sub: 'পরিশোধিত' },
+              { id: 'notices', icon: Bell, color: 'red', label: 'নোটিশ', value: notices.length.toString(), sub: 'সব তথ্য' },
+            ].map((stat, i) => (
+              <motion.div 
+                key={i} 
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setActiveTab(stat.id as any)}
+                className="bg-white border border-slate-100 p-5 rounded-[2rem] flex flex-col items-center text-center gap-3 cursor-pointer shadow-soft hover:shadow-premium hover:-translate-y-1 transition-all h-full"
+              >
+                <div className={`w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100`}>
+                  <stat.icon size={22} className={stat.id === 'attendance' ? 'text-emerald-500' : stat.id === 'results' ? 'text-blue-600' : stat.id === 'fees' ? 'text-orange-500' : 'text-red-500'} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{stat.label}</p>
+                  <p className="text-base font-black text-slate-900">{stat.value}</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em]">{stat.sub}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        <AnimatePresence mode="wait">
+          {activeTab === 'home' && (
+            <motion.div key="home" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8 mt-8 pb-4">
+              {/* Upcoming Events */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
+                    <Calendar size={14} className="text-blue-600" /> আসন্ন ইভেন্ট
+                  </h3>
+                  <button className="text-[10px] font-bold text-slate-400 uppercase">সব দেখুন</button>
+                </div>
+                <div className="space-y-3">
+                  {events.length > 0 ? events.map((event: any, i: number) => {
+                    const dateObj = new Date(event.event_date);
+                    const day = new Intl.DateTimeFormat('bn-BD', { day: 'numeric' }).format(dateObj);
+                    const month = new Intl.DateTimeFormat('bn-BD', { month: 'short' }).format(dateObj);
+                    
+                    return (
+                      <div key={i} className="bg-white border border-slate-100 p-4 rounded-3xl flex items-center gap-4 shadow-soft hover:shadow-premium transition-all duration-300 transform hover:scale-[1.02]">
+                        <div className="w-12 h-12 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-slate-200 overflow-hidden">
+                          <span className="text-xs font-black text-slate-900 leading-none mb-0.5">{day}</span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase">{month}</span>
+                        </div>
+                        <div className="flex-1 text-left">
+                          <h4 className="text-sm font-black text-slate-900">{event.title}</h4>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{event.event_type === 'holiday' ? 'ছুটি' : 'ইভেন্ট'}</p>
+                          <p className="text-[9px] font-bold text-slate-400 flex items-center gap-1">
+                            <Clock size={10} /> সারাদিন
+                          </p>
+                        </div>
+                        <div className={`w-1.5 h-1.5 rounded-full ${event.event_type === 'holiday' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                      </div>
+                    );
+                  }) : (
+                    <div className="bg-white/50 border border-dashed border-slate-200 p-6 rounded-3xl text-center text-[10px] text-slate-400 italic">
+                      নিকট ভবিষ্যতে কোনো ইভেন্ট নেই।
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent Activity */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
+                    <BarChart3 size={14} className="text-emerald-600" /> সাম্প্রতিক কার্যক্রম
+                  </h3>
+                  <button className="text-[10px] font-bold text-slate-400 uppercase">সব দেখুন</button>
+                </div>
+                <div className="space-y-3">
+                   {recentActivities.length > 0 ? recentActivities.map((item, i) => (
+                     <div key={i} className="bg-white/60 border border-slate-100 p-4 rounded-3xl flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-4 text-left">
+                           <div className={`w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 ${item.color === 'emerald' ? 'text-emerald-500' : item.color === 'blue' ? 'text-blue-600' : item.color === 'orange' ? 'text-orange-500' : item.color === 'red' ? 'text-red-500' : 'text-purple-500'}`}>
+                              <item.icon size={18} />
+                           </div>
+                           <div>
+                              <h4 className="text-xs font-black text-slate-900">{item.title}</h4>
+                              <p className="text-[10px] font-bold text-slate-400">{item.sub}</p>
+                           </div>
+                        </div>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest ${item.color === 'emerald' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                           {item.trail}
+                        </span>
+                     </div>
+                   )) : (
+                    <div className="bg-white/50 border border-dashed border-slate-200 p-6 rounded-3xl text-center text-xs text-slate-400 italic">
+                      কোনো সাম্প্রতিক কার্যক্রম নেই।
+                    </div>
+                   )}
+                </div>
+              </div>
+
+              {/* Performance Section */}
+              <div className="bg-white border border-slate-100 p-8 rounded-[2.5rem] relative overflow-hidden text-center shadow-premium backdrop-blur-xl">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl" />
+                <div className="relative z-10">
+                   <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-blue-100">
+                      <div className="relative">
+                        <GraduationCap size={32} className="text-blue-600" />
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
+                           <Trophy size={11} className="text-white" />
+                        </div>
+                      </div>
+                   </div>
+                   <h3 className="text-lg font-black text-slate-900 mb-1 font-noto">দারুন চলছে!</h3>
+                   <p className="text-[11px] font-bold text-slate-400 leading-relaxed max-w-[200px] mx-auto mb-8 font-noto">{student?.student_name} অনেক ভালো করছে। তাকে আরও উৎসাহিত করুন।</p>
+                   
+                    <div className="flex items-center justify-around">
+                       <div className="relative w-24 h-24">
+                          <svg className="w-full h-full transform -rotate-90">
+                             <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100" />
+                             <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={251} strokeDashoffset={251 - (251 * performanceRate) / 100} className="text-emerald-500" strokeLinecap="round" />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                             <span className="text-xl font-black text-slate-900 tracking-tight">{performanceRate}%</span>
+                             <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">পারফরম্যান্স</span>
+                          </div>
+                       </div>
+                       <div className="text-left space-y-4">
+                          <div className="space-y-0.5">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> শ্রেণীতে অবস্থান</p>
+                             <p className="text-base font-black text-slate-900 pl-3"><span className="text-emerald-500">{student?.roll || '--'}</span> / {classTotal || '--'}</p>
+                          </div>
+                          <div className="space-y-0.5">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-600" /> উপস্থিতির হার</p>
+                             <p className="text-base font-black text-slate-900 pl-3">{attendanceRate}%</p>
+                          </div>
+                       </div>
+                    </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'attendance' && (
+            <motion.div key="attendance" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+               <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-black text-slate-900 font-noto">উপস্থিতি</h2>
+                  <div className="bg-white px-4 py-2 rounded-xl flex items-center gap-3 border border-slate-200 shadow-sm">
+                     <button 
+                       onClick={() => {
+                         if (viewMonth === 0) {
+                           setViewMonth(11);
+                           setViewYear(viewYear - 1);
+                         } else {
+                           setViewMonth(viewMonth - 1);
+                         }
+                       }}
+                       className="p-1 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
+                     >
+                       <ChevronLeft size={16} />
+                     </button>
+                     <div className="flex items-center gap-2">
+                        <Calendar size={14} className="text-blue-600" />
+                        <span className="text-xs font-black text-slate-900 w-24 text-center">
+                          {new Intl.DateTimeFormat('bn-BD', { month: 'long', year: 'numeric' }).format(new Date(viewYear, viewMonth))}
+                        </span>
+                     </div>
+                     <button 
+                       onClick={() => {
+                         if (viewMonth === 11) {
+                           setViewMonth(0);
+                           setViewYear(viewYear + 1);
+                         } else {
+                           setViewMonth(viewMonth + 1);
+                         }
+                       }}
+                       className="p-1 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
+                     >
+                       <ChevronRight size={16} />
+                     </button>
+                  </div>
+               </div>
+
+               {/* Summary Cards */}
+               <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 space-y-10 shadow-premium">
+                  <div className="grid grid-cols-3 gap-2">
+                     <div className="text-center group">
+                        <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-emerald-100 group-hover:scale-110 transition-transform">
+                           <CheckCircle2 size={28} />
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">উপস্থিত</p>
+                        <p className="text-lg font-black text-slate-900">{stats.present} <span className="text-xs text-slate-400 font-bold ml-1">দিন</span></p>
+                     </div>
+                     <div className="text-center group">
+                        <div className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-red-100 group-hover:scale-110 transition-transform">
+                           <XCircle size={28} />
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">অনুপস্থিত</p>
+                        <p className="text-lg font-black text-slate-900">{stats.absent} <span className="text-xs text-slate-400 font-bold ml-1">দিন</span></p>
+                     </div>
+                     <div className="text-center group">
+                        <div className="w-14 h-14 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-orange-100 group-hover:scale-110 transition-transform">
+                           <Clock size={28} />
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">দেরি</p>
+                        <p className="text-lg font-black text-slate-900">{stats.late} <span className="text-xs text-slate-400 font-bold ml-1">দিন</span></p>
+                     </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                     <div className="flex justify-between items-end mb-1 px-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">উপস্থিতির হার</p>
+                        <p className="text-2xl font-black text-emerald-600">
+                          {attendanceRate}%
+                        </p>
+                     </div>
+                     <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 rounded-full shadow-[0_0_15px] shadow-emerald-500/20 relative transition-all duration-1000" 
+                          style={{ width: `${attendanceRate}%` }}
+                        >
+                           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+                        </div>
+                     </div>
+                     <button onClick={fetchData} className="text-[9px] font-bold text-slate-400 flex items-center gap-1.5 pt-2 hover:text-blue-600 transition-colors">
+                        <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} /> তথ্য রিফ্রেশ করুন
+                     </button>
+                  </div>
+               </div>
+
+               {/* Filters */}
+               <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                  {[
+                    { id: 'all', label: 'সব দেখুন' },
+                    { id: 'present', label: 'উপস্থিত' },
+                    { id: 'absent', label: 'অনুপস্থিত' },
+                    { id: 'late', label: 'দেরি' }
+                  ].map((f) => (
+                    <button 
+                      key={f.id} 
+                      onClick={() => setAttendanceFilter(f.id as any)}
+                      className={`whitespace-nowrap px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${attendanceFilter === f.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white border-slate-200 text-slate-400'}`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+               </div>
+
+               {/* Calendar Grid */}
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+                  <div className="grid grid-cols-7 gap-y-4 text-center mb-6">
+                     {['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'].map((d, i) => (
+                        <span key={i} className={`text-[11px] font-bold ${i === 5 || i === 6 ? 'text-red-500 uppercase font-black' : 'text-slate-400 uppercase tracking-widest'}`}>{d}</span>
+                     ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-y-4 text-center">
+                     {(() => {
+                       const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
+                       const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+                       const days = [];
+                       
+                       // Pad previous month
+                       for (let i = 0; i < firstDayOfMonth; i++) {
+                         days.push(<div key={`pad-${i}`} className="text-slate-100 text-xs font-bold h-10 w-10 flex items-center justify-center">--</div>);
+                       }
+                       
+                       // Current month days
+                       for (let day = 1; day <= daysInMonth; day++) {
+                         const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                         const att = attendance.find(a => a.date.startsWith(dateStr));
+                         const isSelected = selectedDate.getDate() === day && selectedDate.getMonth() === viewMonth && selectedDate.getFullYear() === viewYear;
+                         const isToday = today.getDate() === day && today.getMonth() === viewMonth && today.getFullYear() === viewYear;
+                         
+                         days.push(
+                           <button 
+                             key={day} 
+                             onClick={() => setSelectedDate(new Date(viewYear, viewMonth, day))}
+                             className="group relative flex flex-col items-center justify-center h-10 w-10 mx-auto"
+                           >
+                             <div className={`absolute inset-0 transition-all duration-300 rounded-full ${isSelected ? 'bg-blue-600 shadow-lg scale-110' : isToday ? 'border-2 border-blue-600 scale-100' : 'group-hover:bg-slate-50'}`} />
+                             <span className={`relative text-xs font-black transition-colors ${isSelected ? 'text-white' : isToday ? 'text-blue-600' : 'text-slate-900'}`}>
+                                {day.toLocaleString('bn-BD')}
+                             </span>
+                             {att && !isSelected && (attendanceFilter === 'all' || att.status === attendanceFilter) && (
+                               <div className={`absolute bottom-1 w-1 h-1 rounded-full ${att.status === 'present' ? 'bg-emerald-500' : att.status === 'absent' ? 'bg-red-500' : 'bg-orange-500'}`} />
+                             )}
+                           </button>
+                         );
+                       }
+                       return days;
+                     })()}
+                  </div>
+               </div>
+
+               {/* History List */}
+               <div className="space-y-4">
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
+                     <HistoryIcon size={16} className="text-blue-600" /> বিস্তারিত তালিকা ({filteredAttendance.length})
+                  </h3>
+                  {filteredAttendance.length > 0 ? (
+                    <div className="space-y-3">
+                       {filteredAttendance.slice(0, 10).map((att, i) => (
+                          <motion.div 
+                            key={att.id} 
+                            initial={{ opacity: 0, y: 10 }} 
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            onClick={() => {
+                              setSelectedDate(new Date(att.date));
+                              setViewMonth(new Date(att.date).getMonth());
+                              setViewYear(new Date(att.date).getFullYear());
+                            }}
+                            className="bg-white border border-slate-100 p-4 rounded-3xl flex items-center justify-between shadow-sm hover:border-blue-200 transition-colors cursor-pointer group"
+                          >
+                             <div className="flex items-center gap-4 text-left">
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border ${att.status === 'present' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : att.status === 'absent' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-orange-50 text-orange-500 border-orange-100'}`}>
+                                   {att.status === 'present' ? <CheckCircle2 size={18} /> : att.status === 'absent' ? <XCircle size={18} /> : <Clock size={18} />}
+                                </div>
+                                <div className="space-y-0.5">
+                                   <p className="text-sm font-black text-slate-900 group-hover:text-blue-600 transition-colors">
+                                     {new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(att.date))}
+                                   </p>
+                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                     {new Intl.DateTimeFormat('bn-BD', { weekday: 'long' }).format(new Date(att.date))} {att.check_in ? `• ${new Date(`2000-01-01T${att.check_in}`).toLocaleTimeString('bn-BD', { hour: 'numeric', minute: '2-digit' })}` : ''}
+                                   </p>
+                                </div>
+                             </div>
+                             <div className="flex items-center gap-3">
+                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${att.status === 'present' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : att.status === 'absent' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-orange-50 text-orange-500 border-orange-100'}`}>
+                                   {att.status === 'present' ? 'উপস্থিত' : att.status === 'absent' ? 'অনুপস্থিত' : 'দেরি'}
+                                </span>
+                                <ChevronRight size={14} className="text-slate-300 group-hover:text-blue-400 transition-colors" />
+                             </div>
+                          </motion.div>
+                       ))}
+                       {filteredAttendance.length > 10 && (
+                         <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest pt-2">পেছনের আরও রেকর্ড ক্যালেন্ডারে দেখুন</p>
+                       )}
+                    </div>
+                  ) : (
+                    <div className="bg-white/50 border border-dashed border-slate-200 p-8 rounded-[2.5rem] text-center text-xs text-slate-400 font-noto">
+                      এই ফিল্টারে কোনো রেকর্ড পাওয়া যায়নি।
+                    </div>
+                  )}
+               </div>
+
+               {/* Selected Day Details */}
+               <div className="bg-white border border-slate-100 p-6 rounded-[2.5rem] space-y-6 shadow-premium">
+                  {(() => {
+                    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+                    const att = attendance.find(a => a.date.startsWith(dateStr));
+                    
+                    return (
+                      <>
+                        <div className="flex items-center justify-between">
+                           <div className="flex items-center gap-4 text-left">
+                              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${att?.status === 'present' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : att?.status === 'absent' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                 {att?.status === 'present' ? <CheckCircle2 size={28} /> : att?.status === 'absent' ? <XCircle size={28} /> : <Calendar size={28} />}
+                              </div>
+                              <div>
+                                 <h4 className="text-lg font-black text-slate-900 font-noto">
+                                   {new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }).format(selectedDate)}
+                                 </h4>
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                                   {new Intl.DateTimeFormat('bn-BD', { weekday: 'long' }).format(selectedDate)}
+                                 </p>
+                              </div>
+                           </div>
+                           <span className={`text-[11px] font-black uppercase tracking-widest ${att?.status === 'present' ? 'text-emerald-500' : att?.status === 'absent' ? 'text-red-500' : 'text-slate-300'}`}>
+                             {att?.status === 'present' ? 'উপস্থিত' : att?.status === 'absent' ? 'অনুপস্থিত' : att?.status === 'late' ? 'দেরি' : 'N/A'}
+                           </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-100">
+                           <div className="flex items-center gap-4 group">
+                              <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-colors">
+                                 <Clock size={20} />
+                              </div>
+                              <div className="text-left">
+                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">সময়</p>
+                                 <p className="text-sm font-black text-slate-900">{att?.check_in ? new Date(`2000-01-01T${att.check_in}`).toLocaleTimeString('bn-BD', { hour: 'numeric', minute: '2-digit' }) : '—'}</p>
+                              </div>
+                           </div>
+                           <div className="flex items-center gap-4 group">
+                              <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-purple-600 transition-colors">
+                                 <MessageSquare size={20} />
+                              </div>
+                              <div className="text-left">
+                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">নোট</p>
+                                 <p className="text-sm font-black text-slate-900">{att?.note || 'নেই'}</p>
+                              </div>
+                           </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+               </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'results' && (
+            <motion.div key="results" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
+              {results.length === 0 ? (
+                <div className="bg-white p-12 rounded-[2.5rem] border border-slate-100 text-center space-y-5 shadow-bubble/50">
+                   <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.3rem] flex items-center justify-center mx-auto border border-blue-100">
+                      <GraduationCap size={32} />
+                   </div>
+                   <div className="space-y-1">
+                      <h3 className="text-xl font-black text-slate-900 font-noto">কোনো পরীক্ষার ফলাফল নেই</h3>
+                      <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto leading-relaxed font-noto">এই শিক্ষার্থীর জন্য এখনো কোনো পরীক্ষার ফলাফল প্রকাশ করা হয়নি। অনুগ্রহ করে মাদ্রাসা বা স্কুল কর্তৃপক্ষের সাথে যোগাযোগ করুন।</p>
+                   </div>
+                   <button onClick={fetchData} className="bg-blue-50 text-blue-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 border border-blue-100 shadow-sm active:scale-95 transition-all outline-none">
+                      <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> রিফ্রেশ করুন
+                   </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                  <div className="text-left">
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight font-noto">ফলাফল</h2>
+                    <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1.5 mt-0.5 tracking-widest uppercase">
+                       <BarChart3 size={12} /> GPA: {currentExam?.gpa || '--'}
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <button 
+                      onClick={() => {
+                        if (results.length > 1) {
+                          setShowExamDropdown(!showExamDropdown);
+                        }
+                      }}
+                      className={`bg-white px-4 py-2.5 rounded-xl flex items-center gap-2 border shadow-sm transition-all ${
+                        showExamDropdown ? 'border-blue-500 ring-2 ring-blue-50/55' : 'border-slate-200 hover:border-slate-300'
+                      } ${results.length > 1 ? 'cursor-pointer' : 'cursor-default'}`}
+                    >
+                       <Calendar size={14} className="text-blue-600" />
+                       <span className="text-xs font-black text-slate-900">{currentExam?.name || 'পরীক্ষা নির্বাচন করুন'}</span>
+                       {results.length > 1 && (
+                         <ChevronDown size={14} className={`text-slate-500 transition-transform duration-200 ${showExamDropdown ? 'rotate-180' : ''}`} />
+                       )}
+                    </button>
+
+                    {showExamDropdown && results.length > 1 && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowExamDropdown(false)} />
+                        <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl py-2.5 z-50 animate-in fade-in-50 slide-in-from-top-1" onClick={(e) => e.stopPropagation()}>
+                          <div className="px-4 py-2 border-b border-slate-50 mb-1">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-noto">পরীক্ষা নির্বাচন করুন</span>
+                          </div>
+                          <div className="max-h-60 overflow-y-auto">
+                            {results.map((exam) => (
+                              <button
+                                key={exam.id}
+                                onClick={() => {
+                                  setSelectedExamId(exam.id);
+                                  setShowExamDropdown(false);
+                                }}
+                                className={`w-full text-left px-4 py-3 text-xs font-bold font-noto flex items-center justify-between transition-colors ${
+                                  (selectedExamId === exam.id || (!selectedExamId && results[0]?.id === exam.id))
+                                    ? 'bg-blue-50/80 text-blue-600' 
+                                    : 'text-slate-700 hover:bg-slate-50'
+                                }`}
+                              >
+                                <span className="truncate pr-2">{exam.name}</span>
+                                {(selectedExamId === exam.id || (!selectedExamId && results[0]?.id === exam.id)) && (
+                                  <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+               </div>
+
+               {/* Result Master Card */}
+               <div className="bg-white p-5 rounded-[2rem] border border-slate-100 grid grid-cols-3 gap-4 items-center shadow-premium relative overflow-hidden backdrop-blur-xl">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl" />
+                  <div className="text-center space-y-1 z-10">
+                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">সর্বমোট গ্রেড</p>
+                     <div className="relative inline-block mt-1">
+                        <span className="text-5xl font-black text-emerald-600 leading-none tracking-tight">
+                          {currentExam?.gpa_grade || '--'}
+                        </span>
+                        <div className="absolute -top-1 -right-3 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                           <span className="text-[8px] text-white">★</span>
+                        </div>
+                     </div>
+                  </div>
+                  
+                  <div className="text-center space-y-4 border-l border-slate-100 px-3 z-10">
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">মোট নম্বর</p>
+                        <p className="text-base font-black text-slate-900">
+                          {currentExam?.marks.reduce((s, m) => s + (m.obtained || 0), 0) || 0} 
+                          <span className="text-[10px] text-slate-300 font-bold ml-1">
+                            / {currentExam?.marks.reduce((s, m) => s + (m.full || 0), 0) || 0}
+                          </span>
+                        </p>
+                     </div>
+                     <div className="space-y-1">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">শতকরা</p>
+                        <p className="text-base font-black text-emerald-600">
+                          {currentExam ? Math.round((currentExam.marks.reduce((s, m) => s + (m.obtained || 0), 0) / currentExam.marks.reduce((s, m) => s + (m.full || 0), 0)) * 100) : 0}%
+                        </p>
+                     </div>
+                  </div>
+
+                  <div className="text-center space-y-2 border-l border-slate-100 z-10">
+                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">শ্রেণীতে অবস্থান</p>
+                     <div className="w-10 h-10 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto border border-orange-100 shadow-sm">
+                        <Trophy size={16} />
+                     </div>
+                     <div className="pt-1">
+                        <p className="text-xl font-black text-slate-900 tracking-widest">{currentExam?.position || '--'}</p>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">
+                          {currentExam?.position && currentExam.position !== '--' ? 'মেধাক্রম' : 'হিসাবকৃত নয়'}
+                        </p>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Subject Table */}
+               <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-premium">
+                  <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                     <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
+                        <BookOpen size={16} className="text-blue-600" /> বিষয়ভিত্তিক ফলাফল
+                     </h3>
+                     <button onClick={fetchData} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 border border-blue-100 shadow-sm transition-all active:scale-95">
+                        <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} /> রিফ্রেশ
+                     </button>
+                  </div>
+                  <div className="p-5 space-y-5">
+                     <div className="flex justify-between text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] mb-1 px-1">
+                        <span>বিষয়</span>
+                        <div className="flex gap-4 md:gap-7 pr-1">
+                           <span>নম্বর</span>
+                           <span>জিপিএ</span>
+                           <span>গ্রেড</span>
+                        </div>
+                     </div>
+                     {currentExam?.marks.map((sub, i) => (
+                        <div key={i} className="group">
+                           <div className="flex items-center justify-between relative">
+                              <div className="flex items-center gap-3">
+                                 <div className="space-y-1 text-left">
+                                    <h4 className="text-xs font-black text-slate-900 capitalize tracking-wide">{sub.subject || 'অজানা বিষয়'}</h4>
+                                    <div className="w-28 md:w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                                       <motion.div 
+                                         initial={{ width: 0 }}
+                                         animate={{ width: `${(sub.obtained / (sub.full || 100)) * 100}%` }}
+                                         transition={{ duration: 1, delay: i * 0.1 }}
+                                         className="h-full bg-blue-600 rounded-full" 
+                                       />
+                                    </div>
+                                 </div>
+                              </div>
+                              <div className="flex items-center gap-2 md:gap-5">
+                                 <p className="text-[11px] font-black text-slate-900 tracking-tight w-12 text-right">
+                                    <span className="text-blue-600">{sub.obtained}</span> 
+                                    <span className="text-[8px] text-slate-300 font-bold ml-0.5">/ {sub.full || 100}</span>
+                                 </p>
+                                 <div className="w-8 h-6 rounded-lg bg-blue-50/50 border border-blue-100 flex items-center justify-center shadow-sm cursor-help" title="জিপিএ">
+                                    <span className="text-[10px] font-black text-blue-700">
+                                      {sub.obtained < sub.pass ? '0.00' : (sub.gpa || '0.00')}
+                                    </span>
+                                 </div>
+                                 <div className={`w-8 h-6 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shadow-sm cursor-help`}>
+                                    <span className={`text-[10px] font-black ${sub.obtained < sub.pass ? 'text-red-500' : 'text-emerald-500'}`}>
+                                      {sub.obtained < sub.pass ? 'F' : (sub.grade || 'A-')}
+                                    </span>
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+
+               {/* Summary Widgets */}
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white p-5 rounded-[2rem] border border-slate-100 flex flex-col items-center gap-4 shadow-premium">
+                     <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] w-full text-left">ফলাফলের সারসংক্ষেপ</h4>
+                     <div className="flex items-center gap-5">
+                        <div className="relative w-20 h-20">
+                           <svg className="w-full h-full transform -rotate-90">
+                              <circle cx="40" cy="40" r="32" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-slate-50" />
+                              <circle cx="40" cy="40" r="32" stroke="currentColor" strokeWidth="10" fill="transparent" strokeDasharray={200} strokeDashoffset={50} className="text-emerald-500" strokeLinecap="round" />
+                              <circle cx="40" cy="40" r="32" stroke="currentColor" strokeWidth="10" fill="transparent" strokeDasharray={200} strokeDashoffset={150} className="text-orange-500" strokeLinecap="round" />
+                           </svg>
+                           <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-xl font-black text-slate-900">{currentExam?.marks.length || 0}</span>
+                              <span className="text-[6px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">বিষয়সমূহ</span>
+                           </div>
+                        </div>
+                        <div className="space-y-1.5 text-left">
+                           <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-sm" /> 
+                              <span className="text-[9px] font-black text-slate-400 tracking-widest uppercase">Passed: {currentExam?.marks.filter(m => m.obtained >= m.pass).length}</span>
+                           </div>
+                           <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-red-500 rounded-full shadow-sm" /> 
+                              <span className="text-[9px] font-black text-slate-400 tracking-widest uppercase">Failed: {currentExam?.marks.filter(m => m.obtained < m.pass).length}</span>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+                  
+                  <div className="bg-white p-5 rounded-[2rem] border border-slate-100 flex flex-col justify-between shadow-premium min-h-[140px]">
+                     <div className="flex items-center justify-between mb-3">
+                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600 border border-blue-100 shadow-sm">
+                           <MessageSquare size={16} />
+                        </div>
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">শিক্ষকের মন্তব্য</span>
+                     </div>
+                     <p className="text-[11px] font-bold text-slate-600 italic leading-relaxed text-left font-noto flex-grow my-2">{currentExam?.remarks || 'এই মুহূর্তে কোনো মন্তব্য নেই।'}</p>
+                     <div className="pt-3 mt-auto border-t border-slate-100 flex items-center justify-between opacity-60">
+                        <div className="flex flex-col text-left">
+                           <span className="text-[8px] font-black text-slate-900 font-noto">--</span>
+                           <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest font-noto">শ্রেণী শিক্ষক</span>
+                        </div>
+                        <div className="w-1.5 h-1.5 bg-blue-100 rounded-full" />
+                     </div>
+                  </div>
+               </div>
+               
+               {/* Action Buttons */}
+               <div className="pt-4">
+                  <button 
+                    onClick={async () => {
+                      if (!currentExam || !student || !madrasah) return;
+                      try {
+                        const marks = currentExam.marks.map((m: any) => ({
+                          subject_name: m.subject,
+                          full_marks: m.full,
+                          pass_marks: m.pass,
+                          marks_obtained: m.obtained,
+                          grade: m.grade,
+                          grade_point: m.gpa
+                        }));
+                        const examInfo = {
+                          exam_name: currentExam.name,
+                          exam_date: currentExam.date,
+                          position: currentExam.position || '--',
+                          gpa: currentExam.gpa,
+                          gpa_grade: currentExam.gpa_grade,
+                          total_marks: currentExam.total_marks,
+                          total_full: currentExam.total_full,
+                          remarks: currentExam.remarks
+                        };
+                        await generateResultPDF(student, examInfo, marks, madrasah, lang === 'bn' ? 'bn' : 'en');
+                      } catch (err) {
+                        console.error('Error generating PDF:', err);
+                      }
+                    }}
+                    className="w-full bg-emerald-50 border border-emerald-100 p-5 rounded-[2rem] flex items-center justify-center gap-4 group hover:bg-emerald-100 transition-all shadow-sm active:scale-95 cursor-pointer"
+                  >
+                     <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
+                        <Download size={20} />
+                     </div>
+                     <div className="text-left font-noto">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ডাউনলোড</p>
+                        <p className="text-xs font-black text-slate-900">রিপোর্ট কার্ড (মার্কশীট)</p>
+                     </div>
+                  </button>
+               </div>
+               </>
+             )}
+            </motion.div>
+          )}
+
+          {activeTab === 'profile' && (
+            <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 pb-20">
+               {/* Hero Header Card */}
+               <div className="text-center p-12 bg-white rounded-[3.5rem] border border-slate-100 relative shadow-premium overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/10 via-indigo-500/5 to-transparent pointer-events-none" />
+                  <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl" />
+                  
+                  <div className="relative inline-block mt-4 mb-8">
+                    <div className="w-40 h-40 bg-white rounded-[3.5rem] p-1.5 shadow-2xl border border-slate-100">
+                      {student?.photo_url ? (
+                         <img src={student.photo_url} alt="" className="w-full h-full object-cover rounded-[3.2rem]" />
+                      ) : (
+                         <div className="w-full h-full bg-slate-50 flex items-center justify-center rounded-[3.2rem]">
+                            <User size={64} className="text-slate-300" />
+                         </div>
+                      )}
+                    </div>
+                    <motion.div 
+                      initial={{ scale: 0, rotate: -45 }} 
+                      animate={{ scale: 1, rotate: 0 }} 
+                      className="absolute -bottom-2 -right-2 bg-emerald-500 p-3.5 rounded-2xl border-[6px] border-white shadow-xl text-white"
+                    >
+                      <CheckCircle2 size={24} />
+                    </motion.div>
+                  </div>
+
+                  <h3 className="text-3xl font-black text-slate-900 mb-2 font-noto tracking-tight">{student?.student_name}</h3>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                     <span className="px-5 py-2 bg-blue-50 text-blue-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-blue-100/50 font-noto">
+                       শ্রেণী: {student?.classes?.class_name || 'N/A'}
+                     </span>
+                     <span className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-indigo-100/50 font-noto">
+                       রেজিষ্ট্রেশন নম্বর: {student?.registration_number || '---'}
+                     </span>
+                  </div>
+               </div>
+
+               {/* Information Sections */}
+               <div className="grid gap-6">
+                 
+                 {/* Basic Info Container */}
+                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-premium space-y-6">
+                   <div className="flex items-center gap-4 mb-2">
+                     <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                       <User size={20} />
+                     </div>
+                     <h4 className="text-lg font-black text-slate-800 font-noto">ব্যক্তিগত তথ্য</h4>
+                   </div>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                     {[
+                       { label: 'রোল নম্বর', value: student?.roll || '---', icon: Hash, color: 'text-orange-500' },
+                       { label: 'রেজিস্ট্রেশন নং', value: student?.registration_number || '---', icon: CreditCard, color: 'text-indigo-500' },
+                       { label: 'জন্ম তারিখ', value: student?.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : '---', icon: Calendar, color: 'text-emerald-500' },
+                       { label: 'রক্তের গ্রুপ', value: student?.blood_group || '---', icon: Heart, color: 'text-red-500' },
+                       { label: 'ছাত্রের ধরণ', value: student?.student_type === 'boarding' ? 'আবাসিক' : student?.student_type === 'day_scholar' ? 'অনাবাসিক' : student?.student_type || '---', icon: Info, color: 'text-blue-500' },
+                       { label: 'বিভাগ', value: student?.department || 'সাধারণ', icon: BookOpen, color: 'text-purple-500' },
+                     ].map((item, i) => (
+                       <div key={i} className="flex items-center gap-4 group">
+                         <div className={`w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center ${item.color} group-hover:bg-white transition-colors border border-transparent group-hover:border-slate-100`}>
+                           <item.icon size={22} />
+                         </div>
+                         <div className="text-left font-noto">
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</p>
+                           <p className="text-sm font-bold text-slate-900">{item.value}</p>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+
+                 {/* Family Info Container */}
+                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-premium space-y-6">
+                   <div className="flex items-center gap-4 mb-2">
+                     <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                       <Shield size={20} />
+                     </div>
+                     <h4 className="text-lg font-black text-slate-800 font-noto">অভিভাবকের তথ্য</h4>
+                   </div>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                     {[
+                       { label: 'পিতা/অভিভাবক', value: student?.guardian_name || '---', icon: User, color: 'text-blue-600' },
+                       { label: 'মাতার নাম', value: student?.mother_name || '---', icon: User, color: 'text-pink-500' },
+                       { label: 'জরুরী ফোন', value: student?.guardian_phone || '---', icon: Phone, color: 'text-indigo-600' },
+                       { label: 'বিকল্প ফোন', value: student?.guardian_phone_2 || '---', icon: Smartphone, color: 'text-emerald-600' },
+                     ].map((item, i) => (
+                       <div key={i} className="flex items-center gap-4">
+                         <div className={`w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center ${item.color}`}>
+                           <item.icon size={22} />
+                         </div>
+                         <div className="text-left font-noto">
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</p>
+                           <p className="text-sm font-bold text-slate-900 leading-tight">
+                             {item.value}
+                           </p>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+
+                 {/* Address Info */}
+                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-premium space-y-6">
+                   <div className="flex items-center gap-4 mb-2">
+                     <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                       <MapPin size={20} />
+                     </div>
+                     <h4 className="text-lg font-black text-slate-800 font-noto">ঠিকানা</h4>
+                   </div>
+                   
+                   <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 font-noto">
+                     <p className="text-sm font-medium text-slate-600 leading-relaxed">
+                       {student?.address || 'ঠিকানা পাওয়া যায়নি। প্রতিষ্ঠানের অফিস থেকে এটি আপডেট করা যাবে।'}
+                     </p>
+                   </div>
+                 </div>
+
+                 {/* Academic Notes if any */}
+                 {student?.notes && (
+                    <div className="bg-amber-50 p-8 rounded-[3rem] border border-amber-100 shadow-soft space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                          <FileText size={20} />
+                        </div>
+                        <h4 className="text-lg font-black text-amber-900 font-noto">শিক্ষক নোট</h4>
+                      </div>
+                      <p className="text-sm font-medium text-amber-800 leading-relaxed bg-white/50 p-6 rounded-2xl border border-amber-200/50 italic">
+                        "{student.notes}"
+                      </p>
+                    </div>
+                 )}
+
+               </div>
+
+               {/* Logout Button */}
+               <motion.button 
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleLogout} 
+                  className="w-full p-8 bg-red-50 border border-red-100 rounded-[3rem] flex items-center justify-between text-red-600 hover:bg-red-100 transition-all shadow-sm group"
+               >
+                  <div className="flex items-center gap-5 text-left font-noto">
+                     <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center border border-red-100 shadow-sm text-red-600 group-hover:scale-110 transition-transform">
+                        <LogOut size={24} />
+                     </div>
+                     <div className="text-left">
+                        <span className="block font-black text-sm uppercase tracking-widest">লগআউট করুন</span>
+                        <span className="block text-[10px] font-bold text-red-400 tracking-[0.2em] mt-1 uppercase">সেশন ডিলিট হয়ে যাবে</span>
+                     </div>
+                  </div>
+                  <ChevronRight size={24} />
+               </motion.button>
+               
+               <div className="flex flex-col items-center gap-1 pt-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em]">Deenora App</span>
+                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                  </div>
+                  <p className="text-[8px] font-bold text-slate-300 uppercase tracking-[0.2em]">Build v26.06.2023</p>
+               </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'fees' && (() => {
+            const currentMonthStr = new Date().toISOString().substring(0, 7);
+            const currentYearStr = currentMonthStr.substring(0, 4);
+
+            const feePaid = totalPaid;
+            const feeTotal = stats.totalPayable;
+            const feeDue = feeStats.pendingFees;
+
+            const paidPercentage = feeTotal > 0 ? Math.round((feePaid / feeTotal) * 100) : 0;
+            const duePercentage = feeTotal > 0 ? Math.round((feeDue / feeTotal) * 100) : 0;
+
+            const monthNamesBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+            
+            const allInstallments = Array.from({ length: 12 }, (_, i) => {
+              const m = String(i + 1).padStart(2, '0');
+              const monthStr = `${currentYearStr}-${m}`;
+              
+              const monthFees = fees.filter(f => f.month === monthStr);
+              const paidAmtTotal = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+
+              const monthPayable = feeStructures.reduce((sum, s) => {
+                const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+                const isEnabled = setting ? setting.is_enabled : true;
+                const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
+                const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
+                const isBeforeYearStart = academicYearStart && monthStr < academicYearStart.slice(0, 7);
+                
+                const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+                return (isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart) ? sum + amountToCharge : sum;
+              }, 0);
+
+              let status = 'unpaid';
+              if (monthPayable > 0) {
+                if (paidAmtTotal >= monthPayable) status = 'paid';
+                else if (paidAmtTotal > 0) status = 'partial';
+                else status = 'unpaid';
+              } else if (paidAmtTotal > 0) {
+                status = 'paid';
+              } else {
+                status = 'no_fee';
+              }
+
+              return {
+                index: i + 1,
+                month: monthStr,
+                nameBn: monthNamesBn[i],
+                status: status,
+                amount: monthPayable,
+                paidAmount: paidAmtTotal,
+                dueDate: `১০ ${monthNamesBn[i]} ${currentYearStr.replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d)])}`
+              };
+            });
+
+            // Summary stats for installments
+            const paidInstallments = allInstallments.filter(inst => inst.status === 'paid').length;
+            const dueInstallments = allInstallments.filter(inst => inst.status === 'unpaid' || inst.status === 'partial').length;
+            const totalInstallments = 12;
+
+            const formatMonth = (monthStr: string) => {
+              if (!monthStr || !monthStr.includes('-')) return monthStr;
+              const [y, m] = monthStr.split('-');
+              const mIndex = parseInt(m, 10) - 1;
+              if (mIndex >= 0 && mIndex < 12) {
+                 return `${monthNamesBn[mIndex]} ${y.replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d)])}`;
+              }
+              return monthStr;
+            };
+
+            const formatDay = (monthStr: string) => {
+              if (!monthStr || !monthStr.includes('-')) return monthStr;
+              const [y, m] = monthStr.split('-');
+              const mIndex = parseInt(m, 10) - 1;
+              if (mIndex >= 0 && mIndex < 12) {
+                 return `১০ ${monthNamesBn[mIndex]} ${y.replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d)])}`;
+              }
+              return monthStr;
+            };
+
+            return (
+            <motion.div key="fees" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+              
+              {/* Header with Session dropdown mockup */}
+              <div className="flex justify-between items-center mb-4 mx-1">
+                <h2 className="text-xl font-black text-slate-900 font-noto tracking-tight">ফি</h2>
+                <button className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm text-sm font-bold text-slate-700">
+                  <Calendar size={16} /> সেশন ২০২৫-২৬ <ChevronRight size={16} className="rotate-90 ml-2" />
+                </button>
+              </div>
+
+              {/* 4 Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Total Fees */}
+                <div className="bg-emerald-50/50 p-5 rounded-3xl border border-emerald-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Wallet size={16} /></div>
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide">প্রদেয় ফি</span>
+                  </div>
+                  <h3 className="text-2xl font-black text-emerald-600 mb-1">৳{feeTotal.toLocaleString('bn-BD')}</h3>
+                  <p className="text-[11px] font-medium text-slate-500">এই সেশনে</p>
+                </div>
+
+                {/* Paid Amount */}
+                <div className="bg-blue-50/50 p-5 rounded-3xl border border-blue-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><WalletCards size={16} /></div>
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide">পরিশোধিত</span>
+                  </div>
+                  <h3 className="text-2xl font-black text-blue-600 mb-1">৳{feePaid.toLocaleString('bn-BD')}</h3>
+                  <p className="text-[11px] font-medium text-slate-500">{paidPercentage}% পরিশোধিত</p>
+                </div>
+
+                {/* Due Amount */}
+                <div className="bg-orange-50/50 p-5 rounded-3xl border border-orange-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-500"><WalletCards size={16} /></div>
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide">বকেয়া</span>
+                  </div>
+                  <h3 className="text-2xl font-black text-orange-500 mb-1">৳{feeDue.toLocaleString('bn-BD')}</h3>
+                  <p className="text-[11px] font-medium text-slate-500">{duePercentage}% বকেয়া</p>
+                </div>
+
+                {/* Total Installments */}
+                <div className="bg-purple-50/50 p-5 rounded-3xl border border-purple-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><ReceiptText size={16} /></div>
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide">মোট মাস</span>
+                  </div>
+                  <h3 className="text-2xl font-black text-purple-600 mb-1">{totalInstallments}</h3>
+                  <p className="text-[11px] font-medium text-slate-500">{paidInstallments} পরিশোধ, {dueInstallments} বকেয়া</p>
+                </div>
+              </div>
+
+              {/* Installment Details Section */}
+              <div className="bg-white rounded-[2rem] border border-slate-100 shadow-premium p-6 overflow-hidden">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600"><ReceiptText size={16} /></div>
+                    <h3 className="font-bold text-slate-900 text-lg">ফি বিবরন</h3>
+                  </div>
+                  <button className="text-purple-600 text-sm font-medium hover:underline flex items-center gap-1">
+                    ফি স্ট্রাকচার দেখুন <ChevronRight size={16} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                  {allInstallments.map((inst, i) => {
+                    const isPaid = inst.status === 'paid';
+                    return (
+                      <div key={i} className={`p-4 rounded-3xl border transition-all flex flex-col gap-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-md ${isPaid ? 'bg-emerald-50/30 border-emerald-100/50' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center flex-wrap gap-1 mb-1">
+                              <span className={`text-xs font-black tracking-tight ${isPaid ? 'text-emerald-700' : 'text-slate-700'}`}>{inst.nameBn}</span>
+                            </div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                              <span className={`w-1.5 h-1.5 flex-shrink-0 rounded-full ${isPaid ? 'bg-emerald-400' : 'bg-orange-400'}`} />
+                              {isPaid ? 'পরিশোধিত' : 'বকেয়া'}
+                            </span>
+                          </div>
+                          
+                          {isPaid ? (
+                            <div className="inline-flex flex-shrink-0 items-center justify-center w-6 h-6 rounded-full border border-emerald-200 text-emerald-500 bg-emerald-50 shadow-sm">
+                              <CheckCircle2 size={14} />
+                            </div>
+                          ) : null}
+                        </div>
+                        
+                        <div className={`flex flex-col p-3 rounded-2xl mt-1 ${isPaid ? 'bg-emerald-500/5 border border-emerald-500/10' : 'bg-white border border-slate-200'} transition-all`}>
+                            <div className="flex flex-wrap justify-between items-center gap-1 mb-1">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:block">পরিমাণ (৳)</p>
+                                {isPaid ? (
+                                    <span className="text-[8px] font-black text-emerald-600 bg-emerald-100/50 px-2 py-0.5 rounded-full">পরিশোধিত</span>
+                                ) : (
+                                    <span className="text-[8px] font-black text-orange-600 bg-orange-100/50 px-2 py-0.5 rounded-full">বকেয়া</span>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap justify-between items-center gap-2 mt-1">
+                                <h3 className={`font-black text-base flex-shrink-0 ${isPaid ? 'text-emerald-700' : 'text-slate-800'}`}>
+                                  ৳{isPaid ? inst.amount.toLocaleString('bn-BD') : (inst.amount - (inst.paidAmount || 0)).toLocaleString('bn-BD')}
+                                </h3>
+                                {!isPaid && (
+                                    <button className="px-3 py-1.5 bg-[#4F46E5]/10 text-[#4F46E5] hover:bg-[#4F46E5]/20 transition-colors text-[10px] font-bold rounded-lg whitespace-nowrap active:scale-95">
+                                        পে
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+
+              {/* Transactions and Summary Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Recent Transactions */}
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-slate-900 text-lg">সাম্প্রতিক লেনদেন</h3>
+                    <button className="text-purple-600 text-sm font-medium hover:underline">সব দেখুন</button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {fees.length > 0 ? fees.slice(0, 3).map((fee, idx) => {
+                      const feeAmount = fee.status === 'paid' ? (fee.amount_paid || fee.amount_due || 0) : (fee.amount_due || 0);
+                      return (
+                      <div key={idx} className="flex items-center justify-between pb-4 border-b border-slate-50 last:border-0 last:pb-0">
+                        <div className="flex items-center gap-3 text-left">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-600`}>
+                             {fee.status === 'paid' ? <Download size={16} /> : <FileText size={16} className="text-orange-500" />}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900">
+                                {(() => {
+                                    // Try to identify specific fee name if it's stored in the fee record description or category
+                                    // Or match based on context. 
+                                    const feeRec: any = fee;
+                                    if (feeRec.fee_name) return feeRec.fee_name;
+                                    if (feeRec.category && feeRec.category !== 'Fee' && feeRec.category !== 'ফি') return feeRec.category;
+
+                                    const monthStr = fee.month;
+                                    if (!monthStr) return fee.status === 'paid' ? 'পেমেন্ট গৃহীত' : 'বকেয়া যুক্ত';
+                                    
+                                    const activeStructures = feeStructures.filter(s => {
+                                        const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+                                        const isEnabled = setting ? setting.is_enabled : true;
+                                        
+                                        // Check if this month matches the start/end dates of the structure
+                                        const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
+                                        const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
+                                        const isBeforeYearStart = academicYearStart && monthStr < academicYearStart.slice(0, 7);
+                                        
+                                        return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart;
+                                    });
+                                    
+                                    if (activeStructures.length > 0) {
+                                        // If we have specific payment data, try to match by amount
+                                        const totalAmt = (Number(fee.amount_paid) || 0) + (Number(fee.discount) || 0);
+                                        const matchingByAmount = activeStructures.filter(s => {
+                                            const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+                                            const amount = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+                                            return amount === totalAmt;
+                                        });
+
+                                        if (matchingByAmount.length > 0) {
+                                            return matchingByAmount.map(s => s.fee_name).join(', ');
+                                        }
+
+                                        return activeStructures.map(s => s.fee_name).join(', ');
+                                    }
+                                    
+                                    return fee.status === 'paid' ? 'পেমেন্ট গৃহীত' : 'বকেয়া যুক্ত';
+                                })()}
+                            </h4>
+                            <p className="text-xs text-slate-500 font-medium">
+                              {formatMonth(fee.month)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-slate-500 font-medium mb-1">{formatDay(fee.month)}</p>
+                          <p className={`text-sm font-bold ${fee.status === 'paid' ? 'text-emerald-600' : 'text-orange-500'}`}>
+                             {fee.status === 'paid' ? '+' : '-'}৳{feeAmount.toLocaleString('bn-BD')}
+                          </p>
+                        </div>
+                      </div>
+                    )}) : (
+                      <div className="text-center italic text-slate-400 text-sm py-4">কোনো লেনদেন নেই</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Fee Summary */}
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-6 flex flex-col">
+                  <h3 className="font-bold text-slate-900 text-lg mb-6 text-left">ফি সারাংশ</h3>
+                  
+                  <div className="flex-grow flex flex-col items-center justify-center relative -mt-4">
+                    <div className="relative w-40 h-40">
+                      <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                        <circle cx="50" cy="50" r="40" stroke="#f1f5f9" strokeWidth="12" fill="transparent" />
+                        {feeTotal > 0 && (
+                          <>
+                            <circle cx="50" cy="50" r="40" stroke="#10b981" strokeWidth="12" fill="transparent" 
+                                    strokeDasharray={`${(feePaid/feeTotal)*251} 251`} strokeLinecap="round" />
+                            <circle cx="50" cy="50" r="40" stroke="#f97316" strokeWidth="12" fill="transparent" 
+                                    strokeDasharray={`${(feeDue/feeTotal)*251} 251`} strokeDashoffset={-((feePaid/feeTotal)*251)} strokeLinecap="round" />
+                          </>
+                        )}
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-lg font-black text-slate-900 border-b border-slate-200 pb-1 mb-1 shadow-sm px-2">৳{feePaid.toLocaleString('bn-BD')}</span>
+                        <span className="text-[10px] font-bold text-slate-500">পরিশোধিত</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full space-y-3 mt-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                          <span className="text-sm text-slate-600 font-medium">পরিশোধিত</span>
+                        </div>
+                        <span className="text-sm font-medium text-slate-600 font-noto">৳{feePaid.toLocaleString('bn-BD')} ({paidPercentage}%)</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                          <span className="text-sm text-slate-600 font-medium">বকেয়া</span>
+                        </div>
+                        <span className="text-sm font-medium text-slate-600 font-noto">৳{feeDue.toLocaleString('bn-BD')} ({duePercentage}%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Support Banner */}
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                <div className="flex items-center gap-4 text-left">
+                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-purple-600 shadow-sm border border-purple-100">
+                    <Wallet size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900 mb-1">পেমেন্ট নিয়ে সাহায্য প্রয়োজন?</h4>
+                    <p className="text-sm text-slate-600">আপনি ইনভয়েস ডাউনলোড করতে পারেন অথবা অফিসের সাথে যোগাযোগ করতে পারেন।</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-purple-600 border border-purple-200 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-50 transition-colors shadow-sm">
+                    <Download size={16} /> ইনভয়েস ডাউনলোড
+                  </button>
+                  <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-purple-600 border border-purple-200 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-50 transition-colors shadow-sm">
+                    <PhoneCall size={16} /> অফিসে যোগাযোগ
+                  </button>
+                </div>
+              </div>
+
+            </motion.div>
+            );
+          })()}
+
+          {activeTab === 'notices' && (
+            <motion.div key="notices" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 pb-20">
+              <div className="flex flex-col gap-6">
+                <div className="text-center sm:text-left">
+                  <h2 className="text-2xl font-black text-slate-900 font-noto tracking-tight">তথ্য ও যোগাযোগ</h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 font-noto">মাদরাসার সকল আপডেট এখানে পাবেন</p>
+                </div>
+                
+                <div className="flex bg-slate-100/50 p-1 rounded-2xl gap-1 overflow-x-auto no-scrollbar self-center sm:self-start border border-slate-100">
+                  {[
+                    { id: 'notice', label: 'নোটিশ', icon: Bell },
+                    { id: 'diary', label: 'ডায়েরি', icon: BookOpen },
+                    { id: 'syllabus', label: 'সিলেবাস', icon: FileText }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveNoticeTab(tab.id as any)}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                        activeNoticeTab === tab.id 
+                          ? 'bg-white text-blue-600 shadow-soft border border-blue-50/50' 
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <tab.icon size={14} />
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {(() => {
+                const filtered = notices.filter(n => {
+                  const studentClass = student?.classes?.class_name?.toLowerCase() || '___';
+                  const msgClass = n.class_name?.toLowerCase() || '';
+
+                  if (activeNoticeTab === 'notice') {
+                    return msgClass === 'app_notice' || msgClass === 'app_holiday' || msgClass === 'app_ptm' || msgClass === 'all' || n.class_name === 'সকলের জন্য';
+                  }
+                  if (activeNoticeTab === 'diary') {
+                    const isDiaryType = msgClass === 'app_diary' || !msgClass.startsWith('app_');
+                    const isForMyClass = msgClass === studentClass || msgClass === 'all' || n.message?.toLowerCase().includes(studentClass);
+                    return isDiaryType && isForMyClass;
+                  }
+                  if (activeNoticeTab === 'syllabus') {
+                    return msgClass === `app_syllabus_${studentClass}`;
+                  }
+                  return false;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="bg-white/50 border border-dashed border-slate-200 p-12 rounded-[3rem] text-center space-y-4">
+                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border border-slate-100">
+                        <Bell size={40} className="text-slate-300" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-400 font-noto">এই ক্যাটাগরিতে কোনো তথ্য পাওয়া যায়নি।</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid gap-5">
+                    {filtered.map((notice, i) => (
+                      <motion.div 
+                        key={notice.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="bg-white border border-slate-100 p-5 md:p-8 rounded-[3rem] shadow-premium relative overflow-hidden group hover:border-blue-200 hover:shadow-bubble transition-all duration-500"
+                      >
+                        <div className={`absolute top-0 right-0 w-48 h-48 rounded-full blur-[80px] -mr-20 -mt-20 opacity-10 transition-colors ${
+                          notice.class_name === 'APP_HOLIDAY' ? 'bg-emerald-500' : 
+                          notice.class_name === 'APP_PTM' ? 'bg-purple-500' : 
+                          activeNoticeTab === 'diary' ? 'bg-blue-500' : 'bg-blue-500'
+                        }`} />
+                        
+                        <div className="flex flex-row items-center gap-3 md:gap-4 text-left relative z-10 w-full pb-3 border-b border-slate-50">
+                          <div className={`w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center border shadow-sm shrink-0 transition-transform group-hover:scale-105 ${
+                            notice.class_name === 'APP_HOLIDAY' ? 'bg-emerald-50 border-emerald-100 text-emerald-500' : 
+                            notice.class_name === 'APP_PTM' ? 'bg-purple-50 border-purple-100 text-purple-500' : 
+                            'bg-blue-50 border-blue-100 text-blue-600'
+                          }`}>
+                            {notice.class_name === 'APP_HOLIDAY' ? <Calendar size={20} /> : 
+                             notice.class_name === 'APP_PTM' ? <Users size={20} /> : 
+                             activeNoticeTab === 'diary' ? <BookOpen size={20} /> : <MessageSquare size={20} />}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                              {activeNoticeTab !== 'diary' && (
+                                <span className={`text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                                  notice.class_name === 'APP_HOLIDAY' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 
+                                  notice.class_name === 'APP_PTM' ? 'bg-purple-50 border-purple-100 text-purple-600' : 
+                                  'bg-blue-100/50 border-blue-200 text-blue-700'
+                                }`}>
+                                  {notice.class_name === 'APP_HOLIDAY' ? 'ছুটি' : 
+                                   notice.class_name === 'APP_PTM' ? 'মিটিং' : 
+                                   notice.class_name === 'all' ? 'সকলের জন্য' : 'সাধারণ'}
+                                </span>
+                              )}
+                              <h3 className="text-sm md:text-xl font-black text-slate-900 leading-tight font-noto tracking-tight flex-1 truncate">{notice.title}</h3>
+                              <span className="text-[9px] font-bold text-slate-400 font-noto whitespace-nowrap ml-auto">
+                                {new Date(notice.created_at).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Message content */}
+                        <div className="w-full pt-3">
+                        {(() => {
+                          try {
+                            const parsed = JSON.parse(notice.message);
+                            return (
+                              <div className="space-y-3">
+                                {parsed.desc && <p className="text-xs md:text-sm text-slate-600 leading-relaxed font-noto">{parsed.desc}</p>}
+                                
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {parsed.activities && (
+                                    <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100/50 group-hover:bg-white transition-colors">
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
+                                          <BookOpen size={10} />
+                                        </div>
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ক্লাসের কাজ</p>
+                                      </div>
+                                      <p className="text-[11px] md:text-xs text-slate-700 leading-snug whitespace-pre-wrap font-noto">{parsed.activities}</p>
+                                    </div>
+                                  )}
+                                  {parsed.homework && (
+                                    <div className="bg-blue-50/20 p-3 rounded-2xl border border-blue-100/20 group-hover:bg-white transition-colors">
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-500">
+                                          <Smartphone size={10} />
+                                        </div>
+                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest">বাড়ির কাজ</p>
+                                      </div>
+                                      <p className="text-[11px] md:text-xs text-blue-800/80 leading-snug whitespace-pre-wrap font-noto">{parsed.homework}</p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {parsed.subjects && (
+                                  <div className="bg-purple-50/20 rounded-2xl border border-purple-100/20 overflow-hidden group-hover:bg-white transition-colors">
+                                    <div className="overflow-x-auto no-scrollbar">
+                                      <table className="w-full text-[10px] md:text-xs min-w-[250px]">
+                                        <thead className="bg-purple-100/30 text-purple-900 font-black tracking-widest uppercase">
+                                          <tr>
+                                            <th className="py-1.5 px-3 text-left font-noto">বিষয়</th>
+                                            <th className="py-1.5 px-3 text-left font-noto">বিস্তারিত</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-purple-100/10">
+                                          {parsed.subjects.map((s, idx) => (
+                                            <tr key={idx} className="hover:bg-purple-50/20 transition-colors">
+                                              <td className="py-1.5 px-3 font-bold text-purple-900 font-noto whitespace-nowrap">{s.subject}</td>
+                                              <td className="py-1.5 px-3 text-slate-600 font-noto leading-tight">{s.details}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } catch (e) {
+                            return <p className="text-xs md:text-sm text-slate-600 leading-relaxed font-noto">{notice.message}</p>;
+                          }
+                        })()}
+                        </div>
+
+                        {notice.sender_name && (
+                          <div className="pt-3 flex items-center gap-2 mt-2">
+                            <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest font-noto">
+                              প্রেরক: <span className="text-slate-400">{notice.sender_name}</span>
+                            </span>
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      {/* Modern Bottom Navigation */}
+      <div className="fixed md:hidden bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[200]">
+        <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble flex justify-around items-center px-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+          {[
+            { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড' },
+            { id: 'attendance', icon: Calendar, label: 'হাজিরা' },
+            { id: 'results', icon: GraduationCap, label: 'পরীক্ষা' },
+            { id: 'fees', icon: CreditCard, label: 'ফি' },
+            { id: 'notices', icon: Bell, label: 'নোটিশ' },
+            { id: 'profile', icon: User, label: 'প্রোফাইল' }
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${
+                isTabActive(item.id) 
+                  ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') 
+                  : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')
+              }`}
+            >
+              <item.icon 
+                size={22} 
+                strokeWidth={isTabActive(item.id) ? 3 : 2} 
+                className="transition-all duration-300"
+              />
+              <span className="text-[9px] font-black font-noto opacity-80 whitespace-nowrap">
+                {item.label}
+              </span>
+              {isTabActive(item.id) && (
+                <motion.div 
+                  layoutId="nav-indicator"
+                  className="absolute -bottom-1 w-1 h-1 bg-current rounded-full"
+                />
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+      </div>
+      </div>
+    </motion.div>
+    )}
+  </AnimatePresence>
+  );
+};
+
+export default ParentPortal;
