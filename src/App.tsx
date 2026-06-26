@@ -880,7 +880,7 @@ const App: React.FC = () => {
       </Suspense>
 
       {/* Global Update Popup */}
-      {showUpdatePopup && globalUpdate && profile?.role && profile.role !== 'parent' && createPortal(
+      {showUpdatePopup && globalUpdate && profile?.role && (profile.role === 'madrasah_admin' || profile.role === 'super_admin') && createPortal(
         <div className="modal-overlay bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-500 z-[110]">
           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-50'} w-full max-w-sm rounded-[3rem] p-8 text-center shadow-2xl border animate-in zoom-in-95 duration-500 relative overflow-hidden`}>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-600"></div>
