@@ -28,7 +28,8 @@ const localT = {
   goal100: { en: '100% Goal', bn: '১০০% লক্ষ্য' },
   progress: { en: 'Progress', bn: 'অগ্রগতি' },
   active: { en: 'Active', bn: 'সক্রিয়' },
-  totalExpense: { en: 'Total Expense', bn: 'মোট খরচ' },
+  totalExpense: { en: 'Total Expense', bn: 'মোট ব্যয়' },
+  totalIncome: { en: 'Total Income', bn: 'মোট আয়' },
   monthlyOutflow: { en: 'Monthly Outflow', bn: 'মাসিক ব্যয়' },
   netIncome: { en: 'Net Income', bn: 'নিট আয়' },
   remainingBalance: { en: 'Remaining Balance', bn: 'অবশিষ্ট ব্যালেন্স' },
@@ -216,11 +217,16 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       let totalExpected = 0;
       let totalCollected = 0;
       let totalExpense = 0;
+      let totalIncome = 0;
 
-      // Calculate Expenses
+      // Calculate Expenses and Total Income
       ledger?.forEach(l => {
-        if (l.type === 'expense' && isDateInRange(l.transaction_date)) {
-          totalExpense += l.amount;
+        if (isDateInRange(l.transaction_date)) {
+          if (l.type === 'expense') {
+            totalExpense += l.amount;
+          } else if (l.type === 'income') {
+            totalIncome += l.amount;
+          }
         }
       });
 
@@ -351,7 +357,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         expected_income: totalExpected,
         prediction: totalCollected,
         total_expense: totalExpense,
-        net_income: totalCollected - totalExpense,
+        total_income: totalIncome,
+        net_income: totalIncome - totalExpense,
         collection_rate: totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : 0
       });
 
@@ -738,7 +745,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       </div>
 
       {/* Stats Cards - Responsive Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {/* Expected Income */}
         <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
           <div className="flex items-center justify-between mb-4">
@@ -756,15 +763,15 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
           </div>
         </div>
 
-        {/* Predicted Collection */}
+        {/* Predicted Collection (Student Fees) */}
         <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
           <div className="flex items-center justify-between mb-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
-              <TrendingUp size={24} />
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-500'}`}>
+              <Download size={24} />
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{viewMode === 'yearly' ? localT.totalCollected[lang] : t('predicted_total', lang)}</p>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.prediction?.toLocaleString('bn-BD')}</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'সংগৃহীত ফি' : 'Collected Fees'}</p>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.prediction?.toLocaleString('bn-BD')}</h3>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -774,10 +781,27 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             </div>
             <div className={`h-2 w-full rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
               <div 
-                className="h-full bg-emerald-500 transition-all duration-1000" 
+                className="h-full bg-blue-500 transition-all duration-1000" 
                 style={{ width: `${Math.min(100, (stats?.prediction / stats?.expected_income) * 100)}%` }}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Total Income (All) */}
+        <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-5 rounded-3xl border shadow-bubble hover:shadow-md transition-all group`}>
+          <div className="flex items-center justify-between mb-4">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
+              <TrendingUp size={24} />
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{localT.totalIncome[lang]}</p>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.total_income?.toLocaleString('bn-BD')}</h3>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+            <span>{lang === 'bn' ? 'মোট আয়' : 'Total In'}</span>
+            <span className="text-emerald-500 font-black">LIVE</span>
           </div>
         </div>
 

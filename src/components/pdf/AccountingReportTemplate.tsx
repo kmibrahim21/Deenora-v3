@@ -8,6 +8,7 @@ interface AccountingReportProps {
     expected_income: number;
     prediction: number;
     total_expense: number;
+    total_income: number;
     net_income: number;
     collection_rate: string | number;
   };
@@ -23,7 +24,8 @@ export const AccountingReportTemplate: React.FC<AccountingReportProps> = ({ madr
     summary: isBangla ? 'সারসংক্ষেপ' : 'Summary',
     expected: isBangla ? 'প্রত্যাশিত ফি' : 'Expected Fee',
     collected: isBangla ? 'সংগৃহীত ফি' : 'Collected Fee',
-    expense: isBangla ? 'মোট খরচ' : 'Total Expense',
+    totalIncome: isBangla ? 'মোট আয়' : 'Total Income',
+    expense: isBangla ? 'মোট ব্যয়' : 'Total Expense',
     net: isBangla ? 'নিট আয়' : 'Net Income',
     rate: isBangla ? 'সংগ্রহের হার' : 'Collection Rate',
     breakdown: isBangla ? 'ফি ব্রেকডাউন' : 'Fee Breakdown',
@@ -70,25 +72,33 @@ export const AccountingReportTemplate: React.FC<AccountingReportProps> = ({ madr
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.expected}</p>
-           <p className="text-lg font-black text-blue-600">৳{stats.expected_income?.toLocaleString('bn-BD')}</p>
-        </div>
-        <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-           <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">{t.collected}</p>
-           <p className="text-lg font-black text-emerald-600">৳{stats.prediction?.toLocaleString('bn-BD')}</p>
-        </div>
-        <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
-           <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">{t.expense}</p>
-           <p className="text-lg font-black text-red-600">৳{stats.total_expense?.toLocaleString('bn-BD')}</p>
-        </div>
-        <div className={`p-4 rounded-2xl border ${stats.net_income >= 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-orange-50 border-orange-100'}`}>
-           <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${stats.net_income >= 0 ? 'text-indigo-400' : 'text-orange-400'}`}>{t.net}</p>
-           <p className={`text-lg font-black ${stats.net_income >= 0 ? 'text-indigo-600' : 'text-orange-600'}`}>৳{stats.net_income?.toLocaleString('bn-BD')}</p>
-        </div>
-      </div>
+  {/* Summary Cards */}
+  <div className="grid grid-cols-2 gap-4 mb-8">
+    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.expected}</p>
+       <p className="text-lg font-black text-blue-600">৳{stats.expected_income?.toLocaleString('bn-BD')}</p>
+    </div>
+    <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
+       <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">{t.collected}</p>
+       <p className="text-lg font-black text-blue-600">৳{stats.prediction?.toLocaleString('bn-BD')}</p>
+    </div>
+    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+       <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">{t.totalIncome}</p>
+       <p className="text-lg font-black text-emerald-600">৳{stats.total_income?.toLocaleString('bn-BD')}</p>
+    </div>
+    <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
+       <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">{t.expense}</p>
+       <p className="text-lg font-black text-red-600">৳{stats.total_expense?.toLocaleString('bn-BD')}</p>
+    </div>
+    <div className={`p-4 rounded-2xl border ${stats.net_income >= 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-orange-50 border-orange-100'}`}>
+       <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${stats.net_income >= 0 ? 'text-indigo-400' : 'text-orange-400'}`}>{t.net}</p>
+       <p className={`text-lg font-black ${stats.net_income >= 0 ? 'text-indigo-600' : 'text-orange-600'}`}>৳{stats.net_income?.toLocaleString('bn-BD')}</p>
+    </div>
+    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.rate}</p>
+       <p className="text-lg font-black text-slate-600">{stats.collection_rate}%</p>
+    </div>
+  </div>
 
       {/* Breakdown Table */}
       <div className="mb-8">
