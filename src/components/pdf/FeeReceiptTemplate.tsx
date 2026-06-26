@@ -5,11 +5,13 @@ interface FeeReceiptProps {
   month: string;
   madrasah: any;
   lang: 'en' | 'bn';
+  receiptId?: string;
 }
 
-export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, madrasah, lang }) => {
+export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, madrasah, lang, receiptId: propReceiptId }) => {
   const isBangla = lang === 'bn';
   const config = madrasah?.config_json || {};
+  const receiptId = React.useMemo(() => propReceiptId || `#REC-${Date.now().toString().slice(-6)}`, [propReceiptId]);
   const t = {
     title: isBangla ? 'ফি পেমেন্ট মানি রিসিট' : 'FEE PAYMENT RECEIPT',
     receiptNo: isBangla ? 'রিসিট নং' : 'Receipt No',
@@ -78,7 +80,7 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
         <div className="flex justify-between items-center mb-1 px-0.5 relative z-10">
           <div className="flex items-center gap-1.5">
             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{t.receiptNo}:</span>
-            <span className="text-[10px] font-black text-[#1E3A8A]">#REC-{Date.now().toString().slice(-6)}</span>
+            <span className="text-[10px] font-black text-[#1E3A8A]">{receiptId}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{t.date}:</span>

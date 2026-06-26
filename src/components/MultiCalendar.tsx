@@ -209,25 +209,7 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
     const endDate = endOfWeek(monthEnd);
 
     const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5]; // Default Friday
-    const dayNamesBn = [
-      "রবিবার",
-      "সোমবার",
-      "মঙ্গলবার",
-      "বুধবার",
-      "বৃহস্পতিবার",
-      "শুক্রবার",
-      "শনিবার",
-    ];
-    const dayNamesEn = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
-
+    
     const rows = [];
     let days = [];
     let day = startDate;
@@ -329,10 +311,13 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
                     }`}
                   >
                     {event.title}
-                    {event.class_id &&
+                    {event.class_ids && event.class_ids.length > 0 ? (
+                      ` • ${classes.filter(c => event.class_ids?.includes(c.id)).map(c => c.class_name).join(', ')}`
+                    ) : event.class_id &&
                       classes.find((c) => c.id === event.class_id)
-                        ?.class_name &&
-                      ` • ${classes.find((c) => c.id === event.class_id)?.class_name}`}
+                        ?.class_name ? (
+                      ` • ${classes.find((c) => c.id === event.class_id)?.class_name}`
+                    ) : null}
                   </div>
                 );
               })}
@@ -582,13 +567,17 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
                                    ` - ${format(new Date(event.end_date), "d MMM yyyy")}`}
                                </p>
                              </div>
-                             {targetClass && (
+                             {((event.class_ids && event.class_ids.length > 0) || targetClass) && (
                                 <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full ${isDark ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "bg-indigo-50 text-indigo-700 border border-indigo-100"}`}>
                                    <span className="w-1 h-1 rounded-full bg-current animate-pulse" />
-                                   <span className="text-[9px] font-black uppercase tracking-widest">{targetClass.class_name}</span>
+                                   <span className="text-[9px] font-black uppercase tracking-widest">
+                                      {event.class_ids && event.class_ids.length > 0 
+                                        ? classes.filter(c => event.class_ids?.includes(c.id)).map(c => c.class_name).join(', ')
+                                        : targetClass?.class_name}
+                                   </span>
                                 </div>
                              )}
-                             {!targetClass && (
+                             {!(event.class_ids && event.class_ids.length > 0) && !targetClass && (
                                 <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full ${isDark ? "bg-slate-700 text-slate-400" : "bg-slate-50 text-slate-500"}`}>
                                    <span className="text-[9px] font-black uppercase tracking-widest">{lang === 'bn' ? 'সকল ক্লাস' : 'All Classes'}</span>
                                 </div>
@@ -725,10 +714,20 @@ const EventModal: React.FC<{
       eventToEdit?.event_date ||
       format(date, "yyyy-MM-dd"),
   );
-  const [classId, setClassId] = useState<string>(eventToEdit?.class_id || "");
+  const [classIds, setClassIds] = useState<string[]>(
+    eventToEdit?.class_ids || (eventToEdit?.class_id ? [eventToEdit.class_id] : []),
+  );
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(false);
   const isDark = madrasah?.theme === "dark";
+
+  const toggleClassId = (id: string) => {
+    if (classIds.includes(id)) {
+      setClassIds(classIds.filter((cid) => cid !== id));
+    } else {
+      setClassIds([...classIds, id]);
+    }
+  };
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -772,7 +771,8 @@ const EventModal: React.FC<{
             event_date: format(start, "yyyy-MM-dd"),
             end_date: format(end, "yyyy-MM-dd"),
             event_type: type,
-            class_id: classId || null,
+            class_id: classIds.length === 1 ? classIds[0] : null,
+            class_ids: classIds.length > 0 ? classIds : null,
           })
           .eq("id", eventToEdit.id)
           .eq("institution_id", institutionId);
@@ -780,11 +780,12 @@ const EventModal: React.FC<{
         if (
           updateError &&
           (updateError.message.includes("end_date") ||
-            updateError.message.includes("class_id"))
+            updateError.message.includes("class_id") ||
+            updateError.message.includes("class_ids"))
         ) {
           alert(
             lang === "bn"
-              ? "ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_add_class_id_to_calendar_events.sql এবং migration_add_calendar_end_date.sql স্ক্রিপ্টটি রান করুন।"
+              ? "ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_add_multiple_classes_to_calendar.sql স্ক্রিপ্টটি রান করুন।"
               : "Database update required: Please run the required migration scripts in your Supabase SQL Editor.",
           );
           setLoading(false);
@@ -799,18 +800,20 @@ const EventModal: React.FC<{
             event_date: format(start, "yyyy-MM-dd"),
             end_date: format(end, "yyyy-MM-dd"),
             event_type: type,
-            class_id: classId || null,
+            class_id: classIds.length === 1 ? classIds[0] : null,
+            class_ids: classIds.length > 0 ? classIds : null,
             created_at: new Date().toISOString(),
           });
 
         if (
           insertError &&
           (insertError.message.includes("end_date") ||
-            insertError.message.includes("class_id"))
+            insertError.message.includes("class_id") ||
+            insertError.message.includes("class_ids"))
         ) {
           alert(
             lang === "bn"
-              ? "ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_add_class_id_to_calendar_events.sql এবং migration_add_calendar_end_date.sql স্ক্রিপ্টটি রান করুন।"
+              ? "ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_add_multiple_classes_to_calendar.sql স্ক্রিপ্টটি রান করুন।"
               : "Database update required: Please run the required migration scripts in your Supabase SQL Editor.",
           );
           setLoading(false);
@@ -914,32 +917,50 @@ const EventModal: React.FC<{
 
             {classes.length > 0 && (
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block px-1">
-                  {lang === "bn"
-                    ? "সংশ্লিষ্ট ক্লাস (ঐচ্ছিক)"
-                    : "Target Class (Optional)"}
-                </label>
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                    {lang === "bn"
+                      ? "সংশ্লিষ্ট ক্লাস নির্বাচন করুন"
+                      : "Select Target Classes"}
+                  </label>
+                  <div className="flex gap-2">
+                     <button
+                        type="button"
+                        onClick={() => setClassIds(classes.map(c => c.id))}
+                        className="text-[9px] font-black uppercase text-blue-600 hover:text-blue-700"
+                     >
+                        {lang === 'bn' ? 'সবগুলো' : 'Select All'}
+                     </button>
+                     <button
+                        type="button"
+                        onClick={() => setClassIds([])}
+                        className="text-[9px] font-black uppercase text-red-600 hover:text-red-700"
+                     >
+                        {lang === 'bn' ? 'মুছে ফেলুন' : 'Clear'}
+                     </button>
+                  </div>
+                </div>
                 <div className="flex flex-wrap gap-2 px-1 max-h-40 overflow-y-auto custom-scrollbar">
                   <button
                     type="button"
-                    onClick={() => setClassId("")}
+                    onClick={() => setClassIds([])}
                     className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      classId === ""
+                      classIds.length === 0
                         ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20 border border-indigo-600"
                         : isDark
                           ? "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700"
                           : "bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900 border border-slate-100"
                     }`}
                   >
-                    {lang === "bn" ? "সকল ক্লাস" : "All Classes"}
+                    {lang === "bn" ? "সাধারণ ইভেন্ট (সবার জন্য)" : "General Event (All Classes)"}
                   </button>
                   {classes.map((cls) => (
                     <button
                       type="button"
                       key={cls.id}
-                      onClick={() => setClassId(cls.id)}
+                      onClick={() => toggleClassId(cls.id)}
                       className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                        classId === cls.id
+                        classIds.includes(cls.id)
                           ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20 border border-indigo-600"
                           : isDark
                             ? "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700"

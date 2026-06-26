@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save, Camera } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
+import { SupabaseWrapper } from 'services/supabaseWrapper';
 import { requestManager } from 'services/RequestManager';
 import { CacheService } from 'services/cacheService';
 import { t } from 'translations';
@@ -84,6 +85,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState(student.notes || '');
+
+  useEffect(() => {
+    setEditedNotes(student.notes || '');
+  }, [student.id, student.notes]);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [libraryIssues, setLibraryIssues] = useState<any[]>([]);
   
@@ -128,28 +133,34 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const handleSaveNotes = async () => {
     setIsSavingNotes(true);
     try {
-      const { error } = await supabase
-        .from('students')
-        .update({ notes: editedNotes })
-        .eq('id', student.id);
+      await SupabaseWrapper.safeUpdate('students', student.id, { notes: editedNotes });
       
-      if (error) {
-        if (error.message.includes('column "notes"')) {
-            alert("Database Error: 'notes' column is missing from 'students' table. Please run this in Supabase SQL Editor: ALTER TABLE students ADD COLUMN notes TEXT;");
-        } else {
-            throw error;
-        }
+      if (onStudentUpdate) {
+        onStudentUpdate({ ...student, notes: editedNotes });
       } else {
-         student.notes = editedNotes;
-         setIsEditingNotes(false);
-         // Invalidate Pattern
-         if (madrasah) {
-           requestManager.invalidatePattern('fetch:students:');
-         }
-         if (triggerRefresh) triggerRefresh();
+        student.notes = editedNotes;
       }
+      setIsEditingNotes(false);
+      
+      // Invalidate Pattern
+      if (madrasah) {
+        requestManager.invalidatePattern('fetch:students:');
+        // Update local cache to prevent stale data on refresh
+        CacheService.getCachedData('students', madrasah.id).then(cached => {
+          if (Array.isArray(cached)) {
+            const updated = cached.map((s: any) => s.id === student.id ? { ...s, notes: editedNotes } : s);
+            CacheService.cacheData('students', madrasah.id, updated);
+          }
+        }).catch(() => {});
+      }
+      if (triggerRefresh) triggerRefresh();
     } catch (err: any) {
-      alert(err.message);
+      console.error('Error saving notes:', err);
+      if (err.message?.includes('column "notes"')) {
+        alert("Database Error: 'notes' column is missing from 'students' table. Please run this in Supabase SQL Editor: ALTER TABLE students ADD COLUMN notes TEXT;");
+      } else {
+        alert(err.message || 'Error saving notes');
+      }
     } finally {
       setIsSavingNotes(false);
     }

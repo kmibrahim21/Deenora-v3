@@ -222,6 +222,27 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       
       let events = getEventsForDate(new Date(date), customEvents || []);
       
+      // Filter events by selected class
+      if (selectedClass && selectedClass.id !== 'all') {
+          events = events.filter(e => {
+              // Islamic holidays and weekly holidays are global
+              if (e.id === 'weekly-holiday' || e.type === 'islamic' || e.event_type === 'islamic') return true;
+              
+              // If it's a custom event, check class restrictions
+              const classId = e.class_id;
+              const classIds = e.class_ids;
+              
+              // Global events (no class restriction)
+              if (!classId && (!classIds || classIds.length === 0)) return true;
+              
+              // Class specific events
+              if (classId === selectedClass.id) return true;
+              if (classIds && classIds.includes(selectedClass.id)) return true;
+              
+              return false;
+          });
+      }
+      
       // Check for weekly holiday
       const weeklyHolidays = madrasah.config_json?.weekly_holidays || [5]; // Default Friday
       const dayIndex = new Date(date).getDay();

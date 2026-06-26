@@ -516,6 +516,7 @@ export interface CalendarEvent {
   event_date: string; // YYYY-MM-DD
   end_date?: string; // YYYY-MM-DD
   class_id?: string;
+  class_ids?: string[];
   event_type: 'islamic' | 'madrasah' | 'holiday' | 'closed';
   created_at: string;
 }

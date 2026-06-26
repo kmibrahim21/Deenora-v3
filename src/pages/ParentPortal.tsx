@@ -59,6 +59,7 @@ interface ParentPortalProps {
 
 const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'results' | 'fees' | 'notices' | 'profile'>('home');
+  const modules = useMemo(() => madrasah?.config_json?.modules || {} as any, [madrasah]);
   const [activeNoticeTab, setActiveNoticeTab] = useState<'diary' | 'notice' | 'syllabus'>('notice');
   const [student, setStudent] = useState<any>(null);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -234,7 +235,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
   const recentActivities = useMemo(() => {
     return [
-      ...(attendance.length > 0 ? [{
+      ...(modules.attendance !== false && attendance.length > 0 ? [{
         icon: CheckCircle2,
         id: 'att',
         title: 'উপস্থিতি রেকর্ড',
@@ -243,7 +244,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         color: attendance[0].status === 'present' ? 'emerald' : 'red',
         timestamp: new Date(attendance[0].date).getTime()
       }] : []),
-      ...(fees.length > 0 ? [{
+      ...(modules.accounting !== false && fees.length > 0 ? [{
         icon: CreditCard,
         id: 'fee',
         title: 'ফি এর তথ্য',
@@ -252,7 +253,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         color: fees[0].status === 'paid' ? 'blue' : 'orange',
         timestamp: new Date(fees[0].created_at || '').getTime() || Date.now()
       }] : []),
-      ...(results.length > 0 ? [{
+      ...((modules.results !== false || modules.exam !== false) && results.length > 0 ? [{
         icon: GraduationCap,
         id: 'res',
         title: 'পরীক্ষার ফলাফল',
@@ -271,7 +272,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         timestamp: new Date(notices[0].created_at).getTime()
       }] : [])
     ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 4);
-  }, [attendance, fees, results, notices]);
+  }, [attendance, fees, results, notices, modules]);
 
   const currentExam = useMemo(() => {
     return results.find(e => e.id === selectedExamId) || results[0] || null;
@@ -356,13 +357,13 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
         <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
            {[
-             { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড' },
-             { id: 'attendance', icon: ClipboardList, label: 'উপস্থিতি' },
-             { id: 'results', icon: GraduationCap, label: 'ফলাফল' },
-             { id: 'fees', icon: Banknote, label: 'ফি ও বকেয়া' },
-             { id: 'notices', icon: Bell, label: 'নোটিশ' },
-             { id: 'profile', icon: User, label: 'প্রোফাইল' }
-           ].map(tab => (
+             { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড', visible: true },
+             { id: 'attendance', icon: ClipboardList, label: 'উপস্থিতি', visible: modules.attendance !== false },
+             { id: 'results', icon: GraduationCap, label: 'ফলাফল', visible: (modules.results !== false || modules.exam !== false) },
+             { id: 'fees', icon: Banknote, label: 'ফি ও বকেয়া', visible: modules.accounting !== false },
+             { id: 'notices', icon: Bell, label: 'নোটিশ', visible: true },
+             { id: 'profile', icon: User, label: 'প্রোফাইল', visible: true }
+           ].filter(t => t.visible).map(tab => (
              <button
                key={tab.id}
                onClick={() => setActiveTab(tab.id as any)}
@@ -473,11 +474,11 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         {activeTab === 'home' && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 animate-in fade-in slide-in-from-top-6 duration-700 delay-100">
             {[
-              { id: 'attendance', icon: CheckCircle2, color: 'emerald', label: 'উপস্থিতি', value: `${stats.present}/${stats.total}`, sub: 'এই মাস' },
-              { id: 'results', icon: GraduationCap, color: 'blue', label: 'ফলাফল', value: stats.lastGpa, sub: 'সর্বশেষ' },
-              { id: 'fees', icon: CreditCard, color: 'orange', label: 'বকেয়া ফি', value: `৳${stats.pendingFees}`, sub: 'পরিশোধিত' },
-              { id: 'notices', icon: Bell, color: 'red', label: 'নোটিশ', value: notices.length.toString(), sub: 'সব তথ্য' },
-            ].map((stat, i) => (
+              { id: 'attendance', icon: CheckCircle2, color: 'emerald', label: 'উপস্থিতি', value: `${stats.present}/${stats.total}`, sub: 'এই মাস', visible: modules.attendance !== false },
+              { id: 'results', icon: GraduationCap, color: 'blue', label: 'ফলাফল', value: stats.lastGpa, sub: 'সর্বশেষ', visible: (modules.results !== false || modules.exam !== false) },
+              { id: 'fees', icon: CreditCard, color: 'orange', label: 'বকেয়া ফি', value: `৳${stats.pendingFees}`, sub: 'পরিশোধিত', visible: modules.accounting !== false },
+              { id: 'notices', icon: Bell, color: 'red', label: 'নোটিশ', value: notices.length.toString(), sub: 'সব তথ্য', visible: true },
+            ].filter(s => s.visible).map((stat, i) => (
               <motion.div 
                 key={i} 
                 whileTap={{ scale: 0.95 }}

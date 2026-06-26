@@ -589,9 +589,10 @@ export const generateFeeReceiptPDF = async (
     container.style.left = '-9999px';
     document.body.appendChild(container);
     const root = createRoot(container);
+    const receiptId = `#REC-${Date.now().toString().slice(-6)}`;
     
     await new Promise<void>((resolve) => {
-        root.render(<FeeReceiptTemplate student={student} month={month} madrasah={madrasah} lang={lang} />);
+        root.render(<FeeReceiptTemplate student={student} month={month} madrasah={madrasah} lang={lang} receiptId={receiptId} />);
         setTimeout(resolve, 500);
     });
 
