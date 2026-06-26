@@ -977,6 +977,10 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {teachers.map(teacher => {
+                        // Filter by join date
+                        if (teacher.join_date && attendanceDate < teacher.join_date) {
+                          return null;
+                        }
                         const status = teacherAttendance[teacher.id] || 'present';
                         return (
                           <div key={teacher.id} className={`p-3 rounded-2xl border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
@@ -1089,6 +1093,23 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {teachers.map(teacher => {
+                      // Filter by join date
+                      if (teacher.join_date) {
+                        const [joinYear, joinMonth] = teacher.join_date.split('-').map(Number);
+                        let filterYear, filterMonth;
+                        
+                        if (reportType === 'daily') {
+                          if (reportDate < teacher.join_date) return null;
+                        } else if (reportType === 'monthly') {
+                          [filterYear, filterMonth] = attendanceMonth.split('-').map(Number);
+                          const isJoined = (filterYear > joinYear) || (filterYear === joinYear && filterMonth >= joinMonth);
+                          if (!isJoined) return null;
+                        } else if (reportType === 'yearly') {
+                          filterYear = parseInt(reportYear);
+                          if (filterYear < joinYear) return null;
+                        }
+                      }
+
                       let presentCount = 0;
                       let absentCount = 0;
                       let lateCount = 0;
@@ -1173,6 +1194,15 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {teachers.map(teacher => {
+                // Filter by join date
+                if (teacher.join_date) {
+                  const [joinYear, joinMonth] = teacher.join_date.split('-').map(Number);
+                  const [selectedYear, selectedMonth] = salaryMonth.split('-').map(Number);
+                  
+                  const isJoined = (selectedYear > joinYear) || (selectedYear === joinYear && selectedMonth >= joinMonth);
+                  if (!isJoined) return null;
+                }
+
                 const paidKey = `${teacher.id}_${salaryMonth}`;
                 const paidSoFar = paidSalaries[paidKey] || 0;
                 let totalSalary = Number(teacher.basic_salary) || Number(teacher.monthly_salary) || 0;
