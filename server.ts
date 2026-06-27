@@ -118,7 +118,17 @@ async function startServer() {
 
   // Audio Proxy Route
   app.all('/api/proxy-audio', async (req, res) => {
-    await runHandler(path.join(__dirname, 'api', 'proxy-audio.ts'), req, res);
+    await runHandler(path.join(__dirname, 'api', 'system.ts'), req, res);
+  });
+
+  // Health check
+  app.get('/api/health', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'system.ts'), req, res);
+  });
+
+  // Voice Refund Route (Mapping from vercel.json)
+  app.all('/api/voice-refund', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
   });
 
   // API Wildcard

@@ -20,15 +20,30 @@ const getAwajHeaders = () => {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
-  const parts = pathname.split('/').filter(Boolean);
+  const urlPath = url.pathname;
+  const parts = urlPath.split('/').filter(Boolean);
   
   // More robust action detection
-  let action = parts[2]; // e.g. 'voices', 'broadcast', 'senders', etc.
-  if (parts[1] === 'awaj' && !action) {
-    action = (req.query.action as string) || 'voices';
+  let action = (parts[2] || '').toLowerCase().trim();
+  
+  // Special case for direct /api/voice-refund path
+  if (parts[1] === 'voice-refund') {
+    action = 'voice-refund';
   }
+
+  // Override with query or body if explicitly provided
+  const explicitAction = (req.query.action as string || req.body?.action as string || '').toLowerCase().trim();
+  if (explicitAction) {
+    action = explicitAction;
+  }
+
+  // Default for /api/awaj
+  if (parts[1] === 'awaj' && !action) {
+    action = 'voices';
+  }
+  
   const subAction = parts[3] || (req.query.id as string);
+  console.log(`Awaj API: url=${req.url}, parts=${JSON.stringify(parts)}, action="${action}"`);
 
   // Ensure body is parsed if it's a string
   if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
@@ -195,8 +210,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(401).json({ error: 'Unauthorized: Invalid token' });
         }
 
-        const { broadcast_id, campaign_id } = req.body;
-        if (!broadcast_id) {
+        const broadcastId = req.body.broadcast_id || req.body.broadcastId;
+        const campaignId = req.body.campaign_id || req.body.campaignId;
+        const providedInstitutionId = req.body.institution_id || req.body.institutionId;
+
+        if (!broadcastId) {
           return res.status(400).json({ error: 'Broadcast ID is required' });
         }
 
@@ -217,7 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const { data: broadcast, error: broadcastErr } = await supabase
           .from('voice_broadcasts')
           .select('*')
-          .eq('id', broadcast_id)
+          .eq('id', broadcastId)
           .eq('institution_id', institutionId)
           .single();
 
@@ -237,7 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(404).json({ error: 'Institution not found' });
         }
 
-        const targetCampaignId = campaign_id || broadcast.provider_campaign_id;
+        const targetCampaignId = campaignId || broadcast.provider_campaign_id;
         if (!targetCampaignId) {
           return res.status(400).json({ error: 'No provider campaign ID found to process' });
         }
@@ -276,12 +294,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const resultData = await response.json() as any;
         
-        const logs = Array.isArray(resultData) ? resultData : 
-          (resultData.results && Array.isArray(resultData.results) ? resultData.results :
-          (resultData.data && Array.isArray(resultData.data) ? resultData.data : 
-          (resultData.broadcast?.logs ? resultData.broadcast.logs : 
-          (resultData.broadcast?.calls ? resultData.broadcast.calls : 
-          (resultData.calls ? resultData.calls : [])))));
+        const extractLogs = (details: any) => {
+          if (!details) return [];
+          if (Array.isArray(details)) return details;
+          if (details.calls && Array.isArray(details.calls)) return details.calls;
+          if (details.logs && Array.isArray(details.logs)) return details.logs;
+          if (details.recipients && Array.isArray(details.recipients)) return details.recipients;
+          if (details.data && Array.isArray(details.data)) return details.data;
+          if (details.results && Array.isArray(details.results)) return details.results;
+          if (details.details && Array.isArray(details.details)) return details.details;
+          if (details.broadcast?.calls && Array.isArray(details.broadcast.calls)) return details.broadcast.calls;
+          if (details.broadcast?.logs && Array.isArray(details.broadcast.logs)) return details.broadcast.logs;
+          
+          for (const key in details) {
+            if (Array.isArray(details[key]) && details[key].length > 0 && typeof details[key][0] === 'object') {
+              const firstItem = details[key][0];
+              if (firstItem.phone || firstItem.number || firstItem.to || firstItem.msisdn || firstItem.recipient || firstItem.mobile || firstItem.destination) {
+                return details[key];
+              }
+            }
+          }
+          return [];
+        };
+
+        const logs = extractLogs(resultData);
 
         if (!logs || logs.length === 0) {
           return res.status(200).json({ 
@@ -293,14 +329,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const failedLogs = logs.filter((log: any) => {
           const status = (log.status || log.state || log.call_status || '').toLowerCase().trim();
-          const successStatuses = ['answered', 'completed', 'delivered', 'accepted', 'success', 'picked', 'pickedup', 'picked_up'];
+          const successStatuses = ['answered', 'completed', 'delivered', 'accepted', 'success', 'picked', 'pickedup', 'picked_up', 'connected', 'complete', 'finished', 'finished_success', 'picked up'];
           if (successStatuses.includes(status)) return false;
-          const failureStatuses = ['failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 'unanswered', 'timeout', 'no-answer', 'abandoned', 'not_answered', 'notanswered', 'notpicked', 'not_picked', 'missed', 'blocked', 'unavailable'];
-          if (failureStatuses.includes(status)) return true;
+          
+          const failureStatuses = [
+            'failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 
+            'unanswered', 'timeout', 'no-answer', 'abandoned', 'not_answered', 'notanswered', 
+            'notpicked', 'not_picked', 'missed', 'blocked', 'unavailable', 'not answered', 'not picked',
+            'no-picked', 'no_picked', 'noanswer', 'not-picked', 'reject', 'declined', 'failed-retry', 'failed_retry',
+            'no picked', 'no answered', 'no answer', 'not pick', 'not-pickedup', 'not_pickedup'
+          ];
+          if (failureStatuses.includes(status) || status.includes('not picked') || status.includes('not answered') || status.includes('no answer')) return true;
+          
           const duration = Number(log.duration || 0);
           if (duration === 0 && !['pending', 'sending', 'processing', 'queued'].includes(status)) return true;
           return false;
         });
+
+        console.log(`Processing refund for campaign ${targetCampaignId}. Logs: ${logs.length}, Failures: ${failedLogs.length}`);
 
         const totalSentOriginal = Number(broadcast.total_numbers || 1);
         const isRetry = targetCampaignId !== broadcast.provider_campaign_id;
@@ -315,6 +361,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let droppedCalls = Math.max(0, campaignTotalSent - logs.length);
         let totalFailuresToRefund = Math.min(failedLogs.length + droppedCalls, campaignTotalSent);
+        
+        console.log(`Campaign ${targetCampaignId}: Total: ${campaignTotalSent}, Logs: ${logs.length}, Dropped: ${droppedCalls}, Failures: ${failedLogs.length}, Final Refund: ${totalFailuresToRefund}`);
         if (!isRetry && totalFailuresToRefund > totalSentOriginal) totalFailuresToRefund = totalSentOriginal;
 
         if (totalFailuresToRefund === 0) {
@@ -381,7 +429,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    return res.status(404).json({ error: 'Action not found' });
+    console.log(`Awaj API: Action not found or not matched: "${action}" (Path: ${req.url})`);
+    return res.status(404).json({ error: `Action not found: ${action}` });
   } catch (error: any) {
     console.error(`Awaj API error (${action}):`, error);
     res.status(500).json({ error: error.message });

@@ -656,9 +656,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (isBackground = false) => {
     if (!madrasah && !isSuperAdmin) return;
-    setLoading(true);
+    if (!isBackground) setLoading(true);
     
     let query = supabase.from('voice_broadcasts').select('*, voice_templates(title)');
     
@@ -696,7 +696,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
               newStatus = 'sending';
             } else if (['failed', 'error', 'cancelled'].includes(providerStatus)) {
               newStatus = 'failed';
-            } else if (['completed', 'done', 'success'].includes(providerStatus)) {
+            } else if (['completed', 'done', 'success', 'complete', 'finished', 'finished_success'].includes(providerStatus)) {
               newStatus = 'completed';
             }
 
@@ -707,9 +707,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                  handleClaimRefundAuto(broadcast.id, activeCampaignId);
               }
               
-              // Refresh history
-              const { data: updatedData } = await supabase.from('voice_broadcasts').select('*, voice_templates(title)').eq('institution_id', madrasah.id).order('created_at', { ascending: false });
-              if (updatedData) setBroadcastHistory(updatedData);
+              // Refresh history if status changed
+              fetchHistory(true);
             }
           }
         } catch (error) {
@@ -719,6 +718,20 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
     setLoading(false);
   };
+
+  // Background polling for pending/sending broadcasts
+  useEffect(() => {
+    if (!madrasah && !isSuperAdmin) return;
+    
+    const pollInterval = setInterval(() => {
+      const hasPending = broadcastHistory.some(b => b.status === 'sending' || b.status === 'pending');
+      if (hasPending || activeTab === 'history') {
+        fetchHistory(true);
+      }
+    }, 7000); // Every 7 seconds instead of 15s
+
+    return () => clearInterval(pollInterval);
+  }, [madrasah?.id, broadcastHistory, activeTab]);
 
   const extractPhoneFromLog = (log: any) => {
     if (!log) return null;
@@ -944,7 +957,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           // trigger auto-refund check
           try {
             const providerStatus = (res.broadcast?.status || res.status || res.state || '').toLowerCase();
-            if (['completed', 'done', 'success', 'failed', 'error', 'cancelled'].includes(providerStatus)) {
+            if (['completed', 'done', 'success', 'complete', 'finished', 'failed', 'error', 'cancelled'].includes(providerStatus)) {
               handleClaimRefundAuto(broadcast.id, res._campaignId);
             }
           } catch(e) {}
@@ -1798,6 +1811,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                             <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${h.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                               {h.status}
                             </span>
+                            {h.status === 'completed' && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleClaimRefund(h.id);
+                                }}
+                                className={`w-7 h-7 bg-emerald-50 text-emerald-500 rounded-lg flex items-center justify-center hover:bg-emerald-100 transition-all active:scale-90 ${refundingId === h.id ? 'animate-pulse' : ''}`}
+                                title={lang === 'bn' ? 'রিফান্ড নিন' : 'Claim Refund'}
+                              >
+                                <Zap size={14} />
+                              </button>
+                            )}
                           </div>
                           <ChevronDown size={16} className={`text-slate-300 transition-transform ${expandedHistoryId === h.id ? 'rotate-180' : ''}`} />
                         </div>
@@ -1873,7 +1898,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                   </div>
 
                                   {failedLogs.length > 0 && (
-                                    <div className="flex justify-end mt-4">
+                                    <div className="flex justify-end mt-4 gap-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleClaimRefund(h.id);
+                                        }}
+                                        className="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 text-xs font-black flex items-center gap-2 shadow-sm transition-all active:scale-95"
+                                      >
+                                        <Zap size={14} />
+                                        {lang === 'bn' ? 'রিফান্ড নিন' : 'Claim Refund'}
+                                      </button>
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
