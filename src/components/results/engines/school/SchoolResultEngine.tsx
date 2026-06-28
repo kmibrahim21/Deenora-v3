@@ -1072,9 +1072,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   // Template Configurations
   const admitCardTemplates = [
+    { id: 'admission', name: lang === 'bn' ? 'ভর্তি পরীক্ষা (প্রিমিয়াম)' : 'Admission (Premium)', description: lang === 'bn' ? 'উন্নত মানের ডায়নামিক ডিজাইন' : 'High-quality dynamic design' },
     { id: 'classic', name: 'Classic', description: 'Traditional layout with border' },
-    { id: 'modern', name: 'Modern', description: 'Clean design with accent colors' },
-    { id: 'minimal', name: 'Minimal', description: 'Simple, ink-saving design' }
+    { id: 'modern', name: 'Modern', description: 'Clean design with accent colors' }
   ];
 
   const seatPlanTemplates = [
@@ -1112,7 +1112,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         await generateAdmitCardPDF(
             examForAdmitCard,
             stds,
-            { name: madrasah.name, logo_url: madrasah.logo_url, institution_type: madrasah.institution_type },
+            madrasah,
             selectedAdmitCardTemplate,
             downloadLang
         );

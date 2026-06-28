@@ -935,7 +935,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                 
                 <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Template</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <button 
                             onClick={() => setSelectedAdmitCardTemplate('classic')}
                             className={`p-3 rounded-xl border text-left transition-all ${selectedAdmitCardTemplate === 'classic' ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 border-emerald-500/30 ring-2 ring-emerald-500/20' : 'bg-emerald-50 border-emerald-200 ring-2 ring-emerald-100') : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 border-slate-100 hover:bg-slate-100')}`}
@@ -949,13 +949,6 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                         >
                             <div className={`font-black text-xs ${selectedAdmitCardTemplate === 'modern' ? (madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600') : (madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600')}`}>Modern</div>
                             <div className="text-[10px] text-slate-400 mt-1">Clean design with color header</div>
-                        </button>
-                        <button 
-                            onClick={() => setSelectedAdmitCardTemplate('minimal')}
-                            className={`p-3 rounded-xl border text-left transition-all ${selectedAdmitCardTemplate === 'minimal' ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/20 border-emerald-500/30 ring-2 ring-emerald-500/20' : 'bg-emerald-50 border-emerald-200 ring-2 ring-emerald-100') : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 border-slate-100 hover:bg-slate-100')}`}
-                        >
-                            <div className={`font-black text-xs ${selectedAdmitCardTemplate === 'minimal' ? (madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600') : (madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600')}`}>Minimal</div>
-                            <div className="text-[10px] text-slate-400 mt-1">Simple, ink-saving design</div>
                         </button>
                     </div>
                 </div>
