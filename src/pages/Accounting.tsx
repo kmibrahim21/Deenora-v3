@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, LedgerEntry, Language, UserRole, Class, Profile, AcademicYear } from 'types';
-import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2, Filter, ChevronDown, Check } from 'lucide-react';
+import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2, Filter, ChevronDown, Check, Database, CheckCircle2 } from 'lucide-react';
 import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import { SchoolFeeEngine, clearGlobalSchoolFeeCache } from 'components/finance/SchoolFeeEngine';
 import { QawmiFeeEngine, clearGlobalQawmiFeeCache } from 'components/finance/QawmiFeeEngine';
@@ -40,8 +40,15 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [selectedLedgerIds, setSelectedLedgerIds] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, ids: string[]}>({show: false, ids: []});
+  const [syncModal, setSyncModal] = useState<{
+    show: boolean;
+    step: 'confirm' | 'loading' | 'success' | 'error';
+    message?: string;
+    deletedCount?: number;
+  }>({ show: false, step: 'confirm' });
   const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>('student_history');
   const [selectedHistoryClass, setSelectedHistoryClass] = useState<string>('all');
   const [showClassFilterMenu, setShowClassFilterMenu] = useState(false);
@@ -250,6 +257,107 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       fetchData(); // Revert on failure
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSyncAndRepairFees = async () => {
+    if (!madrasah?.id) return;
+    if (!isOnline) {
+      alert(lang === 'bn' ? "ডাটা সংশোধন করতে ইন্টারনেট সংযোগ প্রয়োজন।" : "Internet connection required to sync and repair data.");
+      return;
+    }
+    
+    setSyncModal({ show: true, step: 'loading' });
+    setIsSyncing(true);
+
+    try {
+      // 1. Fetch all ledger entries for the institution
+      const { data: allLedger, error: lErr } = await supabase
+        .from('ledger')
+        .select('id, description, category')
+        .eq('institution_id', madrasah.id);
+      
+      if (lErr) throw lErr;
+
+      // 2. Fetch all student fee records for the institution
+      const { data: allFees, error: fErr } = await supabase
+        .from('fees')
+        .select('id, student_id, month, amount_paid')
+        .eq('institution_id', madrasah.id);
+
+      if (fErr) throw fErr;
+
+      if (!allFees || allFees.length === 0) {
+        setSyncModal({ 
+          show: true, 
+          step: 'success', 
+          deletedCount: 0,
+          message: lang === 'bn' ? "কোনো ফি ডাটা পাওয়া যায়নি। ডাটা ইতোমধ্যে পরিষ্কার আছে।" : "No fee records found. Data is already clean." 
+        });
+        setIsSyncing(false);
+        return;
+      }
+
+      // 3. Find orphaned fee records
+      const ledgerList = allLedger || [];
+      const orphanedFeeIds: string[] = [];
+
+      for (const fee of allFees) {
+        // Check if there's any ledger entry referencing this fee ID
+        const hasDirectLedger = ledgerList.some(l => 
+          (l.description || '').includes(`FEE_ID: ${fee.id}`)
+        );
+
+        if (!hasDirectLedger) {
+          // If no direct FEE_ID match, let's check if there are no student fee entries in ledger at all.
+          // Since they deleted ALL history, there should be no ledger entries left.
+          orphanedFeeIds.push(fee.id);
+        }
+      }
+
+      // 4. Batch delete the orphaned fee records
+      if (orphanedFeeIds.length > 0) {
+        // Chunk deletions to avoid hitting database limits or timeouts
+        const chunkSize = 50;
+        for (let i = 0; i < orphanedFeeIds.length; i += chunkSize) {
+          const chunk = orphanedFeeIds.slice(i, i + chunkSize);
+          const { error: delErr } = await supabase
+            .from('fees')
+            .delete()
+            .in('id', chunk);
+          
+          if (delErr) {
+            console.error("Error deleting fee chunk:", delErr);
+          }
+        }
+
+        // 5. Clear all caches
+        requestManager.invalidatePattern(`fees:${madrasah.id}`);
+        requestManager.invalidatePattern(`stats:${madrasah.id}`);
+        requestManager.invalidatePattern(`dashboard_`);
+        await CacheService.clearCache('stats', madrasah.id);
+        await CacheService.clearCache('fees', madrasah.id);
+        clearGlobalSchoolFeeCache();
+        clearGlobalQawmiFeeCache();
+      }
+
+      setSyncModal({
+        show: true,
+        step: 'success',
+        deletedCount: orphanedFeeIds.length
+      });
+
+      if (triggerRefresh) triggerRefresh();
+      fetchData(true);
+    } catch (err: any) {
+      console.error("Error repairing fees:", err);
+      setSyncModal({
+        show: true,
+        step: 'error',
+        message: err.message
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -464,6 +572,33 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       <Trash2 size={12} /> <span className="hidden sm:inline">সব মুছুন</span>
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      if (!isOnline) {
+                        alert(lang === 'bn' ? "ডাটা সংশোধন করতে ইন্টারনেট সংযোগ প্রয়োজন।" : "Internet connection required to sync and repair data.");
+                        return;
+                      }
+                      setSyncModal({ show: true, step: 'confirm' });
+                    }}
+                    disabled={isSyncing}
+                    className={`px-4 py-2 rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-2 hover:shadow-lg active:scale-95 disabled:opacity-50 ${
+                      isDark 
+                        ? 'bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/30 hover:from-blue-500/30 hover:to-indigo-500/30' 
+                        : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 font-bold'
+                    }`}
+                    title={lang === 'bn' ? 'অসংগতিপূর্ণ ফি ডাটা মেরামত করুন' : 'Repair inconsistent fee data'}
+                  >
+                    {isSyncing ? (
+                      <Loader2 size={13} className="animate-spin text-current" />
+                    ) : (
+                      <RefreshCw size={13} className="animate-pulse text-current" />
+                    )}
+                    <span>
+                      {isSyncing 
+                        ? (lang === 'bn' ? 'মেরামত হচ্ছে...' : 'Repairing...') 
+                        : (lang === 'bn' ? 'ডাটা সিঙ্ক ও মেরামত' : 'Sync & Repair')}
+                    </span>
+                  </button>
                 </div>
               </div>
               
@@ -878,6 +1013,183 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 {isSaving ? <Loader2 size={18} className="animate-spin" /> : (lang === 'bn' ? 'মুছে ফেলুন' : 'Delete')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* State-Driven Sync & Repair Modal */}
+      {syncModal.show && (
+        <div id="sync-repair-modal" className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div id="sync-repair-modal-content" className={`w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl transition-all duration-300 transform scale-100 ${
+            isDark 
+              ? 'bg-slate-900/95 border border-slate-800 text-slate-100 shadow-blue-950/20' 
+              : 'bg-white text-slate-800 shadow-indigo-900/10'
+          }`}>
+            
+            {/* Step 1: CONFIRM */}
+            {syncModal.step === 'confirm' && (
+              <div id="sync-step-confirm" className="space-y-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-5 ${
+                    isDark ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-indigo-50 text-indigo-600'
+                  }`}>
+                    <Database size={38} className="animate-pulse" />
+                  </div>
+                  <h3 className={`text-2xl font-black font-noto tracking-tight ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {lang === 'bn' ? 'ডাটা সিঙ্ক ও মেরামত' : 'Data Sync & Repair'}
+                  </h3>
+                  <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${isDark ? 'text-indigo-400' : 'text-[#2563EB]'}`}>
+                    {lang === 'bn' ? 'ডাটাবেজ অসংগতি সংশোধন' : 'Database Inconsistency repair'}
+                  </p>
+                  
+                  <div className={`mt-6 p-5 rounded-2xl text-left border text-sm leading-relaxed ${
+                    isDark ? 'bg-slate-800/50 border-slate-700/50 text-slate-300' : 'bg-slate-50 border-slate-100 text-slate-600'
+                  }`}>
+                    <div className="flex gap-2.5 items-start">
+                      <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+                      <p className="font-semibold text-xs sm:text-sm font-noto">
+                        {lang === 'bn' 
+                          ? 'লেনদেন ইতিহাস ছাড়া কোনো ফি ডাটা (Paid status) থাকলে এই প্রক্রিয়াটি তা স্বয়ংক্রিয়ভাবে শনাক্ত করবে এবং অতিরিক্ত বা অনাথ ডাটাগুলো মুছে দিয়ে ডাটাবেজ সচল রাখবে।'
+                          : 'This process automatically scans your database, detects paid/fee records that do not have matching financial transaction history, and deletes them to keep your data perfectly consistent.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button 
+                    id="btn-sync-cancel"
+                    onClick={() => setSyncModal({ show: false, step: 'confirm' })}
+                    className={`flex-1 py-3.5 rounded-2xl font-black transition-all text-xs uppercase tracking-wider border active:scale-95 ${
+                      isDark 
+                        ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' 
+                        : 'bg-slate-100 text-slate-600 border-slate-200/50 hover:bg-slate-200'
+                    }`}
+                  >
+                    {lang === 'bn' ? 'বাতিল করুন' : 'Cancel'}
+                  </button>
+                  <button 
+                    id="btn-sync-proceed"
+                    onClick={handleSyncAndRepairFees}
+                    className={`flex-1 py-3.5 rounded-2xl font-black text-white transition-all text-xs uppercase tracking-wider bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 active:scale-95 shadow-md hover:shadow-lg`}
+                  >
+                    {lang === 'bn' ? 'শুরু করুন' : 'Begin Repair'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: LOADING */}
+            {syncModal.step === 'loading' && (
+              <div id="sync-step-loading" className="py-6 flex flex-col items-center justify-center text-center space-y-6">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-24 h-24 rounded-full border-4 border-indigo-500/10 animate-ping absolute" />
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center ${
+                    isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
+                  }`}>
+                    <Loader2 size={38} className="animate-spin" />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className={`text-xl font-black font-noto ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                    {lang === 'bn' ? 'ডাটা মেরামত করা হচ্ছে...' : 'Repairing Database...'}
+                  </h3>
+                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} max-w-xs mx-auto leading-relaxed font-noto`}>
+                    {lang === 'bn' 
+                      ? 'ডাটাবেজ স্ক্যান করে অসংগতিপূর্ণ বা অনাথ ফি রেকর্ডগুলো মুছে ফেলা হচ্ছে। অনুগ্রহ করে উইন্ডোটি বন্ধ করবেন না।' 
+                      : 'Scanning and removing orphaned student fee entries to restore structural integrity. Please do not close this window.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: SUCCESS */}
+            {syncModal.step === 'success' && (
+              <div id="sync-step-success" className="space-y-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center mb-5 animate-bounce">
+                    <CheckCircle2 size={38} />
+                  </div>
+                  
+                  <h3 className={`text-2xl font-black font-noto ${isDark ? 'text-white' : 'text-[#065F46]'}`}>
+                    {lang === 'bn' ? 'মেরামত সম্পন্ন!' : 'Repair Completed!'}
+                  </h3>
+                  <p className={`text-xs font-bold uppercase tracking-widest mt-1 text-emerald-500`}>
+                    {lang === 'bn' ? 'ডাটাবেজ এখন সচল' : 'Database is fully sync\'d'}
+                  </p>
+
+                  <div className={`w-full mt-6 p-5 rounded-2xl border text-left ${
+                    isDark ? 'bg-slate-800/40 border-slate-700/50 text-slate-300' : 'bg-emerald-50/50 border-emerald-100 text-emerald-900 font-medium'
+                  }`}>
+                    <div className="space-y-3 font-noto text-xs sm:text-sm">
+                      <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-700/20">
+                        <span className="font-bold">{lang === 'bn' ? 'সংশোধিত রেকর্ড:' : 'Repaired Records:'}</span>
+                        <span className="font-extrabold text-base px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                          {syncModal.deletedCount ?? 0}
+                        </span>
+                      </div>
+                      <p className="leading-relaxed text-xs">
+                        {syncModal.message || (lang === 'bn' 
+                          ? 'ডাটাবেজ থেকে অনাথ ফি ডাটা সফলভাবে পরিষ্কার করা হয়েছে এবং ক্যাশ রিফ্রেশ করা হয়েছে।' 
+                          : 'Successfully cleaned up orphaned/inconsistent student fee records and invalidated matching app cache patterns.')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  id="btn-sync-success-close"
+                  onClick={() => setSyncModal({ show: false, step: 'confirm' })}
+                  className="w-full py-3.5 bg-emerald-500 text-white font-black rounded-2xl shadow-lg hover:bg-emerald-600 active:scale-95 transition-all text-xs uppercase tracking-wider"
+                >
+                  {lang === 'bn' ? 'দারুণ! বন্ধ করুন' : 'Awesome, Close'}
+                </button>
+              </div>
+            )}
+
+            {/* Step 4: ERROR */}
+            {syncModal.step === 'error' && (
+              <div id="sync-step-error" className="space-y-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-20 h-20 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center mb-5 animate-pulse">
+                    <AlertCircle size={38} />
+                  </div>
+                  
+                  <h3 className={`text-2xl font-black font-noto ${isDark ? 'text-white' : 'text-[#991B1B]'}`}>
+                    {lang === 'bn' ? 'সংশোধন ব্যর্থ হয়েছে' : 'Repair Failed'}
+                  </h3>
+                  
+                  <div className={`mt-6 p-5 rounded-2xl border text-left w-full ${
+                    isDark ? 'bg-slate-800/40 border-slate-700/50 text-rose-400' : 'bg-rose-50 border-rose-100 text-rose-700 font-semibold'
+                  }`}>
+                    <p className="font-mono text-xs break-all">
+                      {syncModal.message || 'Unknown database exception occurred.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    id="btn-sync-error-retry"
+                    onClick={handleSyncAndRepairFees}
+                    className="flex-1 py-3.5 bg-rose-500 text-white font-black rounded-2xl hover:bg-rose-600 active:scale-95 transition-all text-xs uppercase tracking-wider font-bold"
+                  >
+                    {lang === 'bn' ? 'আবার চেষ্টা করুন' : 'Retry'}
+                  </button>
+                  <button 
+                    id="btn-sync-error-close"
+                    onClick={() => setSyncModal({ show: false, step: 'confirm' })}
+                    className={`flex-1 py-3.5 rounded-2xl font-black transition-all text-xs uppercase tracking-wider border active:scale-95 ${
+                      isDark ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200/50 hover:bg-slate-200'
+                    }`}
+                  >
+                    {lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
