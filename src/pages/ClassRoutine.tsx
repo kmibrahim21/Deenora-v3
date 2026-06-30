@@ -21,13 +21,14 @@ const routineThemes = {
   'rose': { primary: '#881337', secondary: '#9f1239', light: '#fff1f2', accent: '#fff5f5', border: '#f43f5e', shadow: 'rgba(136,19,55,0.1)' }
 };
 
-const DEFAULT_DAYS = [
-  { id: 'Saturday', bn: 'শনিবার', en: 'Saturday' },
-  { id: 'Sunday', bn: 'রবিবার', en: 'Sunday' },
-  { id: 'Monday', bn: 'সোমবার', en: 'Monday' },
-  { id: 'Tuesday', bn: 'মঙ্গলবার', en: 'Tuesday' },
-  { id: 'Wednesday', bn: 'বুধবার', en: 'Wednesday' },
-  { id: 'Thursday', bn: 'বৃহস্পতিবার', en: 'Thursday' },
+const ALL_DAYS_OF_WEEK = [
+  { id: 'Saturday', bn: 'শনিবার', en: 'Saturday', index: 6 },
+  { id: 'Sunday', bn: 'রবিবার', en: 'Sunday', index: 0 },
+  { id: 'Monday', bn: 'সোমবার', en: 'Monday', index: 1 },
+  { id: 'Tuesday', bn: 'মঙ্গলবার', en: 'Tuesday', index: 2 },
+  { id: 'Wednesday', bn: 'বুধবার', en: 'Wednesday', index: 3 },
+  { id: 'Thursday', bn: 'বৃহস্পতিবার', en: 'Thursday', index: 4 },
+  { id: 'Friday', bn: 'শুক্রবার', en: 'Friday', index: 5 },
 ];
 
 const RoutineCell = ({ value, onChange, theme, placeholder = '-' }: { value: string, onChange: (val: string) => void, theme: any, placeholder?: string }) => {
@@ -77,6 +78,8 @@ const RoutineCell = ({ value, onChange, theme, placeholder = '-' }: { value: str
 };
 
 const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, profile }) => {
+  const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
+  const activeDays = ALL_DAYS_OF_WEEK.filter(day => !weeklyHolidays.includes(day.index));
 
   const [activeTab, setActiveTab] = useState<'general' | 'classwise' | 'saved'>('general');
   const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
@@ -105,7 +108,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
   const [routinePrincipalMobile, setRoutinePrincipalMobile] = useState('');
   
   const [layoutType, setLayoutType] = useState<'day_left' | 'period_left' | 'class_left'>('day_left');
-  const [selectedDay, setSelectedDay] = useState(DEFAULT_DAYS[0].id);
+  const [selectedDay, setSelectedDay] = useState(activeDays[0]?.id || 'Saturday');
   
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{show: boolean, msg: string, type: 'success' | 'error' | 'info'}>({show: false, msg: '', type: 'info'});
@@ -250,7 +253,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
     setActiveTab('general');
     setRoutineThemeColor(routine.themeColor);
     setLayoutType(routine.layoutType || 'day_left');
-    setSelectedDay(routine.selectedDay || DEFAULT_DAYS[0].id);
+    setSelectedDay(routine.selectedDay || (activeDays[0]?.id || 'Saturday'));
     setPeriods(routine.periods);
     setRoutineMatrix(routine.matrix);
     setRoutineInstructions(routine.instructions || []);
@@ -546,7 +549,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                        onChange={e => setSelectedDay(e.target.value)}
                        className={`w-full h-11 rounded-xl px-4 font-bold outline-none border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800 focus:ring-blue-500'}`}
                      >
-                       {DEFAULT_DAYS.map(d => (
+                       {activeDays.map(d => (
                          <option key={d.id} value={d.id}>{lang === 'bn' ? d.bn : d.en}</option>
                        ))}
                      </select>
@@ -777,7 +780,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                    </tr>
                                 </thead>
                                 <tbody>
-                                   {DEFAULT_DAYS.map((day, dIdx) => (
+                                   {activeDays.map((day, dIdx) => (
                                      <tr key={day.id} className="border-b h-[2.75rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
                                        <td className="border-r p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
                                          {lang === 'bn' ? day.bn : day.en}

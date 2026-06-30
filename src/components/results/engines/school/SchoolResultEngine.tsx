@@ -223,10 +223,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         const uniqueSortOrders = Array.from(new Set(allSubs.map(s => s.sort_order || 0))).sort((a, b) => a - b);
         const compiled: any[] = [];
         let currentDate = new Date(startDate);
+        const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
 
         for (const order of uniqueSortOrders) {
-          // Skip Friday (Day 5)
-          while (currentDate.getDay() === 5) {
+          while (weeklyHolidays.includes(currentDate.getDay())) {
             currentDate.setDate(currentDate.getDate() + 1);
           }
 
@@ -345,8 +345,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
       let initialDate = routineStartDate ? new Date(routineStartDate) : new Date();
       let runDate = new Date(initialDate);
+      const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
       sampleDays.forEach((sd) => {
-        while (runDate.getDay() === 5) {
+        while (weeklyHolidays.includes(runDate.getDay())) {
           runDate.setDate(runDate.getDate() + 1);
         }
 
@@ -431,7 +432,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       nextDate.setDate(nextDate.getDate() + 1);
     }
     
-    while (nextDate.getDay() === 5) { // Skip Friday
+    const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
+    while (weeklyHolidays.includes(nextDate.getDay())) {
       nextDate.setDate(nextDate.getDate() + 1);
     }
     
@@ -823,9 +825,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       const routineData: any[] = [];
       
       let currentDate = new Date(startDate);
+      const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
       for (let i = 0; i < maxSlots; i++) {
-        // Skip Friday (5)
-        if (currentDate.getDay() === 5) {
+        while (weeklyHolidays.includes(currentDate.getDay())) {
           currentDate.setDate(currentDate.getDate() + 1);
         }
 
