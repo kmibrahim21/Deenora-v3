@@ -6,9 +6,14 @@ interface ClassFeeReportProps {
   students: any[];
   madrasah: any;
   lang: 'en' | 'bn';
+  allTotals?: {
+    totalPayable: number;
+    totalPaid: number;
+    totalDue: number;
+  };
 }
 
-export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ className, month, students, madrasah, lang }) => {
+export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ className, month, students, madrasah, lang, allTotals }) => {
   const isBangla = lang === 'bn';
   const t = {
     title: isBangla ? 'মাসিক ফি কালেকশন রিপোর্ট' : 'Monthly Fee Collection Report',
@@ -28,9 +33,13 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
     partial: isBangla ? 'আংশিক' : 'Partial'
   };
 
-  const totalPayable = students.reduce((sum, s) => sum + (Number(s.total_payable) || 0), 0);
-  const totalPaid = students.reduce((sum, s) => sum + (Number(s.total_paid) || 0), 0);
-  const totalDue = students.reduce((sum, s) => sum + (Number(s.balance_due) || 0), 0);
+  const currentPayable = students.reduce((sum, s) => sum + (Number(s.total_payable) || 0), 0);
+  const currentPaid = students.reduce((sum, s) => sum + (Number(s.total_paid) || 0), 0);
+  const currentDue = students.reduce((sum, s) => sum + (Number(s.balance_due) || 0), 0);
+
+  const displayPayable = allTotals ? allTotals.totalPayable : currentPayable;
+  const displayPaid = allTotals ? allTotals.totalPaid : currentPaid;
+  const displayDue = allTotals ? allTotals.totalDue : currentDue;
 
   return (
     <div className="w-[794px] min-h-[1123px] p-12 bg-white font-noto text-slate-800 relative flex flex-col">
@@ -106,9 +115,9 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
           <tfoot>
             <tr className="bg-slate-100 font-black">
               <td colSpan={3} className="p-4 text-right text-xs uppercase tracking-widest text-slate-500">Total / মোট:</td>
-              <td className="p-4 text-right text-sm text-slate-900">৳{totalPayable.toLocaleString()}</td>
-              <td className="p-4 text-right text-sm text-emerald-600">৳{totalPaid.toLocaleString()}</td>
-              <td className="p-4 text-right text-sm text-red-600">৳{totalDue.toLocaleString()}</td>
+              <td className="p-4 text-right text-sm text-slate-900">৳{displayPayable.toLocaleString()}</td>
+              <td className="p-4 text-right text-sm text-emerald-600">৳{displayPaid.toLocaleString()}</td>
+              <td className="p-4 text-right text-sm text-red-600">৳{displayDue.toLocaleString()}</td>
               <td className="p-4"></td>
             </tr>
           </tfoot>

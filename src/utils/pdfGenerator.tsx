@@ -538,12 +538,26 @@ export const generateClassFeeReportPDF = async (
         chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
     }
 
+    // Calculate grand totals for the entire set
+    const grandTotals = {
+        totalPayable: students.reduce((sum, s) => sum + (Number(s.total_payable) || 0), 0),
+        totalPaid: students.reduce((sum, s) => sum + (Number(s.total_paid) || 0), 0),
+        totalDue: students.reduce((sum, s) => sum + (Number(s.balance_due) || 0), 0),
+    };
+
     await new Promise<void>((resolve) => {
         root.render(
             <div id="pdf-wrapper">
                 {chunks.map((chunk, idx) => (
                     <div key={idx} className="pdf-page-break">
-                        <ClassFeeReportTemplate className={className} month={month} students={chunk} madrasah={madrasah} lang={lang} />
+                        <ClassFeeReportTemplate 
+                          className={className} 
+                          month={month} 
+                          students={chunk} 
+                          madrasah={madrasah} 
+                          lang={lang} 
+                          allTotals={grandTotals}
+                        />
                     </div>
                 ))}
             </div>
