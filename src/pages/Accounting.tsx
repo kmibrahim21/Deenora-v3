@@ -723,7 +723,18 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           ) : ledger.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {ledger.filter(e => {
-                const isStudent = e.category === 'Student Fee' || e.category?.includes('Fee') || e.category?.includes('ফি');
+                const category = e.category || '';
+                const description = e.description || '';
+                const isStudent = 
+                  category === 'Student Fee' || 
+                  category.includes('Fee') || 
+                  category.includes('ফি') || 
+                  category.includes('ভর্তি') || 
+                  category.includes('Admission') ||
+                  description.includes('FEE_ID:') ||
+                  (description.includes('(') && description.includes('|') && description.includes(')')) ||
+                  (description.includes('Roll:') || description.includes('রোল:')) ||
+                  (description.includes('Month:') || description.includes('মাস:'));
                 if (historyTab === 'student_history') {
                    if (!isStudent) return false;
                    if (selectedHistoryClass !== 'all') {
@@ -747,7 +758,16 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 let feeType = '';
                 const cleanDescription = (entry.description || '').split(' || FEE_ID: ')[0];
 
-                if (entry.category === 'Student Fee' || entry.category?.includes('Fee') || entry.category?.includes('ফি')) {
+                const isStudentDisplay = 
+                  entry.category === 'Student Fee' || 
+                  entry.category?.includes('Fee') || 
+                  entry.category?.includes('ফি') || 
+                  entry.category?.includes('ভর্তি') || 
+                  entry.category?.includes('Admission') ||
+                  entry.description?.includes('FEE_ID:') ||
+                  (entry.description?.includes('(') && entry.description?.includes('|') && entry.description?.includes(')'));
+
+                if (isStudentDisplay) {
                   // Try to find Fee Type and Details in description
                   // Expected format often: "Monthly Fee - Student Name (Details)" or similar
                   const parts = cleanDescription.split(' - ');

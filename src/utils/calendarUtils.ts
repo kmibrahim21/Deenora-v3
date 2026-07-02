@@ -80,7 +80,7 @@ const HIJRI_MONTHS_BN = [
   'রমজান', 'শাওয়াল', 'জিলকদ', 'জিলহজ'
 ];
 
-export const getHijriDate = (date: Date, offset: number = 0) => {
+export const getHijriDate = (date: Date, offset: number = -1) => {
   try {
     const adjustedDate = new Date(date);
     adjustedDate.setDate(date.getDate() + offset);
