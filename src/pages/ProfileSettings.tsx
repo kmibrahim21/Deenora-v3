@@ -51,8 +51,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const packageNumber = String(packageRaw);
 
   const isPremiumPackage = 
-    ['FINANCE', 'PROFESSIONAL', 'ENTERPRISE', 'ENTERPRISE PLUS', 'ফিনান্স', 'প্রফেশনাল', 'এন্টারপ্রাইজ'].includes(packageNumber.toUpperCase()) ||
-    ['7', '8', '9'].includes(packageNumber) ||
+    ['STANDARD', 'FINANCE', 'PROFESSIONAL', 'ENTERPRISE', 'ENTERPRISE PLUS', 'স্ট্যান্ডার্ড', 'ফিনান্স', 'প্রফেশনাল', 'এন্টারপ্রাইজ'].includes(packageNumber.toUpperCase()) ||
+    ['5', '6', '7', '8', '9'].includes(packageNumber) ||
     packageNumber.toUpperCase().includes('ENTERPRISE PLUS');
 
   const compressAndResizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<Blob> => {
