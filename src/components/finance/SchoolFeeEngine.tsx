@@ -363,16 +363,19 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
     // 2. Fetch ledger entries for this student/month to see what's paid
     const yearStart = madrasah.config_json?.academic_year_start;
+    const className = classes.find(c => c.id === student.class_id)?.class_name || '';
+    const roll = student.roll || '-';
+    
     const { data: ledgerData } = await requestManager.cachedFetch(
       'ledger',
       (q) => {
-        let qry = q.select('description').eq('institution_id', madrasah.id).eq('type', 'income').eq('category', 'Student Fee').ilike('description', `%${student.student_name} (%Month: ${selectedMonth})%`);
+        let qry = q.select('description').eq('institution_id', madrasah.id).eq('type', 'income').eq('category', 'Student Fee').ilike('description', `%${student.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})%`);
         if (yearStart) {
           qry = qry.gte('created_at', yearStart);
         }
         return qry;
       },
-      `ledger_paid:${madrasah.id}:${student.student_name}:${selectedMonth}`,
+      `ledger_paid:${madrasah.id}:${student.student_id}:${selectedMonth}`,
       CACHE_TTLS.SHORT
     );
 

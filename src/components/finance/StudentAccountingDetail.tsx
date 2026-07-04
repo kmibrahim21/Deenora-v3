@@ -264,12 +264,15 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       );
 
       // 2. Fetch ledger entries mentioning this student (Selective Cache)
+      const className = classes.find(c => c.id === student.class_id)?.class_name || student.class_name || '';
+      const roll = student.roll || '-';
+      
       const { data: ledgerData } = await requestManager.cachedFetch(
         'ledger',
         (q) => q.select('id, transaction_date, amount, category, description')
           .eq('institution_id', madrasah.id)
           .eq('category', 'Student Fee')
-          .ilike('description', `%${student.student_name}%`),
+          .ilike('description', `%${student.student_name} (${className} | Roll: ${roll} | Month%`),
         `accounting-history-${student.student_id}`,
         CACHE_TTLS.SHORT
       );

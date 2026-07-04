@@ -361,6 +361,108 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     }
   };
 
+  const handleFixFeeNames = async () => {
+    if (!madrasah?.id) return;
+    if (!isOnline) {
+      alert(lang === 'bn' ? "ডাটা সংশোধন করতে ইন্টারনেট সংযোগ প্রয়োজন।" : "Internet connection required to sync and repair data.");
+      return;
+    }
+    if (!confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে এলোমেলো ফি-এর নামগুলো ঠিক করতে চান?' : 'Are you sure you want to fix overlapping fee names?')) return;
+    
+    setIsSyncing(true);
+    
+    try {
+      // 1. Fetch all ledgers that are student fees
+      const { data: allLedgers, error: lErr } = await supabase
+        .from('ledger')
+        .select('id, description')
+        .eq('institution_id', madrasah.id)
+        .eq('category', 'Student Fee')
+        .eq('type', 'income');
+        
+      if (lErr) throw lErr;
+      
+      // 2. Fetch all fees
+      const { data: allFees, error: fErr } = await supabase
+        .from('fees')
+        .select('id, student_id')
+        .eq('institution_id', madrasah.id);
+        
+      if (fErr) throw fErr;
+      
+      // 3. Fetch all students
+      const { data: allStudents, error: sErr } = await supabase
+        .from('students')
+        .select('id, student_id, student_name, class_id, roll')
+        .eq('institution_id', madrasah.id);
+        
+      if (sErr) throw sErr;
+      
+      const studentsMap = new Map();
+      allStudents?.forEach(s => studentsMap.set(s.student_id || s.id, s));
+      
+      const feesMap = new Map();
+      allFees?.forEach(f => feesMap.set(f.id, f));
+      
+      let updatedCount = 0;
+      
+      // 4. Loop through ledger and fix names
+      for (const l of (allLedgers || [])) {
+        if (!l.description) continue;
+        
+        // Extract FEE_ID
+        const feeIdMatches = [...l.description.matchAll(/FEE_ID:\s*([a-f0-9\-]+)/g)];
+        if (feeIdMatches.length === 0) continue;
+        
+        const firstFeeId = feeIdMatches[0][1];
+        const feeRecord = feesMap.get(firstFeeId);
+        
+        if (!feeRecord) continue;
+        
+        const student = studentsMap.get(feeRecord.student_id);
+        if (!student) continue;
+        
+        const className = classes.find(c => c.id === student.class_id)?.class_name || '';
+        const roll = student.roll || '-';
+        
+        if (l.description.includes(`| Roll:`)) continue; // Already fixed!
+        
+        let newDesc = l.description.replace(
+          new RegExp(`- ${student.student_name} \\(Month`), 
+          `- ${student.student_name} (${className} | Roll: ${roll} | Month`
+        );
+        
+        if (newDesc === l.description) {
+           newDesc = l.description.replace(
+             `${student.student_name} (Month`, 
+             `${student.student_name} (${className} | Roll: ${roll} | Month`
+           );
+        }
+        
+        if (newDesc !== l.description) {
+          const { error: updErr } = await supabase.from('ledger').update({ description: newDesc }).eq('id', l.id);
+          if (updErr) console.error(updErr);
+          else updatedCount++;
+        }
+      }
+      
+      alert(lang === 'bn' ? `সফলভাবে ${updatedCount} টি ফি রেকর্ড সংশোধন করা হয়েছে।` : `Successfully fixed ${updatedCount} fee records.`);
+      
+      // Clear caches
+      requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      requestManager.invalidatePattern(`accounting-history`);
+      clearGlobalSchoolFeeCache();
+      clearGlobalQawmiFeeCache();
+      if (triggerRefresh) triggerRefresh();
+      fetchData(true);
+      
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleAddLedger = async () => {
     if (!madrasah || !amount || !category) return;
     if (!isOnline) {
@@ -572,6 +674,21 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       <Trash2 size={12} /> <span className="hidden sm:inline">সব মুছুন</span>
                     </button>
                   )}
+                  <button
+                    onClick={handleFixFeeNames}
+                    disabled={isSyncing}
+                    className={`px-4 py-2 rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-2 hover:shadow-lg active:scale-95 disabled:opacity-50 ${
+                      isDark 
+                        ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30' 
+                        : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700 font-bold'
+                    }`}
+                    title={lang === 'bn' ? 'পুরনো এলোমেলো ফি-এর নাম ঠিক করুন' : 'Fix Old Fee Names'}
+                  >
+                    <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
+                    <span className="hidden sm:inline">
+                      {lang === 'bn' ? 'ফিক্স ফি নাম' : 'Fix Fee Names'}
+                    </span>
+                  </button>
                   <button
                     onClick={() => {
                       if (!isOnline) {
