@@ -1120,7 +1120,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           total_full: currentExam.total_full,
                           remarks: currentExam.remarks
                         };
-                        await generateResultPDF(student, examInfo, marks, madrasah, lang === 'bn' ? 'bn' : 'en');
+                        const totalAttendanceRate = (() => {
+                          const validRecords = attendance.filter(a => a.status === 'present' || a.status === 'absent' || a.status === 'late');
+                          if (validRecords.length === 0) return 'N/A';
+                          const presentCount = validRecords.filter(a => a.status === 'present' || a.status === 'late').length;
+                          return Math.round((presentCount / validRecords.length) * 100).toString();
+                        })();
+
+                        await generateResultPDF({ ...student, attendance: totalAttendanceRate }, examInfo, marks, madrasah, lang === 'bn' ? 'bn' : 'en');
                       } catch (err) {
                         console.error('Error generating PDF:', err);
                       }

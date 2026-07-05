@@ -108,6 +108,44 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
   const [previewScale, setPreviewScale] = useState<number>(1);
   const [userZoom, setUserZoom] = useState<number>(1);
+
+  const fetchClassAttendanceStats = async (classId: string) => {
+    if (!madrasah || !activeYear) return {};
+    try {
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('student_id, status')
+        .eq('institution_id', madrasah.id)
+        .eq('class_id', classId)
+        .gte('date', activeYear.start_date || '')
+        .lte('date', activeYear.end_date || '');
+      
+      if (error) throw error;
+      
+      const stats: Record<string, { present: number, total: number }> = {};
+      data?.forEach((record: any) => {
+        if (!stats[record.student_id]) {
+          stats[record.student_id] = { present: 0, total: 0 };
+        }
+        stats[record.student_id].total += 1;
+        if (record.status === 'present' || record.status === 'late') {
+          stats[record.student_id].present += 1;
+        }
+      });
+      
+      const percentages: Record<string, string> = {};
+      for (const [studentId, stat] of Object.entries(stats)) {
+        if (stat.total > 0) {
+          percentages[studentId] = Math.round((stat.present / stat.total) * 100).toString();
+        }
+      }
+      return percentages;
+    } catch (err) {
+      console.error('Error fetching attendance stats:', err);
+      return {};
+    }
+  };
+
   const routineThemes = {
     'emerald': { primary: '#013c28', secondary: '#023c28', light: '#E6F4EA', accent: '#EAF7EE' },
     'blue': { primary: '#1e3a8a', secondary: '#1e40af', light: '#eff6ff', accent: '#f8fafc' },
@@ -1469,6 +1507,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         await fetchMarkEntryData(selectedExam.id, selectedExam.class_id);
     }
     
+    const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
+    
     // We already have rankingData if view === 'report'. 
     // If not, fetchRanking should be called. 
     const validStudents = rankingData.filter((item: any) => students.find(st => st.id === item.student_id));
@@ -1500,6 +1540,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 if (p >= 33) return { gpa: '1.00', grade: 'D' };
                 return { gpa: '0.00', grade: 'F' };
             };
+
             return {
                 subject_name: s.subject_name,
                 marks_obtained: obtained,
@@ -1519,7 +1560,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                roll: item.roll, 
                classes: { class_name: selectedExam.classes?.class_name }, 
                photo_url: studentObj?.photo_url, 
-               attendance: '95', // You can replace with real attendance computation if needed
+               attendance: attStats[item.student_id] || 'N/A', 
                merit_position: item.rank, 
                gpa: resultInfo.gpa,
                grade: resultInfo.grade
@@ -2984,23 +3025,26 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                               if (selectedExam && madrasah) {
                                                 const studentObj = students.find(st => st.id === item.student_id);
                                                 const resultInfo = calculateStudentResult(item.student_id, subjects);
-                                                generateResultPDF(
-                                                    { 
-                                                      ...studentObj,
-                                                      student_name: item.student_name, 
-                                                      roll: item.roll, 
-                                                      classes: { class_name: selectedExam.classes?.class_name }, 
-                                                      photo_url: studentObj?.photo_url, 
-                                                      attendance: '95', 
-                                                      merit_position: item.rank, 
-                                                      gpa: resultInfo.gpa,
-                                                      grade: resultInfo.grade
-                                                    },
-                                                    selectedExam,
-                                                    preparedMarks,
-                                                    { name: madrasah.name, logo_url: madrasah.logo_url, address: madrasah.address },
-                                                    lang
-                                                );
+                                                
+                                                fetchClassAttendanceStats(selectedExam.class_id).then(attStats => {
+                                                  generateResultPDF(
+                                                      { 
+                                                        ...studentObj,
+                                                        student_name: item.student_name, 
+                                                        roll: item.roll, 
+                                                        classes: { class_name: selectedExam.classes?.class_name }, 
+                                                        photo_url: studentObj?.photo_url, 
+                                                        attendance: attStats[item.student_id] || 'N/A', 
+                                                        merit_position: item.rank, 
+                                                        gpa: resultInfo.gpa,
+                                                        grade: resultInfo.grade
+                                                      },
+                                                      selectedExam,
+                                                      preparedMarks,
+                                                      { name: madrasah.name, logo_url: madrasah.logo_url, address: madrasah.address },
+                                                      lang
+                                                  );
+                                                });
                                               }
                                           }}
                                           className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase flex items-center gap-1 transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
