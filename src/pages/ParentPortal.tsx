@@ -456,7 +456,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
               <div>
                 <h2 className="font-black text-slate-900 text-base">{student?.student_name}</h2>
                 <p className="text-[10px] font-bold text-slate-500 flex items-center gap-2 uppercase">
-                  শ্রেণী: {student?.classes?.class_name || 'N/A'} <span className="w-1 h-1 bg-slate-300 rounded-full" /> আইডি: {student?.roll || 'N/A'}
+                  শ্রেণী: {student?.classes?.class_name || 'N/A'} <span className="w-1 h-1 bg-slate-300 rounded-full" /> আইডি: {student?.registration_number || student?.roll || 'N/A'}
                 </p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <GraduationCap size={10} className="text-blue-600" />

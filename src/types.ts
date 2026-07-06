@@ -66,6 +66,7 @@ export interface Institution {
     seal_url?: string;
     signature_url?: string;
     signature_height?: number;
+    exam_manual_attendance?: Record<string, Record<string, string>>;
     package_name?: string;
     features?: {
       student_attendance_sms?: boolean;

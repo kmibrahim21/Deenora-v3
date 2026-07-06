@@ -152,7 +152,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                 )}
                </div>
             </div>
-            <p className="mt-1 text-[7px] font-black uppercase text-slate-400 tracking-[0.1em] leading-none">REG: {student.admission_number || student.roll}</p>
+            <p className="mt-1 text-[7px] font-black uppercase text-slate-400 tracking-[0.1em] leading-none">{isBangla ? 'রোল' : 'ROLL'}: {student.roll}</p>
           </div>
         </div>
 

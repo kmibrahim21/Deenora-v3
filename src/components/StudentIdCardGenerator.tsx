@@ -186,7 +186,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
 
   const t = {
     title: isBangla ? "স্টুডেন্ট আইডি কার্ড" : "Student ID Card",
-    id: isBangla ? "আইডি নং" : "ID No",
+    id: isBangla ? "রেজিঃ নম্বর" : "Reg No",
     class: isBangla ? "শ্রেণী" : "Class",
     roll: isBangla ? "রোল" : "Roll",
     blood: isBangla ? "রক্তের গ্রুপ" : "Blood",
@@ -409,7 +409,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.id}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-sans tracking-wide">{currentRenderStudent.admission_number || currentRenderStudent.registration_number || currentRenderStudent.id.substring(0, 8)}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-sans tracking-wide">{currentRenderStudent.registration_number || currentRenderStudent.roll || '-'}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.dob}</span>
@@ -540,13 +540,13 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               <div className="my-auto py-1 flex flex-col items-center w-full">
                 <div className="p-1 px-1.5 bg-white rounded-lg shadow-sm border border-slate-100 inline-block mb-1">
                   <QRCode
-                    value={madrasah ? `Name: ${madrasah.name}\nAddress: ${madrasah.address || ''}\nMobile: ${madrasah.phone || ''}\nStudent: ${currentRenderStudent.student_name} (${currentRenderStudent.roll || currentRenderStudent.admission_number})` : `ID:${currentRenderStudent.id}|A:${currentRenderStudent.admission_number}`}
+                    value={madrasah ? `Name: ${madrasah.name}\nAddress: ${madrasah.address || ''}\nMobile: ${madrasah.phone || ''}\nStudent: ${currentRenderStudent.student_name} (${currentRenderStudent.registration_number || currentRenderStudent.roll || ''})` : `ID:${currentRenderStudent.id}`}
                     size={60}
                   />
                 </div>
                 <p className="text-[9px] font-bold tracking-widest text-slate-500 font-sans">
-                  {currentRenderStudent.admission_number ||
-                    currentRenderStudent.registration_number ||
+                  {currentRenderStudent.registration_number ||
+                    currentRenderStudent.roll ||
                     currentRenderStudent.id.substring(0, 8)}
                 </p>
               </div>

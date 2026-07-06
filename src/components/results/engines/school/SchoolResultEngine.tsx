@@ -821,6 +821,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       `exam_marks:${examId}`
     );
     
+    // 3. Load manual attendance from config
+    const manualAttendanceMap = madrasah?.config_json?.exam_manual_attendance?.[examId] || {};
+    
     if (stds) setStudents(stds);
     if (marks) {
         const initialMarks: any = {};
@@ -828,6 +831,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
             initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
         });
+        
+        // Fill manual attendance
+        Object.entries(manualAttendanceMap).forEach(([studentId, val]: [string, any]) => {
+            if (!initialMarks[studentId]) initialMarks[studentId] = {};
+            initialMarks[studentId]['attendance'] = val;
+        });
+        
         setMarksData(initialMarks);
     }
     setLoading(false);
@@ -1455,6 +1465,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
     // Upsert logic
     for (const row of payload) {
+        if (row.subject_id === 'attendance') continue; // Skip attendance here
         const { error } = await supabase.from('exam_marks').upsert(row, { onConflict: 'exam_id,student_id,subject_id' });
         if (error) {
             console.error("Error saving marks:", error);
@@ -1462,6 +1473,33 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             setIsSaving(false);
             return;
         }
+    }
+    
+    // Save manual attendance to madrasah config
+    try {
+        const examId = selectedExam.id;
+        const currentManualAttendance = madrasah?.config_json?.exam_manual_attendance || {};
+        const examAttendance: any = {};
+        
+        Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
+            if (subMarks.attendance) {
+                examAttendance[studentId] = subMarks.attendance;
+            }
+        });
+
+        const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah?.id).single();
+        const updatedConfig = {
+            ...(instData?.config_json || madrasah?.config_json || {}),
+            exam_manual_attendance: {
+                ...currentManualAttendance,
+                [examId]: examAttendance
+            }
+        };
+
+        const { error: configError } = await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah?.id);
+        if (configError) throw configError;
+    } catch (err) {
+        console.error("Error saving manual attendance to config:", err);
     }
     
     if (madrasah?.id && selectedExam) {
@@ -1560,7 +1598,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                roll: item.roll, 
                classes: { class_name: selectedExam.classes?.class_name }, 
                photo_url: studentObj?.photo_url, 
-               attendance: attStats[item.student_id] || 'N/A', 
+               attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
                merit_position: item.rank, 
                gpa: resultInfo.gpa,
                grade: resultInfo.grade
@@ -2851,6 +2889,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                             {subjects.map(s => (
                                 <th key={s.id} className={`py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4 sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{s.subject_name}</th>
                             ))}
+                            <th className={`py-4 text-[10px] font-black text-amber-500 uppercase text-center min-w-[80px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{lang === 'bn' ? 'উপস্থিতি (%)' : 'Attendance (%)'}</th>
                             <th className={`py-4 text-[10px] font-black text-blue-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{t('total_marks', lang)}</th>
                             <th className={`py-4 text-[10px] font-black text-purple-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{t('average', lang)}</th>
                             <th className={`py-4 text-[10px] font-black text-emerald-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{t('gpa', lang)}</th>
@@ -2884,12 +2923,30 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         />
                                     </td>
                                 ))}
+                                <td className="py-4 px-2">
+                                    <input 
+                                        type="number" 
+                                        placeholder="%"
+                                        className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500' : 'bg-amber-50 border-amber-100 text-slate-900 focus:border-amber-500'} rounded-lg text-center font-black text-xs outline-none transition-all`}
+                                        value={marksData[std.id]?.['attendance'] || ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setMarksData(prev => ({
+                                                ...prev,
+                                                [std.id]: {
+                                                    ...prev[std.id],
+                                                    ['attendance']: val
+                                                }
+                                            }));
+                                        }}
+                                    />
+                                </td>
                                 <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
-                                    {(Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0)}
+                                    {(Object.entries(marksData[std.id] || {}).filter(([sid]) => sid !== 'attendance') as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0)}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
                                     {(() => {
-                                        const total = (Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0);
+                                        const total = (Object.entries(marksData[std.id] || {}).filter(([sid]) => sid !== 'attendance') as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0);
                                         const avgValue = subjects.length > 0 ? (total / subjects.length) : 0;
                                         return avgValue.toFixed(2);
                                     })()}
@@ -3034,7 +3091,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                         roll: item.roll, 
                                                         classes: { class_name: selectedExam.classes?.class_name }, 
                                                         photo_url: studentObj?.photo_url, 
-                                                        attendance: attStats[item.student_id] || 'N/A', 
+                                                        attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
                                                         merit_position: item.rank, 
                                                         gpa: resultInfo.gpa,
                                                         grade: resultInfo.grade

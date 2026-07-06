@@ -66,7 +66,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
     const headerStyles = getNameStyles(madrasah.name);
     const studentData = {
       roll: student.roll || '-',
-      application: student.registration_number || student.admission_number || student.id?.slice(0, 8) || '-',
+      application: student.registration_number || student.roll?.toString() || '-',
       name: student.student_name,
       father: student.guardian_name || '-',
       mother: student.mother_name || '-',
