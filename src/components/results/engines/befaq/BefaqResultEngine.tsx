@@ -162,6 +162,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     setLoading(true);
     const activeYearId = madrasah?.config_json?.active_academic_year_id;
     let studentQuery = supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
+    if ((window as any)._hasIsActive !== false) {
+      studentQuery = studentQuery.eq('is_active', true);
+    }
     if (activeYearId) {
       studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
     }
@@ -189,7 +192,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     if (!madrasah || !examForAdmitCard) return;
     
     // Fetch students for the exam class
-    const { data: stds } = await supabase.from('students').select('*, classes(class_name)').eq('class_id', examForAdmitCard.marhala_id).order('roll', { ascending: true });
+    const { data: stds } = await supabase.from('students')
+      .select('*, classes(class_name)')
+      .eq('class_id', examForAdmitCard.marhala_id)
+      .eq('is_active', true)
+      .order('roll', { ascending: true });
     
     if (!stds || stds.length === 0) {
         alert('No students found for this class');
@@ -222,6 +229,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       const { data: stds } = await supabase.from('students')
         .select('*, classes(class_name)')
         .in('class_id', selectedClassesForSeatPlan)
+        .eq('is_active', true)
         .order('class_id', { ascending: true })
         .order('roll', { ascending: true });
         

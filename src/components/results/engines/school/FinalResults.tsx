@@ -210,6 +210,10 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         stdQuery = stdQuery.or(`academic_year_id.eq.${activeYear.id},academic_year_id.is.null`);
       }
 
+      if ((window as any)._hasIsActive !== false) {
+        stdQuery = stdQuery.eq('is_active', true);
+      }
+
       const { data: students } = await stdQuery;
 
       if (!students) throw new Error('No students found');

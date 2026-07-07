@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap } from 'lucide-react';
+import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX } from 'lucide-react';
 import { supabase, offlineApi, smsApi } from 'supabase';
 import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
@@ -38,6 +38,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
@@ -79,11 +80,13 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
     try {
       // 1. Prepare fields
-      const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, photo_url, notes, classes(class_name)';
-      const selectFields = (window as any)._hasMotherName === false ? baseFields.replace('mother_name, ', '') : baseFields;
+      const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, section, is_active, photo_url, notes, classes(class_name)';
+      let selectFields = (window as any)._hasMotherName === false ? baseFields.replace('mother_name, ', '') : baseFields;
+      if ((window as any)._hasSection === false) selectFields = selectFields.replace('section, ', '');
+      if ((window as any)._hasIsActive === false) selectFields = selectFields.replace('is_active, ', '');
 
       // 2. Fetch via RequestManager (Cache key includes page and class)
-      const cacheKey = `v4_students:${selectedClass.id}:p${currentPage}:${searchQuery || 'all'}`;
+      const cacheKey = `v6_students:${selectedClass.id}:p${currentPage}:${searchQuery || 'all'}:${showInactive}`;
       
       const { data, error } = await requestManager.cachedFetch(
         'students',
@@ -99,6 +102,10 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
           }
 
+          if (!showInactive && (window as any)._hasIsActive !== false) {
+            query = query.eq('is_active', true);
+          }
+
           if (searchQuery.trim()) {
             query = query.ilike('student_name', `%${searchQuery}%`);
           }
@@ -109,9 +116,19 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       );
       
       if (error && isOnline) {
-        // ... existing error handling for mother_name ...
+        // Handle missing mother_name column
         if ((window as any)._hasMotherName === undefined && (error.code === 'PGRST204' || error.message?.includes('mother_name'))) {
           (window as any)._hasMotherName = false;
+          return fetchStudents(reset);
+        }
+        // Handle missing section column
+        if ((window as any)._hasSection === undefined && (error.code === 'PGRST204' || error.message?.includes('section'))) {
+          (window as any)._hasSection = false;
+          return fetchStudents(reset);
+        }
+        // Handle missing is_active column
+        if ((window as any)._hasIsActive === undefined && (error.code === 'PGRST204' || error.message?.includes('is_active'))) {
+          (window as any)._hasIsActive = false;
           return fetchStudents(reset);
         }
         throw error;
@@ -119,6 +136,12 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
       if ((window as any)._hasMotherName === undefined) {
         (window as any)._hasMotherName = true;
+      }
+      if ((window as any)._hasSection === undefined) {
+        (window as any)._hasSection = true;
+      }
+      if ((window as any)._hasIsActive === undefined) {
+        (window as any)._hasIsActive = true;
       }
 
       if (data) {
@@ -258,16 +281,33 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="relative group">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-white/60 group-focus-within:text-white transition-colors" size={20} strokeWidth={3} />
-            <input 
-              type="text" 
-              placeholder={t('search_placeholder', lang)}
-              className="w-full h-14 pl-14 pr-6 bg-white/10 backdrop-blur-2xl border-2 border-white/20 rounded-[1.5rem] outline-none text-white font-black text-base placeholder:text-white/40 focus:border-white/40 focus:bg-white/20 transition-all shadow-inner"
-              value={searchQuery} 
-              onChange={(e) => setSearchQuery(e.target.value)} 
-            />
+          {/* Search Bar & Filter */}
+          <div className="flex gap-2">
+            <div className="relative group flex-1">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-white/60 group-focus-within:text-white transition-colors" size={20} strokeWidth={3} />
+              <input 
+                type="text" 
+                placeholder={t('search_placeholder', lang)}
+                className="w-full h-14 pl-14 pr-6 bg-white/10 backdrop-blur-2xl border-2 border-white/20 rounded-[1.5rem] outline-none text-white font-black text-base placeholder:text-white/40 focus:border-white/40 focus:bg-white/20 transition-all shadow-inner"
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
+              />
+            </div>
+            <button
+              onClick={() => {
+                setShowInactive(!showInactive);
+                fetchStudents(true);
+              }}
+              className={`h-14 px-4 rounded-[1.5rem] border-2 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-wider shadow-lg ${
+                showInactive 
+                ? 'bg-white text-[#2563EB] border-white' 
+                : 'bg-white/10 backdrop-blur-2xl text-white border-white/20 hover:bg-white/20'
+              }`}
+              title={lang === 'bn' ? 'ইন-অ্যাক্টিভ শিক্ষার্থী দেখুন' : 'Show Inactive Students'}
+            >
+              <UserX size={18} strokeWidth={3} />
+              <span className="hidden sm:inline">{lang === 'bn' ? 'ইন-অ্যাক্টিভ' : 'Inactive'}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -280,7 +320,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             onClick={() => isSelectionMode ? (setSelectedIds(prev => { const n = new Set(prev); if(n.has(student.id)) n.delete(student.id); else n.add(student.id); return n; })) : onStudentClick(student)}
             className={`group p-4 rounded-[2rem] border-2 transition-all flex items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] cursor-pointer ${isSelectionMode && selectedIds.has(student.id) ? (isDark ? 'bg-blue-600/20 border-[#2563EB] shadow-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB] shadow-[#2563EB]/10') : (isDark ? 'bg-slate-800 border-slate-700 hover:border-[#2563EB]/40 hover:bg-slate-700/50' : 'bg-white border-slate-100 hover:border-[#2563EB]/20')}`}
           >
-            <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className={`flex items-center gap-4 flex-1 min-w-0 relative ${student.is_active === false ? 'opacity-70' : ''}`}>
               <div className="relative shrink-0">
                 <div className={`w-14 h-14 rounded-[1rem] flex flex-col items-center justify-center shrink-0 border-2 shadow-inner transition-all duration-300 ${isSelectionMode && selectedIds.has(student.id) ? 'bg-[#2563EB] text-white border-[#2563EB]' : (isDark ? 'bg-slate-800 text-blue-400 border-slate-700 group-hover:bg-slate-700 group-hover:border-[#2563EB]/40' : 'bg-slate-50 text-[#2563EB] border-slate-100 group-hover:bg-blue-50 group-hover:border-[#2563EB]/20')}`}>
                   <span className={`text-[8px] font-black leading-none uppercase tracking-widest ${isSelectionMode && selectedIds.has(student.id) ? 'opacity-70' : 'opacity-40'}`}>{t('roll', lang)}</span>
@@ -293,8 +333,21 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className={`font-black text-base font-noto truncate leading-tight group-hover:text-[#2563EB] transition-colors ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h3>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5 group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
+                <div className="flex items-center gap-1.5">
+                  <h3 className={`font-black text-base font-noto truncate leading-tight group-hover:text-[#2563EB] transition-colors ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h3>
+                  {student.is_active === false && (
+                    <UserX size={16} className="text-red-500 shrink-0" strokeWidth={2.5} />
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
+                  {student.section && (
+                    <>
+                      <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
+                      <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{student.section}</p>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
             {!isSelectionMode && (

@@ -209,6 +209,8 @@ export interface Student {
   sponsor_id?: string | null;
   academic_year_id?: string;
   registration_number?: string;
+  section?: string;
+  is_active?: boolean;
   created_at?: string;
   classes?: Class;
 }

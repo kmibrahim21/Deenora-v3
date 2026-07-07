@@ -71,6 +71,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [events, setEvents] = useState<any[]>([]);
   const [classTotal, setClassTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [showExamDropdown, setShowExamDropdown] = useState(false);
@@ -123,8 +124,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       const response = await fetch(`/api/parents/data?phone=${phone}&reg_no=${regNo}`);
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) {
+        setError(data.error);
+        throw new Error(data.error);
+      }
 
+      setError(null);
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         data,
         timestamp: Date.now()
@@ -280,7 +285,39 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
   return (
     <AnimatePresence mode="wait">
-      {loading ? (
+      {error ? (
+        <motion.div
+          key="error-screen"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center"
+        >
+          <div className="w-24 h-24 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-sm border border-red-100">
+             <XCircle size={48} />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 mb-2 font-noto">
+             {error.includes('ইন-অ্যাক্টিভ') ? 'শিক্ষার্থী ইন-অ্যাক্টিভ' : 'ত্রুটি হয়েছে'}
+          </h1>
+          <p className="text-slate-500 mb-8 max-w-sm font-noto">
+             {error}
+          </p>
+          <div className="flex flex-col gap-3 w-full max-w-xs mx-auto">
+            <button 
+              onClick={() => fetchData()} 
+              className="flex items-center justify-center gap-2 px-8 py-4 bg-slate-800 text-white rounded-2xl font-black shadow-lg shadow-slate-200 active:scale-95 transition-all"
+            >
+              <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+              আবার চেষ্টা করুন
+            </button>
+            <button 
+              onClick={handleLogout} 
+              className="px-8 py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black active:scale-95 transition-all"
+            >
+              লগ আউট
+            </button>
+          </div>
+        </motion.div>
+      ) : loading ? (
         <motion.div
           key="loading-screen"
           initial={{ opacity: 1 }}
@@ -456,7 +493,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
               <div>
                 <h2 className="font-black text-slate-900 text-base">{student?.student_name}</h2>
                 <p className="text-[10px] font-bold text-slate-500 flex items-center gap-2 uppercase">
-                  শ্রেণী: {student?.classes?.class_name || 'N/A'} <span className="w-1 h-1 bg-slate-300 rounded-full" /> আইডি: {student?.registration_number || student?.roll || 'N/A'}
+                  শ্রেণী: {student?.classes?.class_name || 'N/A'} {student?.section && <><span className="w-1 h-1 bg-slate-300 rounded-full" /> {student.section}</>} <span className="w-1 h-1 bg-slate-300 rounded-full" /> আইডি: {student?.registration_number || student?.roll || 'N/A'}
                 </p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <GraduationCap size={10} className="text-blue-600" />
@@ -1182,6 +1219,11 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                      <span className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-indigo-100/50 font-noto">
                        রেজিষ্ট্রেশন নম্বর: {student?.registration_number || '---'}
                      </span>
+                     {student?.section && (
+                       <span className="px-5 py-2 bg-emerald-50 text-emerald-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-emerald-100/50 font-noto">
+                         বিভাগ/শাখা: {student.section}
+                       </span>
+                     )}
                   </div>
                </div>
 
@@ -1204,6 +1246,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                        { label: 'জন্ম তারিখ', value: student?.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : '---', icon: Calendar, color: 'text-emerald-500' },
                        { label: 'রক্তের গ্রুপ', value: student?.blood_group || '---', icon: Heart, color: 'text-red-500' },
                        { label: 'ছাত্রের ধরণ', value: student?.student_type === 'boarding' ? 'আবাসিক' : student?.student_type === 'day_scholar' ? 'অনাবাসিক' : student?.student_type || '---', icon: Info, color: 'text-blue-500' },
+                       { label: 'বিভাগ/শাখা', value: student?.section || '---', icon: BookOpen, color: 'text-indigo-600' },
                        { label: 'বিভাগ', value: student?.department || 'সাধারণ', icon: BookOpen, color: 'text-purple-500' },
                      ].map((item, i) => (
                        <div key={i} className="flex items-center gap-4 group">

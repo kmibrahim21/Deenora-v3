@@ -319,21 +319,40 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           if (activeYearId) {
             query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
           }
+          if ((window as any)._hasIsActive !== false) {
+            query = query.eq('is_active', true);
+          }
           return query;
         },
         `students:${madrasah.id}:${cid}:${activeYearId || 'all'}`,
         CACHE_TTLS.LONG
       );
       
-      if (stdError && isOnline) throw stdError;
+      if (stdError && isOnline) {
+        if ((window as any)._hasIsActive === undefined && (stdError.code === 'PGRST204' || stdError.message?.includes('is_active'))) {
+          (window as any)._hasIsActive = false;
+          return fetchStudents(cid);
+        }
+        throw stdError;
+      }
+      
+      if ((window as any)._hasIsActive === undefined) {
+        (window as any)._hasIsActive = true;
+      }
       
       let finalStdData = stdData || [];
       
       // Fallback: if no students found with activeYearId, try fetching without it (caching the fallback too)
       if (finalStdData.length === 0 && activeYearId) {
-        const { data: fallbackData } = await requestManager.cachedFetch(
+        const { data: fallbackData, error: fallbackError } = await requestManager.cachedFetch(
           'students',
-          (q) => q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).order('roll', { ascending: true }),
+          (q) => {
+            let query = q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).order('roll', { ascending: true });
+            if ((window as any)._hasIsActive !== false) {
+              query = query.eq('is_active', true);
+            }
+            return query;
+          },
           `students:${madrasah.id}:${cid}:all`,
           CACHE_TTLS.LONG
         );

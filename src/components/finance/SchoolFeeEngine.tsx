@@ -179,13 +179,16 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         const { data: studentsData, error } = await requestManager.cachedFetch(
           'students',
           (q) => {
-            let query = q.select('id, student_name, roll, class_id, classes(class_name), guardian_phone')
+            let query = q.select('id, student_name, roll, class_id, classes(class_name), guardian_phone, is_active')
               .eq('institution_id', madrasah.id);
             if (classId) {
               query = query.eq('class_id', classId);
             }
             if (activeYearId) {
               query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+            }
+            if ((window as any)._hasIsActive !== false) {
+              query = query.eq('is_active', true);
             }
             return query;
           },

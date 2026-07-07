@@ -204,6 +204,7 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
         .from('students')
         .select('*')
         .eq('class_id', result.class_id)
+        .eq('is_active', true)
         .order('roll', { ascending: true });
 
       if (!students) throw new Error('No students found');

@@ -26,7 +26,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [registrationNumber, setRegistrationNumber] = useState(student?.registration_number || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
   const [motherName, setMotherName] = useState(student?.mother_name || '');
-
+  const [section, setSection] = useState(student?.section || '');
   const [roll, setRoll] = useState(student?.roll?.toString() || '');
   const [dob, setDob] = useState(student?.date_of_birth || '');
   const [bloodGroup, setBloodGroup] = useState(student?.blood_group || '');
@@ -136,6 +136,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         guardian_phone_2: phone2.trim() || null,
         address: address.trim() || null,
         class_id: classId,
+        section: section.trim() || null,
         institution_id: madrasah.id,
         academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null
       };
@@ -166,6 +167,22 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
           
           // Alert user that mother_name was skipped (optional, but good for UX)
           console.log('Successfully saved without mother_name');
+        } else if (innerErr.code === 'PGRST204' || innerErr.message?.includes('section does not exist')) {
+          console.warn('section column missing in students table, retrying without it...');
+          
+          // Remember it for the session
+          (window as any)._hasSection = false;
+          
+          const retryPayload = { ...payload };
+          delete retryPayload.section;
+          if ((window as any)._hasMotherName === false) delete retryPayload.mother_name;
+          
+          if (isEditing && student) {
+            finalStudent = await OfflineService.safeUpdate('students', student.id, retryPayload);
+          } else {
+            finalStudent = await OfflineService.safeInsert('students', retryPayload);
+          }
+          console.log('Successfully saved without section');
         } else if (innerErr.message?.includes('foreign key constraint') || innerErr.code === '23503') {
           // If foreign key error, retry with null academic_year_id
           console.warn('Foreign key violation for academic_year_id in students, retrying with null...');
@@ -384,6 +401,20 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] font-black text-lg outline-none text-center focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
                   value={roll} 
                   onChange={(e) => setRoll(e.target.value)} 
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                  <BookOpen size={11} className="text-[#2563EB]" /> 
+                  {t('section', lang)}
+                </label>
+                <input 
+                  type="text" 
+                  placeholder={lang === 'bn' ? 'উদা: ক শাখা / বিজ্ঞান' : 'e.g. Sec A / Science'}
+                  className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
+                  value={section} 
+                  onChange={(e) => setSection(e.target.value)} 
                 />
               </div>
 

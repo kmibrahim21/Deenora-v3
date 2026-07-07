@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS students (
     sponsor_id UUID,
     academic_year_id UUID REFERENCES academic_years(id) ON DELETE SET NULL,
     registration_number TEXT,
+    section TEXT,
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

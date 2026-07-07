@@ -55,6 +55,14 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Student not found with provided credentials' });
     }
 
+    if (student.is_active === false) {
+      console.warn('Parents API: Student is deactivated');
+      return res.status(401).json({ 
+        error: 'আপনার শিক্ষার্থীর একাউন্টটি ইন-অ্যাক্টিভ অবস্থায় আছে। বিস্তারিত জানতে প্রতিষ্ঠানের সাথে যোগাযোগ করুন।',
+        code: 'STUDENT_DEACTIVATED'
+      });
+    }
+
     if (student.institutions?.is_active === false) {
       console.warn('Parents API: Institution is deactivated');
       return res.status(401).json({ 

@@ -812,6 +812,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       if (activeYearId) {
         query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
       }
+      if ((window as any)._hasIsActive !== false) {
+        query = query.eq('is_active', true);
+      }
       return query;
     }, `students:${classId}:${activeYearId || 'no-year'}`);
 
@@ -932,6 +935,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         requestManager.cachedFetch('students', (q: any) => {
           let query = q.select('*').eq('class_id', classId);
           if (activeYearId) query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+          if ((window as any)._hasIsActive !== false) query = query.eq('is_active', true);
           return query;
         }, `students:${classId}:${activeYearId || 'no-year'}`),
         requestManager.cachedFetch('exam_marks', (q: any) => q.select('*').eq('exam_id', examId), `exam_marks:${examId}`)
@@ -1148,10 +1152,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setIsDownloading(true);
     try {
         // Fetch students for the exam class
-        const { data: stds } = await requestManager.cachedFetch('students', (q: any) => 
-          q.select('*, classes(class_name)').eq('class_id', examForAdmitCard.class_id).order('roll', { ascending: true }),
-          `students:${examForAdmitCard.class_id}:with-classes`
-        );
+        const { data: stds } = await requestManager.cachedFetch('students', (q: any) => {
+          let query = q.select('*, classes(class_name)').eq('class_id', examForAdmitCard.class_id).order('roll', { ascending: true });
+          if ((window as any)._hasIsActive !== false) query = query.eq('is_active', true);
+          return query;
+        }, `students:${examForAdmitCard.class_id}:with-classes`);
         
         if (!stds || stds.length === 0) {
             alert('No students found for this class');
@@ -1183,13 +1188,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       
       setLoading(true);
       // Fetch students from selected classes
-      const { data: stds } = await requestManager.cachedFetch('students', (q: any) => 
-        q.select('*, classes(class_name)')
+      const { data: stds } = await requestManager.cachedFetch('students', (q: any) => {
+        let query = q.select('*, classes(class_name)')
           .in('class_id', selectedClassesForSeatPlan)
           .order('class_id', { ascending: true })
-          .order('roll', { ascending: true }),
-        `students:seatplan:${selectedClassesForSeatPlan.join('-')}`
-      );
+          .order('roll', { ascending: true });
+        if ((window as any)._hasIsActive !== false) query = query.eq('is_active', true);
+        return query;
+      }, `students:seatplan:${selectedClassesForSeatPlan.join('-')}`);
         
       if (!stds || stds.length === 0) {
           setLoading(false);

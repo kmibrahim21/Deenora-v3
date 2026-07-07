@@ -95,6 +95,8 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const [currentPhotoUrl, setCurrentPhotoUrl] = useState(student.photo_url || '');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
+  const [isActive, setIsActive] = useState(student.is_active !== false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPhotoDeleteConfirm, setShowPhotoDeleteConfirm] = useState(false);
   const [photoAlert, setPhotoAlert] = useState<{ show: boolean; type: 'success' | 'error'; message: string } | null>(null);
@@ -128,7 +130,37 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
 
   useEffect(() => {
     setCurrentPhotoUrl(student.photo_url || '');
-  }, [student?.photo_url, student?.id]);
+    setIsActive(student.is_active !== false);
+  }, [student?.photo_url, student?.id, student?.is_active]);
+
+  const toggleStatus = async () => {
+    setIsUpdatingStatus(true);
+    const newStatus = !isActive;
+    try {
+      await SupabaseWrapper.safeUpdate('students', student.id, { is_active: newStatus });
+      setIsActive(newStatus);
+      if (onStudentUpdate) {
+        onStudentUpdate({ ...student, is_active: newStatus });
+      }
+      // Invalidate Pattern
+      if (madrasah) {
+        requestManager.invalidatePattern('fetch:students:');
+        // Update local cache
+        CacheService.getCachedData('students', madrasah.id).then(cached => {
+          if (Array.isArray(cached)) {
+            const updated = cached.map((s: any) => s.id === student.id ? { ...s, is_active: newStatus } : s);
+            CacheService.cacheData('students', madrasah.id, updated);
+          }
+        }).catch(() => {});
+      }
+      if (triggerRefresh) triggerRefresh();
+    } catch (err: any) {
+      console.error('Error updating status:', err);
+      alert(err.message || 'Error updating status');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   const handleSaveNotes = async () => {
     setIsSavingNotes(true);
@@ -405,6 +437,24 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
           
           {!readOnly && (
             <div className="flex gap-1.5">
+              <button
+                onClick={toggleStatus}
+                disabled={isUpdatingStatus}
+                className={`w-9 h-9 backdrop-blur-2xl rounded-[1rem] flex items-center justify-center active:scale-90 transition-all border shadow-lg ${
+                  isActive 
+                  ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-100 hover:bg-emerald-500/30' 
+                  : 'bg-red-500/20 border-red-500/30 text-red-100 hover:bg-red-500/30'
+                }`}
+                title={isActive ? (lang === 'bn' ? 'অ্যাক্টিভ' : 'Active') : (lang === 'bn' ? 'ইন-অ্যাক্টিভ' : 'Inactive')}
+              >
+                {isUpdatingStatus ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : isActive ? (
+                  <UserCheck size={16} />
+                ) : (
+                  <X size={16} />
+                )}
+              </button>
               <button 
                 onClick={() => setShowDeleteConfirm(true)} 
                 className="w-9 h-9 bg-red-500/20 backdrop-blur-2xl rounded-[1rem] flex items-center justify-center text-red-100 active:scale-90 transition-all border border-red-500/30 shadow-lg hover:bg-red-500/30"
@@ -493,6 +543,16 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
             <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[0.7rem] border-2 shadow-inner ${isDark ? 'bg-blue-900/20 border-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB]/10'}`}>
               <span className="text-xs font-black text-[#2563EB] uppercase tracking-[0.15em]">{t('roll', lang)}: {student.roll || '-'}</span>
             </div>
+            {student.section && (
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[0.7rem] border-2 shadow-inner ${isDark ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-emerald-50 border-emerald-500/10'}`}>
+                <span className="text-xs font-black text-emerald-600 uppercase tracking-[0.15em]">{t('section', lang)}: {student.section}</span>
+              </div>
+            )}
+            {!isActive && (
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[0.7rem] border-2 shadow-inner ${isDark ? 'bg-red-900/20 border-red-500/20' : 'bg-red-50 border-red-500/10'}`}>
+                <span className="text-xs font-black text-red-600 uppercase tracking-[0.15em]">{lang === 'bn' ? 'ইন-অ্যাক্টিভ' : 'Inactive'}</span>
+              </div>
+            )}
           </div>
         </div>
 

@@ -195,6 +195,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
     father: isBangla ? "পিতা" : "Father",
     mother: isBangla ? "মাতা" : "Mother",
     address: isBangla ? "ঠিকানা" : "Address",
+    section: isBangla ? "বিভাগ/শাখা" : "Section",
     validity: isBangla ? "মেয়াদ" : "Validity",
     principal: isBangla ? "অধ্যক্ষ" : "Principal",
     instructions: isBangla ? "নিয়মাবলি" : "Instructions",
@@ -406,6 +407,13 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
                           <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-noto">{currentRenderStudent.classes?.class_name || "-"}</span>
                        </div>
+                       {currentRenderStudent.section && (
+                         <div className="flex items-center">
+                            <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.section}</span>
+                            <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
+                            <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-noto">{currentRenderStudent.section}</span>
+                         </div>
+                       )}
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.id}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
