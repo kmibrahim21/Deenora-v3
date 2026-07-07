@@ -762,8 +762,74 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                           {lang === 'bn' ? 'লাইভ প্রিভিউ' : 'Live Preview'}
                        </label>
                        <div className={`p-5 rounded-2xl border text-[11px] min-h-[100px] leading-relaxed break-words font-noto overflow-hidden transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900 shadow-inner'}`}>
-                          <article className="prose prose-sm dark:prose-invert max-w-none font-noto prose-p:my-0.5 prose-headings:my-1 prose-ul:my-1 prose-li:my-0 prose-p:text-inherit">
-                             <ReactMarkdown>{globalSettings.global_update_message || (lang === 'bn' ? '*মেসেজ লিখলে এখানে প্রিভিউ দেখা যাবে...*' : '*Write message to see preview...*')}</ReactMarkdown>
+                          <article className="font-noto font-black">
+                             <ReactMarkdown
+                                components={{
+                                   p: ({ children }) => (
+                                      <p className={`my-2 leading-relaxed text-[13px] sm:text-sm font-extrabold ${madrasah?.theme === 'dark' ? 'text-slate-100' : 'text-slate-950'}`}>
+                                         {children}
+                                      </p>
+                                   ),
+                                   h1: ({ children }) => (
+                                      <h1 className={`text-base sm:text-lg font-black tracking-tight mt-4 mb-2 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-700'}`}>
+                                         {children}
+                                      </h1>
+                                   ),
+                                   h2: ({ children }) => (
+                                      <h2 className={`text-sm sm:text-base font-black tracking-tight mt-4 mb-2 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-700'}`}>
+                                         {children}
+                                      </h2>
+                                   ),
+                                   h3: ({ children }) => (
+                                      <h3 className={`text-xs sm:text-sm font-black tracking-tight mt-3 mb-1.5 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-700'}`}>
+                                         {children}
+                                       </h3>
+                                   ),
+                                   ul: ({ children }) => (
+                                      <ul className="list-disc pl-5 my-2 space-y-1.5">
+                                         {children}
+                                      </ul>
+                                   ),
+                                   ol: ({ children }) => (
+                                      <ol className="list-decimal pl-5 my-2 space-y-1.5">
+                                         {children}
+                                      </ol>
+                                   ),
+                                   li: ({ children }) => (
+                                      <li className={`text-[12px] sm:text-[13px] font-extrabold leading-relaxed ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-900'}`}>
+                                         {children}
+                                      </li>
+                                   ),
+                                   strong: ({ children }) => (
+                                      <strong className={`font-black px-1.5 py-0.5 rounded-[0.4rem] text-xs sm:text-[13px] inline-block shadow-sm ${
+                                         madrasah?.theme === 'dark' 
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                                             : 'bg-amber-100 text-amber-950 border border-amber-200/80'
+                                      }`}>
+                                         {children}
+                                      </strong>
+                                   ),
+                                   em: ({ children }) => (
+                                      <em className="italic font-bold opacity-95">
+                                         {children}
+                                      </em>
+                                   ),
+                                   code: ({ children }) => (
+                                      <code className={`px-1.5 py-0.5 rounded font-mono text-xs ${
+                                         madrasah?.theme === 'dark' 
+                                            ? 'bg-slate-800 text-pink-400 border border-slate-700' 
+                                            : 'bg-slate-100 text-pink-600 border border-slate-200'
+                                      }`}>
+                                         {children}
+                                      </code>
+                                   )
+                                }}
+                             >
+                                {(() => {
+                                   const rawMsg = globalSettings.global_update_message || (lang === 'bn' ? '*মেসেজ লিখলে এখানে প্রিভিউ দেখা যাবে...*' : '*Write message to see preview...*');
+                                   return rawMsg.replace(/\r?\n/g, '  \n');
+                                })()}
+                             </ReactMarkdown>
                           </article>
                        </div>
                     </div>
