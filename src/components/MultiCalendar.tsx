@@ -31,6 +31,7 @@ import {
   getHijriDate,
   getEventsForDate,
 } from "../utils/calendarUtils";
+import { useHijriCalendar } from "../hooks/useHijriCalendar";
 import { supabase } from "../supabase";
 import { requestManager } from "../services/RequestManager";
 
@@ -49,6 +50,9 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
   stacked,
   madrasah,
 }) => {
+  // Call the Hijri calendar hook to fetch, cache, and synchronize the correct API-based Hijri offset
+  const { hijriData } = useHijriCalendar();
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [classes, setClasses] = useState<any[]>([]);

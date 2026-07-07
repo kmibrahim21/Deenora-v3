@@ -72,6 +72,7 @@ export interface Institution {
       student_attendance_sms?: boolean;
       fee_collection_sms?: boolean;
       teacher_attendance_deduction?: boolean;
+      teacher_salary_sms?: boolean;
     };
   };
   theme: string;

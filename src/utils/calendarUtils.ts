@@ -80,10 +80,24 @@ const HIJRI_MONTHS_BN = [
   'রমজান', 'শাওয়াল', 'জিলকদ', 'জিলহজ'
 ];
 
-export const getHijriDate = (date: Date, offset: number = -1) => {
+export const getHijriDate = (date: Date, offset?: number) => {
   try {
     const adjustedDate = new Date(date);
-    adjustedDate.setDate(date.getDate() + offset);
+    
+    let resolvedOffset = offset;
+    if (resolvedOffset === undefined) {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem('hijri_offset_v1');
+        if (cached !== null) {
+          resolvedOffset = parseInt(cached, 10);
+        }
+      }
+    }
+    if (resolvedOffset === undefined) {
+      resolvedOffset = -1; // Default fallback
+    }
+
+    adjustedDate.setDate(date.getDate() + resolvedOffset);
 
     // Use numeric month to get index (1-12)
     const enFormatter = new Intl.DateTimeFormat('en-u-ca-islamic-civil', {

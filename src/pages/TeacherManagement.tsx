@@ -148,6 +148,18 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const [permissions, setPermissions] =
     useState<Partial<TeacherPermissions>>(initialPermissions);
+
+  const formatSalaryMonth = (monthStr: string) => {
+    if (!monthStr) return "";
+    const [year, month] = monthStr.split('-');
+    const monthIndex = parseInt(month) - 1;
+    
+    const bnMonths = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
+    const enMonths = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    
+    const monthName = lang === 'bn' ? bnMonths[monthIndex] : enMonths[monthIndex];
+    return `${monthName} ${year}`;
+  };
   const [activeTab, setActiveTab] = useState<'teachers' | 'salary' | 'attendance'>('teachers');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'take' | 'report'>('take');
   const [salaryMonth, setSalaryMonth] = useState(() => getTodayMonthString());
@@ -453,7 +465,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       }
 
       // Auto Send SMS
-      if ((madrasah.config_json as any)?.features?.teacher_attendance_deduction) {
+      if ((madrasah.config_json as any)?.features?.teacher_salary_sms) {
         try {
           const smsApiModule = await import('../supabase').then(res => res.smsApi);
           const templates = (madrasah.config_json as any)?.features?.sms_templates || {};
@@ -462,11 +474,10 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
             : `As-salamu Alaikum, {amount} BDT has been paid as your salary for {month}.`);
           
           let smsText = template
-             .replace(/\{month\}/g, salaryMonth)
+             .replace(/\{month\}/g, formatSalaryMonth(salaryMonth))
              .replace(/\{amount\}/g, amountToPay.toString());
              
-          // smsApiModule.sendBulk expects students but we can trick it with teacher Object since it only needs id & phone usually, but let's see. Wait, `sendBulk` signature is `students: Student[]`. Teacher doesn't have student properties. I can just map it to { id, phone: teacher.phone, student_name: teacher.name, ... }
-          await smsApiModule.sendBulk(madrasah.id, [{ id: teacher.id, phone: teacher.phone, student_name: teacher.name } as any], smsText);
+          await smsApiModule.sendBulk(madrasah.id, [{ id: teacher.id, guardian_phone: teacher.phone, student_name: teacher.name } as any], smsText);
         } catch (smsError) {
           console.error("Teacher salary SMS error:", smsError);
         }
@@ -1350,6 +1361,26 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                                     [key]: [...(prev[key] || []), data]
                                  }));
                               }
+
+                              // Auto Send SMS
+                              if ((madrasah.config_json as any)?.features?.teacher_salary_sms) {
+                                try {
+                                  const smsApiModule = await import('../supabase').then(res => res.smsApi);
+                                  const templates = (madrasah.config_json as any)?.features?.sms_templates || {};
+                                  let template = templates.teacher_salary || (lang === 'bn' 
+                                    ? `আস-সালামু আলাইকুম, আপনার {month} মাসের বেতন বাবদ {amount} টাকা প্রদান করা হয়েছে।`
+                                    : `As-salamu Alaikum, {amount} BDT has been paid as your salary for {month}.`);
+                                  
+                                  let smsText = template
+                                     .replace(/\{month\}/g, formatSalaryMonth(salaryMonth))
+                                     .replace(/\{amount\}/g, due.toString());
+                                     
+                                  await smsApiModule.sendBulk(madrasah.id, [{ id: teacher.id, guardian_phone: teacher.phone, student_name: teacher.name } as any], smsText);
+                                } catch (smsError) {
+                                  console.error("Teacher salary SMS error:", smsError);
+                                }
+                              }
+
                               alert(lang === 'bn' ? 'বেতন পরিশোধ হয়েছে' : 'Salary paid successfully');
                             } catch (err: any) {
                               alert(lang === 'bn' ? `ব্যর্থ: ${err.message}` : `Failed: ${err.message}`);
