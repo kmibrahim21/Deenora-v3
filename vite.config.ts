@@ -117,10 +117,6 @@ export default defineConfig(({ mode }) => {
         tailwindcss(), 
         tsconfigPaths(), 
         vercelApiPlugin(env),
-        legacy({
-          targets: ['defaults', 'not IE 11', 'Android >= 5'],
-          polyfills: true,
-        }),
         VitePWA({
           registerType: 'autoUpdate',
           injectRegister: 'auto',
@@ -199,7 +195,10 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, './src'),
-        }
+          'react': path.resolve(__dirname, './node_modules/react'),
+          'react-dom': path.resolve(__dirname, './node_modules/react-dom')
+        },
+        dedupe: ['react', 'react-dom']
       },
       build: {
         target: 'es2015',
