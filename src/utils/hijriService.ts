@@ -12,7 +12,17 @@ export interface HijriData {
   isFromApi: boolean;
 }
 
-const CACHE_KEY = 'aladhan_hijri_cache_v1';
+const CACHE_KEY = 'aladhan_hijri_cache_v2';
+
+const WEEKDAYS_AR: Record<string, string> = {
+  'Sunday': 'الأحد',
+  'Monday': 'الإثنين',
+  'Tuesday': 'الثلاثاء',
+  'Wednesday': 'الأربعاء',
+  'Thursday': 'الخميس',
+  'Friday': 'الجمعة',
+  'Saturday': 'السبت'
+};
 
 const WEEKDAYS_BN: Record<string, string> = {
   'Sunday': 'রবিবার',
@@ -55,9 +65,14 @@ export function getTodayDateStringYYYYMMDD(date: Date = new Date()): string {
 
 // Fallback logic using calendarUtils
 export function getFallbackHijriData(date: Date = new Date()): HijriData {
-  const localHijri = getHijriDate(date);
+  // To match Bangladesh's 1-day behind Hijri calendar, we align the fallback
+  // by subtracting 1 day from the target date.
+  const adjustedDate = new Date(date);
+  adjustedDate.setDate(adjustedDate.getDate() - 1);
+  const localHijri = getHijriDate(adjustedDate);
   const weekdayEn = date.toLocaleDateString('en-US', { weekday: 'long' });
   const weekdayBn = WEEKDAYS_BN[weekdayEn] || weekdayEn;
+  const weekdayAr = WEEKDAYS_AR[weekdayEn] || '';
   
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -68,7 +83,7 @@ export function getFallbackHijriData(date: Date = new Date()): HijriData {
     hijriMonthAr: localHijri.month || 'Muharram',
     hijriMonthEn: localHijri.month || 'Muharram',
     hijriYear: localHijri.year || '1447',
-    weekdayAr: '',
+    weekdayAr,
     weekdayEn,
     weekdayBn,
     gregorianDate: `${day}-${month}-${year}`,
@@ -77,7 +92,11 @@ export function getFallbackHijriData(date: Date = new Date()): HijriData {
 }
 
 export async function fetchHijriDateFromApi(date: Date = new Date()): Promise<HijriData> {
-  const dateStr = getTodayDateStringDDMMYYYY(date);
+  // To match Bangladesh's 1-day behind Hijri calendar compared to Saudi/Aladhan standard,
+  // we subtract 1 day from the target date when querying the API.
+  const adjustedDate = new Date(date);
+  adjustedDate.setDate(adjustedDate.getDate() - 1);
+  const dateStr = getTodayDateStringDDMMYYYY(adjustedDate);
   const url = `https://api.aladhan.com/v1/gToH/${dateStr}`;
 
   const response = await fetch(url);
@@ -91,20 +110,21 @@ export async function fetchHijriDateFromApi(date: Date = new Date()): Promise<Hi
   }
 
   const hijri = json.data.hijri;
-  const gregorian = json.data.gregorian;
 
-  const weekdayEn = hijri.weekday?.en || gregorian.weekday?.en || '';
+  // Use the ORIGINAL date for the weekday calculation so the day of the week remains correct
+  const weekdayEn = date.toLocaleDateString('en-US', { weekday: 'long' });
   const weekdayBn = WEEKDAYS_BN[weekdayEn] || weekdayEn;
+  const weekdayAr = WEEKDAYS_AR[weekdayEn] || hijri.weekday?.ar || '';
 
   return {
     hijriDay: hijri.day,
     hijriMonthAr: hijri.month?.ar || '',
     hijriMonthEn: hijri.month?.en || '',
     hijriYear: hijri.year,
-    weekdayAr: hijri.weekday?.ar || '',
+    weekdayAr,
     weekdayEn,
     weekdayBn,
-    gregorianDate: gregorian.date,
+    gregorianDate: getTodayDateStringDDMMYYYY(date),
     isFromApi: true
   };
 }
@@ -129,7 +149,7 @@ export function calculateAndSaveOffset(data: HijriData): number {
       }
     }
     
-    localStorage.setItem('hijri_offset_v1', foundOffset.toString());
+    localStorage.setItem('hijri_offset_v2', foundOffset.toString());
     return foundOffset;
   } catch (e) {
     console.error('Error calculating Hijri offset:', e);

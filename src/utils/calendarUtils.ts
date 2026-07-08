@@ -87,7 +87,7 @@ export const getHijriDate = (date: Date, offset?: number) => {
     let resolvedOffset = offset;
     if (resolvedOffset === undefined) {
       if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem('hijri_offset_v1');
+        const cached = localStorage.getItem('hijri_offset_v2');
         if (cached !== null) {
           resolvedOffset = parseInt(cached, 10);
         }
