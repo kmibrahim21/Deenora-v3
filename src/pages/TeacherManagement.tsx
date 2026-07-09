@@ -508,11 +508,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  const fetchTeachers = async () => {
+  const fetchTeachers = async (forceRefresh = false) => {
     if (!madrasah?.id) return;
     
     // Load from cache first for instant UI
-    const cachedTeachers = await CacheService.getCachedData('teachers', madrasah.id);
+    const cachedTeachers = forceRefresh ? null : await CacheService.getCachedData('teachers', madrasah.id);
     if (cachedTeachers && cachedTeachers.length > 0) {
       setTeachers(cachedTeachers);
       setLoading(false);
@@ -530,7 +530,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       }
 
       const response = await fetch(
-        `/api/teachers/list?institute_id=${madrasah.id}`,
+        `/api/teachers/list?institute_id=${madrasah.id}&t=${Date.now()}`,
       );
       if (!response.ok) throw new Error("Failed to fetch teachers");
       const data = await response.json();
@@ -661,7 +661,16 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         await CacheService.clearCache('teachers', madrasah.id);
       }
 
-      await fetchTeachers();
+      await fetchTeachers(true);
+      if (viewProfile && viewProfile.id === selectedTeacher.id) {
+        // Find the updated teacher in the new list to be safe, or just merge
+        setViewProfile(prev => prev ? { 
+          ...prev, 
+          ...formData, 
+          basic_salary: Number(formData.basic_salary),
+          permissions 
+        } : null);
+      }
       setShowEditModal(false);
       setSelectedTeacher(null);
       resetForm();
@@ -697,7 +706,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         await CacheService.clearCache('teachers', madrasah.id);
       }
 
-      await fetchTeachers();
+      await fetchTeachers(true);
       setDeleteModal({ show: false, teacherId: null });
     } catch (err: any) {
       alert(err.message);
