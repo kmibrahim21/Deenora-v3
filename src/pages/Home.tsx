@@ -50,6 +50,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     smsBalance: 0,
     voiceBalance: 0,
     attendanceToday: 0,
+    attendanceTodayLeaves: 0,
     totalIncome: 0,
     totalExpense: 0
   });
@@ -182,22 +183,47 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         CACHE_TTLS.MEDIUM
       );
 
-      // 6. Attendance Today (Optimized with RPC to count unique students)
-      const attProm = modules.modules.attendance 
-        ? requestManager.cachedRpc(
-            'get_today_attendance_count',
-            {
-              p_institution_id: institutionId,
-              p_date: today,
-              p_academic_year_id: activeYearId,
-              p_allowed_classes: isTeacher && allowedClasses?.length ? allowedClasses : null
-            },
-            CACHE_TTLS.SHORT
-          )
-        : Promise.resolve({ data: 0 });
+      // 6. Attendance Today (Direct query to avoid RPC issues and support both presents & leaves count)
+      let attendanceTodayCount = 0;
+      let attendanceTodayLeavesCount = 0;
 
-      const [stdRes, clsRes, teacherRes, mRes, ledgerRes, attRes] = await Promise.all([
-        stdProm, clsProm, teacherProm, instProm, ledgerProm, attProm
+      if (modules.modules.attendance) {
+        let attQuery = supabase
+          .from('attendance')
+          .select('status, student_id')
+          .eq('institution_id', institutionId)
+          .eq('date', today);
+        
+        if (activeYearId) {
+          attQuery = attQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        }
+        
+        if (isTeacher && allowedClasses?.length) {
+          attQuery = attQuery.in('class_id', allowedClasses);
+        }
+
+        const { data: attData } = await attQuery;
+        if (attData) {
+          const studentAttMap = new Map<string, string[]>();
+          attData.forEach((a: any) => {
+            if (!studentAttMap.has(a.student_id)) {
+              studentAttMap.set(a.student_id, []);
+            }
+            studentAttMap.get(a.student_id)!.push(a.status);
+          });
+
+          studentAttMap.forEach((statuses) => {
+            if (statuses.includes('present') || statuses.includes('late') || statuses.includes('half_day')) {
+              attendanceTodayCount++;
+            } else if (statuses.includes('leave')) {
+              attendanceTodayLeavesCount++;
+            }
+          });
+        }
+      }
+
+      const [stdRes, clsRes, teacherRes, mRes, ledgerRes] = await Promise.all([
+        stdProm, clsProm, teacherProm, instProm, ledgerProm
       ]);
 
       const income = Array.isArray(ledgerRes.data) 
@@ -215,7 +241,8 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         totalTeachers: teacherRes.count || 0,
         smsBalance: singleInst?.sms_balance || 0,
         voiceBalance: singleInst?.balance || 0,
-        attendanceToday: Number(attRes.data) || 0,
+        attendanceToday: attendanceTodayCount,
+        attendanceTodayLeaves: attendanceTodayLeavesCount,
         totalIncome: income,
         totalExpense: expense
       };
@@ -303,7 +330,14 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         {canManageAttendance && modules.modules.attendance && (
           <button onClick={onNavigateToAttendance} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-200 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><CheckCircle2 size={20} className="lg:w-6 lg:h-6" /></div>
-             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.attendanceToday}</h4>
+             <div className="flex flex-col items-center">
+                <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.attendanceToday}</h4>
+                {!loadingStats && stats.attendanceTodayLeaves > 0 && (
+                  <span className="text-[9px] lg:text-[10px] font-black text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-full mt-1">
+                    {lang === 'bn' ? `ছুটি: ${stats.attendanceTodayLeaves} জন` : `Leave: ${stats.attendanceTodayLeaves}`}
+                  </span>
+                )}
+             </div>
              <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>আজকের হাজিরা</p>
           </button>
         )}

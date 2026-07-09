@@ -549,6 +549,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   };
 
+  const [editCustomSubscriptionFee, setEditCustomSubscriptionFee] = useState<number | ''>('');
   const [editPassword, setEditPassword] = useState('');
   const [editDiscount, setEditDiscount] = useState(0);
   const [overrideTotal, setOverrideTotal] = useState<number | ''>('');
@@ -800,7 +801,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   };
 
   const fetchPendingTransactions = async () => {
-    const { data } = await supabase.from('transactions').select('*, institutions(*)').eq('status', 'pending').neq('module', 'subscription').order('created_at', { ascending: false });
+    const { data } = await supabase.from('transactions').select('*, institutions(*)').eq('status', 'pending').order('created_at', { ascending: false });
     return data || [];
   };
 
@@ -950,7 +951,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (view === 'approvals') {
         const [pTrans, tHist] = await Promise.all([
           fetchPendingTransactions(),
-          fetchTransactionHistory(['sms', 'voice']) // Approvals only shows recharge requests
+          fetchTransactionHistory(['sms', 'voice', 'subscription']) // Approvals shows all requests
         ]);
         if (isMounted) {
           setPendingTrans(pTrans);
@@ -1307,6 +1308,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditPackageRate(userConfig?.package_rate || 0);
     setEditPackageName(userConfig?.package_name || '');
     setEditSubscriptionNote(userConfig?.subscription_note || '');
+    setEditCustomSubscriptionFee(user.custom_subscription_fee || '');
     setEditDueAmount(userConfig?.due_amount || 0);
     setEditDiscount(0);
     setOverrideTotal('');
@@ -1389,6 +1391,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         reve_client_id: editReveClientId.trim() || null,
         sms_rate: Number(editSmsRate) || 0.50,
         voice_rate: Number(editVoiceRate) || 0.50,
+        custom_subscription_fee: editCustomSubscriptionFee === '' ? null : Number(editCustomSubscriptionFee),
         institute_code: editInstituteCode.trim(),
         config_json: {
           ...latestConfig,
@@ -1526,9 +1529,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', tr.institution_id);
         if (balanceError) throw balanceError;
       } else if (isSubscription) {
-        // ২. সাবস্ক্রিপশন অনুমোদন (Just mark as approved, profile is usually updated manually or via trigger)
+        // ২. সাবস্ক্রিপশন অনুমোদন ও প্রোফাইল আপডেট
         const { error: updateError } = await supabase.from('transactions').update({ status: 'approved' }).eq('id', tr.id);
         if (updateError) throw updateError;
+
+        // অটো প্রোফাইল আপডেট
+        const { data: instData, error: instFetchError } = await supabase
+          .from('institutions')
+          .select('config_json, subscription_end')
+          .eq('id', tr.institution_id)
+          .single();
+        
+        if (!instFetchError && instData) {
+          const config = (instData.config_json as any) || {};
+          const currentPaidMonths = config.paid_months || [];
+          const newMonths = tr.metadata?.months || [];
+          const updatedPaidMonths = Array.from(new Set([...currentPaidMonths, ...newMonths])).sort();
+          
+          const updatedConfig = {
+            ...config,
+            paid_months: updatedPaidMonths,
+            package_name: tr.metadata?.package_name || config.package_name,
+            package_rate: tr.metadata?.package_rate || config.package_rate,
+            subscription_type: tr.metadata?.subscription_type || config.subscription_type
+          };
+
+          // Calculate new subscription end date based on last paid month
+          let newSubEnd = instData.subscription_end;
+          if (updatedPaidMonths.length > 0) {
+            const lastMonthStr = updatedPaidMonths[updatedPaidMonths.length - 1]; // "YYYY-MM"
+            const [year, month] = lastMonthStr.split('-').map(Number);
+            const lastDay = new Date(year, month, 0); // Last day of that month
+            newSubEnd = lastDay.toISOString();
+          }
+
+          const { error: instUpdateError } = await supabase
+            .from('institutions')
+            .update({ 
+              config_json: updatedConfig,
+              subscription_end: newSubEnd,
+              status: 'active'
+            })
+            .eq('id', tr.institution_id);
+          
+          if (instUpdateError) console.error("Auto profile update failed:", instUpdateError);
+        }
       } else {
         // ৩. SMS রিচার্জ অনুমোদন (Manual implementation to fix Issue 2 - Avoid unintended voice balance increase)
         console.log('ApproveTransaction: Approving SMS recharge for tr:', tr.id, 'sms count:', sms);
@@ -2790,12 +2835,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     return mod !== 'voice' && mod !== 'subscription' && !desc.includes('voice') && !desc.includes('subscription') && !desc.includes('refund');
                   }).map(tr => (
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border space-y-5 animate-in slide-in-from-left-4`}>
-                      <div className="flex items-center justify-between">
-                        <div className="bg-emerald-500/10 text-emerald-600 px-4 py-2 rounded-2xl text-lg font-black">{tr.amount} ৳</div>
-                        <div className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5">
-                           <Clock size={12} /> {new Date(tr.created_at).toLocaleDateString('bn-BD')}
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <div className="bg-emerald-500/10 text-emerald-600 px-4 py-2 rounded-2xl text-lg font-black">{tr.amount} ৳</div>
+                            {tr.module === 'subscription' && tr.institutions?.custom_subscription_fee && (
+                              <div className="text-[9px] font-black text-blue-500 mt-1 px-1">
+                                Expected: {tr.institutions.custom_subscription_fee} ৳ / month
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1.5">
+                             <Clock size={12} /> {new Date(tr.created_at).toLocaleDateString('bn-BD')}
+                          </div>
                         </div>
-                      </div>
                       <div className="px-1 space-y-2">
                         <div className={`flex items-start justify-between gap-2`}>
                           <p className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto leading-tight`}>
@@ -2808,6 +2860,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                           )}
                         </div>
                         <div className="flex flex-col gap-1">
+                           {tr.description && (
+                             <p className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} uppercase tracking-tight mb-1`}>
+                               {tr.description}
+                             </p>
+                           )}
+                           {tr.module === 'subscription' && tr.metadata?.months && (
+                             <div className="flex flex-wrap gap-1 mb-2">
+                               {tr.metadata.months.map((m: string) => (
+                                 <span key={m} className={`px-1.5 py-0.5 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-300 border-blue-800' : 'bg-blue-50 text-blue-600 border-blue-100'} text-[8px] font-black rounded-md border uppercase`}>
+                                   {m}
+                                 </span>
+                               ))}
+                             </div>
+                           )}
                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TrxID: <span className="text-blue-500 font-mono">{tr.transaction_id}</span></p>
                            <p className={`text-xs font-black flex items-center gap-2 ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
                                <Smartphone size={14} className="text-blue-500" /> 
@@ -3234,6 +3300,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Subscription End</label>
                                     <input type="date" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
+                                 </div>
+                                 <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest px-2">Custom Monthly Rate (৳)</label>
+                                    <input 
+                                       type="number" 
+                                       placeholder="Set Custom Rate"
+                                       className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} 
+                                       value={editCustomSubscriptionFee} 
+                                       onChange={(e) => setEditCustomSubscriptionFee(e.target.value === '' ? '' : Number(e.target.value))} 
+                                    />
                                  </div>
                               </div>
 

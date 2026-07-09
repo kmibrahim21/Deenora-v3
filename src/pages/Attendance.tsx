@@ -64,6 +64,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [reportDate, setReportDate] = useState(getTodayDateString());
   const [dailyAbsentees, setDailyAbsentees] = useState<any[]>([]);
   const [attendanceNotTaken, setAttendanceNotTaken] = useState(false);
+
+  const onlyAbsents = dailyAbsentees.filter(a => a.final_status === 'absent');
+  const lateCount = dailyAbsentees.filter(a => a.final_status === 'late').length;
+  const leaveCount = dailyAbsentees.filter(a => a.final_status === 'leave').length;
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -452,17 +456,82 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
            setAttendanceNotTaken(true);
         } else {
            setAttendanceNotTaken(false);
-           const { data, error } = await supabase.rpc('get_daily_attendance_details', {
-              p_institution_id: madrasah?.id,
-              p_date: reportDate,
-              p_class_id: cid === 'all' ? null : cid,
-              p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
+           
+           // Client-side mapping of daily attendance to ensure support for 'leave' and 'late' statuses
+           let stdQuery = supabase
+             .from('students')
+             .select('id, student_name, roll, guardian_phone, class_id')
+             .eq('institution_id', madrasah?.id);
+           if (cid && cid !== 'all') {
+             stdQuery = stdQuery.eq('class_id', cid);
+           }
+           const { data: stdData, error: stdError } = await stdQuery;
+           if (stdError) throw stdError;
+
+           let attQuery = supabase
+             .from('attendance')
+             .select('student_id, status, arrival_time, class_id, session')
+             .eq('institution_id', madrasah?.id)
+             .eq('date', reportDate);
+           if (cid && cid !== 'all') {
+             attQuery = attQuery.eq('class_id', cid);
+           }
+           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+             attQuery = attQuery.eq('session', selectedSession);
+           }
+           const { data: attData, error: attError } = await attQuery;
+           if (attError) throw attError;
+
+           const studentDailyAtt: Record<string, { statuses: string[]; max_arrival: string | null }> = {};
+           attData?.forEach((r: any) => {
+             if (!studentDailyAtt[r.student_id]) {
+               studentDailyAtt[r.student_id] = { statuses: [], max_arrival: null };
+             }
+             studentDailyAtt[r.student_id].statuses.push(r.status);
+             if (r.arrival_time && (!studentDailyAtt[r.student_id].max_arrival || r.arrival_time > studentDailyAtt[r.student_id].max_arrival)) {
+               studentDailyAtt[r.student_id].max_arrival = r.arrival_time;
+             }
            });
 
-           if (error) throw error;
-           
-           // Filter for absents only for the "Absentees List"
-           const absents = (data || []).filter((r: any) => r.final_status === 'absent').map((r: any) => ({
+           const mappedDailyDetails = stdData?.map((s: any) => {
+             const att = studentDailyAtt[s.id];
+             const statuses = att?.statuses || [];
+             
+             let finalStatus = 'absent';
+             if (statuses.length === 0) {
+               return null;
+             }
+             
+             if (statuses.includes('present')) {
+               finalStatus = 'present';
+             } else if (statuses.includes('late')) {
+               finalStatus = 'late';
+             } else if (statuses.includes('half_day')) {
+               finalStatus = 'half_day';
+             } else if (statuses.includes('leave')) {
+               finalStatus = 'leave';
+             } else if (statuses.includes('absent')) {
+               finalStatus = 'absent';
+             }
+
+             const cls = classes.find(c => c.id === s.class_id);
+
+             return {
+               id: s.id,
+               student_id: s.id,
+               student_name: s.student_name,
+               roll: s.roll,
+               class_name: cls?.class_name || '',
+               class_id: s.class_id,
+               guardian_phone: s.guardian_phone,
+               final_status: finalStatus,
+               arrival_time: att?.max_arrival || null,
+               session: selectedSession === 'all' || selectedSession === 'daily' ? 'daily' : selectedSession
+             };
+           }).filter(Boolean) || [];
+
+           // Filter for absents, lates, and leaves for the list
+           const absents = (mappedDailyDetails as any[]).filter((r: any) => r.final_status === 'absent' || r.final_status === 'late' || r.final_status === 'leave').map((r: any) => ({
              ...r,
              students: { student_name: r.student_name, roll: r.roll, guardian_phone: r.guardian_phone },
              classes: { class_name: r.class_name }
@@ -504,40 +573,95 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             endDate = `${selectedYear}-12-31`;
         }
 
-        let finalData: any[] = [];
-
-        if (cid === 'all') {
-          const results = [];
-          for (const c of classes) {
-            const { data, error } = await supabase.rpc('get_attendance_report', {
-              p_class_id: c.id,
-              p_start_date: startDate,
-              p_end_date: endDate,
-              p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
-            });
-            // Inject class_id to help with sorting if not already present
-            const dataWithClass = (data || []).map((d: any) => ({ ...d, class_id: c.id, class_sort_order: c.sort_order }));
-            results.push({ data: dataWithClass, error });
-            // Small delay to prevent rate limit triggers if many classes
-            if (classes.length > 5) await new Promise(r => setTimeout(r, 50));
-          }
-          results.forEach(res => {
-            if (res.error) console.error("Error fetching class report:", res.error);
-            if (res.data) finalData = [...finalData, ...res.data];
-          });
-        } else {
-          const { data, error } = await supabase.rpc('get_attendance_report', {
-            p_class_id: cid,
-            p_start_date: startDate,
-            p_end_date: endDate,
-            p_session: selectedSession === 'all' || selectedSession === 'daily' ? null : selectedSession
-          });
-          if (error) throw error;
-          if (data) {
-            const cls = classes.find(c => c.id === cid);
-            finalData = data.map((d: any) => ({ ...d, class_id: cid, class_sort_order: cls?.sort_order }));
-          }
+        // Fetch students to map over
+        let stdQuery = supabase
+          .from('students')
+          .select('id, student_name, roll, class_id')
+          .eq('institution_id', madrasah?.id);
+        if (cid && cid !== 'all') {
+          stdQuery = stdQuery.eq('class_id', cid);
         }
+        const { data: activeStudents, error: stdError } = await stdQuery;
+        if (stdError) throw stdError;
+
+        // Fetch attendance records for date range
+        let attQuery = supabase
+          .from('attendance')
+          .select('student_id, status, date, session')
+          .eq('institution_id', madrasah?.id)
+          .gte('date', startDate)
+          .lte('date', endDate);
+        if (cid && cid !== 'all') {
+          attQuery = attQuery.eq('class_id', cid);
+        }
+        if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+          attQuery = attQuery.eq('session', selectedSession);
+        }
+        const { data: attRecords, error: attError } = await attQuery;
+        if (attError) throw attError;
+
+        // Perform aggregation client-side so 'leave_days' and 'late_days' are 100% supported
+        const attendanceMap: Record<string, { present: number; absent: number; late: number; leave: number; half_day: number; total: number }> = {};
+        activeStudents?.forEach((s: any) => {
+          attendanceMap[s.id] = { present: 0, absent: 0, late: 0, leave: 0, half_day: 0, total: 0 };
+        });
+
+        const studentDailyStatus: Record<string, Record<string, string[]>> = {};
+        attRecords?.forEach((r: any) => {
+          if (!studentDailyStatus[r.student_id]) {
+            studentDailyStatus[r.student_id] = {};
+          }
+          if (!studentDailyStatus[r.student_id][r.date]) {
+            studentDailyStatus[r.student_id][r.date] = [];
+          }
+          studentDailyStatus[r.student_id][r.date].push(r.status);
+        });
+
+        Object.entries(studentDailyStatus).forEach(([studentId, dates]) => {
+          const counts = attendanceMap[studentId];
+          if (!counts) return;
+
+          Object.entries(dates).forEach(([date, statuses]) => {
+            let finalStatus = 'absent';
+            if (statuses.includes('present')) {
+              finalStatus = 'present';
+            } else if (statuses.includes('late')) {
+              finalStatus = 'late';
+            } else if (statuses.includes('half_day')) {
+              finalStatus = 'half_day';
+            } else if (statuses.includes('leave')) {
+              finalStatus = 'leave';
+            } else if (statuses.includes('absent')) {
+              finalStatus = 'absent';
+            }
+
+            counts.total++;
+            if (finalStatus === 'present') counts.present++;
+            else if (finalStatus === 'late') counts.late++;
+            else if (finalStatus === 'half_day') counts.half_day++;
+            else if (finalStatus === 'leave') counts.leave++;
+            else if (finalStatus === 'absent') counts.absent++;
+          });
+        });
+
+        const finalData = activeStudents?.map((s: any) => {
+          const counts = attendanceMap[s.id] || { present: 0, absent: 0, late: 0, leave: 0, half_day: 0, total: 0 };
+          const cls = classes.find(c => c.id === s.class_id);
+          
+          return {
+            student_id: s.id,
+            student_name: s.student_name,
+            roll: s.roll,
+            present_days: counts.present,
+            absent_days: counts.absent,
+            late_days: counts.late,
+            half_days: counts.half_day,
+            leave_days: counts.leave,
+            total_days: counts.total,
+            class_id: s.class_id,
+            class_sort_order: cls?.sort_order ?? 999999
+          };
+        }) || [];
 
         // Sort finalData by class serial and then by roll
         const sortedFinalData = [...finalData].sort((a, b) => {
@@ -1480,33 +1604,56 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   </div>
             ) : reportType === 'daily' ? (
               <div className="space-y-6 animate-in slide-in-from-bottom-5">
-                  <div className="flex items-center gap-2 mb-2 mt-2">
-                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'অনুপস্থিত/দেরি/ছুটি শিক্ষার্থী তালিকা' : 'Absent/Late/Leave Students'} ({dailyAbsentees.length})</h4>
-                  </div>
-                 {dailyAbsentees.length > 0 ? (
-                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                     {dailyAbsentees.map(a => (
-                       <div key={a.id} className={`p-2.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-2.5 sm:gap-4 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                          <div className="flex items-center gap-4 min-w-0">
-                            <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 ${isDark ? 'bg-slate-900 text-red-400 border-slate-700' : 'bg-red-50 text-red-500 border-red-100'}`}>
-                              <XCircle size={16} className="sm:w-5 sm:h-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <h5 className={`font-black font-noto text-xs sm:text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{a.students?.student_name}</h5>
-                              <div className="mt-1 space-y-0.5">
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.classes?.class_name || 'Class'}</p>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Roll: {a.students?.roll}</p>
-                              </div>
-                            </div>
-                          </div>
-                          {a.students?.guardian_phone && (
-                            <a href={`tel:${a.students.guardian_phone}`} className={`shrink-0 w-11 h-11 rounded-[1.1rem] flex items-center justify-center border transition-all active:scale-95 ${isDark ? 'bg-blue-900/30 text-blue-400 border-blue-900/50 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'}`}>
-                              <Phone size={16} className="sm:w-[18px] sm:h-[18px]" />
-                            </a>
-                          )}
+                  {dailyAbsentees.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3 max-w-sm">
+                       <div className={`p-2 sm:p-2.5 rounded-[1.2rem] border text-center ${isDark ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50/50 border-red-100 text-red-600'}`}>
+                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-0.5">{lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}</p>
+                          <p className="text-xs sm:text-sm font-black">{onlyAbsents.length}</p>
                        </div>
-                     ))}
-                   </div>
+                       <div className={`p-2 sm:p-2.5 rounded-[1.2rem] border text-center ${isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50/50 border-amber-100 text-amber-600'}`}>
+                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-0.5">{lang === 'bn' ? 'বিলম্ব / দেরি' : 'Late'}</p>
+                          <p className="text-xs sm:text-sm font-black">{lateCount}</p>
+                       </div>
+                       <div className={`p-2 sm:p-2.5 rounded-[1.2rem] border text-center ${isDark ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50/50 border-indigo-100 text-indigo-600'}`}>
+                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-0.5">{lang === 'bn' ? 'ছুটি' : 'Leave'}</p>
+                          <p className="text-xs sm:text-sm font-black">{leaveCount}</p>
+                       </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 mb-2 mt-2">
+                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                        {lang === 'bn' ? 'অনুপস্থিত শিক্ষার্থী তালিকা' : 'Absent Student List'} ({onlyAbsents.length})
+                     </h4>
+                  </div>
+
+                  {onlyAbsents.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {onlyAbsents.map(a => (
+                        <div key={a.student_id} className={`p-2.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-2.5 sm:gap-4 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                           <div className="flex items-center gap-4 min-w-0">
+                             <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 ${isDark ? 'bg-slate-900 text-red-400 border-slate-700' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                               <XCircle size={16} className="sm:w-5 sm:h-5" />
+                             </div>
+                             <div className="min-w-0">
+                               <h5 className={`font-black font-noto text-xs sm:text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{a.students?.student_name}</h5>
+                               <div className="mt-1 space-y-0.5">
+                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.classes?.class_name || 'Class'}</p>
+                                   <span className="text-slate-300">•</span>
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Roll: {a.students?.roll}</p>
+                                 </div>
+                               </div>
+                             </div>
+                           </div>
+                           {a.students?.guardian_phone && (
+                             <a href={`tel:${a.students.guardian_phone}`} className={`shrink-0 w-11 h-11 rounded-[1.1rem] flex items-center justify-center border transition-all active:scale-95 ${isDark ? 'bg-blue-900/30 text-blue-400 border-blue-900/50 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'}`}>
+                               <Phone size={16} className="sm:w-[18px] sm:h-[18px]" />
+                             </a>
+                           )}
+                        </div>
+                      ))}
+                    </div>
                  ) : attendanceNotTaken ? (
                     <div className={`p-10 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                        <AlertTriangle size={40} className="text-yellow-500 mb-3" />
@@ -1535,7 +1682,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                           setShowErrorModal(true);
                                           return;
                                       }
-                                      const mappedAbsents = dailyAbsentees.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
+                                      const mappedAbsents = onlyAbsents.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
                                       sendAbsentAlerts(mappedAbsents, selectedClass?.id === 'all' ? 'All Classes' : undefined);
                                   }} 
                                   disabled={sendingAlerts || !isOnline} 
@@ -1573,7 +1720,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                           setShowErrorModal(true);
                                           return;
                                       }
-                                      const mappedAbsents = dailyAbsentees.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
+                                      const mappedAbsents = onlyAbsents.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
                                       sendAbsentVoiceAlerts(mappedAbsents, selectedClass?.id === 'all' ? 'All Classes' : undefined);
                                   }} 
                                   disabled={sendingVoiceAlerts || !isOnline || voiceTemplates.length === 0} 

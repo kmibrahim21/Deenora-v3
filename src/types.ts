@@ -90,6 +90,7 @@ export interface Institution {
   reve_api_key?: string;
   reve_secret_key?: string;
   reve_client_id?: string;
+  custom_subscription_fee?: number;
 }
 
 export interface Voice {

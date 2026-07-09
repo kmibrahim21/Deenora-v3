@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -121,6 +121,10 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [packages, setPackages] = useState<any[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [showPackageDetails, setShowPackageDetails] = useState<any>(null);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
 
   const [newName, setNewName] = useState(initialMadrasah?.name || '');
   const [newAddress, setNewAddress] = useState(initialMadrasah?.address || '');
@@ -199,17 +203,20 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     if (!selectedPackage || !madrasah || !rechargeTrx || !rechargePhone) return;
     setRequestingUpgrade(true);
     try {
-      const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
-      const effectiveRate = stats.students > 0 && stats.students <= 200 ? selectedPackage.rate : stats.students * 1;
-      const amount = effectiveRate * duration;
-
-      const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth();
-      const selectedMonthsForPayment = [];
-      for (let i = 0; i < duration; i++) {
-        const d = new Date(currentYear, currentMonth + i, 1);
-        selectedMonthsForPayment.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
+      const selectedMonthsForPayment = selectedMonths.length > 0 ? selectedMonths : [];
+      if (selectedMonthsForPayment.length === 0) {
+        const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+        for (let i = 0; i < duration; i++) {
+          const d = new Date(currentYear, currentMonth + i, 1);
+          selectedMonthsForPayment.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
+        }
       }
+      
+      const duration = selectedMonthsForPayment.length;
+      const effectiveRate = madrasah.custom_subscription_fee || (stats.students > 0 && stats.students <= 200 ? selectedPackage.rate : stats.students * 1);
+      const amount = effectiveRate * duration;
 
       const { error } = await supabase.from('transactions').insert({
         institution_id: madrasah.id,
@@ -240,6 +247,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       setIsEditingSubscription(false);
       setRechargeTrx('');
       setRechargePhone('');
+      setSelectedMonths([]);
+      fetchPaymentHistory();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -285,9 +294,30 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         if (config?.subscription_type) {
           setSubscriptionType(config.subscription_type);
         }
+        fetchPaymentHistory();
       }
     }
   }, [initialMadrasah]);
+
+  const fetchPaymentHistory = async () => {
+    if (!initialMadrasah) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('institution_id', initialMadrasah.id)
+        .eq('module', 'subscription')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setPaymentHistory(data || []);
+    } catch (err) {
+      console.error('Error fetching payment history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const fetchPackages = async () => {
     try {
@@ -517,9 +547,25 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
   if (isEditingSubscription) {
     const currentRate = selectedPackage ? selectedPackage.rate : (Number((madrasah?.config_json as any)?.package_rate) || 0);
-    const effectiveRate = stats.students > 0 && stats.students <= 200 ? currentRate : stats.students * 1;
-    const durationMonths = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
+    const effectiveRate = madrasah.custom_subscription_fee || (stats.students > 0 && stats.students <= 200 ? currentRate : stats.students * 1);
+    const durationMonths = selectedMonths.length > 0 ? selectedMonths.length : (subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12);
     const calculatedFee = effectiveRate * durationMonths;
+
+    const paidMonths = (madrasah?.config_json as any)?.paid_months || [];
+    const currentYear = new Date().getFullYear();
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const monthNum = i + 1;
+      const monthKey = `${currentYear}-${monthNum.toString().padStart(2, '0')}`;
+      const name = new Date(currentYear, i).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long' });
+      return { key: monthKey, name, isPaid: paidMonths.includes(monthKey) };
+    });
+
+    const toggleMonth = (key: string, isPaid: boolean) => {
+      if (isPaid) return;
+      setSelectedMonths(prev => 
+        prev.includes(key) ? prev.filter(m => m !== key) : [...prev, key].sort()
+      );
+    };
 
     const formatSubscriptionEnd = (dateStr: string | null | undefined) => {
       if (!dateStr) return lang === 'bn' ? 'অনির্দিষ্ট' : 'N/A';
@@ -632,7 +678,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                 {lang === 'bn' ? '১. প্যাকেজ নির্বাচন করুন' : '1. Select Subscription Package'}
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {packages.map((pkg) => {
                   const isCurrent = pkg.name === (madrasah?.config_json as any)?.package_name;
                   const isSelected = selectedPackage?.id === pkg.id;
@@ -641,98 +687,86 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                     <div
                       key={pkg.id}
                       onClick={() => setSelectedPackage(pkg)}
-                      className={`p-4 sm:p-5 rounded-[1.8rem] sm:rounded-[2.2rem] border cursor-pointer transition-all relative overflow-hidden flex flex-col active:scale-[0.98] ${
+                      className={`p-4 rounded-[1.5rem] border cursor-pointer transition-all relative overflow-hidden flex flex-col items-center justify-center text-center active:scale-[0.98] ${
                         isSelected 
                           ? (madrasah?.theme === 'dark' ? 'bg-blue-950/30 border-blue-500 ring-2 ring-blue-500/20' : 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-500/10 shadow-sm')
                           : (madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/60 hover:border-slate-600' : 'bg-white border-slate-100 hover:border-slate-200 hover:shadow-bubble')
                       }`}
                     >
                       {isCurrent && (
-                        <div className="absolute top-0 right-0 bg-blue-500 text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl z-20">
+                        <div className="absolute top-0 right-0 bg-blue-500 text-white text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-bl-lg z-20">
                           {lang === 'bn' ? 'বর্তমান' : 'Current'}
                         </div>
                       )}
                       
-                      {isSelected && !isCurrent && (
-                        <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl z-20">
-                          {lang === 'bn' ? 'নির্বাচিত' : 'Selected'}
-                        </div>
-                      )}
-
-                      <div className="mb-3.5 flex justify-between items-start">
-                        <div>
-                          <h4 className={`text-xs sm:text-sm font-black font-noto ${isSelected ? 'text-blue-500' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>
-                            {pkg.name}
-                          </h4>
-                          <p className={`text-[10px] font-bold mt-0.5 ${isSelected ? 'text-blue-500/80' : 'text-slate-400'}`}>
-                            {pkg.rate.toFixed(2)} ৳ {stats.students <= 200 ? `(${lang === 'bn' ? 'ফিক্সড' : 'Flat'})` : `/ ${lang === 'bn' ? 'ছাত্র' : 'Student'}`}
-                          </p>
-                        </div>
-                        {isSelected && (
-                          <div className="w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center shrink-0">
-                            <Check size={12} strokeWidth={3} />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-1.5 mt-auto pt-3 border-t border-slate-200/5 dark:border-slate-700/20">
-                        {pkg.features?.map((f: string, i: number) => (
-                          <div key={i} className={`flex items-center gap-2 text-[9px] sm:text-[10px] font-bold ${isSelected ? 'text-[#1E3A8A] dark:text-blue-300' : 'text-slate-500'}`}>
-                            <CheckCircle2 size={10} className={isSelected ? 'text-blue-500' : 'text-emerald-500'} />
-                            <span>{f}</span>
-                          </div>
-                        ))}
-                      </div>
+                      <h4 className={`text-[11px] sm:text-[13px] font-black font-noto leading-tight ${isSelected ? 'text-blue-500' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>
+                        {pkg.name}
+                      </h4>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowPackageDetails(pkg);
+                        }}
+                        className="mt-2 text-[9px] font-bold text-slate-400 hover:text-blue-500 underline"
+                      >
+                        {lang === 'bn' ? 'বিস্তারিত দেখুন' : 'View Details'}
+                      </button>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* Select Billing Cycle Container */}
-            <div className="space-y-3">
-              <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">
-                {lang === 'bn' ? '২. সময়সীমা নির্বাচন করুন' : '2. Select Duration / Cycle'}
+            {/* Month-wise Payment Status */}
+            <div className="space-y-3.5">
+              <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest px-1 flex justify-between items-center">
+                <span>{lang === 'bn' ? '২. মাসের পেমেন্ট স্ট্যাটাস' : '2. Monthly Payment Status'}</span>
+                <span className="text-[9px] text-blue-500 font-black">{currentYear}</span>
               </label>
 
-              <div className={`p-1.5 rounded-2xl border flex gap-1 ${
-                madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700/80' : 'bg-slate-50 border-slate-100'
-              }`}>
-                {(['monthly', 'quarterly', 'yearly'] as const).map((type) => {
-                  const isSelected = subscriptionType === type;
-                  const labelBn = type === 'monthly' ? '১ মাস (মাসিক)' : type === 'quarterly' ? '৩ মাস (ত্রৈমাসিক)' : '১২ মাস (বার্ষিক)';
-                  const labelEn = type === 'monthly' ? '1 Month (Monthly)' : type === 'quarterly' ? '3 Months (Quarterly)' : '12 Months (Yearly)';
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {months.map((m) => {
+                  const isSelected = selectedMonths.includes(m.key);
                   return (
                     <button
-                      key={type}
-                      type="button"
-                      onClick={() => setSubscriptionType(type)}
-                      className={`flex-1 py-3 text-center rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer ${
-                        isSelected 
-                          ? 'bg-[#2563EB] text-white shadow-premium' 
-                          : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')
+                      key={m.key}
+                      onClick={() => toggleMonth(m.key, m.isPaid)}
+                      disabled={m.isPaid}
+                      className={`p-3 rounded-2xl border text-center transition-all relative ${
+                        m.isPaid 
+                          ? 'bg-emerald-50 border-emerald-100 text-emerald-600 opacity-80 cursor-default'
+                          : isSelected
+                            ? 'bg-blue-500 border-blue-500 text-white shadow-md active:scale-95'
+                            : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 active:scale-95')
                       }`}
                     >
-                      {lang === 'bn' ? labelBn : labelEn}
+                      <p className="text-[10px] sm:text-[11px] font-black font-noto truncate">{m.name}</p>
+                      <div className={`mt-1 h-1 w-full rounded-full ${m.isPaid ? 'bg-emerald-500' : isSelected ? 'bg-white' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                      {m.isPaid && <CheckCircle2 size={10} className="absolute top-1 right-1 text-emerald-500" />}
                     </button>
                   );
                 })}
               </div>
+              <p className="text-[9px] font-bold text-slate-400 italic">
+                {lang === 'bn' ? '* যে মাসের পেমেন্ট করতে চান সেই মাসগুলো সিলেক্ট করুন।' : '* Select the months you want to pay for.'}
+              </p>
             </div>
+
+            {/* Select Billing Cycle Container (Removed) */}
 
           </div>
 
           {/* Right Column: Payment Instructions and Form (5 Cols on lg) */}
           <div className="lg:col-span-5 space-y-5">
             
-            {/* bKash/Nagad Instructions Card */}
+            {/* bKash/Nagad/Bank Instructions Card */}
             <div className={`p-5 rounded-[2.2rem] border relative overflow-hidden text-center flex flex-col items-center justify-center ${
               madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-[#F4F7FF] border-[#E2E8F0]'
             }`}>
               <div className="absolute -top-12 -left-12 w-28 h-28 bg-[#2563EB]/5 rounded-full"></div>
               
               {/* Payment Methods Info Header */}
-              <div className="flex gap-2.5 mb-3.5 z-10">
+              <div className="flex flex-wrap justify-center gap-2 mb-3.5 z-10">
                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-500/15 text-rose-500 flex items-center justify-center`}>
                   bKash
                 </span>
@@ -773,8 +807,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
               <p className="text-[10px] sm:text-[11px] font-semibold text-slate-400 leading-relaxed mt-2.5 max-w-[280px] z-10">
                 {lang === 'bn' 
-                  ? 'এই বিকাশ বা নগদ নম্বরে সেন্ড মানি (Send Money) করার পর নিচে সঠিক তথ্য দিয়ে চার্জ পরিশোধ করুন।' 
-                  : 'Send Money to the above personal number and submit payment details below.'}
+                  ? 'উপরের তথ্য অনুযায়ী পেমেন্ট করার পর নিচে সঠিক তথ্য দিয়ে চার্জ পরিশোধ রিকোয়েস্ট করুন।' 
+                  : 'Pay according to the above details and submit payment request below.'}
               </p>
             </div>
 
@@ -798,7 +832,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                         : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700')
                     }`}
                   >
-                    bKash (বিকাশ)
+                    bKash
                   </button>
                   <button
                     type="button"
@@ -809,7 +843,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                         : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700')
                     }`}
                   >
-                    Nagad (নগদ)
+                    Nagad
                   </button>
                 </div>
               </div>
@@ -827,6 +861,13 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                 <p className="text-[9px] font-bold text-slate-400 mt-1 leading-none">
                   ({selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name} • {effectiveRate}৳ * {durationMonths} {lang === 'bn' ? 'মাস' : 'months'})
                 </p>
+                {selectedMonths.length > 0 && (
+                  <div className="mt-2 flex flex-wrap justify-center gap-1">
+                    {selectedMonths.map(m => (
+                      <span key={m} className="px-2 py-0.5 bg-indigo-500/10 text-indigo-500 text-[8px] font-black rounded-md">{m}</span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Sender Phone Input */}
@@ -888,9 +929,123 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
             </div>
 
+            {/* Payment History List */}
+            <div className="space-y-3.5">
+              <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest px-1">
+                {lang === 'bn' ? 'সাবস্ক্রিপশন পেমেন্ট হিস্ট্রি' : 'Subscription Payment History'}
+              </label>
+
+              <div className={`rounded-[2rem] border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800/20 border-slate-700/50' : 'bg-white border-slate-100 shadow-bubble'}`}>
+                {loadingHistory ? (
+                  <div className="p-10 flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="animate-spin text-blue-500" size={24} />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'লোড হচ্ছে...' : 'Loading History...'}</p>
+                  </div>
+                ) : paymentHistory.length === 0 ? (
+                  <div className="p-10 text-center space-y-2">
+                    <History size={32} className="mx-auto text-slate-300" />
+                    <p className="text-xs font-bold text-slate-400">{lang === 'bn' ? 'কোনো পেমেন্ট হিস্ট্রি পাওয়া যায়নি' : 'No payment history found'}</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700/30">
+                    {paymentHistory.map((tr) => (
+                      <div key={tr.id} className="p-4 flex items-center justify-between group hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10' : tr.status === 'pending' ? 'bg-amber-50 text-amber-500 dark:bg-amber-500/10' : 'bg-red-50 text-red-500 dark:bg-red-500/10'}`}>
+                            <CreditCard size={16} />
+                          </div>
+                          <div>
+                            <h5 className={`text-[11px] sm:text-[13px] font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                              {tr.amount} ৳
+                            </h5>
+                            <p className="text-[9px] font-bold text-slate-400 mt-0.5">
+                              {new Date(tr.created_at).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })} • {tr.transaction_id}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                            tr.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' : 
+                            tr.status === 'pending' ? 'bg-amber-500/10 text-amber-500' : 
+                            'bg-red-500/10 text-red-500'
+                          }`}>
+                            {tr.status === 'approved' ? (lang === 'bn' ? 'সফল' : 'Success') : 
+                             tr.status === 'pending' ? (lang === 'bn' ? 'অপেক্ষা' : 'Pending') : 
+                             (lang === 'bn' ? 'ব্যর্থ' : 'Failed')}
+                          </span>
+                          {tr.metadata?.months && (
+                            <p className="text-[8px] font-bold text-slate-400 mt-1 truncate max-w-[80px]">
+                              {tr.metadata.months.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
 
         </div>
+
+        {/* Package Details Modal */}
+        {showPackageDetails && createPortal(
+          <div className="modal-overlay bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className={`w-full max-w-md rounded-[2.5rem] border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className="p-6 relative">
+                <button 
+                  onClick={() => setShowPackageDetails(null)}
+                  className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 active:scale-90 transition-all"
+                >
+                  <X size={20} />
+                </button>
+                
+                <div className="flex flex-col items-center text-center mt-4">
+                  <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mb-4">
+                    <Package size={32} />
+                  </div>
+                  <h3 className={`text-xl sm:text-2xl font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {showPackageDetails.name}
+                  </h3>
+                  <div className="mt-2 px-4 py-1 bg-blue-500/10 rounded-full">
+                    <p className="text-sm font-black text-blue-600">
+                      {showPackageDetails.rate.toFixed(2)} ৳ {stats.students <= 200 ? `(${lang === 'bn' ? 'ফিক্সড' : 'Flat'})` : `/ ${lang === 'bn' ? 'ছাত্র' : 'Student'}`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-8 space-y-3">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-4">
+                    {lang === 'bn' ? 'প্যাকেজের ফিচারসমূহ' : 'Package Features'}
+                  </p>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {showPackageDetails.features?.map((f: string, i: number) => (
+                      <div key={i} className={`p-3 rounded-xl border flex items-center gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                          <Check size={12} strokeWidth={3} />
+                        </div>
+                        <span className="text-xs sm:text-sm font-bold font-noto">{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setSelectedPackage(showPackageDetails);
+                    setShowPackageDetails(null);
+                  }}
+                  className="w-full h-14 bg-[#2563EB] text-white font-black rounded-2xl shadow-premium mt-8 active:scale-95 transition-all text-sm uppercase tracking-widest"
+                >
+                  {lang === 'bn' ? 'প্যাকেজটি সিলেক্ট করুন' : 'Select This Package'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     );
   }
