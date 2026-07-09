@@ -177,6 +177,7 @@ export interface Profile {
     can_manage_sms?: boolean;
     can_manage_settings?: boolean;
     can_view_reports?: boolean;
+    can_send_messages?: boolean;
     allowed_classes?: string[];
   };
 }
@@ -393,6 +394,7 @@ export interface TeacherPermissions {
   can_view_reports?: boolean;
   can_manage_teachers?: boolean;
   can_upload_student_photos?: boolean;
+  can_send_messages?: boolean;
   allowed_classes?: string[];
 }
 

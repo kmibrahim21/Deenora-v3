@@ -513,6 +513,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const role = profile?.role || 'teacher';
   const isAdmin = role === 'madrasah_admin' || role === 'super_admin';
   const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
+  const canSendMessages = isAdmin || !!profile?.permissions?.can_send_messages;
 
   if (isEditingSubscription) {
     const currentRate = selectedPackage ? selectedPackage.rate : (Number((madrasah?.config_json as any)?.package_rate) || 0);
@@ -1046,7 +1047,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         )}
 
         {/* Message Card */}
-        {(isAdmin || canSendSMS) && modules.messages && (
+        {(isAdmin || canSendMessages) && modules.messages && (
           <ActionCard
             icon={MessageCircle}
             title={lang === 'bn' ? 'বার্তা পাঠান' : 'Send Message'}

@@ -239,7 +239,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'লাইব্রেরী' : 'Library'}</span>
                 </button>
               )}
-              {modules.modules.messages && (
+              {modules.modules.messages && (isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_send_messages')) && (
                 <button onClick={() => setView('messages')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('messages') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <MessageCircle size={22} strokeWidth={isTabActive('messages') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">বার্তা</span>

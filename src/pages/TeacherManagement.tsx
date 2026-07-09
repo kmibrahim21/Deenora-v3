@@ -82,6 +82,7 @@ const initialPermissions: TeacherPermissions = {
   can_view_reports: false,
   can_manage_teachers: false,
   can_upload_student_photos: false,
+  can_send_messages: false,
   allowed_classes: [],
 };
 
@@ -1683,6 +1684,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         label: t("permissions_sms", lang),
                         icon: <MessageSquare size={14} />,
                         module: "sms",
+                      },
+                      {
+                        key: "can_send_messages",
+                        label: lang === "bn" ? "বার্তা পাঠান" : "Send Messages",
+                        icon: <MessageSquare size={14} />,
+                        module: "parent_portal",
                       },
                       {
                         key: "can_manage_classes",

@@ -703,7 +703,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 <p className="text-[10px] font-black uppercase tracking-widest">ডাটা লোড হচ্ছে...</p>
               </div>
             ) : feesReport.length > 0 ? (
-                feesReport.filter((item: any) => {
+                (() => {
+                  const filteredData = feesReport.filter((item: any) => {
                     const isFullyPaid = Number(item.balance_due) <= 0 && Number(item.total_payable) > 0;
                     const isPartial = Number(item.balance_due) > 0 && Number(item.total_paid) > 0;
                     const isUnpaid = Number(item.total_paid) === 0 && Number(item.total_payable) > 0;
@@ -712,17 +713,28 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     if (statusFilter === 'partial') return isPartial;
                     if (statusFilter === 'unpaid') return isUnpaid;
                     return true;
-                }).map((item: any) => {
-                  const balance = Number(item.balance_due) || 0;
-                  const payable = Number(item.total_payable) || 0;
-                  const paid = Number(item.total_paid) || 0;
-
-                  const isFullyPaid = balance <= 0 && payable > 0;
-                  const isNoFeeSet = payable === 0;
-                  const hasBalance = balance > 0;
+                  });
 
                   return (
-                  <div key={item.student_id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                    <>
+                      {statusFilter !== 'all' && (
+                        <div className="col-span-full mb-1">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                            {statusFilter === 'paid' ? 'পরিশোধিত' : statusFilter === 'partial' ? 'আংশিক' : 'বকেয়া'}: {filteredData.length} জন
+                          </span>
+                        </div>
+                      )}
+                      {filteredData.map((item: any) => {
+                        const balance = Number(item.balance_due) || 0;
+                        const payable = Number(item.total_payable) || 0;
+                        const paid = Number(item.total_paid) || 0;
+
+                        const isFullyPaid = balance <= 0 && payable > 0;
+                        const isNoFeeSet = payable === 0;
+                        const hasBalance = balance > 0;
+
+                        return (
+                        <div key={item.student_id} className={`p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                      <div className="flex items-center gap-3.5 min-w-0">
                         <div className={`w-11 h-11 rounded-[1rem] flex items-center justify-center font-black shrink-0 ${isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-500') : hasBalance ? (isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-50 text-orange-500') : (isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-[#2563EB]')}`}>
                            {item.roll || '-'}
@@ -769,7 +781,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        </button>
                      </div>
                   </div>
-                )})
+                  );
+                })}
+                </>
+                );
+              })()
             ) : !selectedClass ? (
               <div className={`text-center py-16 rounded-[3rem] border-2 border-dashed mx-2 px-6 flex flex-col items-center col-span-full ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-5 ${isDark ? 'bg-slate-800 text-slate-700' : 'bg-blue-50 text-blue-200'}`}>
