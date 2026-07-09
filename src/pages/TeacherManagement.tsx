@@ -600,6 +600,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       requestManager.invalidatePattern(`teachers:${madrasah.id}`);
       requestManager.invalidatePattern(`stats:${madrasah.id}`);
       requestManager.invalidatePattern(`dashboard_`);
+      await CacheService.clearCache('teachers', madrasah.id);
 
       await fetchTeachers();
       setShowAddModal(false);
@@ -654,7 +655,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
       // Invalidate caches
       requestManager.invalidatePattern(`teachers:${madrasah?.id}`);
+      requestManager.invalidatePattern(`profile:${selectedTeacher.id}`);
       requestManager.invalidatePattern(`dashboard_`);
+      if (madrasah?.id) {
+        await CacheService.clearCache('teachers', madrasah.id);
+      }
 
       await fetchTeachers();
       setShowEditModal(false);
@@ -685,8 +690,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
       // Invalidate caches
       requestManager.invalidatePattern(`teachers:${madrasah?.id}`);
+      requestManager.invalidatePattern(`profile:${id}`);
       requestManager.invalidatePattern(`stats:${madrasah?.id}`);
       requestManager.invalidatePattern(`dashboard_`);
+      if (madrasah?.id) {
+        await CacheService.clearCache('teachers', madrasah.id);
+      }
 
       await fetchTeachers();
       setDeleteModal({ show: false, teacherId: null });

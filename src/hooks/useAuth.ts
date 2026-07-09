@@ -409,7 +409,7 @@ export const useAuth = () => {
                 const updatedProfile = payload.new as Profile;
                 setProfile(updatedProfile);
                 requestManager.setManualCache(`fetch:profiles:profile:${session.user.id}`, updatedProfile);
-                OfflineService.setCache('profile', updatedProfile);
+                OfflineService.setCache('user_profile', updatedProfile);
               }
             )
             .subscribe();

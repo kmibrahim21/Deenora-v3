@@ -270,6 +270,15 @@ export default async function handler(req, res) {
       }
       const { error: teacherError } = await supabase.from('teachers').update(updateData).eq('id', id);
       if (teacherError) throw teacherError;
+
+      // ALSO update the profiles table so the logged-in user gets updated permissions
+      await supabase.from('profiles').update({
+        full_name: name,
+        role: 'teacher',
+        permissions: finalPermissions,
+        is_active: is_active ?? true
+      }).eq('id', id);
+
       return res.status(200).json({ success: true });
     }
 
