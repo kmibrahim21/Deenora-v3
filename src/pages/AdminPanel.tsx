@@ -1689,7 +1689,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       
       const userPhone = rejectConfirm.institutions?.phone || rejectConfirm.sender_phone;
       if (userPhone) {
-        const msg = `দুঃখিত, আপনার পেমেন্ট রিকোয়েস্টটি (${rejectConfirm.amount} ৳) বাতিল করা হয়েছে। বিস্তারিত জানতে যোগাযোগ করুন।`;
+        const msg = `Assalamu Alaikum, Sorry, your payment request of (${rejectConfirm.amount}tk) has been rejected. Please contact for details. Thank you.`;
         smsApi.sendDirect(userPhone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
       }
 
