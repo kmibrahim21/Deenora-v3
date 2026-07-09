@@ -2097,12 +2097,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                            try {
                               const [rYear, rMonth] = selectedMonthForReminder.split('-');
                               const date = new Date(parseInt(rYear), parseInt(rMonth) - 1);
-                              monthLabel = date.toLocaleDateString('bn-BD', { month: 'long', year: 'numeric' });
+                              monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                            } catch (e) {
                               monthLabel = selectedMonthForReminder;
                            }
                            
-                           const msg = `আসসালামু আলাইকুম, {{name}}।আপনার প্রতিষ্ঠানের ${monthLabel} মাসের সাবস্ক্রিপশন ফি এখনো পরিশোধিত হয়নি। অনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।`;
+                           const msg = `Assalamu Alaikum, {{name}}. Your institution's subscription fee for ${monthLabel} has not been paid yet. Please pay as soon as possible. Thank you.`;
                            
                            if (onNavigateToSMSBroadcast) {
                              onNavigateToSMSBroadcast(unpaidInstitutions.map(inst => inst.id), msg);

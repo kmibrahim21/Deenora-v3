@@ -25,7 +25,7 @@ interface AccountingProps {
 }
 
 const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear, triggerRefresh }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'automation' | 'fees' | 'sms' | 'summary' | 'structures' | 'add-ledger'>('fees');
+  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'automation' | 'fees' | 'sms' | 'summary' | 'structures' | 'add-ledger'>(() => (localStorage.getItem('accounting_activeTab') as any) || 'fees');
   const [isAdding, setIsAdding] = useState(false);
   const [entryType, setEntryType] = useState<'income' | 'expense'>('income');
   const [amount, setAmount] = useState('');
@@ -49,8 +49,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
     message?: string;
     deletedCount?: number;
   }>({ show: false, step: 'confirm' });
-  const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>('student_history');
-  const [selectedHistoryClass, setSelectedHistoryClass] = useState<string>('all');
+  const [historyTab, setHistoryTab] = useState<'student_history' | 'income_expense'>(() => (localStorage.getItem('accounting_historyTab') as any) || 'student_history');
+  const [selectedHistoryClass, setSelectedHistoryClass] = useState<string>(() => localStorage.getItem('accounting_selectedHistoryClass') || 'all');
   const [showClassFilterMenu, setShowClassFilterMenu] = useState(false);
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
   const isDark = madrasah?.theme === 'dark';
@@ -59,6 +59,18 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
 
   const [type, setType] = useState<'income' | 'expense'>('income');
   const [desc, setDesc] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('accounting_activeTab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('accounting_historyTab', historyTab);
+  }, [historyTab]);
+
+  useEffect(() => {
+    localStorage.setItem('accounting_selectedHistoryClass', selectedHistoryClass);
+  }, [selectedHistoryClass]);
 
   useEffect(() => {
     if (madrasah?.id) {

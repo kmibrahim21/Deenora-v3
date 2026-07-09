@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, UserRole, Profile } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone, Check } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
@@ -89,6 +89,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
   // Structure State
   const [showAddStructure, setShowAddStructure] = useState(false);
+  const [structureSelectedClass, setStructureSelectedClass] = useState<string>('');
+  const [showStructureClassDropdown, setShowStructureClassDropdown] = useState(false);
   const [editingStructureId, setEditingStructureId] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
@@ -621,7 +623,18 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                   {showClassDropdown && (
                       <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-xl border z-50 p-1 max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-200 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                           {classes.map(c => (
-                              <button key={c.id} onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black transition-colors ${isDark ? 'text-slate-400 hover:bg-slate-700 hover:text-blue-400' : 'text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]'}`}>{c.class_name}</button>
+                              <button 
+                                key={c.id} 
+                                onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} 
+                                className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-black transition-colors flex items-center justify-between ${
+                                  selectedClass === c.id
+                                    ? (isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600')
+                                    : (isDark ? 'text-slate-400 hover:bg-slate-700 hover:text-blue-400' : 'text-slate-600 hover:bg-slate-50 hover:text-[#2563EB]')
+                                }`}
+                              >
+                                {c.class_name}
+                                {selectedClass === c.id && <Check size={14} />}
+                              </button>
                           ))}
                       </div>
                   )}
@@ -1106,7 +1119,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         setEditingStructureId(null);
                         setCategory('');
                         setAmount('');
-                        setSelectedClass('');
+                        setStructureSelectedClass('');
                         setDueDate(activeYearEndDate);
                         setStartDate(madrasah.config_json?.academic_year_start || '');
                         setShowAddStructure(true);
@@ -1172,7 +1185,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                                         setEditingStructureId(s.id);
                                                         setCategory(s.fee_name);
                                                         setAmount(s.amount?.toString() || '');
-                                                        setSelectedClass(s.class_id || '');
+                                                        setStructureSelectedClass(s.class_id || '');
                                                         setDueDate(s.due_date || '');
                                                         setStartDate(s.start_date || '');
                                                         setShowAddStructure(true);
@@ -1212,15 +1225,15 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                  <div className="space-y-4">
                     <div className="relative">
                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শ্রেণি নির্বাচন করুন (ঐচ্ছিক)</label>
-                       <button onClick={() => setShowClassDropdown(!showClassDropdown)} className={`w-full h-14 px-6 rounded-2xl border-2 flex items-center justify-between font-black transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
-                          <span className="truncate">{classes.find(c => c.id === selectedClass)?.class_name || 'সব শ্রেণি (All Classes)'}</span>
+                       <button onClick={() => setShowStructureClassDropdown(!showStructureClassDropdown)} className={`w-full h-14 px-6 rounded-2xl border-2 flex items-center justify-between font-black transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
+                          <span className="truncate">{classes.find(c => c.id === structureSelectedClass)?.class_name || 'সব শ্রেণি (All Classes)'}</span>
                           <ChevronDown size={20} className="text-slate-300" />
                        </button>
-                       {showClassDropdown && (
+                       {showStructureClassDropdown && (
                            <div className={`absolute top-full left-0 right-0 mt-2 rounded-2xl shadow-2xl border z-[1001] p-2 max-h-48 overflow-y-auto ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-                               <button onClick={() => { setSelectedClass(''); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black transition-colors ${isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50'}`}>সব শ্রেণি (All Classes)</button>
+                               <button onClick={() => { setStructureSelectedClass(''); setShowStructureClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black transition-colors ${isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50'}`}>সব শ্রেণি (All Classes)</button>
                                {classes.map(c => (
-                                   <button key={c.id} onClick={() => { setSelectedClass(c.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black transition-colors ${isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50'}`}>{c.class_name}</button>
+                                   <button key={c.id} onClick={() => { setStructureSelectedClass(c.id); setShowStructureClassDropdown(false); }} className={`w-full text-left px-5 py-3 rounded-xl font-black transition-colors ${isDark ? 'text-slate-100 hover:bg-slate-700' : 'text-[#1E3A8A] hover:bg-slate-50'}`}>{c.class_name}</button>
                                ))}
                            </div>
                        )}
@@ -1268,7 +1281,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        try {
                            const payload = {
                                institution_id: madrasah.id,
-                               class_id: selectedClass || null,
+                               class_id: structureSelectedClass || null,
                                fee_name: category,
                                amount: parseFloat(amount),
                                due_date: dueDate || null,
@@ -1291,7 +1304,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                throw error;
                            }
                            setShowAddStructure(false);
-                           setCategory(''); setAmount(''); setSelectedClass(''); setDueDate(''); setStartDate(''); setEditingStructureId(null);
+                           setCategory(''); setAmount(''); setStructureSelectedClass(''); setDueDate(''); setStartDate(''); setEditingStructureId(null);
                            requestManager.invalidatePattern(`structures:${madrasah.id}`);
                            requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
                            clearGlobalSchoolFeeCache();

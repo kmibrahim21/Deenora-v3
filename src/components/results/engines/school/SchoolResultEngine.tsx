@@ -2306,74 +2306,90 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     >
                     
                     {/* Render live mockup copy matching true output */}
-                    <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
-                      {/* Frame Design corners */}
-                      <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
-                      <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 rounded-tr-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
-                      <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 rounded-bl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
-                      <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 rounded-br-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                    {(() => {
+                      const isClassMode = routineSelectionMode === 'class';
+                      const previewNameFontSize = isClassMode 
+                        ? (madrasah?.name && madrasah.name.length > 25 ? 'text-[20px]' : 'text-[24px]') 
+                        : (madrasah?.name && madrasah.name.length > 25 ? 'text-[26px]' : 'text-[32px]');
+                      
+                      const previewLogoSize = isClassMode ? 'w-[64px] h-[64px]' : 'w-[85px] h-[85px]';
+                      const previewCalendarBoxClass = isClassMode ? 'w-[125px] h-[90px] p-2' : 'w-[160px] h-[105px] p-3';
+                      const previewCalendarIconSize = isClassMode ? 'w-5 h-5 text-xs' : 'w-7 h-7 text-sm';
+                      const previewCalendarTextClass1 = isClassMode ? 'text-[9.5px]' : 'text-[11px]';
+                      const previewCalendarTextClass2 = isClassMode ? 'text-[9.5px]' : 'text-[11px]';
+                      const previewCalendarTextClass3 = isClassMode ? 'text-[8.5px]' : 'text-[10px]';
+                      const previewContactTextSize = isClassMode ? 'text-[10.5px]' : 'text-[12px]';
+                      const previewPillBadgeClass = isClassMode ? 'px-3 py-1 text-[10px]' : 'px-5 py-1.5 text-[11px]';
 
-                      <div className="flex-1 flex flex-col justify-between">
-                        {/* Banner Block */}
-                        <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
-                          
-                          {/* Left Column: Logotype */}
-                          <div className="flex-shrink-0 flex items-center justify-center pl-4">
-                            <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
-                              {madrasah?.logo_url ? (
-                                <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain rounded-full bg-white" alt="Logo" referrerPolicy="no-referrer" />
-                              ) : (
-                                <div className="w-[85px] h-[85px] bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[10px]">LOGO</div>
-                              )}
-                            </div>
-                          </div>
+                      return (
+                        <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                          {/* Frame Design corners */}
+                          <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                          <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 rounded-tr-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                          <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 rounded-bl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                          <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 rounded-br-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
 
-                          {/* Center Column: Madrasah Title, location, etc */}
-                          <div className="flex-1 text-center px-3 leading-normal">
-                            <h1 className="text-[32px] font-black tracking-tight leading-none mb-1 font-serif-bn italic" style={{ color: rtTheme.primary }}>
-                              {madrasah?.name || 'মাদরাসার নাম'}
-                            </h1>
-                            
-                            <div className="flex items-center justify-center gap-2 text-[12px] font-bold text-[#475569] leading-tight flex-wrap font-noto">
-                              <span className="inline-flex items-center gap-0.5 italic" style={{ color: rtTheme.primary }}>
-                                {madrasah?.address || 'ঠিকানা'}
-                              </span>
-                              <span className="text-slate-300">|</span>
-                              <span className="inline-flex items-center gap-0.5" style={{ color: rtTheme.primary }}>
-                                {lang === 'bn' ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
-                              </span>
-                            </div>
+                          <div className="flex-1 flex flex-col justify-between">
+                            {/* Banner Block */}
+                            <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
+                              
+                              {/* Left Column: Logotype */}
+                              <div className="flex-shrink-0 flex items-center justify-center pl-4">
+                                <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
+                                  {madrasah?.logo_url ? (
+                                    <img src={madrasah.logo_url} className={`${previewLogoSize} object-contain rounded-full bg-white`} alt="Logo" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className={`${previewLogoSize} bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[10px]`}>LOGO</div>
+                                  )}
+                                </div>
+                              </div>
 
-                            {/* Center pill badge matching bottom-center of image */}
-                            <div className="mt-2 inline-block">
-                              <div className="text-white px-5 py-1.5 rounded-full shadow-sm text-[11px] font-black tracking-wide border" style={{ backgroundColor: rtTheme.secondary, borderColor: `${rtTheme.primary}80` }}>
-                                {lang === 'bn' 
-                                  ? `${activeExamName} সময়সূচি - ${currentYearBn}` 
-                                  : `${activeExamName} Schedule - ${currentYear}`}
+                              {/* Center Column: Madrasah Title, location, etc */}
+                              <div className="flex-1 text-center px-3 leading-normal">
+                                <h1 className={`${previewNameFontSize} font-black tracking-tight leading-none mb-1 font-serif-bn italic`} style={{ color: rtTheme.primary }}>
+                                  {madrasah?.name || 'মাদরাসার নাম'}
+                                </h1>
+                                
+                                <div className={`flex items-center justify-center gap-2 ${previewContactTextSize} font-bold text-[#475569] leading-tight flex-wrap font-noto`}>
+                                  <span className="inline-flex items-center gap-0.5 italic" style={{ color: rtTheme.primary }}>
+                                    {madrasah?.address || 'ঠিকানা'}
+                                  </span>
+                                  <span className="text-slate-300">|</span>
+                                  <span className="inline-flex items-center gap-0.5" style={{ color: rtTheme.primary }}>
+                                    {lang === 'bn' ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
+                                  </span>
+                                </div>
+
+                                {/* Center pill badge matching bottom-center of image */}
+                                <div className="mt-2 inline-block">
+                                  <div className={`text-white ${previewPillBadgeClass} rounded-full shadow-sm font-black tracking-wide border`} style={{ backgroundColor: rtTheme.secondary, borderColor: `${rtTheme.primary}80` }}>
+                                    {lang === 'bn' 
+                                      ? `${activeExamName} সময়সূচি - ${currentYearBn}` 
+                                      : `${activeExamName} Schedule - ${currentYear}`}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
+                              <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-between border shadow mr-4`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
+                                <div className="flex items-center justify-center">
+                                  <div className={`${previewCalendarIconSize} rounded-full bg-white flex items-center justify-center font-black`} style={{ color: rtTheme.primary }}>
+                                    📅
+                                  </div>
+                                </div>
+                                <div className="text-center mt-1 leading-normal">
+                                  <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
+                                    {activeExamName ? activeExamName.replace(/পরীক্ষা|Exam/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
+                                  </p>
+                                  <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
+                                    পরীক্ষার সময়সূচি
+                                  </p>
+                                  <p className={`${previewCalendarTextClass3} font-semibold text-white/70 block`}>
+                                    {currentYearBn}ইং
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-
-                          {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
-                          <div className="flex-shrink-0 w-[160px] h-[105px] text-white rounded-2xl flex flex-col justify-between p-3 border shadow mr-4" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
-                            <div className="flex items-center justify-center">
-                              <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center font-black text-sm" style={{ color: rtTheme.primary }}>
-                                📅
-                              </div>
-                            </div>
-                            <div className="text-center mt-1 leading-normal">
-                              <p className="text-[11px] font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden" style={{ color: rtTheme.accent }}>
-                                {activeExamName ? activeExamName.replace(/পরীক্ষা|Exam/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
-                              </p>
-                              <p className="text-[11px] font-extrabold block mb-0.5" style={{ color: `${rtTheme.accent}cc` }}>
-                                পরীক্ষার সময়সূচি
-                              </p>
-                              <p className="text-[10px] font-semibold text-white/70 block">
-                                {currentYearBn}ইং
-                              </p>
-                            </div>
-                          </div>
-                        </div>
 
                         {/* Main Grid Table matching image perfectly */}
                         <div className="flex-1 mt-2 overflow-x-auto pb-4 custom-scrollbar">
@@ -2750,6 +2766,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         </div>
                       </div>
                     </div>
+                  )})()}
 
                   </div>
                 </div>
