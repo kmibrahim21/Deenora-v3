@@ -905,10 +905,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                     const nameAndDetails = parts.slice(1).join(' - ');
                     
                     // Regex for "Name (Details)"
-                    const match = nameAndDetails.match(/^(.*?)\s*\((.*?)\)/);
+                    const match = nameAndDetails.match(/^(.*?)\s*(\(.*)$/);
                     if (match) {
                       displayName = match[1];
-                      details = match[2];
+                      details = match[2].trim();
                     } else {
                       displayName = nameAndDetails;
                       details = ''; // Reset details if no parenthesis match

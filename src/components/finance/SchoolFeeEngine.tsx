@@ -464,7 +464,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       }
 
       // Add to Ledger
-      const feeDescription = selectedFeeCategories.join(', ');
+      const feeDescription = selectedFeeCategories.length > 0 ? selectedFeeCategories.join(', ') : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
       const className = classes.find(c => c.id === selectedStudent.class_id)?.class_name || '';
       const roll = selectedStudent.roll || '-';
       

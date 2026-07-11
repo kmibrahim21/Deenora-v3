@@ -440,6 +440,11 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                           <span className="text-[11px] font-extrabold text-slate-800 leading-[1.2] line-clamp-2 max-w-[155px] font-noto">{currentRenderStudent.mother_name || "-"}</span>
                        </div>
                        <div className="flex items-start">
+                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto shrink-0 mt-[1px]">{t.phone}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.2] font-sans tracking-wide">{currentRenderStudent.guardian_phone || "-"}</span>
+                       </div>
+                       <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto shrink-0 mt-[1px]">{t.address}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
                           <span className="text-[11px] font-extrabold text-slate-800 leading-[1.1] line-clamp-3 max-w-[155px] font-noto">{currentRenderStudent.address || "-"}</span>

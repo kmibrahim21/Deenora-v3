@@ -32,7 +32,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const [isSavingMulti, setIsSavingMulti] = useState(false);
   const [errorMulti, setErrorMulti] = useState<string>('');
 
-  const getDueForMonth = (monthStr: string) => {
+  const getFeeDetailsForMonth = (monthStr: string) => {
       const monthFees = fees.filter(f => f.month === monthStr);
       const paidAmt = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
       
@@ -49,8 +49,10 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         return (isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart) ? sum + amountToCharge : sum;
       }, 0);
       
-      return Math.max(0, monthPayable - paidAmt);
+      return { due: Math.max(0, monthPayable - paidAmt), payable: monthPayable, paid: paidAmt };
   };
+
+  const getDueForMonth = (monthStr: string) => getFeeDetailsForMonth(monthStr).due;
 
   const toggleMonthSelection = (monthStr: string) => {
       setSelectedMonthsToPay(prev => 
@@ -161,7 +163,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         const totalPaid = parseFloat(multiPaidAmount) || 0;
         const totalDisc = parseFloat(multiDiscount) || 0;
         
-        let finalDescription = `${totalCategories} - ${student.student_name} (${classNameToSave} | Roll: ${roll} | Months: ${monthsNames})${totalDisc > 0 ? " (ছাড়: ৳" + totalDisc + ")" : ""}`;
+        const categoriesStr = totalCategories || (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
+        let finalDescription = `${categoriesStr} - ${student.student_name} (${classNameToSave} | Roll: ${roll} | Months: ${monthsNames})${totalDisc > 0 ? " (ছাড়: ৳" + totalDisc + ")" : ""}`;
         
         if (createdFeeIds.length > 0) {
             finalDescription += createdFeeIds.map(id => ` || FEE_ID: ${id}`).join('');
@@ -751,7 +754,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                           </div>
                         </div>
                         <p className="text-[10px] text-slate-500 font-medium leading-relaxed whitespace-pre-wrap">
-                          {(entry.description || '').split(' || FEE_ID: ')[0].split(' | Month: ')[0].split(' | মাস: ')[0]}
+                          {(entry.description || '').split(' || FEE_ID: ')[0]}
                         </p>
                       </div>
                     </div>
@@ -790,7 +793,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                         {Array.from({ length: 12 }).map((_, i) => {
                             const monthStr = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
                             const monthName = ['জানু', 'ফেব', 'মার্চ', 'এপ্রি', 'মে', 'জুন', 'জুল', 'আগ', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'][i];
-                            const due = getDueForMonth(monthStr);
+                            const details = getFeeDetailsForMonth(monthStr);
+                            const due = details.due;
                             const isSelected = selectedMonthsToPay.includes(monthStr);
                             
                             return (
@@ -809,7 +813,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                 >
                                     <span className="text-xs font-black">{monthName}</span>
                                     {due > 0 && <span className={`text-[9px] font-bold mt-1 ${isSelected ? 'text-blue-100' : isDark ? 'text-red-400' : 'text-red-500'}`}>৳{due}</span>}
-                                    {due <= 0 && <span className="text-[9px] font-bold mt-1 text-emerald-500">Paid</span>}
+                                    {due <= 0 && details.payable > 0 && <span className="text-[9px] font-bold mt-1 text-emerald-500">Paid</span>}
+                                    {due <= 0 && details.payable === 0 && <span className="text-[9px] font-bold mt-1 text-slate-400">-</span>}
                                 </button>
                             );
                         })}
