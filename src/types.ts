@@ -412,6 +412,7 @@ export interface Teacher {
   address?: string;
   join_date?: string;
   leave_date?: string;
+  sort_order?: number;
   is_active: boolean;
   photo_url?: string;
   permissions?: TeacherPermissions;

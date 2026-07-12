@@ -137,6 +137,7 @@ export default async function handler(req, res) {
           address: parsedPermissions.address,
           join_date: parsedPermissions.join_date,
           leave_date: parsedPermissions.leave_date,
+          sort_order: parsedPermissions.sort_order,
           permissions: parsedPermissions
         };
       });
@@ -144,14 +145,14 @@ export default async function handler(req, res) {
     }
 
     if (action === 'create' && req.method === 'POST') {
-      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions, address, join_date, leave_date } = body;
+      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions, address, join_date, leave_date, sort_order } = body;
       if (!institute_id || !name || !phone || !pin) return res.status(400).json({ error: 'Required fields missing' });
       
       console.log('Creating teacher:', { institute_id, name, phone, basic_salary });
 
       const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
 
-      const finalPermissions = { ...permissions, address, join_date, leave_date, raw_password: pin };
+      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, raw_password: pin };
 
       const { data: teacher, error: teacherError } = await supabase.from('teachers').insert({
         institution_id: institute_id,
@@ -257,10 +258,10 @@ export default async function handler(req, res) {
     }
 
     if (action === 'update' && req.method === 'PUT') {
-      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions, address, join_date, leave_date } = body;
+      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions, address, join_date, leave_date, sort_order } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
       
-      const finalPermissions = { ...permissions, address, join_date, leave_date };
+      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order };
       if (pin) {
         finalPermissions.raw_password = pin;
       }

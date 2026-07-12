@@ -39,7 +39,8 @@ import {
   Download,
   CalendarOff,
   AlertTriangle,
-  Camera
+  Camera,
+  ListOrdered
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -145,6 +146,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     address: "",
     join_date: getTodayDateString(),
     leave_date: "",
+    sort_order: 0,
     is_active: true,
   });
 
@@ -725,6 +727,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       address: "",
       join_date: getTodayDateString(),
       leave_date: "",
+      sort_order: 0,
       is_active: true,
     });
     setPermissions(initialPermissions);
@@ -742,6 +745,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       address: teacher.address || "",
       join_date: teacher.join_date || getTodayDateString(),
       leave_date: teacher.leave_date || "",
+      sort_order: teacher.sort_order || 0,
       is_active: teacher.is_active,
     });
     setPermissions({ ...initialPermissions, ...(teacher.permissions || {}) });
@@ -757,7 +761,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           .toLowerCase()
           .includes((searchQuery || "").toLowerCase()) ||
         (t.phone && t.phone.includes(searchQuery)),
-    );
+    ).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   }, [teachers, searchQuery]);
 
   const isDark = madrasah?.theme === "dark";
@@ -1676,6 +1680,24 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                           setFormData({
                             ...formData,
                             leave_date: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <ListOrdered size={11} className="text-[#2563EB]" /> 
+                        {lang === 'bn' ? 'সিরিয়াল' : 'Sort Order'}
+                      </label>
+                      <input
+                        type="number"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.sort_order ?? 0}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            sort_order: parseInt(e.target.value) || 0,
                           })
                         }
                       />
