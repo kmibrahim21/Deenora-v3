@@ -411,6 +411,7 @@ export interface Teacher {
   monthly_salary?: number;
   address?: string;
   join_date?: string;
+  leave_date?: string;
   is_active: boolean;
   photo_url?: string;
   permissions?: TeacherPermissions;

@@ -144,6 +144,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     basic_salary: "",
     address: "",
     join_date: getTodayDateString(),
+    leave_date: "",
     is_active: true,
   });
 
@@ -723,6 +724,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       basic_salary: "",
       address: "",
       join_date: getTodayDateString(),
+      leave_date: "",
       is_active: true,
     });
     setPermissions(initialPermissions);
@@ -739,6 +741,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       basic_salary: (teacher.basic_salary || teacher.monthly_salary) ? (teacher.basic_salary || teacher.monthly_salary)!.toString() : "",
       address: teacher.address || "",
       join_date: teacher.join_date || getTodayDateString(),
+      leave_date: teacher.leave_date || "",
       is_active: teacher.is_active,
     });
     setPermissions({ ...initialPermissions, ...(teacher.permissions || {}) });
@@ -831,18 +834,22 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           >
             {lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teachers List'}
           </button>
-          <button
-            onClick={() => setActiveTab('attendance')}
-            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'attendance' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
-          >
-            {lang === 'bn' ? 'হাজিরা' : 'Attendance'}
-          </button>
-          <button
-            onClick={() => setActiveTab('salary')}
-            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'salary' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
-          >
-            {lang === 'bn' ? 'বেতন প্রদান' : 'Pay Salary'}
-          </button>
+          {madrasah?.config_json?.modules?.attendance !== false && (
+            <button
+              onClick={() => setActiveTab('attendance')}
+              className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'attendance' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+            >
+              {lang === 'bn' ? 'হাজিরা' : 'Attendance'}
+            </button>
+          )}
+          {madrasah?.config_json?.modules?.accounting !== false && (
+            <button
+              onClick={() => setActiveTab('salary')}
+              className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'salary' ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+            >
+              {lang === 'bn' ? 'বেতন প্রদান' : 'Pay Salary'}
+            </button>
+          )}
         </div>
 
         {activeTab === 'teachers' ? (
@@ -900,8 +907,13 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     >
                       {teacher.name}
                     </h3>
-                    <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
                       <Briefcase size={12} /> {teacher.designation || (lang === "bn" ? "শিক্ষক" : "Teacher")}
+                      {teacher.leave_date && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-[9px] border border-red-200">
+                          {lang === 'bn' ? `বিদায়: ${teacher.leave_date}` : `Left: ${teacher.leave_date}`}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1007,8 +1019,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {teachers.map(teacher => {
-                        // Filter by join date
+                        // Filter by join date and leave date
                         if (teacher.join_date && attendanceDate < teacher.join_date) {
+                          return null;
+                        }
+                        if (teacher.leave_date && attendanceDate > teacher.leave_date) {
                           return null;
                         }
                         const status = teacherAttendance[teacher.id] || 'present';
@@ -1123,7 +1138,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {teachers.map(teacher => {
-                      // Filter by join date
+                      // Filter by join date and leave date
                       if (teacher.join_date) {
                         const [joinYear, joinMonth] = teacher.join_date.split('-').map(Number);
                         let filterYear, filterMonth;
@@ -1137,6 +1152,22 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         } else if (reportType === 'yearly') {
                           filterYear = parseInt(reportYear);
                           if (filterYear < joinYear) return null;
+                        }
+                      }
+
+                      if (teacher.leave_date) {
+                        const [leaveYear, leaveMonth] = teacher.leave_date.split('-').map(Number);
+                        let filterYear, filterMonth;
+
+                        if (reportType === 'daily') {
+                          if (reportDate > teacher.leave_date) return null;
+                        } else if (reportType === 'monthly') {
+                          [filterYear, filterMonth] = attendanceMonth.split('-').map(Number);
+                          const isLeft = (filterYear > leaveYear) || (filterYear === leaveYear && filterMonth > leaveMonth);
+                          if (isLeft) return null;
+                        } else if (reportType === 'yearly') {
+                          filterYear = parseInt(reportYear);
+                          if (filterYear > leaveYear) return null;
                         }
                       }
 
@@ -1231,6 +1262,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                   
                   const isJoined = (selectedYear > joinYear) || (selectedYear === joinYear && selectedMonth >= joinMonth);
                   if (!isJoined) return null;
+                }
+
+                if (teacher.leave_date) {
+                  const [leaveYear, leaveMonth] = teacher.leave_date.split('-').map(Number);
+                  const [selectedYear, selectedMonth] = salaryMonth.split('-').map(Number);
+
+                  const isLeft = (selectedYear > leaveYear) || (selectedYear === leaveYear && selectedMonth > leaveMonth);
+                  if (isLeft) return null;
                 }
 
                 const paidKey = `${teacher.id}_${salaryMonth}`;
@@ -1620,6 +1659,23 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                           setFormData({
                             ...formData,
                             join_date: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <Calendar size={11} className="text-[#2563EB]" /> 
+                        {lang === 'bn' ? 'বিদায়ের তারিখ (যদি থাকে)' : 'Leave Date (Optional)'}
+                      </label>
+                      <input
+                        type="date"
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.leave_date || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            leave_date: e.target.value,
                           })
                         }
                       />
