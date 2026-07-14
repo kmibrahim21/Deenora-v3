@@ -51,10 +51,33 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const packageRaw = madrasah?.config_json?.package_name || madrasah?.config_json?.subscription?.package_name || '1';
   const packageNumber = String(packageRaw);
 
-  const isPremiumPackage = 
-    ['STANDARD', 'FINANCE', 'PROFESSIONAL', 'ENTERPRISE', 'ENTERPRISE PLUS', 'স্ট্যান্ডার্ড', 'ফিনান্স', 'প্রফেশনাল', 'এন্টারপ্রাইজ'].includes(packageNumber.toUpperCase()) ||
-    ['5', '6', '7', '8', '9'].includes(packageNumber) ||
-    packageNumber.toUpperCase().includes('ENTERPRISE PLUS');
+  const getPackageLevel = (pkg: string): number => {
+    const name = pkg.trim().toUpperCase();
+    if (name === '1' || name === 'STARTER' || name === 'স্টার্টার') return 1;
+    if (name === '2' || name === 'BASIC' || name === 'বেসিক') return 2;
+    if (name === '3' || name === 'SMART' || name === 'স্মার্ট') return 3;
+    if (name === '4' || name === 'ACADEMIC' || name === 'একাডেমিক') return 4;
+    if (name === '5' || name === 'STANDARD' || name === 'স্ট্যান্ডার্ড') return 5;
+    if (name === '6' || name === 'FINANCE' || name === 'ফিনান্স') return 6;
+    if (name === '7' || name === 'PROFESSIONAL' || name === 'প্রফেশনাল') return 7;
+    if (name === '8' || name === 'ENTERPRISE' || name === 'এন্টারপ্রাইজ') return 8;
+    if (name === '9' || name === 'ENTERPRISE PLUS' || name === 'এন্টারপ্রাইজ প্লাস') return 9;
+    if (name === '10' || name === 'ULTIMATE' || name === 'আল্টিমেট') return 10;
+    
+    const num = parseInt(name);
+    if (!isNaN(num)) return num;
+
+    if (name.includes('ULTIMATE') || name.includes('আল্টিমেট')) return 10;
+    if (name.includes('ENTERPRISE') || name.includes('এন্টারপ্রাইজ')) return 8;
+    if (name.includes('PROFESSIONAL') || name.includes('প্রফেশনাল')) return 7;
+    if (name.includes('FINANCE') || name.includes('ফিনান্স')) return 6;
+    if (name.includes('STANDARD') || name.includes('স্ট্যান্ডার্ড')) return 5;
+    if (name.includes('ACADEMIC') || name.includes('একাডেমিক')) return 4;
+
+    return 1;
+  };
+
+  const isPremiumPackage = getPackageLevel(packageNumber) >= 4;
 
   const compressAndResizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<Blob> => {
     return new Promise((resolve, reject) => {
