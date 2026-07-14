@@ -366,7 +366,7 @@ export const generateClassResultPDF = async (
                     else if (pct >= 60) gp = 3.50;
                     else if (pct >= 50) gp = 3.00;
                     else if (pct >= 40) gp = 2.00;
-                    else if (pct >= 33) gp = 1.00;
+                    else gp = 1.00;
                 }
 
                 if (resultSystem === 'grading_optional') {

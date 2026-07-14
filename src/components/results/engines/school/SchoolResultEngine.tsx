@@ -1056,8 +1056,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (scorePercentage >= 60) return { gpa: '3.50', grade: 'A-' };
     if (scorePercentage >= 50) return { gpa: '3.00', grade: 'B' };
     if (scorePercentage >= 40) return { gpa: '2.00', grade: 'C' };
-    if (scorePercentage >= 33) return { gpa: '1.00', grade: 'D' };
-    return { gpa: '0.00', grade: 'F' };
+    return { gpa: '1.00', grade: 'D' };
   };
 
   const calculateStudentResult = (studentId: string, currentSubjects: ExamSubject[]) => {
@@ -1600,8 +1599,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 if (p >= 60) return { gpa: '3.50', grade: 'A-' };
                 if (p >= 50) return { gpa: '3.00', grade: 'B' };
                 if (p >= 40) return { gpa: '2.00', grade: 'C' };
-                if (p >= 33) return { gpa: '1.00', grade: 'D' };
-                return { gpa: '0.00', grade: 'F' };
+                return { gpa: '1.00', grade: 'D' };
             };
 
             return {
@@ -3107,8 +3105,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       if (p >= 60) return { gpa: '3.50', grade: 'A-' };
                                                       if (p >= 50) return { gpa: '3.00', grade: 'B' };
                                                       if (p >= 40) return { gpa: '2.00', grade: 'C' };
-                                                      if (p >= 33) return { gpa: '1.00', grade: 'D' };
-                                                      return { gpa: '0.00', grade: 'F' };
+                                                      return { gpa: '1.00', grade: 'D' };
                                                   };
                                                   return {
                                                       subject_name: s.subject_name,
