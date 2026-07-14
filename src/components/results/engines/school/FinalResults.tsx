@@ -380,8 +380,26 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       // Sort by Total (Rank)
       processed.sort((a, b) => parseFloat(b.total) - parseFloat(a.total));
       
-      // Add Rank
-      const ranked = processed.map((p, i) => ({ ...p, rank: i + 1 }));
+      // Add Rank with tie-handling
+      let currentRank = 1;
+      let lastRank = 1;
+      const ranked = processed.map((p, i) => {
+        let rank = currentRank;
+        if (i > 0) {
+          const prev = processed[i - 1];
+          if (parseFloat(prev.total) === parseFloat(p.total)) {
+            rank = lastRank;
+          } else {
+            rank = currentRank;
+            lastRank = currentRank;
+          }
+        } else {
+          rank = currentRank;
+          lastRank = currentRank;
+        }
+        currentRank++;
+        return { ...p, rank };
+      });
       
       setCalculatedData(ranked);
 

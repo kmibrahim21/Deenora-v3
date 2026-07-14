@@ -891,36 +891,59 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                         </tr>
                     </thead>
                     <tbody>
-                        {students.map(std => {
-                            const stdMarks = marksData[std.id] || {};
-                            const totalObtained = Object.values(stdMarks).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0) as number;
-                            const totalPossible = subjects.reduce((sum, s) => sum + s.total_marks, 0);
-                            
-                            // Check if failed in any subject
-                            const failed = subjects.some(sub => {
-                                const marks = parseFloat(stdMarks[sub.id] || '0');
-                                return marks < sub.passing_marks;
-                            });
+                        {(() => {
+                            const sortedStds = students.map(std => {
+                                const stdMarks = marksData[std.id] || {};
+                                const totalObtained = Object.values(stdMarks).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0) as number;
+                                const totalPossible = subjects.reduce((sum, s) => sum + s.total_marks, 0);
+                                
+                                // Check if failed in any subject
+                                const failed = subjects.some(sub => {
+                                    const marks = parseFloat(stdMarks[sub.id] || '0');
+                                    return marks < sub.passing_marks;
+                                });
 
-                            return {
-                                ...std,
-                                totalObtained,
-                                division: failed ? 'রাসিব' : getDivision(totalObtained, totalPossible),
-                                failed
-                            } as Student & { totalObtained: number; division: string; failed: boolean };
-                        }).sort((a, b) => b.totalObtained - a.totalObtained).map((std, index) => (
-                            <tr key={std.id} className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800/50' : 'border-slate-50'} last:border-0`}>
-                                <td className="py-4 px-2">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black mx-auto ${index < 3 ? 'bg-yellow-100 text-yellow-700' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500')}`}>
-                                        {index + 1}
-                                    </div>
-                                </td>
-                                <td className={`py-4 pl-4 font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto`}>{std.student_name}</td>
-                                <td className="py-4 text-center font-black text-slate-400 text-xs">{std.roll}</td>
-                                <td className="py-4 text-center font-black text-emerald-600 text-xs">{std.totalObtained}</td>
-                                <td className={`py-4 text-center font-black text-xs ${std.failed ? 'text-red-500' : 'text-purple-600'}`}>{std.division}</td>
-                            </tr>
-                        ))}
+                                return {
+                                    ...std,
+                                    totalObtained,
+                                    division: failed ? 'রাসিব' : getDivision(totalObtained, totalPossible),
+                                    failed
+                                };
+                            }).sort((a, b) => b.totalObtained - a.totalObtained);
+
+                            let currentRank = 1;
+                            let lastRank = 1;
+                            return sortedStds.map((std, index) => {
+                                let rank = currentRank;
+                                if (index > 0) {
+                                    const prev = sortedStds[index - 1];
+                                    if (prev.totalObtained === std.totalObtained && prev.failed === std.failed) {
+                                        rank = lastRank;
+                                    } else {
+                                        rank = currentRank;
+                                        lastRank = currentRank;
+                                    }
+                                } else {
+                                    rank = currentRank;
+                                    lastRank = currentRank;
+                                }
+                                currentRank++;
+
+                                return (
+                                    <tr key={std.id} className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800/50' : 'border-slate-50'} last:border-0`}>
+                                        <td className="py-4 px-2">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black mx-auto ${rank <= 3 ? 'bg-yellow-100 text-yellow-700' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500')}`}>
+                                                {rank}
+                                            </div>
+                                        </td>
+                                        <td className={`py-4 pl-4 font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto`}>{std.student_name}</td>
+                                        <td className="py-4 text-center font-black text-slate-400 text-xs">{std.roll}</td>
+                                        <td className="py-4 text-center font-black text-emerald-600 text-xs">{std.totalObtained}</td>
+                                        <td className={`py-4 text-center font-black text-xs ${std.failed ? 'text-red-500' : 'text-purple-600'}`}>{std.division}</td>
+                                    </tr>
+                                );
+                            });
+                        })()}
                     </tbody>
                 </table>
             </div>

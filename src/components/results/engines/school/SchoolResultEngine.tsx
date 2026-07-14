@@ -945,7 +945,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       const stds = studentsRes.data || [];
       const mks = marksRes.data || [];
 
-      const ranked = stds.map(student => {
+      const sortedRanked = stds.map(student => {
         const studentMarksForStudent = mks.filter(m => m.student_id === student.id);
         const studentMarksObjLocal: Record<string, string> = {};
         studentMarksForStudent.forEach(m => {
@@ -1018,8 +1018,27 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
            if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
         }
         return b.total_marks - a.total_marks;
-      })
-      .map((item, idx) => ({ ...item, rank: idx + 1 }));
+      });
+
+      let currentRank = 1;
+      let lastRank = 1;
+      const ranked = sortedRanked.map((item, idx) => {
+        let rank = currentRank;
+        if (idx > 0) {
+          const prev = sortedRanked[idx - 1];
+          if (prev.pass_status === item.pass_status && prev.total_marks === item.total_marks) {
+            rank = lastRank;
+          } else {
+            rank = currentRank;
+            lastRank = currentRank;
+          }
+        } else {
+          rank = currentRank;
+          lastRank = currentRank;
+        }
+        currentRank++;
+        return { ...item, rank };
+      });
 
       setRankingData(ranked);
     } catch (e) {
