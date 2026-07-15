@@ -334,7 +334,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <h3 className={`font-black text-base font-noto truncate leading-tight group-hover:text-[#2563EB] transition-colors ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h3>
+                  <h3 className={`font-black text-base font-noto line-clamp-2 whitespace-normal leading-tight group-hover:text-[#2563EB] transition-colors ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h3>
                   {student.is_active === false && (
                     <UserX size={16} className="text-red-500 shrink-0" strokeWidth={2.5} />
                   )}

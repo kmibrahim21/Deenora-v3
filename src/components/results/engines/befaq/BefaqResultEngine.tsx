@@ -91,6 +91,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [examName, setExamName] = useState('');
   const [examYear, setExamYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
   const [classId, setClassId] = useState('');
+  const [isPublished, setIsPublished] = useState(false);
   const [subName, setSubName] = useState('');
   const [totalMarks, setTotalMarks] = useState('100');
   const [passingMarks, setPassingMarks] = useState('33');
@@ -125,7 +126,26 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       query = query.eq('marhala_id', selectedClassId);
     }
 
-    const { data } = await query.order('created_at', { ascending: false });
+    let { data, error } = await query.order('created_at', { ascending: false });
+    
+    // If the academic_year_id column does not exist in the database, fallback to querying without it
+    if (error && error.message && error.message.includes('academic_year_id')) {
+      console.warn('Querying befaq_exams failed with academic_year_id, retrying without academic_year_id filter...');
+      let fallbackQuery = supabase.from('befaq_exams').select('*, classes(class_name)').eq('institution_id', madrasah?.id);
+      
+      const yearStart = madrasah?.config_json?.academic_year_start;
+      if (yearStart) {
+        fallbackQuery = fallbackQuery.gte('created_at', yearStart);
+      }
+      
+      if (selectedClassId) {
+        fallbackQuery = fallbackQuery.eq('marhala_id', selectedClassId);
+      }
+      
+      const retryResult = await fallbackQuery.order('created_at', { ascending: false });
+      data = retryResult.data;
+    }
+
     if (data) {
       let filteredExams = data;
       if (profile?.role === 'teacher' && profile?.permissions?.allowed_classes) {
@@ -306,6 +326,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           class_name: classes.find(c => c.id === classId)?.class_name || '',
           exam_name: examName,
           exam_year: examYear,
+          is_published: isPublished,
           is_active: true
         };
 
@@ -323,8 +344,41 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           error = insertError;
         }
         
+        // If error is because is_published column does not exist, retry without it
+        if (error && error.message && error.message.includes('is_published') && (error.message.includes('column') || error.message.includes('not exist') || error.message.includes('Could not find'))) {
+          console.warn('Column is_published does not exist in befaq_exams table, retrying without it...');
+          const retryData = { ...examData };
+          delete retryData.is_published;
+          if (editingExam) {
+            const { error: retryError } = await supabase.from('befaq_exams').update(retryData).eq('id', editingExam.id);
+            error = retryError;
+          } else {
+            const { error: retryError } = await supabase.from('befaq_exams').insert(retryData);
+            error = retryError;
+          }
+          if (!error) {
+            alert(lang === 'bn'
+              ? 'পরীক্ষাটি সংরক্ষিত হয়েছে, তবে ফলাফল প্রকাশ অপশনটি সচল করতে দয়া করে Supabase SQL Editor এ src/services/migration_add_is_published_to_befaq_exams.sql স্ক্রিপ্টটি রান করুন।'
+              : 'Exam saved, but to enable results publishing, please run the src/services/migration_add_is_published_to_befaq_exams.sql script in your Supabase SQL Editor.');
+          }
+        }
+
+        // If error is because academic_year_id column does not exist at all, retry without academic_year_id property
+        if (error && error.message && error.message.includes('academic_year_id') && (error.message.includes('Could not find') || error.message.includes('not exist') || error.message.includes('column'))) {
+          console.warn('Column academic_year_id does not exist in befaq_exams table, retrying without it...');
+          const retryData = { ...examData };
+          delete retryData.academic_year_id;
+          if (editingExam) {
+            const { error: retryError } = await supabase.from('befaq_exams').update(retryData).eq('id', editingExam.id);
+            error = retryError;
+          } else {
+            const { error: retryError } = await supabase.from('befaq_exams').insert(retryData);
+            error = retryError;
+          }
+        }
+        
         // If still getting foreign key error, retry with null academic_year_id
-        if (error && error.message.includes('foreign key constraint')) {
+        if (error && error.message && error.message.includes('foreign key constraint')) {
           console.warn('Foreign key violation for academic_year_id in befaq_exams, retrying with null...');
           const retryData = { ...examData, academic_year_id: null };
           if (editingExam) {
@@ -338,10 +392,26 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         
         if (error) {
             console.error('Error saving exam:', error);
-            if (error.message.includes('academic_year_id') && (error.message.includes('Could not find') || error.message.includes('not exist'))) {
-              alert(lang === 'bn' 
-                ? 'ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_fix_befaq_academic_year.sql স্ক্রিপ্টটি রান করুন।' 
-                : 'Database update required: Please run the src/services/migration_fix_befaq_academic_year.sql script in your Supabase SQL Editor.');
+            if (error.message.includes('academic_year_id') && (error.message.includes('Could not find') || error.message.includes('not exist') || error.message.includes('column'))) {
+              // Try to do one more fallback by saving completely without academic_year_id to avoid blocking the user
+              console.warn('Database error on academic_year_id, attempting last-resort save without it...');
+              const finalRetryData = { ...examData };
+              delete finalRetryData.academic_year_id;
+              let finalError;
+              if (editingExam) {
+                const { error: finalRetryError } = await supabase.from('befaq_exams').update(finalRetryData).eq('id', editingExam.id);
+                finalError = finalRetryError;
+              } else {
+                const { error: finalRetryError } = await supabase.from('befaq_exams').insert(finalRetryData);
+                finalError = finalRetryError;
+              }
+              if (!finalError) {
+                error = null;
+              } else {
+                alert(lang === 'bn' 
+                  ? 'ডাটাবেস আপডেট প্রয়োজন: দয়া করে Supabase SQL Editor এ src/services/migration_fix_befaq_academic_year.sql স্ক্রিপ্টটি রান করুন।' 
+                  : 'Database update required: Please run the src/services/migration_fix_befaq_academic_year.sql script in your Supabase SQL Editor.');
+              }
             } else if (error.message.includes('row-level security')) {
               alert('Permission denied: You do not have permission to add exams. Please run the SQL migration script.');
             } else {
@@ -352,6 +422,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           setEditingExam(null);
           setExamName('');
           setClassId('');
+          setIsPublished(false);
           fetchExams();
         }
     } catch (e) {
@@ -367,6 +438,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     setExamName(exam.exam_name || '');
     setExamYear(exam.exam_year || '');
     setClassId(exam.marhala_id || '');
+    setIsPublished(exam.is_published || false);
     setShowAddExam(true);
   };
 
@@ -487,6 +559,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
             });
         });
     });
+
+    // Validate that no marks exceed the subject's total_marks
+    for (const item of payload) {
+        const sub = subjects.find(s => s.id === item.subject_id);
+        if (sub && item.marks_obtained > sub.total_marks) {
+            alert(lang === 'bn' ? `${sub.subject_name} বিষয়ের প্রাপ্ত নম্বর পূর্ণ নম্বর (${sub.total_marks}) এর বেশি হতে পারে না!` : `Obtained marks for ${sub.subject_name} cannot exceed full marks (${sub.total_marks})!`);
+            setIsSaving(false);
+            return;
+        }
+    }
 
     // Upsert logic - simpler to delete and insert or use upsert if constraint exists
     // Assuming upsert works on (exam_id, student_id, subject_id)
@@ -739,9 +821,14 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                         <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} rounded-2xl flex items-center justify-center shadow-inner`}><GraduationCap size={24}/></div>
                         <div>
                             <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>{exam.exam_name}</h3>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{exam.classes?.class_name}</span>
                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[8px] font-black uppercase">{exam.exam_year}</span>
+                                {exam.is_published ? (
+                                  <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded-full text-[8px] font-extrabold uppercase font-noto">প্রকাশিত</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full text-[8px] font-extrabold uppercase font-noto">অপ্রকাশিত</span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -840,10 +927,22 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                     <td key={sub.id} className={`py-4 px-2 ${idx === 0 ? 'pl-4' : ''}`}>
                                         <input 
                                             type="number" 
+                                            min="0"
+                                            max={sub.total_marks}
                                             className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-emerald-600'} rounded-lg text-center font-black text-xs outline-none transition-all`}
                                             value={marksData[std.id]?.[sub.id] || ''}
                                             onChange={(e) => {
-                                                const val = e.target.value;
+                                                let val = e.target.value;
+                                                if (val !== '') {
+                                                    const num = parseFloat(val);
+                                                    if (!isNaN(num)) {
+                                                        if (num > sub.total_marks) {
+                                                            val = sub.total_marks.toString();
+                                                        } else if (num < 0) {
+                                                            val = '0';
+                                                        }
+                                                    }
+                                                }
                                                 setMarksData(prev => ({
                                                     ...prev,
                                                     [std.id]: {
@@ -1095,7 +1194,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} w-full max-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95`}>
              <div className="flex items-center justify-between">
                <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{editingExam ? 'পরীক্ষা এডিট করুন' : 'নতুন পরীক্ষা (বেফাক)'}</h3>
-               <button onClick={() => { setShowAddExam(false); setEditingExam(null); setExamName(''); setClassId(''); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
+               <button onClick={() => { setShowAddExam(false); setEditingExam(null); setExamName(''); setClassId(''); setIsPublished(false); }} className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-400'} rounded-xl flex items-center justify-center`}><X size={18} /></button>
              </div>
              <div className="space-y-4">
                 <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-emerald-600/20 transition-all`} placeholder="পরীক্ষার নাম" value={examName} onChange={(e) => setExamName(e.target.value)} /><BookOpen className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
@@ -1106,6 +1205,16 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                         {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
                     </select>
                     <LayoutGrid className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/>
+                </div>
+                <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+                  <input 
+                    type="checkbox" 
+                    id="isPublishedBefaqInput" 
+                    checked={isPublished} 
+                    onChange={(e) => setIsPublished(e.target.checked)} 
+                    className="w-5 h-5 rounded-lg border-slate-300 text-emerald-600 focus:ring-emerald-600" 
+                  />
+                  <label htmlFor="isPublishedBefaqInput" className={`text-xs font-bold ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'} font-noto cursor-pointer select-none`}>ফলাফল প্রকাশ করুন (Publish Results)</label>
                 </div>
                 <button onClick={handleAddExam} disabled={isSaving} className="w-full py-5 bg-emerald-600 text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all">
                   {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={20}/> {editingExam ? 'আপডেট করুন' : 'পরীক্ষা তৈরি করুন'}</>}

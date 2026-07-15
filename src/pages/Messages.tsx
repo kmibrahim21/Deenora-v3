@@ -33,23 +33,23 @@ const SyllabusItem = ({ item, onDelete, onEdit }: { item: any, onDelete: (id: st
   const subjects = item.parsedMessage?.subjects || [];
   return (
     <div className="p-3 group hover:bg-slate-50 transition-colors">
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-             <h4 className="font-bold text-slate-800 text-base">{item.title}</h4>
-             <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase font-black tracking-widest border border-slate-200">
+      <div className="flex justify-between items-start mb-2 gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+             <h4 className="font-bold text-slate-800 text-base truncate">{item.title}</h4>
+             <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase font-black tracking-widest border border-slate-200 shrink-0">
                 {item.class_name.replace('APP_SYLLABUS_', '')}
              </span>
           </div>
           <p className="text-[10px] text-slate-500 font-medium tracking-wide">Session: {item.parsedMessage?.session}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {item.parsedMessage?.status === 'draft' && <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold">ড্রাফট</span>}
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => onEdit(item)} className="p-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-lg shadow-sm transition-all" title="Edit">
+        <div className="flex items-center gap-2 shrink-0">
+          {item.parsedMessage?.status === 'draft' && <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold shrink-0">ড্রাফট</span>}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => onEdit(item)} className="p-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-lg shadow-sm transition-all shrink-0" title="Edit">
               <Pencil size={12} />
             </button>
-            <button onClick={() => onDelete(item.id)} className="p-1.5 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white rounded-lg shadow-sm transition-all" title="Delete">
+            <button onClick={() => onDelete(item.id)} className="p-1.5 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white rounded-lg shadow-sm transition-all shrink-0" title="Delete">
               <Trash2 size={12} />
             </button>
           </div>
@@ -553,9 +553,9 @@ export default function Messages({
                       {studentMsgs.map((msg) => (
                         <div key={msg.id} className="bg-white border-l-4 border-l-blue-500 border border-slate-200 rounded-3xl hover:shadow-xl transition-all group overflow-hidden">
                           <div className="p-4">
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100 shadow-sm">
+                            <div className="flex justify-between items-start mb-3 gap-2">
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
                                    <BookOpen size={18} />
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -570,14 +570,14 @@ export default function Messages({
                                   <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest leading-none mt-1.5">{msg.class_name}</p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <button onClick={() => handleDuplicateDiary(msg)} className="p-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm" title="Duplicate Diary">
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button onClick={() => handleDuplicateDiary(msg)} className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm shrink-0" title="Duplicate Diary">
                                   <Copy size={12} />
                                 </button>
-                                <button onClick={() => startEdit(msg)} className="p-2 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-xl shadow-sm transition-all" title="Edit">
+                                <button onClick={() => startEdit(msg)} className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-xl shadow-sm transition-all shrink-0" title="Edit">
                                   <Pencil size={12} />
                                 </button>
-                                <button onClick={() => handleDelete(msg.id)} className="p-2 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white rounded-xl shadow-sm transition-all" title="Delete">
+                                <button onClick={() => handleDelete(msg.id)} className="p-1.5 sm:p-2 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white rounded-xl shadow-sm transition-all shrink-0" title="Delete">
                                   <Trash2 size={12} />
                                 </button>
                               </div>
@@ -645,8 +645,8 @@ export default function Messages({
                           </div>
                           
                           <div className="flex-1 min-w-0 py-1">
-                            <div className="flex items-center justify-between mb-1">
-                               <div className="flex items-center gap-2 overflow-hidden flex-wrap">
+                            <div className="flex items-center justify-between mb-1 gap-2">
+                               <div className="flex items-center gap-2 overflow-hidden flex-wrap min-w-0 flex-1">
                                  <h3 className="font-bold text-slate-800 text-base truncate">{msg.title}</h3>
                                  <span className="text-[8px] font-black uppercase text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 shrink-0">
                                     {msg.class_name.replace('APP_', '')}
@@ -657,11 +657,11 @@ export default function Messages({
                                    </span>
                                  )}
                                </div>
-                               <div className="flex items-center gap-1.5">
-                                  <button onClick={() => startEdit(msg)} className="p-2 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-xl shadow-sm transition-all" title="Edit">
+                               <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => startEdit(msg)} className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-xl shadow-sm transition-all shrink-0" title="Edit">
                                      <Pencil size={12} />
                                   </button>
-                                  <button onClick={() => handleDelete(msg.id)} className="p-2 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white rounded-xl shadow-sm transition-all" title="Delete">
+                                  <button onClick={() => handleDelete(msg.id)} className="p-1.5 sm:p-2 bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white rounded-xl shadow-sm transition-all shrink-0" title="Delete">
                                      <Trash2 size={12} />
                                   </button>
                                </div>

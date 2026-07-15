@@ -1487,6 +1487,17 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         });
     });
 
+    // Validate that no marks exceed the subject's full marks
+    for (const item of payload) {
+        if (item.subject_id === 'attendance') continue;
+        const sub = subjects.find(s => s.id === item.subject_id);
+        if (sub && item.marks_obtained > sub.full_marks) {
+            alert(lang === 'bn' ? `${sub.subject_name} বিষয়ের প্রাপ্ত নম্বর পূর্ণ নম্বর (${sub.full_marks}) এর বেশি হতে পারে না!` : `Obtained marks for ${sub.subject_name} cannot exceed full marks (${sub.full_marks})!`);
+            setIsSaving(false);
+            return;
+        }
+    }
+
     // Upsert logic
     for (const row of payload) {
         if (row.subject_id === 'attendance') continue; // Skip attendance here
@@ -2948,10 +2959,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     <td key={sub.id} className={`py-4 px-2 ${idx === 0 ? 'pl-4' : ''}`}>
                                         <input 
                                             type="number" 
+                                            min="0"
+                                            max={sub.full_marks}
                                             className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-[#2563EB]'} rounded-lg text-center font-black text-xs outline-none transition-all`}
                                             value={marksData[std.id]?.[sub.id] || ''}
                                             onChange={(e) => {
-                                                const val = e.target.value;
+                                                let val = e.target.value;
+                                                if (val !== '') {
+                                                    const num = parseFloat(val);
+                                                    if (!isNaN(num)) {
+                                                        if (num > sub.full_marks) {
+                                                            val = sub.full_marks.toString();
+                                                        } else if (num < 0) {
+                                                            val = '0';
+                                                        }
+                                                    }
+                                                }
                                                 setMarksData(prev => ({
                                                     ...prev,
                                                     [std.id]: {

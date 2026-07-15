@@ -113,6 +113,7 @@ export interface BefaqExam {
   marhala_id: string; // class_id
   is_active: boolean;
   academic_year_id?: string;
+  is_published?: boolean;
   created_at: string;
   classes?: Class;
 }

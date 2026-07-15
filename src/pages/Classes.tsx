@@ -317,7 +317,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                 <input 
                   type="text" 
                   autoFocus
-                  className={`w-full px-6 py-5 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border-2 rounded-[1.8rem] font-black text-lg outline-none focus:border-[#2563EB]/30 focus:bg-white transition-all shadow-inner`} 
+                  className={`w-full px-6 py-5 ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:bg-white'} border-2 rounded-[1.8rem] font-black text-lg outline-none focus:border-[#2563EB]/30 transition-all shadow-inner`} 
                   value={newClassName} 
                   onChange={(e) => setNewClassName(e.target.value)}
                   placeholder="যেমন: হিফয বিভাগ"
@@ -332,7 +332,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                   type="text" 
                   inputMode="numeric"
                   pattern="[0-9০-৯]*"
-                  className={`w-full px-6 py-5 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'} border-2 rounded-[1.8rem] font-black text-lg outline-none focus:border-[#2563EB]/30 focus:bg-white transition-all shadow-inner`} 
+                  className={`w-full px-6 py-5 ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:bg-white'} border-2 rounded-[1.8rem] font-black text-lg outline-none focus:border-[#2563EB]/30 transition-all shadow-inner`} 
                   value={newSortOrder} 
                   onChange={(e) => setNewSortOrder(e.target.value)}
                   placeholder="যেমন: ১"

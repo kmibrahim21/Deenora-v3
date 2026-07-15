@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { Exam, Student, ExamSubject, Institution, SeatAssignment, Class, ClassRoutine } from '../types';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { toJpeg } from 'html-to-image';
+import { toJpeg, toPng } from 'html-to-image';
 import { ResultSheetTemplate } from '../components/pdf/ResultSheetTemplate';
 import { ClassResultTemplate } from '../components/pdf/ClassResultTemplate';
 import { ClassFeeReportTemplate } from '../components/pdf/ClassFeeReportTemplate';
@@ -15,6 +15,7 @@ import { AccountingReportTemplate } from '../components/pdf/AccountingReportTemp
 import { RoutinePDFTemplate } from '../components/pdf/RoutinePDFTemplate';
 import { MasterRoutinePDFTemplate } from '../components/pdf/MasterRoutinePDFTemplate';
 import { ExamRoutinePDFTemplate } from '../components/pdf/ExamRoutinePDFTemplate';
+import { StudentListTemplate } from '../components/pdf/StudentListTemplate';
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
@@ -916,6 +917,58 @@ export const generateExamRoutinePDF = async (
     }
     
     doc.save(`${madrasah?.name || 'Madrasah'}_Exam_Routine.pdf`);
+    root.unmount();
+    document.body.removeChild(container);
+};
+
+// --- STUDENT LIST GENERATOR ---
+export const generateStudentListPDF = async (
+    students: any[],
+    madrasah: any,
+    className?: string,
+    lang: 'en' | 'bn' = 'en'
+) => {
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                <StudentListTemplate 
+                  students={students} 
+                  madrasah={madrasah} 
+                  className={className} 
+                  lang={lang} 
+                />
+            </div>
+        );
+        setTimeout(resolve, 1500); 
+    });
+
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    const wrapper = container.querySelector('#pdf-wrapper');
+    if (wrapper && wrapper.children.length > 0) {
+        const pages = Array.from(wrapper.children);
+        for (let i = 0; i < pages.length; i++) {
+            const imgData = await toPng(pages[i] as HTMLElement, {
+                pixelRatio: 2.5,
+                backgroundColor: '#ffffff',
+                width: 1123,
+                height: 794,
+            });
+            if (i > 0) doc.addPage();
+            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        }
+    }
+    
+    doc.save(`Student_List_${className || 'All'}.pdf`);
     root.unmount();
     document.body.removeChild(container);
 };

@@ -1,10 +1,11 @@
 
-import React, { useState, useRef } from 'react';
-import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangle, FileUp, FileSpreadsheet } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangle, FileUp, FileSpreadsheet, FileText } from 'lucide-react';
 import { supabase } from 'supabase';
 import { requestManager } from 'services/RequestManager';
 import { Institution, Language } from 'types';
 import * as XLSX from 'xlsx';
+import { generateStudentListPDF } from 'utils/pdfGenerator';
 
 // Declare the Android interface for TypeScript
 declare global {
@@ -26,7 +27,23 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
+  const [classes, setClasses] = useState<any[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>('all');
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchClasses = async () => {
+      if (!madrasah) return;
+      const { data } = await supabase
+        .from('classes')
+        .select('*')
+        .eq('institution_id', madrasah.id)
+        .order('class_name', { ascending: true });
+      if (data) setClasses(data);
+    };
+    fetchClasses();
+  }, [madrasah]);
   const isDark = madrasah?.theme === 'dark';
 
   const downloadFileNative = (blob: Blob, fileName: string, mimeType: string) => {
@@ -127,6 +144,46 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       setStatus({ type: 'error', message: err.message }); 
     } finally { 
       setLoading(false); 
+      setTimeout(() => setStatus({ type: 'idle', message: '' }), 4000);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!madrasah) return;
+    setGeneratingPDF(true);
+    setStatus({ type: 'idle', message: '' });
+    
+    try {
+      let query = supabase
+        .from('students')
+        .select('*, classes(class_name)')
+        .eq('institution_id', madrasah.id);
+      
+      if (selectedClassId !== 'all') {
+        query = query.eq('class_id', selectedClassId);
+      }
+
+      const { data: students, error: fetchError } = await query;
+        
+      if (fetchError) throw fetchError;
+      if (!students || students.length === 0) {
+        throw new Error(lang === 'bn' ? "কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি" : "No student data found");
+      }
+      
+      const className = selectedClassId === 'all' 
+        ? undefined 
+        : classes.find(c => c.id === selectedClassId)?.class_name;
+
+      await generateStudentListPDF(students, madrasah, className, lang);
+
+      setStatus({
+        type: 'success',
+        message: lang === 'bn' ? 'সফলভাবে পিডিএফ ডাউনলোড হয়েছে' : 'PDF Downloaded Successfully'
+      });
+    } catch (err: any) { 
+      setStatus({ type: 'error', message: err.message }); 
+    } finally { 
+      setGeneratingPDF(false); 
       setTimeout(() => setStatus({ type: 'idle', message: '' }), 4000);
     }
   };
@@ -352,6 +409,34 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 <><Download size={28} /> {lang === 'bn' ? 'এক্সেল ডাউনলোড' : 'Excel Download'}</>
               )}
             </button>
+
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
+               <div className="flex flex-col gap-2">
+                 <label className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                   {lang === 'bn' ? 'ক্লাস নির্বাচন (পিডিএফ এর জন্য)' : 'Select Class (for PDF)'}
+                 </label>
+                 <select 
+                   value={selectedClassId}
+                   onChange={(e) => setSelectedClassId(e.target.value)}
+                   className={`w-full h-12 rounded-xl px-4 border ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200 text-[#1E3A8A]'} font-bold outline-none focus:border-blue-500 transition-all`}
+                 >
+                   <option value="all">{lang === 'bn' ? 'সকল ক্লাস' : 'All Classes'}</option>
+                   {classes.map(c => (
+                     <option key={c.id} value={c.id}>{c.class_name}</option>
+                   ))}
+                 </select>
+               </div>
+
+               <button 
+                 onClick={handleExportPDF} 
+                 disabled={generatingPDF} 
+                 className={`w-full h-[64px] ${isDark ? 'bg-emerald-600' : 'bg-emerald-500'} text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-4 text-xl disabled:opacity-50`}
+               >
+                 {generatingPDF ? <Loader2 className="animate-spin" size={28} /> : (
+                   <><FileText size={28} /> {lang === 'bn' ? 'পিডিএফ ডাউনলোড' : 'PDF Download'}</>
+                 )}
+               </button>
+            </div>
           </div>
         </div>
 

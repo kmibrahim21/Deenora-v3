@@ -152,21 +152,45 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         );
 
         const yearStart = madrasah.config_json?.academic_year_start;
+        const startMonth = yearStart ? yearStart.slice(0, 7) : `${selectedMonth.slice(0, 4)}-01`;
 
-        const { data: feesData } = await requestManager.cachedFetch(
+        const { data: allFeesData } = await requestManager.cachedFetch(
           'fees',
           (q) => {
-            let query = q.select('student_id, amount_paid, discount')
+            let query = q.select('student_id, amount_paid, discount, month')
               .eq('institution_id', madrasah.id)
-              .eq('month', selectedMonth);
+              .gte('month', startMonth)
+              .lte('month', selectedMonth);
             if (activeYearId) {
               query = query.eq('academic_year_id', activeYearId);
             }
             return query;
           },
-          `fees:${madrasah.id}_${selectedMonth}`,
-          CACHE_TTLS.SHORT
+          `all_fees:${madrasah.id}_${startMonth}_${selectedMonth}_${activeYearId || 'current'}`,
+          CACHE_TTLS.SHORT 
         );
+
+        const feesData = allFeesData?.filter(f => f.month === selectedMonth) || [];
+
+        const getMonthsInRange = (startMonthStr: string, endMonthStr: string): string[] => {
+          const months: string[] = [];
+          let [startYear, startMonth] = startMonthStr.split('-').map(Number);
+          const [endYear, endMonth] = endMonthStr.split('-').map(Number);
+          
+          if (!startYear || !startMonth || !endYear || !endMonth) return [];
+          
+          while (startYear < endYear || (startYear === endYear && startMonth <= endMonth)) {
+            months.push(`${startYear}-${String(startMonth).padStart(2, '0')}`);
+            startMonth++;
+            if (startMonth > 12) {
+              startMonth = 1;
+              startYear++;
+            }
+          }
+          return months;
+        };
+
+        const previousMonths = getMonthsInRange(startMonth, selectedMonth).filter(m => m < selectedMonth);
 
         // Fetch student fee settings for the whole institution
         const { data: allSettings } = await requestManager.cachedFetch(
@@ -179,7 +203,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         const { data: studentsData, error } = await requestManager.cachedFetch(
           'students',
           (q) => {
-            let query = q.select('id, student_name, roll, class_id, classes(class_name), guardian_phone, is_active')
+            let query = q.select('id, student_name, roll, class_id, classes(class_name), guardian_phone, is_active, notes')
               .eq('institution_id', madrasah.id);
             if (classId) {
               query = query.eq('class_id', classId);
@@ -218,6 +242,43 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         
         const correctedData = filteredData.map((student: any) => {
             const studentSettings = allSettings?.filter(as => as.student_id === student.student_id) || [];
+            
+            // Calculate previous due
+            let previousPayable = 0;
+            const studentNotes = student.notes || '';
+            const accStartMatch = studentNotes.match(/\[ACC_START:(.*?)\]/);
+            const accStartDate = accStartMatch ? accStartMatch[1] : null;
+
+            previousMonths.forEach(m => {
+                const studentFeeStructuresForMonth = feeStructures?.filter(fs => {
+                    const isClassMatch = fs.class_id === student.class_id || fs.class_id === null;
+                    if (!isClassMatch) return false;
+                    
+                    const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
+                    const isEnabled = setting ? setting.is_enabled : true;
+                    const isMonthExpired = fs.due_date && m > fs.due_date.slice(0, 7);
+                    const isMonthNotStarted = fs.start_date && m < fs.start_date.slice(0, 7);
+                    const isBeforeYearStart = yearStart && m < yearStart.slice(0, 7);
+                    
+                    // Respect student individual accounting start date
+                    const isBeforeAccStart = accStartDate && m < accStartDate;
+
+                    return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
+                }) || [];
+                
+                const monthPayable = studentFeeStructuresForMonth.reduce((sum, fs) => {
+                    const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
+                    const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(fs.amount);
+                    return sum + amountToCharge;
+                }, 0);
+                previousPayable += monthPayable;
+            });
+
+            const allStudentFees = allFeesData?.filter(f => f.student_id === student.student_id) || [];
+            const totalPaidOverall = allStudentFees.reduce((sum, f) => sum + Number(f.amount_paid) + Number(f.discount || 0), 0);
+            
+            const previousDue = Math.max(0, previousPayable - totalPaidOverall);
+
             const studentFeeStructures = feeStructures?.filter(fs => {
                 const isClassMatch = fs.class_id === student.class_id || fs.class_id === null;
                 if (!isClassMatch) return false;
@@ -230,7 +291,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                 // If yearStart exists, ensure selectedMonth >= yearStart
                 const isBeforeYearStart = yearStart && selectedMonth < yearStart.slice(0, 7);
 
-                return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart;
+                // Respect student individual accounting start date
+                const isBeforeAccStart = accStartDate && selectedMonth < accStartDate;
+
+                return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
             }) || [];
             
             const totalPayable = studentFeeStructures.reduce((sum, fs) => {
@@ -242,15 +306,19 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             const studentFees = feesData?.filter(f => f.student_id === student.student_id) || [];
             const totalPaid = studentFees.reduce((sum, f) => sum + Number(f.amount_paid) + Number(f.discount || 0), 0);
             
-            const balanceDue = Math.max(0, totalPayable - totalPaid);
+            const balanceDue = Math.max(0, previousPayable + totalPayable - totalPaidOverall);
             
             let status = 'unpaid';
-            if (totalPayable <= 0) status = 'no_fee';
-            else if (totalPaid >= totalPayable) status = 'paid';
-            else if (totalPaid > 0) status = 'partial';
+            const paidForCurrent = totalPaidOverall - previousPayable;
+            
+            if (totalPayable === 0 && previousPayable === 0) status = 'no_fee';
+            else if (balanceDue <= 0) status = 'paid';
+            else if (paidForCurrent > 0) status = 'partial';
+            else status = 'unpaid';
 
             return {
                 ...student,
+                previous_due: previousDue,
                 total_payable: totalPayable,
                 total_paid: totalPaid,
                 balance_due: balanceDue,
@@ -362,6 +430,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         }
         return s;
     });
+
     setAvailableFeeItems(enabledStructures);
 
     // 2. Fetch ledger entries for this student/month to see what's paid
@@ -711,15 +780,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             ) : feesReport.length > 0 ? (
                 (() => {
                   const filteredData = feesReport.filter((item: any) => {
-                    // Qawmi logic might be different, but using standard for now
-                    const isFullyPaid = Number(item.balance_due) <= 0 && Number(item.total_payable) > 0;
-                    const isPartial = Number(item.balance_due) > 0 && Number(item.total_paid) > 0;
-                    const isUnpaid = Number(item.total_paid) === 0 && Number(item.total_payable) > 0;
-
-                    if (statusFilter === 'paid') return isFullyPaid;
-                    if (statusFilter === 'partial') return isPartial;
-                    if (statusFilter === 'unpaid') return isUnpaid;
-                    return true;
+                    if (statusFilter === 'all') return true;
+                    return item.status === statusFilter;
                   });
 
                   return (
@@ -733,11 +795,12 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                       )}
                       {filteredData.map((item: any) => {
                         const balance = Number(item.balance_due) || 0;
-                        const payable = Number(item.total_payable) || 0;
                         const paid = Number(item.total_paid) || 0;
 
-                        const isFullyPaid = balance <= 0 && payable > 0;
-                        const isNoFeeSet = payable === 0;
+                        const isFullyPaid = item.status === 'paid';
+                        const isNoFeeSet = item.status === 'no_fee';
+                        const isPartial = item.status === 'partial';
+                        const isUnpaid = item.status === 'unpaid';
                         const hasBalance = balance > 0;
                         
                         return (
@@ -748,14 +811,14 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                         </div>
                         <div className="min-w-0">
                            <h5 
-                             className={`font-black font-noto truncate leading-tight mb-1 cursor-pointer hover:underline decoration-2 underline-offset-2 ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
+                             className={`font-black font-noto line-clamp-2 whitespace-normal leading-tight mb-1 cursor-pointer hover:underline decoration-2 underline-offset-2 ${madrasah.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'}`}
                              onClick={() => onStudentClick ? onStudentClick(item) : handleShowHistory(item)}
                            >
                              {item.student_name}
                            </h5>
                            <div className="flex items-center gap-2">
                               <p className="text-[10px] text-slate-400 font-bold uppercase">জমা: ৳{paid}</p>
-                              <p className="text-[10px] text-red-400 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
+                              <p className="text-[10px] text-red-500 font-bold uppercase">বকেয়া: ৳{Math.max(0, balance)}</p>
                            </div>
                         </div>
                      </div>
@@ -781,10 +844,16 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                        </button>
                        <button 
                           onClick={() => { setSelectedStudent(item); setCollectAmount(''); setShowFeeCollection(true); }} 
-                          disabled={isFullyPaid || isNoFeeSet}
-                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : isNoFeeSet ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : hasBalance ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 'bg-[#2563EB] text-white active:scale-95'}`}
+                          disabled={isFullyPaid || isNoFeeSet || isPartial}
+                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${
+                            isFullyPaid ? (madrasah.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : 
+                            isPartial ? (madrasah.theme === 'dark' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-600 border border-rose-200') :
+                            isNoFeeSet ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : 
+                            isUnpaid ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 
+                            'bg-[#2563EB] text-white active:scale-95 shadow-blue-200'
+                          }`}
                        >
-                          {isFullyPaid ? 'PAID' : isNoFeeSet ? 'ফি নেই' : 'জমা নিন'}
+                          {(isFullyPaid || isPartial) ? 'PAID' : isNoFeeSet ? 'ফি নেই' : 'জমা নিন'}
                        </button>
                      </div>
                   </div>
@@ -1048,7 +1117,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                         {monthName}
                                     </span>
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${status === 'paid' ? (madrasah.theme === 'dark' ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : status === 'partial' ? (madrasah.theme === 'dark' ? 'bg-orange-500/30 text-orange-300' : 'bg-orange-200 text-orange-800') : (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600')}`}>
-                                        {status === 'paid' ? 'পরিশোধিত' : status === 'partial' ? 'আংশিক' : 'বকেয়া'}
+                                        {status === 'paid' ? 'পরিশোধিত' : status === 'partial' ? 'পরিশোধিত' : 'বকেয়া'}
                                     </span>
                                     {totalProcessed > 0 && (
                                         <div className="flex flex-col items-center mt-1">

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, LedgerEntry, Language, UserRole, Class, Profile, AcademicYear } from 'types';
-import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2, Filter, ChevronDown, Check, Database, CheckCircle2 } from 'lucide-react';
+import { Calculator, Plus, ArrowUpCircle, ArrowDownCircle, Loader2, Save, X, DollarSign, Tag, FileText, RefreshCw, Bell, Heart, Users, BarChart3, AlertCircle, Trash2, Filter, ChevronDown, Check, Database, CheckCircle2, Clock } from 'lucide-react';
 import SmartFeeAnalytics from 'components/SmartFeeAnalytics';
 import { SchoolFeeEngine, clearGlobalSchoolFeeCache } from 'components/finance/SchoolFeeEngine';
 import { QawmiFeeEngine, clearGlobalQawmiFeeCache } from 'components/finance/QawmiFeeEngine';
@@ -158,7 +158,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
               const yearStart = config?.academic_year_start;
               if (yearStart) query = query.gte('transaction_date', yearStart);
             }
-            return query.order('transaction_date', { ascending: false }).limit(2000);
+            return query.order('transaction_date', { ascending: false }).order('id', { ascending: false }).limit(2000);
           },
           cacheKey,
           CACHE_TTLS.MEDIUM
@@ -675,7 +675,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       onClick={() => setDeleteConfirm({show: true, ids: selectedLedgerIds})}
                       className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-red-500 text-white shadow-sm hover:bg-red-600 flex items-center gap-1 active:scale-95"
                     >
-                      <Trash2 size={12} /> <span className="hidden sm:inline">{selectedLedgerIds.length} টি মুছুন</span>
+                      <span>{selectedLedgerIds.length} টি মুছুন</span>
                     </button>
                   )}
                   {ledger.length > 0 && (
@@ -683,51 +683,9 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       onClick={() => setDeleteConfirm({show: true, ids: ledger.map(l => l.id)})}
                       className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
                     >
-                      <Trash2 size={12} /> <span className="hidden sm:inline">সব মুছুন</span>
+                      <span>সব মুছুন</span>
                     </button>
                   )}
-                  <button
-                    onClick={handleFixFeeNames}
-                    disabled={isSyncing}
-                    className={`px-4 py-2 rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-2 hover:shadow-lg active:scale-95 disabled:opacity-50 ${
-                      isDark 
-                        ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30' 
-                        : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700 font-bold'
-                    }`}
-                    title={lang === 'bn' ? 'পুরনো এলোমেলো ফি-এর নাম ঠিক করুন' : 'Fix Old Fee Names'}
-                  >
-                    <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
-                    <span className="hidden sm:inline">
-                      {lang === 'bn' ? 'ফিক্স ফি নাম' : 'Fix Fee Names'}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!isOnline) {
-                        alert(lang === 'bn' ? "ডাটা সংশোধন করতে ইন্টারনেট সংযোগ প্রয়োজন।" : "Internet connection required to sync and repair data.");
-                        return;
-                      }
-                      setSyncModal({ show: true, step: 'confirm' });
-                    }}
-                    disabled={isSyncing}
-                    className={`px-4 py-2 rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-2 hover:shadow-lg active:scale-95 disabled:opacity-50 ${
-                      isDark 
-                        ? 'bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/30 hover:from-blue-500/30 hover:to-indigo-500/30' 
-                        : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 font-bold'
-                    }`}
-                    title={lang === 'bn' ? 'অসংগতিপূর্ণ ফি ডাটা মেরামত করুন' : 'Repair inconsistent fee data'}
-                  >
-                    {isSyncing ? (
-                      <Loader2 size={13} className="animate-spin text-current" />
-                    ) : (
-                      <RefreshCw size={13} className="animate-pulse text-current" />
-                    )}
-                    <span>
-                      {isSyncing 
-                        ? (lang === 'bn' ? 'মেরামত হচ্ছে...' : 'Repairing...') 
-                        : (lang === 'bn' ? 'ডাটা সিঙ্ক ও মেরামত' : 'Sync & Repair')}
-                    </span>
-                  </button>
                 </div>
               </div>
               
@@ -937,72 +895,75 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 };
 
                 return (
-                  <div key={entry.id} className={`group p-4 sm:p-5 rounded-3xl sm:rounded-[2.5rem] border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:shadow-lg active:scale-[0.98] gap-4 ${isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
-                    <div className="flex items-start sm:items-center gap-3 w-full">
-                      <div className="pt-2 sm:pt-0">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedLedgerIds.includes(entry.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedLedgerIds([...selectedLedgerIds, entry.id]);
-                            } else {
-                              setSelectedLedgerIds(selectedLedgerIds.filter(id => id !== entry.id));
-                            }
-                          }}
-                          className={`w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ${isDark ? 'bg-slate-800 border-slate-600' : ''}`}
-                        />
+                  <div key={entry.id} className={`group p-4 sm:p-5 rounded-[2rem] sm:rounded-[2.5rem] border transition-all flex flex-col gap-4 shadow-sm hover:shadow-xl active:scale-[0.98] min-w-0 ${isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
+                    <div className="flex items-start gap-4 w-full min-w-0">
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="pt-1">
+                          <input 
+                             type="checkbox" 
+                             checked={selectedLedgerIds.includes(entry.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedLedgerIds([...selectedLedgerIds, entry.id]);
+                              } else {
+                                setSelectedLedgerIds(selectedLedgerIds.filter(id => id !== entry.id));
+                              }
+                            }}
+                            className={`w-5 h-5 rounded-lg border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer ${isDark ? 'bg-slate-800 border-slate-600' : ''}`}
+                          />
+                        </div>
+                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner border transition-all group-hover:scale-105 ${entry.type === 'income' ? (isDark ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-100') : (isDark ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-100')}`}>
+                          {entry.type === 'income' ? <ArrowUpCircle size={24} className="sm:w-7 sm:h-7" /> : <ArrowDownCircle size={24} className="sm:w-7 sm:h-7" />}
+                        </div>
                       </div>
                       
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-3 sm:gap-0">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center shrink-0 shadow-inner border transition-transform group-hover:scale-110 ${entry.type === 'income' ? (isDark ? 'bg-emerald-900/20 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-100') : (isDark ? 'bg-red-900/20 text-red-400 border-red-800/50' : 'bg-red-50 text-red-600 border-red-100')}`}>
-                            {entry.type === 'income' ? <ArrowUpCircle size={24} /> : <ArrowDownCircle size={24} />}
+                      <div className="flex-1 min-w-0 py-0.5">
+                        <div className="flex flex-col gap-1">
+                          <h5 className={`font-black font-noto text-sm sm:text-base leading-snug break-words line-clamp-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                            {displayName}
+                          </h5>
+                          
+                          <div className="flex flex-wrap items-center gap-2">
+                            {entry.category === 'Student Fee' ? (
+                              <>
+                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                  {feeType}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-bold break-words italic">{details}</span>
+                              </>
+                            ) : (
+                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                                {entry.category}
+                              </span>
+                            )}
                           </div>
-                          <div>
-                            <h5 className={`font-black font-noto text-sm sm:text-base mb-0.5 ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{displayName}</h5>
-                            <div className="flex flex-col gap-0.5">
-                              {entry.category === 'Student Fee' ? (
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-slate-400 font-bold max-w-[120px] sm:max-w-none truncate">{details}</span>
-                                    <span className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-200'} shrink-0`} />
-                                    <span className="text-[9px] text-blue-500 font-black uppercase tracking-tighter shrink-0">{feeType}</span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 font-bold">
-                                    {formatDate(entry.transaction_date)}
-                                  </span>
-                                </div>
-                              ) : (
-                                <>
-                                  {cleanDescription && cleanDescription !== entry.category && (
-                                    <p className="text-[11px] text-slate-500 font-bold font-noto leading-tight mb-1 line-clamp-1">{cleanDescription}</p>
-                                  )}
-                                  <span className="text-[10px] text-slate-400 font-bold">
-                                    {formatDate(entry.transaction_date)}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                          <div className="text-left sm:text-right">
-                            <p className={`text-base font-black ${entry.type === 'income' ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
-                              {entry.type === 'income' ? '+' : '-'} ৳{entry.amount.toLocaleString()}
+                          {cleanDescription && cleanDescription !== entry.category && entry.category !== 'Student Fee' && (
+                            <p className="text-[10px] text-slate-400 font-medium font-noto leading-tight mt-1 break-words italic">
+                              {cleanDescription}
                             </p>
-                            <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{entry.category}</p>
-                          </div>
-                          <button 
-                            onClick={() => setDeleteConfirm({show: true, ids: [entry.id]})}
-                            className={`p-2 sm:p-1.5 rounded-full transition-colors flex shrink-0 items-center justify-center ${isDark ? 'text-red-400 hover:bg-slate-800 bg-slate-800/50 sm:bg-transparent sm:hover:bg-red-500/20' : 'text-red-500 hover:bg-red-100 bg-red-50 sm:bg-transparent sm:text-red-400 sm:hover:bg-red-50 sm:hover:text-red-600'}`}
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          )}
                         </div>
                       </div>
+                    </div>
+
+                    <div className={`flex items-center justify-between pt-4 border-t ${isDark ? 'border-slate-800' : 'border-slate-50'}`}>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                          <Clock size={12} className="text-slate-300" />
+                          {formatDate(entry.transaction_date)}
+                        </div>
+                        <p className={`text-xl sm:text-2xl font-black mt-1 ${entry.type === 'income' ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                          {entry.type === 'income' ? '+' : '-'} ৳{entry.amount.toLocaleString()}
+                        </p>
+                      </div>
+                      
+                      <button 
+                         onClick={() => setDeleteConfirm({show: true, ids: [entry.id]})}
+                        className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center shadow-sm active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-100'}`}
+                      >
+                        মুছুন
+                      </button>
                     </div>
                   </div>
                 )
