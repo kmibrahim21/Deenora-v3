@@ -369,8 +369,43 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
           p_academic_year_id: null 
         });
         if (remindersData) {
-            const activeStudentIds = new Set(students?.map(s => s.id) || []);
-            const filteredReminders = remindersData.filter((r: any) => activeStudentIds.has(r.student_id));
+            const getExpectedForStudentAndMonth = (studentId: string, classId: string, monthStr: string) => {
+              let totalExpectedVal = 0;
+              structures.forEach(s => {
+                if (s.class_id !== null && s.class_id !== classId) return;
+
+                const isExpired = s.due_date && s.due_date.slice(0, 7) < monthStr;
+                const isNotStarted = s.start_date && s.start_date.slice(0, 7) > monthStr;
+                if (isExpired || isNotStarted) return;
+
+                const setting = allSettings?.find(as => as.student_id === studentId && as.fee_structure_id === s.id);
+                if (setting ? setting.is_enabled : true) {
+                  const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+                  totalExpectedVal += amountToCharge;
+                }
+              });
+              return totalExpectedVal;
+            };
+
+            const activeStudents = students || [];
+            const filteredReminders = remindersData
+              .map((r: any) => {
+                const student = activeStudents.find(st => st.id === r.student_id);
+                if (!student) return null;
+                
+                const expected = getExpectedForStudentAndMonth(student.id, student.class_id, selectedMonth);
+                const paid = Number(r.total_paid) || 0;
+                const balance_due = Math.max(0, expected - paid);
+                
+                return {
+                  ...r,
+                  total_payable: expected,
+                  balance_due: balance_due,
+                  reminder_type: expected > 0 ? (balance_due > (expected * 0.8) ? 'final' : (balance_due > (expected * 0.4) ? 'strong' : 'soft')) : 'soft'
+                };
+              })
+              .filter((r: any) => r !== null && r.balance_due > 0);
+
             setReminders(filteredReminders || []);
         } else {
             setReminders([]);
