@@ -645,7 +645,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     else if (viewMode === 'custom') period = `${dateRange.start} - ${dateRange.end}`;
     try {
       await generateAccountingReportPDF(
-        { name: madrasah.name },
+        madrasah,
         period,
         stats,
         breakdown,

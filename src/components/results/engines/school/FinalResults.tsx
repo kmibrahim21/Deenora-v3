@@ -431,7 +431,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           classes.find(c => c.id === viewResult.class_id)?.class_name || '',
           subjects,
           calculatedData,
-          { name: madrasah.name },
+          madrasah,
           downloadLang
       );
     } catch (error) {

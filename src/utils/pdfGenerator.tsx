@@ -157,7 +157,7 @@ export const generateAttendanceReportPDF = async (
 // --- SEAT PLAN GENERATOR ---
 export const generateSeatPlanPDF = async (
     assignments: any[],
-    madrasah: { name: string },
+    madrasah: any,
     templateId: string = 'list',
     lang: 'en' | 'bn' = 'en'
 ) => {
@@ -522,7 +522,7 @@ export const generateClassFeeReportPDF = async (
     className: string,
     month: string,
     students: any[],
-    madrasah: { name: string },
+    madrasah: any,
     lang: 'en' | 'bn' = 'en'
 ) => {
     const container = document.createElement('div');
@@ -596,7 +596,7 @@ export const generateClassFeeReportPDF = async (
 export const generateFeeReceiptPDF = async (
     student: any,
     month: string,
-    madrasah: { name: string; address?: string; phone?: string; logo_url?: string },
+    madrasah: any,
     lang: 'en' | 'bn' = 'en'
 ) => {
     const container = document.createElement('div');
@@ -637,7 +637,7 @@ export const generateFinalResultPDF = async (
     className: string,
     subjects: string[],
     students: any[],
-    madrasah: { name: string },
+    madrasah: any,
     lang: 'en' | 'bn' = 'en'
 ) => {
     const container = document.createElement('div');
@@ -695,7 +695,7 @@ export const generateFinalResultPDF = async (
 
 // --- ACCOUNTING REPORT GENERATOR ---
 export const generateAccountingReportPDF = async (
-    madrasah: { name: string },
+    madrasah: any,
     period: string,
     stats: any,
     breakdown: any[],

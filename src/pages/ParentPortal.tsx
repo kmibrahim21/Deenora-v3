@@ -44,6 +44,7 @@ import {
   Smartphone,
   Moon,
   Sun,
+  TrendingDown,
 } from 'lucide-react';
 import { getBengaliDate, getHijriDate } from '../utils/calendarUtils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -168,8 +169,62 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       : monthAttendance.filter(a => a.status === attendanceFilter);
   }, [attendanceFilter, monthAttendance]);
 
+  const accStartDate = useMemo(() => {
+    if (student?.notes) {
+      const match = student.notes.match(/\[ACC_START:(.*?)\]/);
+      return match ? match[1] : '';
+    }
+    return '';
+  }, [student]);
+
+  const getFeeDetailsForMonth = useCallback((monthStr: string) => {
+    const monthFees = fees.filter(f => f.month === monthStr);
+    const actualPaid = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
+    const discountAmt = monthFees.reduce((sum, f) => sum + (Number(f.discount) || 0), 0);
+    
+    const monthPayable = feeStructures.reduce((sum, s) => {
+      const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
+      const isEnabled = setting ? setting.is_enabled : true;
+      const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
+      const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
+      
+      const yearStart = madrasah?.config_json?.academic_year_start;
+      const isBeforeYearStart = yearStart && monthStr < yearStart.slice(0, 7);
+      
+      // Respect individual student accounting start date
+      const isBeforeAccStart = accStartDate && monthStr < accStartDate.slice(0, 7);
+      
+      const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
+      return (isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart) ? sum + amountToCharge : sum;
+    }, 0);
+    
+    const paidAmtTotal = actualPaid + discountAmt;
+    let status = 'unpaid';
+    if (monthPayable > 0) {
+      if (paidAmtTotal >= monthPayable) status = 'paid';
+      else if (paidAmtTotal > 0) status = 'partial';
+      else status = 'unpaid';
+    } else if (paidAmtTotal > 0) {
+      status = 'paid';
+    } else {
+      status = 'no_fee';
+    }
+
+    return { 
+      payable: monthPayable, 
+      paid: actualPaid,
+      discount: discountAmt,
+      due: Math.max(0, monthPayable - actualPaid - discountAmt),
+      status
+    };
+  }, [fees, feeStructures, studentFeeSettings, madrasah, accStartDate]);
+
   const totalPaid = useMemo(() => {
-    return fees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
+    return fees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
+  }, [fees]);
+
+  const totalDiscount = useMemo(() => {
+    return fees.reduce((sum, f) => sum + (Number(f.discount) || 0), 0);
   }, [fees]);
   
   const feeStats = useMemo(() => {
@@ -178,36 +233,25 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     const startMonthIdx = acStart && acStart.getFullYear().toString() === currentYearForFees ? acStart.getMonth() + 1 : 1;
 
     const currentMonthIdx = today.getMonth() + 1;
-    let totalPayableUpToNow = 0;
     let totalPayableTotal = 0;
 
-    for (let m = startMonthIdx; m <= 12; m++) {
+    for (let m = startMonthIdx; m <= currentMonthIdx; m++) {
         const monthStr = `${currentYearForFees}-${String(m).padStart(2, '0')}`;
-        feeStructures.forEach(s => {
-            const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
-            const isEnabled = setting ? setting.is_enabled : true;
-            if (!isEnabled) return;
-            
-            const isExpired = s.due_date && s.due_date.slice(0, 7) < monthStr;
-            const isNotStarted = s.start_date && s.start_date.slice(0, 7) > monthStr;
-            const isBeforeYearStart = academicYearStart && monthStr < academicYearStart.slice(0, 7);
-            
-            if (!isExpired && !isNotStarted && !isBeforeYearStart) {
-               const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
-               totalPayableTotal += amountToCharge;
-               if (m <= currentMonthIdx) {
-                  totalPayableUpToNow += amountToCharge;
-               }
-            }
-        });
+        const details = getFeeDetailsForMonth(monthStr);
+        totalPayableTotal += details.payable;
     }
 
-    const overallDueActual = Math.max(0, totalPayableUpToNow - totalPaid);
+    const tPaid = fees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
+    const tDiscount = fees.reduce((sum, f) => sum + (Number(f.discount) || 0), 0);
+    const totalDue = Math.max(0, totalPayableTotal - tPaid - tDiscount);
+
     return {
-      pendingFees: overallDueActual,
-      totalPayable: totalPayableTotal
+      pendingFees: totalDue,
+      totalPayable: totalPayableTotal,
+      totalPaid: tPaid,
+      totalDiscount: tDiscount
     };
-  }, [madrasah, today, feeStructures, studentFeeSettings, totalPaid]);
+  }, [fees, getFeeDetailsForMonth, academicYearStart, today]);
 
   const stats = useMemo(() => {
     return {
@@ -456,20 +500,20 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         {/* Date Display */}
         {activeTab === 'home' && (
           <div className="mb-4 animate-in fade-in duration-700">
-            <div className="flex flex-wrap items-center gap-2 md:gap-3">
-              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft">
+            <div className="flex flex-nowrap items-center gap-2 md:gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 md:mx-0 md:px-0 py-1">
+              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft shrink-0">
                 <Moon size={12} className="text-amber-500" />
                 <span className="text-[10px] md:text-xs font-black text-slate-700 font-noto whitespace-nowrap">
                   {getHijriDate(new Date()).fullBn.split(',')[0]}
                 </span>
               </div>
-              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft">
+              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft shrink-0">
                 <Calendar size={12} className="text-blue-500" />
                 <span className="text-[10px] md:text-xs font-black text-slate-700 font-noto whitespace-nowrap">
                   {new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}
                 </span>
               </div>
-              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft">
+              <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm border border-slate-100 px-3 py-1.5 rounded-xl shadow-soft shrink-0">
                 <Sun size={12} className="text-emerald-500" />
                 <span className="text-[10px] md:text-xs font-black text-slate-700 font-noto whitespace-nowrap">
                   {getBengaliDate(new Date()).fullBn.split(',')[0]}
@@ -1359,12 +1403,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             const currentMonthStr = new Date().toISOString().substring(0, 7);
             const currentYearStr = currentMonthStr.substring(0, 4);
 
-            const feePaid = totalPaid;
-            const feeTotal = stats.totalPayable;
+            const feePaid = feeStats.totalPaid;
+            const feeTotal = feeStats.totalPayable;
             const feeDue = feeStats.pendingFees;
+            const feeDiscount = feeStats.totalDiscount;
 
             const paidPercentage = feeTotal > 0 ? Math.round((feePaid / feeTotal) * 100) : 0;
             const duePercentage = feeTotal > 0 ? Math.round((feeDue / feeTotal) * 100) : 0;
+            const discountPercentage = feeTotal > 0 ? Math.round((feeDiscount / feeTotal) * 100) : 0;
 
             const monthNamesBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
             
@@ -1372,38 +1418,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
               const m = String(i + 1).padStart(2, '0');
               const monthStr = `${currentYearStr}-${m}`;
               
-              const monthFees = fees.filter(f => f.month === monthStr);
-              const paidAmtTotal = monthFees.reduce((sum, f) => sum + (Number(f.amount_paid) || 0) + (Number(f.discount) || 0), 0);
-
-              const monthPayable = feeStructures.reduce((sum, s) => {
-                const setting = studentFeeSettings.find(set => set.fee_structure_id === s.id);
-                const isEnabled = setting ? setting.is_enabled : true;
-                const isMonthExpired = s.due_date && monthStr > s.due_date.slice(0, 7);
-                const isMonthNotStarted = s.start_date && monthStr < s.start_date.slice(0, 7);
-                const isBeforeYearStart = academicYearStart && monthStr < academicYearStart.slice(0, 7);
-                
-                const amountToCharge = setting?.custom_amount !== undefined && setting?.custom_amount !== null ? Number(setting.custom_amount) : Number(s.amount);
-                return (isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart) ? sum + amountToCharge : sum;
-              }, 0);
-
-              let status = 'unpaid';
-              if (monthPayable > 0) {
-                if (paidAmtTotal >= monthPayable) status = 'paid';
-                else if (paidAmtTotal > 0) status = 'partial';
-                else status = 'unpaid';
-              } else if (paidAmtTotal > 0) {
-                status = 'paid';
-              } else {
-                status = 'no_fee';
-              }
+              const details = getFeeDetailsForMonth(monthStr);
 
               return {
                 index: i + 1,
                 month: monthStr,
                 nameBn: monthNamesBn[i],
-                status: status,
-                amount: monthPayable,
-                paidAmount: paidAmtTotal,
+                status: details.status,
+                amount: details.payable,
+                paidAmount: details.paid,
+                discount: details.discount,
+                due: details.due,
                 dueDate: `১০ ${monthNamesBn[i]} ${currentYearStr.replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d)])}`
               };
             });
@@ -1444,8 +1469,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 </button>
               </div>
 
-              {/* 4 Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* 5 Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Total Fees */}
                 <div className="bg-emerald-50/50 p-5 rounded-3xl border border-emerald-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
                   <div className="flex items-center gap-2 mb-3">
@@ -1466,6 +1491,16 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   <p className="text-[11px] font-medium text-slate-500">{paidPercentage}% পরিশোধিত</p>
                 </div>
 
+                {/* Discount Amount */}
+                <div className="bg-amber-50/50 p-5 rounded-3xl border border-amber-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-500"><TrendingDown size={16} /></div>
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide">ছাড়</span>
+                  </div>
+                  <h3 className="text-2xl font-black text-amber-600 mb-1">৳{feeDiscount.toLocaleString('bn-BD')}</h3>
+                  <p className="text-[11px] font-medium text-slate-500">{discountPercentage}% মোট ছাড়</p>
+                </div>
+
                 {/* Due Amount */}
                 <div className="bg-orange-50/50 p-5 rounded-3xl border border-orange-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
                   <div className="flex items-center gap-2 mb-3">
@@ -1477,7 +1512,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 </div>
 
                 {/* Total Installments */}
-                <div className="bg-purple-50/50 p-5 rounded-3xl border border-purple-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft">
+                <div className="bg-purple-50/50 p-5 rounded-3xl border border-purple-100/50 flex flex-col justify-center text-left hover:shadow-premium hover:-translate-y-1 transition-all duration-300 shadow-soft col-span-2 md:col-span-1">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><ReceiptText size={16} /></div>
                     <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide">মোট মাস</span>
@@ -1502,16 +1537,54 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
                   {allInstallments.map((inst, i) => {
                     const isPaid = inst.status === 'paid';
+                    const isPartial = inst.status === 'partial';
+                    const isNoFee = inst.status === 'no_fee';
+
+                    const cardBgClass = isPaid 
+                      ? 'bg-emerald-50/30 border-emerald-100/50 hover:shadow-emerald-500/5' 
+                      : isPartial 
+                        ? 'bg-amber-50/50 border-amber-100/50 hover:shadow-amber-500/5' 
+                        : isNoFee
+                          ? 'bg-slate-50/30 border-slate-100/50 opacity-60'
+                          : 'bg-slate-50/50 border-slate-100';
+
+                    const textClass = isPaid 
+                      ? 'text-emerald-700' 
+                      : isPartial 
+                        ? 'text-amber-700' 
+                        : 'text-slate-700';
+
+                    const dotBgClass = isPaid 
+                      ? 'bg-emerald-400' 
+                      : isPartial 
+                        ? 'bg-amber-400' 
+                        : isNoFee
+                          ? 'bg-slate-300'
+                          : 'bg-orange-400';
+
+                    const statusLabel = isPaid 
+                      ? 'পরিশোধিত' 
+                      : isPartial 
+                        ? 'আংশিক পরিশোধ' 
+                        : isNoFee
+                          ? 'কোনো ফি নেই'
+                          : 'বকেয়া';
+
                     return (
-                      <div key={i} className={`p-4 rounded-3xl border transition-all flex flex-col gap-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-md ${isPaid ? 'bg-emerald-50/30 border-emerald-100/50' : 'bg-slate-50/50 border-slate-100'}`}>
+                      <div key={i} className={`p-4 rounded-3xl border transition-all flex flex-col gap-2.5 shadow-sm hover:-translate-y-0.5 hover:shadow-md ${cardBgClass}`}>
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex flex-col min-w-0">
                             <div className="flex items-center flex-wrap gap-1 mb-1">
-                              <span className={`text-xs font-black tracking-tight ${isPaid ? 'text-emerald-700' : 'text-slate-700'}`}>{inst.nameBn}</span>
+                              <span className={`text-xs font-black tracking-tight ${textClass}`}>{inst.nameBn}</span>
+                              {inst.discount > 0 && (
+                                <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1 py-0.5 rounded border border-amber-200">
+                                  ছাড় ৳{inst.discount}
+                                </span>
+                              )}
                             </div>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                              <span className={`w-1.5 h-1.5 flex-shrink-0 rounded-full ${isPaid ? 'bg-emerald-400' : 'bg-orange-400'}`} />
-                              {isPaid ? 'পরিশোধিত' : 'বকেয়া'}
+                              <span className={`w-1.5 h-1.5 flex-shrink-0 rounded-full ${dotBgClass}`} />
+                              {statusLabel}
                             </span>
                           </div>
                           
@@ -1519,23 +1592,39 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                             <div className="inline-flex flex-shrink-0 items-center justify-center w-6 h-6 rounded-full border border-emerald-200 text-emerald-500 bg-emerald-50 shadow-sm">
                               <CheckCircle2 size={14} />
                             </div>
+                          ) : isPartial ? (
+                            <div className="inline-flex flex-shrink-0 items-center justify-center w-6 h-6 rounded-full border border-amber-200 text-amber-500 bg-amber-50 shadow-sm">
+                              <Clock size={14} className="text-amber-500" />
+                            </div>
                           ) : null}
                         </div>
                         
-                        <div className={`flex flex-col p-3 rounded-2xl mt-1 ${isPaid ? 'bg-emerald-500/5 border border-emerald-500/10' : 'bg-white border border-slate-200'} transition-all`}>
+                        <div className={`flex flex-col p-3 rounded-2xl mt-1 ${
+                          isPaid ? 'bg-emerald-500/5 border border-emerald-500/10' : 
+                          isPartial ? 'bg-amber-500/5 border border-amber-500/10' : 
+                          'bg-white border border-slate-200'
+                        } transition-all`}>
                             <div className="flex flex-wrap justify-between items-center gap-1 mb-1">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:block">পরিমাণ (৳)</p>
                                 {isPaid ? (
                                     <span className="text-[8px] font-black text-emerald-600 bg-emerald-100/50 px-2 py-0.5 rounded-full">পরিশোধিত</span>
+                                ) : isPartial ? (
+                                    <span className="text-[8px] font-black text-amber-600 bg-amber-100/50 px-2 py-0.5 rounded-full">আংশিক</span>
+                                ) : isNoFee ? (
+                                    <span className="text-[8px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">প্রযোজ্য নয়</span>
                                 ) : (
                                     <span className="text-[8px] font-black text-orange-600 bg-orange-100/50 px-2 py-0.5 rounded-full">বকেয়া</span>
                                 )}
                             </div>
                             <div className="flex flex-wrap justify-between items-center gap-2 mt-1">
-                                <h3 className={`font-black text-base flex-shrink-0 ${isPaid ? 'text-emerald-700' : 'text-slate-800'}`}>
-                                  ৳{isPaid ? inst.amount.toLocaleString('bn-BD') : (inst.amount - (inst.paidAmount || 0)).toLocaleString('bn-BD')}
+                                <h3 className={`font-black text-base flex-shrink-0 ${
+                                  isPaid ? 'text-emerald-700' : 
+                                  isPartial ? 'text-amber-700' : 
+                                  'text-slate-800'
+                                }`}>
+                                  ৳{isPaid ? inst.amount.toLocaleString('bn-BD') : inst.due.toLocaleString('bn-BD')}
                                 </h3>
-                                {!isPaid && (
+                                {!isPaid && !isNoFee && (
                                     <button className="px-3 py-1.5 bg-[#4F46E5]/10 text-[#4F46E5] hover:bg-[#4F46E5]/20 transition-colors text-[10px] font-bold rounded-lg whitespace-nowrap active:scale-95">
                                         পে
                                     </button>
@@ -1565,8 +1654,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       return (
                       <div key={idx} className="flex items-center justify-between pb-4 border-b border-slate-50 last:border-0 last:pb-0">
                         <div className="flex items-center gap-3 text-left">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-600`}>
-                             {fee.status === 'paid' ? <Download size={16} /> : <FileText size={16} className="text-orange-500" />}
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${fee.status === 'paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-500'}`}>
+                             {fee.status === 'paid' ? <CheckCircle2 size={16} /> : <FileText size={16} />}
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-slate-900">
@@ -1681,16 +1770,21 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   </div>
                   <div>
                     <h4 className="text-base font-bold text-slate-900 mb-1">পেমেন্ট নিয়ে সাহায্য প্রয়োজন?</h4>
-                    <p className="text-sm text-slate-600">আপনি ইনভয়েস ডাউনলোড করতে পারেন অথবা অফিসের সাথে যোগাযোগ করতে পারেন।</p>
+                    <p className="text-sm text-slate-600">পেমেন্ট সংক্রান্ত যেকোনো তথ্যের জন্য সরাসরি অফিসে যোগাযোগ করুন।</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                  <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-purple-600 border border-purple-200 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-50 transition-colors shadow-sm">
-                    <Download size={16} /> ইনভয়েস ডাউনলোড
-                  </button>
-                  <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-purple-600 border border-purple-200 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-50 transition-colors shadow-sm">
-                    <PhoneCall size={16} /> অফিসে যোগাযোগ
-                  </button>
+                  <a 
+                    href={madrasah?.phone ? `tel:${madrasah.phone}` : '#'} 
+                    className="flex-1 md:flex-none flex flex-col items-center justify-center bg-white text-purple-600 border border-purple-200 px-4 py-2 rounded-xl font-bold text-sm hover:bg-purple-50 transition-colors shadow-sm cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <PhoneCall size={16} /> অফিসে যোগাযোগ
+                    </span>
+                    {madrasah?.phone && (
+                      <span className="text-[10px] text-slate-400 font-mono font-medium tracking-wide mt-0.5">{madrasah.phone}</span>
+                    )}
+                  </a>
                 </div>
               </div>
 

@@ -1266,7 +1266,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       try {
         await generateSeatPlanPDF(
             seatAssignments,
-            { name: madrasah?.name || 'Madrasah' },
+            madrasah,
             selectedSeatPlanTemplate,
             downloadLang
         );
@@ -3160,7 +3160,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       },
                                                       selectedExam,
                                                       preparedMarks,
-                                                      { name: madrasah.name, logo_url: madrasah.logo_url, address: madrasah.address },
+                                                      madrasah,
                                                       lang
                                                   );
                                                 });

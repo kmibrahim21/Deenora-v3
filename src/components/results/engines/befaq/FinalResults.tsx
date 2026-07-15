@@ -361,7 +361,7 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
           classes.find(c => c.id === viewResult.class_id)?.class_name || '',
           subjects,
           pdfData,
-          { name: madrasah.name },
+          madrasah,
           downloadLang
       );
     } catch (error) {

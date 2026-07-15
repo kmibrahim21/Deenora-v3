@@ -643,7 +643,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
           className,
           selectedMonth,
           feesReport,
-          { name: madrasah.name },
+          madrasah,
           downloadLang
       );
     } catch (error) {
@@ -661,7 +661,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       await generateFeeReceiptPDF(
           { ...student, class_name: className, section: student.student_type ? student.student_type : '' },
           selectedMonth,
-          { name: madrasah.name, address: madrasah.address, phone: madrasah.phone, logo_url: madrasah.logo_url },
+          madrasah,
           downloadLang
       );
     } catch (error) {

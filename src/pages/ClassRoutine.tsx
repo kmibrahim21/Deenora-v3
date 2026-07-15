@@ -904,8 +904,13 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                             </div>
 
                             {/* Right Column: Signature */}
-                            <div className="text-center min-w-[200px]">
-                              <div className="relative pt-8">
+                            <div className="text-center min-w-[200px] flex flex-col items-center">
+                              <div className="relative pt-4 w-full flex flex-col items-center">
+                                <div className="flex items-center justify-center relative w-full mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 35}px` }}>
+                                  {madrasah?.config_json?.signature_url && (
+                                    <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 35}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
+                                  )}
+                                </div>
                                 <div className="h-px bg-slate-300 w-full mb-1"></div>
                                 <p className="text-[11px] font-black" style={{ color: rtTheme.primary }}>
                                   {lang === 'bn' ? 'অধ্যক্ষ / পরিচালক' : 'Principal / Director'}

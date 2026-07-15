@@ -300,7 +300,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const handleDownloadSeatPlan = async (downloadLang: 'en' | 'bn' = lang) => {
       if (seatAssignments.length === 0 || !madrasah) return;
       try {
-          await generateSeatPlanPDF(seatAssignments, { name: madrasah.name }, selectedSeatPlanTemplate, downloadLang);
+          await generateSeatPlanPDF(seatAssignments, madrasah, selectedSeatPlanTemplate, downloadLang);
       } catch (error) {
           console.error('Download error:', error);
           alert('Error downloading Seat Plan');

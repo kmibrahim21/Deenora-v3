@@ -638,7 +638,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           className,
           selectedMonth,
           feesReport,
-          { name: madrasah.name },
+          madrasah,
           downloadLang
       );
     } catch (error) {
@@ -656,7 +656,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
         await generateFeeReceiptPDF(
             { ...student, class_name: className, section: student.student_type ? student.student_type : '' }, // Assuming student_type might represent section temporarily if none exists
             selectedMonth,
-            { name: madrasah.name, address: madrasah.address, phone: madrasah.phone, logo_url: madrasah.logo_url },
+            madrasah,
             downloadLang
         );
     } catch (error) {
