@@ -22,8 +22,8 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
         groupedStudents[className] = students;
     }
 
-    // Set exactly 20 rows per page to maximize vertical space utilization
-    const ROWS_PER_PAGE = 20;
+    // Set exactly 14 rows per page to prevent vertical overflow and overlap with the signature area
+    const ROWS_PER_PAGE = 14;
 
     // Flatten to pages
     const pages: { title: string; data: any[] }[] = [];
@@ -111,10 +111,62 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
                             </tbody>
                         </table>
 
-                        {/* Footer */}
-                        <div style={{ position: 'absolute', bottom: '25px', left: '35px', right: '35px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475569', fontWeight: '500', borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
+                        {/* Signature block on the right */}
+                        <div style={{ 
+                            position: 'absolute', 
+                            bottom: '50px', 
+                            right: '35px', 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            justifyContent: 'flex-end',
+                            width: '160px'
+                        }}>
+                            <div style={{ 
+                                height: '35px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                marginBottom: '4px' 
+                            }}>
+                                {madrasah?.config_json?.signature_url && (
+                                    <img 
+                                        src={madrasah.config_json.signature_url} 
+                                        style={{ height: `${madrasah.config_json.signature_height || 35}px`, objectFit: 'contain' }} 
+                                        alt="Signature" 
+                                        crossOrigin="anonymous" 
+                                    />
+                                )}
+                            </div>
+                            <div style={{ 
+                                width: '100%', 
+                                borderTop: '1px solid #cbd5e1', 
+                                textAlign: 'center', 
+                                paddingTop: '4px',
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                                color: '#1e3a8a'
+                            }}>
+                                {isBn ? 'অধ্যক্ষ/পরিচালক' : 'Principal/Director'}
+                            </div>
+                        </div>
+
+                        {/* Footer Bar */}
+                        <div style={{ 
+                            position: 'absolute', 
+                            bottom: '20px', 
+                            left: '35px', 
+                            right: '35px', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            fontSize: '11px', 
+                            color: '#475569', 
+                            fontWeight: '500', 
+                            borderTop: '1px solid #e2e8f0', 
+                            paddingTop: '8px' 
+                        }}>
                             <div>{isBn ? 'ডাউনলোড তারিখ' : 'Download Date'}: {new Date().toLocaleDateString(isBn ? 'bn-BD' : 'en-US')}</div>
-                            <div>Page {pageIndex + 1} of {pages.length}</div>
+                            <div>{isBn ? `পৃষ্ঠা ${pageIndex + 1} / ${pages.length}` : `Page ${pageIndex + 1} of ${pages.length}`}</div>
                         </div>
                     </div>
                 );
