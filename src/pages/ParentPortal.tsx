@@ -52,6 +52,90 @@ import { Attendance, Fee, Language, Institution } from 'types';
 import { hardReload } from 'utils/reloadUtils';
 import { generateResultPDF } from 'utils/pdfGenerator';
 
+const ExpandableText: React.FC<{ text: string; maxChars?: number }> = ({ text, maxChars = 100 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const shouldTruncate = text.length > maxChars;
+
+  if (!shouldTruncate) {
+    return <span className="whitespace-pre-wrap leading-relaxed block font-noto">{text}</span>;
+  }
+
+  return (
+    <div className="font-noto text-left">
+      <div className={`transition-all duration-300 relative ${isExpanded ? '' : 'max-h-[3.6em] overflow-hidden'}`}>
+        <span className="whitespace-pre-wrap leading-relaxed block text-slate-600">
+          {text}
+        </span>
+        {!isExpanded && (
+          <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none" />
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="text-[10px] md:text-xs font-black text-blue-600 hover:text-blue-800 transition-colors mt-1 focus:outline-none inline-flex items-center gap-1 cursor-pointer select-none"
+      >
+        {isExpanded ? (
+          <>
+            <span>সংক্ষিপ্ত করুন</span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7" /></svg>
+          </>
+        ) : (
+          <>
+            <span>বিস্তারিত দেখুন...</span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+          </>
+        )}
+      </button>
+    </div>
+  );
+};
+
+const SyllabusAccordion: React.FC<{ subjects: { subject: string; details: string }[] }> = ({ subjects }) => {
+  const [openIndexes, setOpenIndexes] = useState<Record<number, boolean>>({});
+
+  const toggleIndex = (index: number) => {
+    setOpenIndexes(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  return (
+    <div className="space-y-2.5 font-noto w-full">
+      {subjects.map((s, idx) => {
+        const isOpen = !!openIndexes[idx];
+        return (
+          <div 
+            key={idx} 
+            className="border border-purple-100/60 bg-white rounded-2xl overflow-hidden transition-all duration-300 shadow-sm hover:shadow-md hover:border-purple-200"
+          >
+            <button
+              type="button"
+              onClick={() => toggleIndex(idx)}
+              className="w-full flex items-center justify-between p-4 text-left font-noto font-black text-purple-950 text-xs md:text-sm hover:bg-purple-50/30 transition-colors cursor-pointer select-none focus:outline-none"
+            >
+              <span className="flex-1 pr-4 font-noto font-bold">{s.subject}</span>
+              <span className={`transform transition-transform duration-300 text-purple-500 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                </svg>
+              </span>
+            </button>
+            <div 
+              className={`transition-all duration-300 ease-in-out overflow-hidden ${isOpen ? 'max-h-[1000px] border-t border-purple-50' : 'max-h-0'}`}
+            >
+              <div className="p-4 bg-purple-50/15 text-slate-700 text-xs md:text-sm leading-relaxed font-noto whitespace-pre-wrap select-text border-t border-purple-50/50">
+                {s.details}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 interface ParentPortalProps {
   lang: Language;
   studentId: string;
@@ -1935,26 +2019,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                 </div>
 
                                 {parsed.subjects && (
-                                  <div className="bg-purple-50/20 rounded-2xl border border-purple-100/20 overflow-hidden group-hover:bg-white transition-colors">
-                                    <div className="overflow-x-auto no-scrollbar">
-                                      <table className="w-full text-[10px] md:text-xs min-w-[250px]">
-                                        <thead className="bg-purple-100/30 text-purple-900 font-black tracking-widest uppercase">
-                                          <tr>
-                                            <th className="py-1.5 px-3 text-left font-noto">বিষয়</th>
-                                            <th className="py-1.5 px-3 text-left font-noto">বিস্তারিত</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-purple-100/10">
-                                          {parsed.subjects.map((s, idx) => (
-                                            <tr key={idx} className="hover:bg-purple-50/20 transition-colors">
-                                              <td className="py-1.5 px-3 font-bold text-purple-900 font-noto whitespace-nowrap">{s.subject}</td>
-                                              <td className="py-1.5 px-3 text-slate-600 font-noto leading-tight">{s.details}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </div>
+                                  <SyllabusAccordion subjects={parsed.subjects} />
                                 )}
                               </div>
                             );
