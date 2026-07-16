@@ -31,6 +31,28 @@ interface AdminPanelProps {
   onNavigateToSMSBroadcast?: (ids: string[], initialMessage?: string) => void;
 }
 
+// Global caching structure for Super Admin panel to prevent redundant loading when switching tabs or exiting institution details.
+const adminPanelCache = {
+  madrasahs: null as any[] | null,
+  globalStats: null as any | null,
+  recentInstitutions: null as any[] | null,
+  transactionHistory: null as any[] | null,
+  pendingTrans: null as any[] | null,
+  detailedReport: {} as Record<string, any>,
+  lastFetched: 0,
+};
+
+// Helper function to clear cache when a mutation occurs.
+const clearAdminPanelCache = () => {
+  adminPanelCache.madrasahs = null;
+  adminPanelCache.globalStats = null;
+  adminPanelCache.recentInstitutions = null;
+  adminPanelCache.transactionHistory = null;
+  adminPanelCache.pendingTrans = null;
+  adminPanelCache.detailedReport = {};
+  adminPanelCache.lastFetched = 0;
+};
+
 const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal, onNavigateToVoiceBroadcast, onNavigateToSMSBroadcast }) => {
   const [madrasahs, setMadrasahs] = useState<InstitutionWithStats[]>([]);
   const [pendingTrans, setPendingTrans] = useState<Transaction[]>([]);
@@ -637,7 +659,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [newInstType, setNewInstType] = useState<'madrasah' | 'school' | 'kindergarten' | 'choching'>('madrasah');
   const [isCreatingInst, setIsCreatingInst] = useState(false);
 
-  const fetchDetailedReport = async () => {
+  const fetchDetailedReport = async (force = false) => {
+    const cacheKey = `${detailedFilterMode}_${detailedMonth}_${detailedYear}`;
+    if (!force && adminPanelCache.detailedReport[cacheKey]) {
+      setDetailedReport(adminPanelCache.detailedReport[cacheKey]);
+      return;
+    }
+
     setDetailedReport(prev => ({ ...prev, loading: true }));
     let startDate: Date;
     let endDate: Date;
@@ -690,14 +718,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     const smsSentNum = smsLogsRes.count || 0;
     const voiceCallsNum = (voiceBroadcastsRes.data || []).reduce((sum, t) => sum + (Number(t.total_numbers) || 0), 0) || 0;
 
-    setDetailedReport({
+    const reportData = {
       smsRechargeTotal,
       voiceRechargeTotal,
       subRechargeTotal,
       smsSentNum,
       voiceCallsNum,
       loading: false
-    });
+    };
+
+    adminPanelCache.detailedReport[cacheKey] = reportData;
+    setDetailedReport(reportData);
   };
 
   useEffect(() => {
@@ -912,9 +943,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   };
 
-  const initData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+  const initData = useCallback(async (silent = false, forceRefresh = false) => {
+    if (forceRefresh) {
+      clearAdminPanelCache();
+    }
+
     let isMounted = true;
+
+    // Check if we can serve from cache
+    if (!forceRefresh && (view === 'list' || view === 'dashboard' || view === 'institutions')) {
+      if (adminPanelCache.madrasahs && adminPanelCache.globalStats && adminPanelCache.recentInstitutions && adminPanelCache.transactionHistory) {
+        setMadrasahs(adminPanelCache.madrasahs);
+        setGlobalStats(adminPanelCache.globalStats);
+        setRecentInstitutions(adminPanelCache.recentInstitutions);
+        setTransactionHistory(adminPanelCache.transactionHistory);
+        setLoading(false);
+        silent = true; // Still update silently in background
+      }
+    } else if (!forceRefresh && view === 'approvals') {
+      if (adminPanelCache.pendingTrans && adminPanelCache.transactionHistory) {
+        setPendingTrans(adminPanelCache.pendingTrans);
+        setTransactionHistory(adminPanelCache.transactionHistory);
+        setLoading(false);
+        silent = true; // Still update silently in background
+      }
+    }
+
+    if (!silent) setLoading(true);
     try {
       // Always fetch packages to ensure latest rates
       fetchPackages();
@@ -939,12 +994,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           fetchTransactionHistory(['subscription']) // Dashboard only shows subscriptions
         ]);
         if (isMounted) {
-          setMadrasahs(mList);
-          setGlobalStats(gStats);
-          setRecentInstitutions((recent.data || []).map(m => ({
+          const mappedRecent = (recent.data || []).map(m => ({
             ...m,
             student_count: (m as any).student_count?.[0]?.count || 0
-          })));
+          }));
+
+          // Update Cache
+          adminPanelCache.madrasahs = mList;
+          adminPanelCache.globalStats = gStats;
+          adminPanelCache.recentInstitutions = mappedRecent;
+          adminPanelCache.transactionHistory = history;
+          adminPanelCache.lastFetched = Date.now();
+
+          setMadrasahs(mList);
+          setGlobalStats(gStats);
+          setRecentInstitutions(mappedRecent);
           setTransactionHistory(history);
         }
       }
@@ -954,6 +1018,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           fetchTransactionHistory(['sms', 'voice', 'subscription']) // Approvals shows all requests
         ]);
         if (isMounted) {
+          // Update Cache
+          adminPanelCache.pendingTrans = pTrans;
+          adminPanelCache.transactionHistory = tHist;
+          adminPanelCache.lastFetched = Date.now();
+
           setPendingTrans(pTrans);
           setTransactionHistory(tHist);
           const newSmsMap = { ...smsEnabledMap };
@@ -975,7 +1044,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     if (isRefreshing) return;
     setIsRefreshing(true);
     try {
-      await initData(true); // silent refresh to avoid full-page loader
+      await initData(true, true); // silent refresh, bypass/clear cache
       setShowRefreshPopup(true);
       setTimeout(() => setShowRefreshPopup(false), 3000);
     } catch (err) {
@@ -1442,7 +1511,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
 
       setEditPassword('');
-      initData(true);
+      initData(true, true);
       if (onProfileUpdate) onProfileUpdate();
       setView('list');
     } catch (err: any) {
@@ -1486,7 +1555,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           });
           setView('list');
           setSelectedUser(null);
-          initData();
+          initData(false, true);
         } catch (err: any) {
           console.error("Error removing institution:", err);
           setStatusModal({
@@ -1665,7 +1734,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       });
       
       // ব্যাকগ্রাউন্ডে ডাটা রিফ্রেশ করা
-      initData(true);
+      initData(true, true);
     } catch (err: any) {
       console.error("Approve Error:", err);
       // Detailed error reporting for debugging
@@ -1696,7 +1765,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setPendingTrans(prev => prev.filter(p => p.id !== rejectConfirm.id));
       setRejectConfirm(null);
       setStatusModal({ show: true, type: 'success', title: 'বাতিল', message: 'পেমেন্ট রিকোয়েস্ট বাতিল করা হয়েছে' });
-      initData(true);
+      initData(true, true);
     } catch (err: any) {
       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
     } finally {
@@ -1767,7 +1836,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         title: 'সফল', 
         message: `সবার জন্য ক্লাস রুটিন মডিউল অ্যাক্টিভ করা হয়েছে। (আপডেট করা হয়েছে: ${result.updated} টি প্রতিষ্ঠান)` 
       });
-      initData(true);
+      initData(true, true);
     } catch (err: any) {
        setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
     } finally {
@@ -1814,7 +1883,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setNewInstPhone('');
       setNewInstEmail('');
       setNewInstPassword('');
-      initData(true);
+      initData(true, true);
     } catch (err: any) {
       console.error("Create Error:", err);
       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
@@ -3591,11 +3660,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                        smsApi.sendDirect(selectedUser.phone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
                                      }
 
-                                     setSelectedMonthsForPayment([]);
+                                    setSelectedMonthsForPayment([]);
                                     setEditDiscount(0);
                                     setOverrideTotal('');
                                     setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'পেমেন্ট রিসিভ করা হয়েছে এবং প্রোফাইল আপডেট হয়েছে।' });
-                                    initData(true);
+                                    initData(true, true);
                                   } catch (err: any) {
                                     setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
                                   } finally {
