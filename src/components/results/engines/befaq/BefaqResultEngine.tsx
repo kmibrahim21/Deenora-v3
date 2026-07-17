@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, BefaqExam, BefaqSubject, Language, UserRole, Profile } from 'types';
-import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Download, CreditCard, Trash2, RefreshCw, Edit2, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash } from 'lucide-react';
+import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Download, CreditCard, Trash2, RefreshCw, Edit2, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash, Palette, Clock, ZoomIn, ZoomOut, Maximize, Upload } from 'lucide-react';
 import { t } from 'translations';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
-import { generateSeatPlanPDF } from '../../../../utils/pdfGenerator';
+import { generateSeatPlanPDF, generateExamRoutinePDF } from '../../../../utils/pdfGenerator';
 import { SeatAssignment, ExamRoom } from 'types';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import FinalResults from './FinalResults';
@@ -21,7 +21,9 @@ interface BefaqResultEngineProps {
 }
 
 const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, onBack, role, activeYear, profile }) => {
-  const [activeTab, setActiveTab] = useState<'exams' | 'analytics' | 'final-results' | 'seat-plan'>('exams');
+  const [activeTab, setActiveTab] = useState<'exams' | 'analytics' | 'final-results' | 'seat-plan' | 'exam-routine'>('exams');
+  
+  // Original Befaq states moved to top to avoid TS2448 block-scope issues
   const [view, setView] = useState<'list' | 'subjects' | 'marks' | 'report' | 'rank'>('list');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [exams, setExams] = useState<BefaqExam[]>([]);
@@ -43,6 +45,548 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => void) | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  
+  // Exam Routine Feature States
+  const [selectedRoutineExamId, setSelectedRoutineExamId] = useState<string>('');
+  const [selectedRoutineAllExamIds, setSelectedRoutineAllExamIds] = useState<string[]>([]);
+  const [customRoutineTitle, setCustomRoutineTitle] = useState<string>('');
+  const [routineSelectionMode, setRoutineSelectionMode] = useState<'all' | 'class' | 'saved'>('all');
+  const [selectedRoutineClassId, setSelectedRoutineClassId] = useState<string>('');
+  const [routineMorningTime, setRoutineMorningTime] = useState<string>('09:00 AM - 12:00 PM');
+  const [routineAfternoonTime, setRoutineAfternoonTime] = useState<string>('02:00 PM - 05:00 PM');
+  const [showRoutineAfternoon, setShowRoutineAfternoon] = useState<boolean>(true);
+
+  const getBanglaNumber = (str: string) => {
+    const englishDigits: { [key: string]: string } = { '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪', '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯' };
+    return str.replace(/[0-9]/g, d => englishDigits[d]);
+  };
+  const currentYear = new Date().getFullYear().toString();
+  const currentYearBn = getBanglaNumber(currentYear);
+  const [routineMorningStart, setRoutineMorningStart] = useState<string>('09:00');
+  const [routineMorningEnd, setRoutineMorningEnd] = useState<string>('12:00');
+  const [routineAfternoonStart, setRoutineAfternoonStart] = useState<string>('14:00');
+  const [routineAfternoonEnd, setRoutineAfternoonEnd] = useState<string>('17:00');
+  const [routineStartDate, setRoutineStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [routineThemeColor, setRoutineThemeColor] = useState<string>('emerald');
+  const [routinePrincipalName, setRoutinePrincipalName] = useState<string>('');
+  const [routinePrincipalMobile, setRoutinePrincipalMobile] = useState<string>('');
+  const [routineInstructions, setRoutineInstructions] = useState<string[]>([
+    'পরীক্ষার ১৫ মিনিট পূর্বে আসনে উপস্থিত হতে হবে',
+    'অবশ্যই সাথে প্রবেশপত্র আনতে হবে',
+    'মোবাইল ও যেকোনো ইলেকট্রনিক ডিভাইস নিষিদ্ধ',
+    'পরিষ্কার-পরিচ্ছন্ন ও সুশৃঙ্খলভাবে পরীক্ষা দিতে হবে'
+  ]);
+  const [routineData, setRoutineData] = useState<any[]>([]);
+  const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
+  const [isRestoringRoutine, setIsRestoringRoutine] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  
+  // Custom states for routine modals to avoid overlap
+  const [showRoutineSuccessModal, setShowRoutineSuccessModal] = useState(false);
+  const [routineSuccessTitle, setRoutineSuccessTitle] = useState('');
+  const [routineSuccessMessage, setRoutineSuccessMessage] = useState('');
+  const [routineModalMode, setRoutineModalMode] = useState<'success' | 'confirm'>('success');
+  const [routineOnConfirm, setRoutineOnConfirm] = useState<() => void>(() => {});
+  const [routineConfirmText, setRoutineConfirmText] = useState('');
+  const [routineCancelText, setRoutineCancelText] = useState('');
+
+  // Load saved routines from config_json
+  useEffect(() => {
+    if ((madrasah?.config_json as any)?.saved_exam_routines) {
+      setSavedRoutines((madrasah.config_json as any).saved_exam_routines);
+    }
+  }, [madrasah?.config_json]);
+
+  const routineThemes = {
+    'emerald': { primary: '#013c28', secondary: '#023c28', light: '#E6F4EA', accent: '#EAF7EE' },
+    'blue': { primary: '#1E3A8A', secondary: '#1E40AF', light: '#EFF6FF', accent: '#F0F9FF' },
+    'slate': { primary: '#334155', secondary: '#475569', light: '#F1F5F9', accent: '#F8FAFC' },
+    'purple': { primary: '#581C87', secondary: '#6B21A8', light: '#F3E8FF', accent: '#FAF5FF' },
+    'rose': { primary: '#881337', secondary: '#9F1239', light: '#FFE4E6', accent: '#FFF5F5' }
+  };
+
+  const rtTheme = routineThemes[routineThemeColor as keyof typeof routineThemes] || routineThemes.emerald;
+
+  const formatTime = (time24: string) => {
+    if (!time24) return '';
+    const [hrs, mins] = time24.split(':');
+    const hr = parseInt(hrs);
+    const ampm = hr >= 12 ? 'PM' : 'AM';
+    const hr12 = hr % 12 || 12;
+    return `${hr12.toString().padStart(2, '0')}:${mins} ${ampm}`;
+  };
+
+  // Update routine times whenever start/end times change
+  useEffect(() => {
+    setRoutineMorningTime(`${formatTime(routineMorningStart)} - ${formatTime(routineMorningEnd)}`);
+    setRoutineAfternoonTime(`${formatTime(routineAfternoonStart)} - ${formatTime(routineAfternoonEnd)}`);
+  }, [routineMorningStart, routineMorningEnd, routineAfternoonStart, routineAfternoonEnd]);
+
+  // Automatically fetch / prepare data when active tab is exam-routine or filters update
+  useEffect(() => {
+    if (isRestoringRoutine) return;
+    if (activeTab !== 'exam-routine') return;
+    
+    const loadRoutineData = async () => {
+      try {
+        let relevantExams = [];
+        
+        if (routineSelectionMode === 'class' && selectedRoutineClassId) {
+          if (selectedRoutineExamId) {
+            const pickedExam = exams.find(e => e.id === selectedRoutineExamId);
+            if (pickedExam) relevantExams = [pickedExam];
+          } else {
+            const classExams = exams.filter(e => e.marhala_id === selectedRoutineClassId);
+            if (classExams.length > 0) {
+              relevantExams = [classExams[0]];
+            }
+          }
+        } else {
+          if (selectedRoutineAllExamIds.length > 0) {
+            relevantExams = exams.filter(e => selectedRoutineAllExamIds.includes(e.id));
+          } else {
+            relevantExams = exams; // Fallback to all exams
+          }
+        }
+
+        if (relevantExams.length === 0) {
+          setDefaultSampleRoutine();
+          return;
+        }
+
+        const { data: allSubs, error } = await supabase
+          .from('befaq_subjects')
+          .select('*')
+          .in('exam_id', relevantExams.map(e => e.id))
+          .order('sort_order', { ascending: true });
+
+        if (error || !allSubs || allSubs.length === 0) {
+          setDefaultSampleRoutine();
+          return;
+        }
+
+        const startDate = routineStartDate ? new Date(routineStartDate) : new Date();
+
+        // Get unique sort orders and sort them
+        const uniqueSortOrders = Array.from(new Set(allSubs.map(s => s.sort_order || 0))).sort((a, b) => a - b);
+        const compiled: any[] = [];
+        let currentDate = new Date(startDate);
+        const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
+
+        for (const order of uniqueSortOrders) {
+          while (weeklyHolidays.includes(currentDate.getDay())) {
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+
+          const isoDate = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${currentDate.getDate().toString().padStart(2, '0')}`;
+          const dateStr = currentDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          const dayStr = currentDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+
+          const slotSubs = allSubs.filter(s => s.sort_order === order);
+          if (slotSubs.length === 0) continue;
+
+          const morningSubjects = slotSubs.map(s => {
+            const exam = relevantExams.find(e => e.id === s.exam_id);
+            const cls = classes.find(c => c.id === exam?.marhala_id);
+            return {
+              classId: cls?.id || '',
+              className: cls?.class_name || 'Class',
+              subject: s.subject_name
+            };
+          });
+
+          compiled.push({
+            id: crypto.randomUUID(),
+            isoDate: isoDate,
+            date: dateStr,
+            day: dayStr,
+            morning: {
+              time: routineMorningTime || '09:00 AM - 12:00 PM',
+              subjects: morningSubjects
+            },
+            afternoon: {
+              time: routineAfternoonTime || '02:00 PM - 05:00 PM',
+              subjects: []
+            }
+          });
+
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        setRoutineData(compiled);
+      } catch (err) {
+        console.error('Error compiling routine:', err);
+        setDefaultSampleRoutine();
+      }
+    };
+
+    const setDefaultSampleRoutine = () => {
+      const compiled: any[] = [];
+      const sampleDays = [
+        { 
+          dayName: lang === 'bn' ? 'শনিবার' : 'Saturday',
+          subjects: [
+            { classId: 'p', className: lang === 'bn' ? 'তাইসীর' : 'Taisir', subject: lang === 'bn' ? 'আরবি সাহিত্য' : 'Arabic Lit' },
+            { classId: 'n', className: lang === 'bn' ? 'মিযান' : 'Mizan', subject: lang === 'bn' ? 'নাহবেমীর' : 'Nahvemir' },
+            { classId: '1', className: lang === 'bn' ? 'নাহবেমীর' : 'Nahvemir', subject: lang === 'bn' ? 'শরহে মিআতে আমিল' : 'Sharh' },
+            { classId: '2', className: lang === 'bn' ? 'হিদায়াতুন্নাহব' : 'Hidayatunnahv', subject: lang === 'bn' ? 'কুদুরী' : 'Kuduri' },
+            { classId: '3', className: lang === 'bn' ? 'কাফিয়া' : 'Kafia', subject: lang === 'bn' ? 'শরহে জামী' : 'Sharh Jami' }
+          ]
+        },
+        { 
+          dayName: lang === 'bn' ? 'রোববার' : 'Sunday',
+          subjects: [
+            { classId: 'p', className: lang === 'bn' ? 'তাইসীর' : 'Taisir', subject: lang === 'bn' ? 'উর্দু' : 'Urdu' },
+            { classId: 'n', className: lang === 'bn' ? 'মিযান' : 'Mizan', subject: lang === 'bn' ? 'উর্দু কায়েদা' : 'Urdu' },
+            { classId: '1', className: lang === 'bn' ? 'নাহবেমীর' : 'Nahvemir', subject: lang === 'bn' ? 'পাক-পাঞ্জাবি' : 'Punjabi' },
+            { classId: '2', className: lang === 'bn' ? 'হিদায়াতুন্নাহব' : 'Hidayatunnahv', subject: lang === 'bn' ? 'কুদুরী' : 'Kuduri' },
+            { classId: '3', className: lang === 'bn' ? 'কাফিয়া' : 'Kafia', subject: lang === 'bn' ? 'কানযুদ্দাকায়িক' : 'Kanz' }
+          ]
+        },
+        { 
+          dayName: lang === 'bn' ? 'সোমবার' : 'Monday',
+          subjects: [
+            { classId: 'p', className: lang === 'bn' ? 'তাইসীর' : 'Taisir', subject: lang === 'bn' ? 'ফার্সি' : 'Persian' },
+            { classId: 'n', className: lang === 'bn' ? 'মিযান' : 'Mizan', subject: lang === 'bn' ? 'ফার্সি কায়েদা' : 'Persian' },
+            { classId: '1', className: lang === 'bn' ? 'নাহবেমীর' : 'Nahvemir', subject: lang === 'bn' ? 'গুলিস্তাঁ' : 'Gulistan' },
+            { classId: '2', className: lang === 'bn' ? 'হিদায়াতুন্নাহব' : 'Hidayatunnahv', subject: lang === 'bn' ? 'বুস্তাঁ' : 'Bustan' },
+            { classId: '3', className: lang === 'bn' ? 'কাফিয়া' : 'Kafia', subject: lang === 'bn' ? 'শরহে বেকায়া' : 'Sharh Viqaya' }
+          ]
+        },
+        { 
+          dayName: lang === 'bn' ? 'মঙ্গলবার' : 'Tuesday',
+          subjects: [
+            { classId: 'p', className: lang === 'bn' ? 'তাইসীর' : 'Taisir', subject: lang === 'bn' ? 'ফিকাহ' : 'Fiqh' },
+            { classId: 'n', className: lang === 'bn' ? 'মিযান' : 'Mizan', subject: lang === 'bn' ? 'মুনশাইব' : 'Munshaib' },
+            { classId: '1', className: lang === 'bn' ? 'নাহবেমীর' : 'Nahvemir', subject: lang === 'bn' ? 'কুরআন অনুবাদ' : 'Quran Translation' },
+            { classId: '2', className: lang === 'bn' ? 'হিদায়াতুন্নাহব' : 'Hidayatunnahv', subject: lang === 'bn' ? 'নূরুল ঈযাহ' : 'Nurul Idah' },
+            { classId: '3', className: lang === 'bn' ? 'কাফিয়া' : 'Kafia', subject: lang === 'bn' ? 'আকাইদ' : 'Aqaid' }
+          ]
+        },
+        { 
+          dayName: lang === 'bn' ? 'বুধবার' : 'Wednesday',
+          subjects: [
+            { classId: 'p', className: lang === 'bn' ? 'তাইসীর' : 'Taisir', subject: lang === 'bn' ? 'সীরাত' : 'Seerat' },
+            { classId: 'n', className: lang === 'bn' ? 'মিযান' : 'Mizan', subject: lang === 'bn' ? 'পাঁচ কিতাব' : 'Five Books' },
+            { classId: '1', className: lang === 'bn' ? 'নাহবেমীর' : 'Nahvemir', subject: lang === 'bn' ? 'তারিখ' : 'History' },
+            { classId: '2', className: lang === 'bn' ? 'হিদায়াতুন্নাহব' : 'Hidayatunnahv', subject: lang === 'bn' ? 'খুলাসাতুল কায়দা' : 'Tajweed' },
+            { classId: '3', className: lang === 'bn' ? 'কাফিয়া' : 'Kafia', subject: lang === 'bn' ? 'উসূলে শাশী' : 'Usul al-Shashi' }
+          ]
+        }
+      ];
+
+      const getSampleMorningSubjects = (subs: any[]) => {
+        if (routineSelectionMode === 'all') {
+          return subs;
+        }
+        const selectedClassName = classes.find(c => c.id === selectedRoutineClassId)?.class_name || '';
+        const matched = subs.find(sub => 
+          sub.className.includes(selectedClassName) || 
+          selectedClassName.includes(sub.className)
+        );
+        if (matched) {
+          return [matched];
+        } else {
+          return [{ className: selectedClassName || 'Class 1', subject: subs[0]?.subject || (lang === 'bn' ? 'আরবি' : 'Arabic') }];
+        }
+      };
+
+      let initialDate = routineStartDate ? new Date(routineStartDate) : new Date();
+      let runDate = new Date(initialDate);
+      const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
+      sampleDays.forEach((sd) => {
+        while (weeklyHolidays.includes(runDate.getDay())) {
+          runDate.setDate(runDate.getDate() + 1);
+        }
+
+        const dateStr = runDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const isoDate = `${runDate.getFullYear()}-${(runDate.getMonth() + 1).toString().padStart(2, '0')}-${runDate.getDate().toString().padStart(2, '0')}`;
+        
+        compiled.push({
+          id: crypto.randomUUID(),
+          isoDate: isoDate,
+          date: dateStr,
+          day: sd.dayName,
+          morning: {
+            time: routineMorningTime || '09:00 AM - 12:00 PM',
+            subjects: getSampleMorningSubjects(sd.subjects)
+          },
+          afternoon: {
+            time: routineAfternoonTime || '02:00 PM - 05:00 PM',
+            subjects: []
+          }
+        });
+
+        runDate.setDate(runDate.getDate() + 1);
+      });
+
+      setRoutineData(compiled);
+    };
+
+    loadRoutineData();
+  }, [exams, classes, routineMorningTime, routineAfternoonTime, lang, routineSelectionMode, selectedRoutineClassId, selectedRoutineExamId, selectedRoutineAllExamIds, routineStartDate, activeTab]);
+
+  // Set default Selected Class for Routine
+  useEffect(() => {
+    if (classes.length > 0 && !selectedRoutineClassId) {
+      setSelectedRoutineClassId(classes[0].id);
+    }
+  }, [classes, selectedRoutineClassId]);
+
+  // Scaler Hook/Ref for responsive A4 Live Preview
+  const previewContainerRef = React.useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState<number>(1);
+  const [userZoom, setUserZoom] = useState<number>(1);
+
+  useEffect(() => {
+    if (!previewContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        const isMobile = window.innerWidth < 768;
+        const targetWidth = 1123; // Landscape width
+        const s = Math.min(1.2, isMobile ? (width / 1160) : (width / (targetWidth + 40)));
+        setPreviewScale(s);
+      }
+    });
+    observer.observe(previewContainerRef.current);
+    return () => observer.disconnect();
+  }, [activeTab]);
+
+  // Automated name of the active exam
+  const activeExamName = React.useMemo(() => {
+    if (routineSelectionMode === 'all' && customRoutineTitle.trim() !== '') {
+      return customRoutineTitle;
+    }
+    if (routineSelectionMode === 'class' && selectedRoutineClassId) {
+      if (selectedRoutineExamId) {
+        const pickedExam = exams.find(e => e.id === selectedRoutineExamId);
+        if (pickedExam) return pickedExam.exam_name;
+      }
+      const classExams = exams.filter(e => e.marhala_id === selectedRoutineClassId);
+      if (classExams.length > 0) {
+        return classExams[0].exam_name;
+      }
+      const selectedClass = classes.find(c => c.id === selectedRoutineClassId);
+      if (selectedClass) {
+        return lang === 'bn' 
+          ? `${selectedClass.class_name} পরীক্ষা`
+          : `${selectedClass.class_name} Exam`;
+      }
+    }
+    return customRoutineTitle || (lang === 'bn' ? 'বেফাক পরীক্ষা' : 'Befaq Exam');
+  }, [routineSelectionMode, customRoutineTitle, selectedRoutineClassId, selectedRoutineExamId, exams, classes, lang]);
+
+  // Compute display classes for routine mode
+  const routineDisplayClasses = React.useMemo(() => {
+    if (classes.length === 0) return [];
+    if (routineSelectionMode === 'all' && selectedRoutineAllExamIds.length > 0) {
+      return classes.filter(c => selectedRoutineAllExamIds.some(examId => exams.find(e => e.id === examId)?.marhala_id === c.id));
+    }
+    return classes;
+  }, [classes, routineSelectionMode, selectedRoutineAllExamIds, exams]);
+
+  const handleAddRoutineDay = () => {
+    const lastDay = routineData[routineData.length - 1];
+    let nextDate = new Date();
+    if (lastDay && lastDay.isoDate) {
+      nextDate = new Date(lastDay.isoDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+    
+    const weeklyHolidays = madrasah?.config_json?.weekly_holidays || [5];
+    while (weeklyHolidays.includes(nextDate.getDay())) {
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+    
+    const isoDate = `${nextDate.getFullYear()}-${(nextDate.getMonth() + 1).toString().padStart(2, '0')}-${nextDate.getDate().toString().padStart(2, '0')}`;
+    const dateStr = nextDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const dayStr = nextDate.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+    
+    setRoutineData(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        isoDate: isoDate,
+        date: dateStr,
+        day: dayStr,
+        morning: {
+          time: routineMorningTime,
+          subjects: []
+        },
+        afternoon: {
+          time: routineAfternoonTime,
+          subjects: []
+        }
+      }
+    ]);
+  };
+
+  const handleRemoveRoutineDay = (id: string) => {
+    setRoutineData(prev => prev.filter(d => d.id !== id));
+  };
+
+  const saveRoutineToDB = async () => {
+    if (!madrasah) return;
+    try {
+      const payload = {
+        id: Date.now().toString(),
+        name: customRoutineTitle || activeExamName || (lang === 'bn' ? 'বেফাক পরীক্ষার রুটিন' : 'Befaq Exam Routine'),
+        createdAt: new Date().toISOString(),
+        routineData,
+        routineInstructions,
+        routineMorningTime,
+        routineAfternoonTime,
+        routineThemeColor,
+        activeExamName,
+        routineStartDate,
+        showRoutineAfternoon,
+        routineSelectionMode,
+        selectedRoutineClassId,
+        customRoutineTitle,
+        routineMorningStart,
+        routineMorningEnd,
+        routineAfternoonStart,
+        routineAfternoonEnd,
+        routinePrincipalName,
+        routinePrincipalMobile,
+        selectedRoutineExamId,
+        selectedRoutineAllExamIds
+      };
+
+      const currentConfig = madrasah.config_json || {};
+      const updatedRoutines = [...((currentConfig as any).saved_exam_routines || []), payload];
+      const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
+
+      const { error } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (error) throw error;
+      setSavedRoutines(updatedRoutines);
+      if (madrasah.config_json) {
+        (madrasah.config_json as any).saved_exam_routines = updatedRoutines;
+      }
+      
+      setRoutineSuccessTitle(lang === 'bn' ? 'রুটিন সেভ হয়েছে' : 'Routine Saved');
+      setRoutineSuccessMessage(lang === 'bn' ? 'আপনার পরীক্ষার রুটিনটি সফলভাবে সার্ভারে সংরক্ষিত হয়েছে।' : 'Your exam routine has been successfully saved to the server.');
+      setRoutineModalMode('success');
+      setShowRoutineSuccessModal(true);
+    } catch (err) {
+      console.error('Error saving routine:', err);
+    }
+  };
+
+  const deleteRoutineFromDB = async (id: string) => {
+    if (!madrasah) return;
+    
+    setRoutineModalMode('confirm');
+    setRoutineSuccessTitle(lang === 'bn' ? 'মুছে ফেলতে নিশ্চিত?' : 'Confirm Delete');
+    setRoutineSuccessMessage(lang === 'bn' ? 'আপনি কি রুটিনটি মুছে ফেলতে নিশ্চিত?' : 'Are you sure you want to delete this routine?');
+    setRoutineConfirmText(lang === 'bn' ? 'মুছে ফেলুন' : 'Delete');
+    setRoutineCancelText(lang === 'bn' ? 'বাতিল' : 'Cancel');
+    
+    setRoutineOnConfirm(() => async () => {
+      try {
+        const currentConfig = madrasah.config_json || {};
+        const updatedRoutines = ((currentConfig as any).saved_exam_routines || []).filter((r: any) => r.id !== id);
+        const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
+
+        const { error } = await supabase
+          .from('institutions')
+          .update({ config_json: updatedConfig })
+          .eq('id', madrasah.id);
+
+        if (error) throw error;
+        setSavedRoutines(updatedRoutines);
+        if (madrasah.config_json) {
+          (madrasah.config_json as any).saved_exam_routines = updatedRoutines;
+        }
+        
+        setRoutineSuccessTitle(lang === 'bn' ? 'রুটিন মুছে ফেলা হয়েছে' : 'Routine Deleted');
+        setRoutineSuccessMessage(lang === 'bn' ? 'রুটিনটি সফলভাবে মুছে ফেলা হয়েছে।' : 'Routine has been successfully deleted.');
+        setRoutineModalMode('success');
+        setShowRoutineSuccessModal(true);
+      } catch (err) {
+        console.error('Error deleting routine:', err);
+      }
+    });
+  };
+
+  const loadRoutineFromDB = (routine: any) => {
+    setIsRestoringRoutine(true);
+
+    if (routine.routineData) setRoutineData(routine.routineData);
+    if (routine.routineInstructions) setRoutineInstructions(routine.routineInstructions);
+    if (routine.routineMorningTime) setRoutineMorningTime(routine.routineMorningTime);
+    if (routine.routineAfternoonTime) setRoutineAfternoonTime(routine.routineAfternoonTime);
+    if (routine.routineThemeColor) setRoutineThemeColor(routine.routineThemeColor);
+    if (routine.customRoutineTitle) setCustomRoutineTitle(routine.customRoutineTitle);
+    else if (routine.activeExamName && routine.routineSelectionMode === 'all') setCustomRoutineTitle(routine.activeExamName);
+    if (routine.routineStartDate) setRoutineStartDate(routine.routineStartDate);
+    if (routine.showRoutineAfternoon !== undefined) setShowRoutineAfternoon(routine.showRoutineAfternoon);
+    if (routine.routineSelectionMode) setRoutineSelectionMode(routine.routineSelectionMode);
+    if (routine.selectedRoutineClassId) setSelectedRoutineClassId(routine.selectedRoutineClassId);
+    
+    // Additional fields for complete restore
+    if (routine.routineMorningStart) setRoutineMorningStart(routine.routineMorningStart);
+    if (routine.routineMorningEnd) setRoutineMorningEnd(routine.routineMorningEnd);
+    if (routine.routineAfternoonStart) setRoutineAfternoonStart(routine.routineAfternoonStart);
+    if (routine.routineAfternoonEnd) setRoutineAfternoonEnd(routine.routineAfternoonEnd);
+    if (routine.routinePrincipalName) setRoutinePrincipalName(routine.routinePrincipalName);
+    if (routine.routinePrincipalMobile) setRoutinePrincipalMobile(routine.routinePrincipalMobile);
+    if (routine.selectedRoutineExamId) setSelectedRoutineExamId(routine.selectedRoutineExamId);
+    if (routine.selectedRoutineAllExamIds) setSelectedRoutineAllExamIds(routine.selectedRoutineAllExamIds);
+
+    setRoutineSuccessTitle(lang === 'bn' ? 'রুটিন লোড হয়েছে' : 'Routine Loaded');
+    setRoutineSuccessMessage(lang === 'bn' ? 'রুটিনটি সফলভাবে লোড করা হয়েছে। আপনি এখন এটি এডিট করতে পারেন।' : 'Routine has been loaded successfully. You can now edit it.');
+    setRoutineModalMode('success');
+    setShowRoutineSuccessModal(true);
+
+    // Release the lock after a delay to ensure effects have finished triggering
+    setTimeout(() => {
+      setIsRestoringRoutine(false);
+    }, 500);
+  };
+
+  const handleDownloadCustomExamRoutine = async () => {
+    setIsDownloading(true);
+    try {
+      const isExamPostfixBn = activeExamName.endsWith('পরীক্ষা');
+      const isExamPostfixEn = activeExamName.toLowerCase().endsWith('exam');
+      const examTitle = lang === 'bn' 
+        ? (isExamPostfixBn ? `${activeExamName} সময়সূচি` : `${activeExamName} পরীক্ষার সময়সূচি`)
+        : (isExamPostfixEn ? `${activeExamName} Schedule` : `${activeExamName} Exam Schedule`);
+
+      await generateExamRoutinePDF(
+        {
+          ...madrasah,
+          phone: routinePrincipalMobile || madrasah?.phone || ''
+        } as any, 
+        examTitle, 
+        routineData, 
+        lang,
+        {
+          routineSelectionMode: routineSelectionMode as any,
+          selectedRoutineClassId,
+          classesList: routineDisplayClasses,
+          routineMorningTime,
+          routineAfternoonTime,
+          routineInstructions,
+          routinePrincipalName,
+          routinePrincipalMobile,
+          showRoutineAfternoon,
+          examYear: currentYear,
+          themeColor: routineThemeColor
+        }
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // Dynamic module configuration
   const modules = React.useMemo(() => {
@@ -570,18 +1114,35 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         }
     }
 
-    // Upsert logic - simpler to delete and insert or use upsert if constraint exists
-    // Assuming upsert works on (exam_id, student_id, subject_id)
-    for (const row of payload) {
-        // We need a unique constraint on befaq_results(exam_id, student_id, subject_id) for upsert to work perfectly
-        // Or we check if exists. For now, let's try upsert.
-        const { error } = await supabase.from('befaq_results').upsert(row, { onConflict: 'exam_id,student_id,subject_id' });
-        if (error) {
-            console.error("Error saving marks:", error);
-            alert("Error saving marks: " + error.message);
+    // We use a robust delete-and-insert strategy for each row to ensure it works
+    // perfectly even if the unique constraint is missing on the database.
+    // By using Promise.all, we perform these in parallel for maximum performance.
+    const savePromises = payload.map(async (row) => {
+        // Delete existing entry if any
+        await supabase.from('befaq_results')
+            .delete()
+            .eq('exam_id', row.exam_id)
+            .eq('student_id', row.student_id)
+            .eq('subject_id', row.subject_id);
+
+        // Insert new entry
+        return supabase.from('befaq_results').insert(row);
+    });
+
+    try {
+        const results = await Promise.all(savePromises);
+        const firstError = results.find(r => r.error);
+        if (firstError) {
+            console.error("Error saving marks:", firstError.error);
+            alert("Error saving marks: " + firstError.error.message);
             setIsSaving(false);
             return;
         }
+    } catch (err: any) {
+        console.error("Error saving marks:", err);
+        alert("Error saving marks: " + (err.message || err));
+        setIsSaving(false);
+        return;
     }
     setShowSuccessModal(true);
     setIsSaving(false);
@@ -610,7 +1171,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
             {activeTab === 'exams' && view === 'list' ? (selectedClassId ? classes.find(c => c.id === selectedClassId)?.class_name : 'বেফাক পরীক্ষা') : 
              activeTab === 'exams' && selectedExam ? selectedExam.exam_name :
              activeTab === 'seat-plan' ? (lang === 'bn' ? 'আসন বিন্যাস' : 'Seat Plan') :
-             activeTab === 'analytics' ? (lang === 'bn' ? 'ফলাফল অ্যানালিটিক্স' : 'Result Analytics') : 'বেফাক পরীক্ষা'}
+             activeTab === 'analytics' ? (lang === 'bn' ? 'ফলাফল অ্যানালিটিক্স' : 'Result Analytics') : 
+             activeTab === 'exam-routine' ? (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine') : 'বেফাক পরীক্ষা'}
           </h1>
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
@@ -639,6 +1201,9 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         <button onClick={() => setActiveTab('analytics')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'analytics' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
             {lang === 'bn' ? 'অ্যানালিটিক্স' : 'Analytics'}
         </button>
+        <button onClick={() => setActiveTab('exam-routine')} className={`flex-1 min-w-[85px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${activeTab === 'exam-routine' ? 'bg-emerald-600 text-white shadow-premium' : 'text-slate-400'}`}>
+            {lang === 'bn' ? 'রুটিন' : 'Routine'}
+        </button>
       </div>
       )}
 
@@ -648,6 +1213,998 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {activeTab === 'analytics' && madrasah && (
         <SmartResultAnalytics institutionId={madrasah.id} lang={lang} madrasah={madrasah} />
+      )}
+
+
+      {activeTab === 'exam-routine' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Left Control Panel Column */}
+            <div className="space-y-6">
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2.5rem] border shadow-bubble space-y-6`}>
+                <h3 className={`text-base font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
+                  {lang === 'bn' ? 'রুটিন কনফিগারেশন' : 'Routine Configuration'}
+                </h3>
+
+                <div className="space-y-4 font-noto">
+                  {/* Selection Mode Selector */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'রুটিনের ধরণ' : 'Routine Type'}</label>
+                    <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button 
+                        onClick={() => setRoutineSelectionMode('all')}
+                        className={`py-2 text-[10px] font-black rounded-lg transition-all ${routineSelectionMode === 'all' ? 'bg-[#013c28] text-white shadow' : 'text-slate-500'}`}
+                      >
+                        {lang === 'bn' ? 'মাস্টার রুটিন' : 'Master'}
+                      </button>
+                      <button 
+                        onClick={() => setRoutineSelectionMode('class')}
+                        className={`py-2 text-[10px] font-black rounded-lg transition-all ${routineSelectionMode === 'class' ? 'bg-[#013c28] text-white shadow' : 'text-slate-500'}`}
+                      >
+                        {lang === 'bn' ? 'সিঙ্গেল ক্লাস' : 'Single Class'}
+                      </button>
+                      <button 
+                        onClick={() => setRoutineSelectionMode('saved')}
+                        className={`py-2 text-[10px] font-black rounded-lg transition-all ${routineSelectionMode === 'saved' ? 'bg-[#013c28] text-white shadow' : 'text-slate-500'}`}
+                      >
+                        {lang === 'bn' ? 'সেভ করা' : 'Saved'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {routineSelectionMode !== 'saved' && (
+                    <>
+                      {/* Theme Palette Choice */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Palette size={12} className="text-[#013c28]" />
+                          {lang === 'bn' ? 'থিম কালার' : 'Theme Color'}
+                        </label>
+                        <div className="flex gap-2">
+                          {Object.keys(routineThemes).map((color) => {
+                            const tc = routineThemes[color as keyof typeof routineThemes];
+                            return (
+                              <button
+                                key={color}
+                                onClick={() => setRoutineThemeColor(color)}
+                                className={`w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center`}
+                                style={{ 
+                                  backgroundColor: tc.primary,
+                                  borderColor: routineThemeColor === color ? '#000000' : 'transparent'
+                                }}
+                                title={color}
+                              >
+                                {routineThemeColor === color && <span className="text-white text-[10px]">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Custom Routine Title input */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'পরীক্ষার নাম (কাস্টম)' : 'Exam Name (Custom)'}</label>
+                        <input 
+                          type="text" 
+                          value={customRoutineTitle} 
+                          onChange={e => setCustomRoutineTitle(e.target.value)} 
+                          className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none focus:border-emerald-500`}
+                          placeholder={lang === 'bn' ? 'যেমনঃ বেফাক পরীক্ষা' : 'e.g. Befaq Exam'}
+                        />
+                      </div>
+
+                      {routineSelectionMode === 'class' && (
+                        <div className="space-y-4 animate-fadeIn">
+                          {/* Class Selector */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'ক্লাস নির্বাচন' : 'Select Class'}</label>
+                            <select 
+                              value={selectedRoutineClassId} 
+                              onChange={e => setSelectedRoutineClassId(e.target.value)}
+                              className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none`}
+                            >
+                              {classes.map(c => (
+                                <option key={c.id} value={c.id}>{c.class_name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Filter Single Exam if multiple matches found */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'পরীক্ষা নির্বাচন (ঐচ্ছিক)' : 'Select Exam (Optional)'}</label>
+                            <select 
+                              value={selectedRoutineExamId} 
+                              onChange={e => setSelectedRoutineExamId(e.target.value)}
+                              className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none`}
+                            >
+                              <option value="">{lang === 'bn' ? 'মাস্টার রুটিন সাবজেক্টসমূহ' : 'Master Routine Subjects'}</option>
+                              {exams.filter(e => e.marhala_id === selectedRoutineClassId).map(e => (
+                                <option key={e.id} value={e.id}>{e.exam_name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {routineSelectionMode === 'all' && (
+                        <div className="space-y-1 animate-fadeIn">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'রুটিনে অন্তর্ভুক্ত ক্লাস সমূহ' : 'Include Classes in Routine'}</label>
+                          <div className="flex flex-wrap gap-1.5 p-2 border border-slate-200 rounded-xl max-h-[140px] overflow-y-auto bg-slate-50">
+                            {exams.length > 0 ? (
+                              exams.map(e => {
+                                const cls = classes.find(c => c.id === e.marhala_id);
+                                if (!cls) return null;
+                                const isChecked = selectedRoutineAllExamIds.includes(e.id);
+                                return (
+                                  <button
+                                    key={e.id}
+                                    onClick={() => {
+                                      if (isChecked) {
+                                        setSelectedRoutineAllExamIds(prev => prev.filter(id => id !== e.id));
+                                      } else {
+                                        setSelectedRoutineAllExamIds(prev => [...prev, e.id]);
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1.5 text-[10px] font-black rounded-lg border transition-all ${isChecked ? 'bg-emerald-600 border-emerald-700 text-white' : 'bg-white border-slate-200 text-slate-600'}`}
+                                  >
+                                    {cls.class_name} ({e.exam_name})
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <p className="text-[10px] font-bold text-slate-400 p-2">{lang === 'bn' ? 'কোনো পরীক্ষা পাওয়া যায়নি' : 'No exams found'}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Principal Info */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'স্বাক্ষরকারীর নাম' : 'Signatory Name'}</label>
+                          <input 
+                            type="text" 
+                            value={routinePrincipalName} 
+                            onChange={e => setRoutinePrincipalName(e.target.value)} 
+                            className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none`}
+                            placeholder={lang === 'bn' ? 'যেমনঃ মুহতামিম' : 'e.g. Principal'}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'স্বাক্ষরকারী মোবাইল' : 'Signatory Mobile'}</label>
+                          <input 
+                            type="text" 
+                            value={routinePrincipalMobile} 
+                            onChange={e => setRoutinePrincipalMobile(e.target.value)} 
+                            className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none`}
+                            placeholder="017XXXXXXXX"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Start Date */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                           <Calendar size={12} className="text-emerald-600" />
+                           {lang === 'bn' ? 'পরীক্ষা শুরুর তারিখ' : 'Exam Start Date'}
+                        </label>
+                        <input 
+                          type="date" 
+                          value={routineStartDate} 
+                          onChange={e => setRoutineStartDate(e.target.value)} 
+                          className={`w-full py-2 px-3 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-700'} outline-none focus:border-emerald-500 transition-all`}
+                        />
+                      </div>
+
+                      {/* Morning Shift */}
+                      <div className="space-y-2 p-3 rounded-xl border border-dashed border-slate-200">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                           <Clock size={12} className="text-emerald-600" />
+                           {lang === 'bn' ? 'সকালের সময়সূচি' : 'Morning Shift Time'}
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শুরু' : 'Start'}</span>
+                            <input 
+                              type="time" 
+                              value={routineMorningStart} 
+                              onChange={e => setRoutineMorningStart(e.target.value)} 
+                              className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-emerald-500`}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শেষ' : 'End'}</span>
+                            <input 
+                              type="time" 
+                              value={routineMorningEnd} 
+                              onChange={e => setRoutineMorningEnd(e.target.value)} 
+                              className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-emerald-500`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Afternoon Shift Toggle & Time */}
+                      <div className="space-y-3 p-3 rounded-xl border border-dashed border-slate-200">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                             <Clock size={12} className="text-blue-600" />
+                             {lang === 'bn' ? '稳কালের সময়সূচি' : 'Afternoon Shift'}
+                          </label>
+                          <button 
+                            onClick={() => setShowRoutineAfternoon(!showRoutineAfternoon)}
+                            className={`w-8 h-4 rounded-full relative transition-colors ${showRoutineAfternoon ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                          >
+                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${showRoutineAfternoon ? 'left-4' : 'left-0.5'}`} />
+                          </button>
+                        </div>
+
+                        {showRoutineAfternoon && (
+                          <div className="grid grid-cols-2 gap-2 pt-1 animate-fadeIn">
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শুরু' : 'Start'}</span>
+                              <input 
+                                type="time" 
+                                value={routineAfternoonStart} 
+                                onChange={e => setRoutineAfternoonStart(e.target.value)} 
+                                className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-blue-500`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-bold text-slate-400">{lang === 'bn' ? 'শেষ' : 'End'}</span>
+                              <input 
+                                type="time" 
+                                value={routineAfternoonEnd} 
+                                onChange={e => setRoutineAfternoonEnd(e.target.value)} 
+                                className={`w-full py-1.5 px-2 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none focus:border-blue-500`}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Add Row Button */}
+                      <button
+                        onClick={handleAddRoutineDay}
+                        className="w-full py-3 px-4 rounded-xl text-xs font-black bg-[#013c28] text-white shadow-lg hover:bg-[#02261a] transition-all flex items-center justify-center gap-2"
+                      >
+                        <Plus size={16} />
+                        {lang === 'bn' ? 'আরও একটি দিন যোগ করুন' : 'Add Another Exam Day'}
+                      </button>
+
+                      {/* Special Instructions List Editor */}
+                      <div className="space-y-3 pt-2 border-t border-dashed border-slate-200/50">
+                        <div className="flex justify-between items-center font-noto">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}</label>
+                          <button 
+                            onClick={() => setRoutineInstructions(prev => [...prev, ''])}
+                            className="text-[10px] font-black text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                          >
+                            <Plus size={12} /> {lang === 'bn' ? 'যুক্ত করুন' : 'Add'}
+                          </button>
+                        </div>
+                        <div className="space-y-2 max-h-[130px] overflow-y-auto pr-1">
+                          {routineInstructions.map((inst, index) => (
+                            <div key={index} className="flex gap-2">
+                              <input 
+                                type="text" 
+                                value={inst} 
+                                onChange={e => {
+                                  const updated = [...routineInstructions];
+                                  updated[index] = e.target.value;
+                                  setRoutineInstructions(updated);
+                                }} 
+                                className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-lg border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'} outline-none`}
+                                placeholder={lang === 'bn' ? `নির্দেশনা ${index+1}` : `Instruction ${index+1}`}
+                              />
+                              <button 
+                                onClick={() => setRoutineInstructions(prev => prev.filter((_, i) => i !== index))}
+                                className="w-8 h-8 rounded-lg bg-red-50 text-red-500 border border-red-100 flex items-center justify-center hover:bg-red-100 transition-colors shrink-0"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Master Action Button */}
+                      <button 
+                        onClick={handleDownloadCustomExamRoutine}
+                        disabled={isDownloading}
+                        className="w-full h-11 bg-[#013c28] hover:bg-[#02261a] text-white rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-premium active:scale-95 transition-all disabled:opacity-50 font-noto"
+                      >
+                        {isDownloading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Download size={16} />
+                        )}
+                        {lang === 'bn' ? 'পিডিএফ ডাউনলোড করুন' : 'Download Printable PDF'}
+                      </button>
+                    </>
+                  )}
+
+                  {/* Content for Saved tab */}
+                  {routineSelectionMode === 'saved' && (
+                    <div className="space-y-4 pt-2 border-t border-dashed border-slate-200/50 animate-fadeIn">
+                      {/* Saved Routines List */}
+                      {savedRoutines.length > 0 ? (
+                        <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+                            {lang === 'bn' ? 'সেভ করা রুটিন সমূহ' : 'Saved Routines'}
+                          </h4>
+                          <div className="space-y-2">
+                            {savedRoutines.map((r, i) => (
+                              <div key={r.id || i} className="flex flex-col gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <p className="text-sm font-bold text-slate-800">{r.name}</p>
+                                    <p className="text-[10px] text-slate-500 mt-0.5">
+                                      {new Date(r.createdAt).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', {
+                                        day: '2-digit', month: 'long', year: 'numeric'
+                                      })} • {r.routineSelectionMode === 'all' ? (lang === 'bn' ? 'মাস্টার রুটিন' : 'Master Routine') : (lang === 'bn' ? 'সিঙ্গেল ক্লাস' : 'Single Class')}
+                                    </p>
+                                  </div>
+                                  <button 
+                                    onClick={() => deleteRoutineFromDB(r.id)}
+                                    className="text-red-400 hover:text-red-500 transition-colors p-1"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mt-1">
+                                  <button 
+                                    onClick={() => loadRoutineFromDB(r)}
+                                    className="h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                                  >
+                                    <Upload size={12} />
+                                    {lang === 'bn' ? 'লোড করুন' : 'Load'}
+                                  </button>
+                                  <button 
+                                    onClick={async () => {
+                                      setIsDownloading(true);
+                                      try {
+                                        const tempName = r.customRoutineTitle || r.activeExamName || (lang === 'bn' ? 'বেফাক পরীক্ষার রুটিন' : 'Befaq Exam Routine');
+                                        await generateExamRoutinePDF(
+                                          { ...madrasah, name: madrasah?.name || 'Madrasah' } as any,
+                                          tempName,
+                                          r.routineData,
+                                          lang,
+                                          {
+                                            routineSelectionMode: r.routineSelectionMode,
+                                            selectedRoutineClassId: r.selectedRoutineClassId,
+                                            classesList: classes,
+                                            routineMorningTime: r.routineMorningTime,
+                                            routineAfternoonTime: r.routineAfternoonTime,
+                                            routineInstructions: r.routineInstructions,
+                                            routinePrincipalName: routinePrincipalName,
+                                            routinePrincipalMobile: routinePrincipalMobile,
+                                            showRoutineAfternoon: r.showRoutineAfternoon,
+                                            examYear: currentYear,
+                                            themeColor: r.routineThemeColor
+                                          }
+                                        );
+                                      } finally {
+                                        setIsDownloading(false);
+                                      }
+                                    }}
+                                    className="h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                                  >
+                                    <Download size={12} />
+                                    {lang === 'bn' ? 'ডাউনলোড' : 'Download'}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-slate-50 border border-slate-200 rounded-xl">
+                          <Calendar size={24} className="mx-auto text-slate-300 mb-2" />
+                          <p className="text-xs font-bold text-slate-400">
+                            {lang === 'bn' ? 'কোনো রুটিন সেভ করা নেই' : 'No saved routines'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Live Preview Column */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2.5rem] border shadow-bubble`}>
+                <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-4 gap-3">
+                  <h3 className={`text-base font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
+                    {lang === 'bn' ? 'লাইভ প্রিন্ট প্রিভিউ' : 'Live Print Preview'}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {routineSelectionMode !== 'saved' && (
+                      <div className="flex bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                        <button 
+                          onClick={saveRoutineToDB}
+                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black transition-colors flex items-center gap-1"
+                        >
+                          <Save size={12} />
+                          {lang === 'bn' ? 'রুটিন সেভ' : 'Save Routine'}
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">
+                      <button onClick={() => setUserZoom(z => Math.max(0.5, z - 0.2))} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'জুম আউট' : 'Zoom Out'}><ZoomOut size={16} /></button>
+                      <span className="text-[11px] font-black text-slate-700 min-w-[44px] text-center">{Math.round(userZoom * 100)}%</span>
+                      <button onClick={() => setUserZoom(z => Math.min(3, z + 0.2))} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'জুম ইন' : 'Zoom In'}><ZoomIn size={16} /></button>
+                      <div className="w-[1px] h-4 bg-slate-300 mx-0.5"></div>
+                      <button onClick={() => setUserZoom(1)} className="p-1.5 text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors" title={lang === 'bn' ? 'রিসেট জুম' : 'Reset Zoom'}><Maximize size={14} /></button>
+                    </div>
+                    <div className="hidden sm:block text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-emerald-50/50 border border-emerald-100 text-emerald-800 px-2 py-1.5 rounded-lg whitespace-nowrap">
+                      {lang === 'bn' ? 'এ৪ সাইজ' : 'A4 Size'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Preview Paper Wrapper */}
+                <div 
+                  ref={previewContainerRef}
+                  className="w-full py-8 px-2 sm:px-8 bg-slate-100/50 rounded-[2.8rem] border border-slate-200/50 overflow-auto custom-scrollbar text-center"
+                  style={{ minHeight: `${794 * previewScale * userZoom + 40}px`, maxHeight: '75vh' }}
+                >
+                  <div 
+                    className="relative shrink-0 inline-flex items-start text-left mx-auto"
+                    style={{ 
+                      width: `${1123 * previewScale * userZoom}px`,
+                      height: `${794 * previewScale * userZoom}px`
+                    }}
+                  >
+                    <div 
+                      className="shadow-3xl origin-top-left transition-transform duration-200 bg-white font-noto rounded-lg absolute top-0 left-0"
+                      style={{ 
+                        transform: `scale(${previewScale * userZoom})`,
+                        width: '1123px',
+                        height: '794px'
+                      }}
+                    >
+                    
+                    {(() => {
+                      const isClassMode = routineSelectionMode === 'class';
+                      const previewNameFontSize = isClassMode 
+                        ? (madrasah?.name && madrasah.name.length > 25 ? 'text-[20px]' : 'text-[24px]') 
+                        : (madrasah?.name && madrasah.name.length > 25 ? 'text-[26px]' : 'text-[32px]');
+                      
+                      const previewLogoSize = isClassMode ? 'w-[64px] h-[64px]' : 'w-[85px] h-[85px]';
+                      const previewCalendarBoxClass = isClassMode ? 'w-[125px] h-[90px] p-2' : 'w-[160px] h-[105px] p-3';
+                      const previewCalendarIconSize = isClassMode ? 'w-5 h-5 text-xs' : 'w-7 h-7 text-sm';
+                      const previewCalendarTextClass1 = isClassMode ? 'text-[9.5px]' : 'text-[11px]';
+                      const previewCalendarTextClass2 = isClassMode ? 'text-[9.5px]' : 'text-[11px]';
+                      const previewCalendarTextClass3 = isClassMode ? 'text-[8.5px]' : 'text-[10px]';
+                      const previewContactTextSize = isClassMode ? 'text-[10.5px]' : 'text-[12px]';
+                      const previewPillBadgeClass = isClassMode ? 'px-3 py-1 text-[10px]' : 'px-5 py-1.5 text-[11px]';
+
+                      return (
+                        <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                          {/* Frame Design corners */}
+                          <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                          <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 rounded-tr-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                          <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 rounded-bl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+                          <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 rounded-br-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
+
+                          <div className="flex-1 flex flex-col justify-between">
+                            {/* Banner Block */}
+                            <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
+                              {/* Left Column: Logotype */}
+                              <div className="flex-shrink-0 flex items-center justify-center pl-4">
+                                <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
+                                  {madrasah?.logo_url ? (
+                                    <img src={madrasah.logo_url} className={`${previewLogoSize} object-contain rounded-full bg-white`} alt="Logo" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className={`${previewLogoSize} bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[10px]`}>LOGO</div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Center Column: Madrasah Title, location, etc */}
+                              <div className="flex-1 text-center px-3 leading-normal">
+                                <h1 className={`${previewNameFontSize} font-black tracking-tight leading-none mb-1 font-serif-bn italic`} style={{ color: rtTheme.primary }}>
+                                  {madrasah?.name || 'মাদরাসার নাম'}
+                                </h1>
+                                
+                                <div className={`flex items-center justify-center gap-2 ${previewContactTextSize} font-bold text-[#475569] leading-tight flex-wrap font-noto`}>
+                                  <span className="inline-flex items-center gap-0.5 italic" style={{ color: rtTheme.primary }}>
+                                    {madrasah?.address || 'ঠিকানা'}
+                                  </span>
+                                  <span className="text-slate-300">|</span>
+                                  <span className="inline-flex items-center gap-0.5" style={{ color: rtTheme.primary }}>
+                                    {lang === 'bn' ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
+                                  </span>
+                                </div>
+
+                                {/* Center pill badge matching bottom-center of image */}
+                                <div className="mt-2 inline-block">
+                                  <div className={`text-white ${previewPillBadgeClass} rounded-full shadow-sm font-black tracking-wide border`} style={{ backgroundColor: rtTheme.secondary, borderColor: `${rtTheme.primary}80` }}>
+                                    {lang === 'bn' 
+                                      ? `${activeExamName} সময়সূচি - ${currentYearBn}` 
+                                      : `${activeExamName} Schedule - ${currentYear}`}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
+                              <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-between border shadow mr-4`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
+                                <div className="flex items-center justify-center">
+                                  <div className={`${previewCalendarIconSize} rounded-full bg-white flex items-center justify-center font-black`} style={{ color: rtTheme.primary }}>
+                                    📅
+                                  </div>
+                                </div>
+                                <div className="text-center mt-1 leading-normal">
+                                  <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
+                                    {activeExamName ? activeExamName.replace(/পরীক্ষা|Exam/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
+                                  </p>
+                                  <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
+                                    পরীক্ষার সময়সূচি
+                                  </p>
+                                  <p className={`${previewCalendarTextClass3} font-semibold text-white/70 block`}>
+                                    {currentYearBn}ইং
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Main Grid Table matching image perfectly */}
+                            <div className="flex-1 mt-2 overflow-x-auto pb-4 custom-scrollbar">
+                              {routineSelectionMode === 'all' ? (
+                                /* FORMAT A: ALL CLASSES TOGETHER GRID */
+                                <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: rtTheme.primary }}>
+                                  <thead>
+                                    {/* First row of Table Header: Days/Dates */}
+                                    <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
+                                      <th className="border-r px-2 py-1.5 text-xs font-black w-24" rowSpan={2} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                        <div className="flex flex-col items-center justify-center">
+                                          <span className="text-[11px] tracking-wider leading-none mb-1 border-b pb-0.5" style={{ borderColor: `${rtTheme.primary}66` }}>{lang === 'bn' ? 'বার' : 'DAY'}</span>
+                                          <span className="text-[10px] tracking-widest opacity-80 leading-none">{lang === 'bn' ? 'তারিখ' : 'DATE'}</span>
+                                        </div>
+                                      </th>
+                                      {routineData.map((col, idx) => (
+                                        <th key={col.id || idx} className="border-r p-1 text-xs font-black min-w-[100px] relative group" colSpan={showRoutineAfternoon ? 2 : 1} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                          <button 
+                                            onClick={() => handleRemoveRoutineDay(col.id)}
+                                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
+                                            title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete Day'}
+                                          >
+                                            <X size={10} strokeWidth={4} />
+                                          </button>
+                                          <input 
+                                            type="text"
+                                            value={col.day}
+                                            onChange={(e) => {
+                                              const updated = [...routineData];
+                                              updated[idx].day = e.target.value;
+                                              setRoutineData(updated);
+                                            }}
+                                            className="bg-transparent text-[11px] font-black leading-tight text-white w-full text-center border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none"
+                                          />
+                                          <input 
+                                            type="text"
+                                            value={col.date}
+                                            onChange={(e) => {
+                                              const updated = [...routineData];
+                                              updated[idx].date = e.target.value;
+                                              setRoutineData(updated);
+                                            }}
+                                            className="bg-transparent text-[9px] font-bold mt-0.5 w-full text-center border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none"
+                                            style={{ color: rtTheme.accent }}
+                                          />
+                                        </th>
+                                      ))}
+                                    </tr>
+                                    
+                                    {/* Second row of Table Header: Morning/Afternoon Shifts */}
+                                    <tr className="h-9 border-b" style={{ backgroundColor: rtTheme.accent, borderColor: rtTheme.primary }}>
+                                      {routineData.map((_, idx) => (
+                                        <React.Fragment key={idx}>
+                                          <th className="border-r p-1 text-[9px] font-black font-noto tracking-tighter w-[55px]" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: rtTheme.accent, color: rtTheme.primary }}>
+                                            {lang === 'bn' ? 'সকাল' : 'Morning'}
+                                            <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
+                                              {routineMorningTime.split(' ')[0]}
+                                            </span>
+                                          </th>
+                                          {showRoutineAfternoon && (
+                                            <th className="border-r p-1 text-[9px] font-black font-noto tracking-tighter w-[55px]" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: rtTheme.accent, color: rtTheme.primary }}>
+                                              {lang === 'bn' ? 'বিকাল' : 'Afternoon'}
+                                              <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
+                                                {routineAfternoonTime.split(' ')[0]}
+                                              </span>
+                                            </th>
+                                          )}
+                                        </React.Fragment>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  
+                                  <tbody>
+                                    {(() => {
+                                      const defaultClassesList = [
+                                        { id: '1', class_name: lang === 'bn' ? 'প্রথম মারহালা' : 'Class 1' },
+                                        { id: '2', class_name: lang === 'bn' ? 'দ্বিতীয় মারহালা' : 'Class 2' },
+                                        { id: '3', class_name: lang === 'bn' ? 'তৃতীয় মারহালা' : 'Class 3' }
+                                      ];
+                                      const displayClassesList = classes.length > 0 
+                                        ? (routineSelectionMode === 'all' && selectedRoutineAllExamIds.length > 0 
+                                            ? classes.filter(c => selectedRoutineAllExamIds.some(examId => exams.find(e => e.id === examId)?.marhala_id === c.id)) 
+                                            : classes) 
+                                        : defaultClassesList;
+                                      
+                                      const getSubjectForClassAndDayAndShift = (cls: any, dayIdx: number, shift: 'morning' | 'afternoon') => {
+                                        const dayObj = routineData[dayIdx];
+                                        if (!dayObj) return '*****';
+                                        const slots = dayObj[shift]?.subjects || [];
+                                        const found = slots.find((s: any) => 
+                                          s.classId === cls.id || 
+                                          s.className === cls.class_name || 
+                                          (s.className && cls.class_name && (s.className.includes(cls.class_name) || cls.class_name.includes(s.className)))
+                                        );
+                                        return found ? found.subject : '*****';
+                                      };
+
+                                      return displayClassesList.map((cls, idx) => (
+                                        <tr key={cls.id} className="hover:opacity-80 transition-opacity border-b h-[2.75rem]" style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}4d`, borderColor: `${rtTheme.primary}26` }}>
+                                          <td className="border-r-2 p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
+                                            <div className="flex items-center justify-center gap-1">
+                                              <span className="text-[12px] font-black tracking-tight">{cls.class_name}</span>
+                                            </div>
+                                          </td>
+
+                                          {routineData.map((_, dayIdx) => {
+                                            const mrnSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'morning');
+                                            const aftSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'afternoon');
+
+                                            return (
+                                              <React.Fragment key={dayIdx}>
+                                                <td className="border-r p-1 align-middle text-center" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                                  <input 
+                                                    type="text"
+                                                    value={mrnSub === '*****' ? '' : mrnSub}
+                                                    onChange={(e) => {
+                                                      const updated = [...routineData];
+                                                      const subjects = updated[dayIdx].morning.subjects;
+                                                      const foundIdx = subjects.findIndex((s: any) => s.classId === cls.id);
+                                                      if (foundIdx > -1) {
+                                                        subjects[foundIdx].subject = e.target.value;
+                                                      } else {
+                                                        subjects.push({
+                                                          classId: cls.id,
+                                                          className: cls.class_name,
+                                                          subject: e.target.value
+                                                        });
+                                                      }
+                                                      setRoutineData(updated);
+                                                    }}
+                                                    placeholder="-"
+                                                    className="w-full bg-transparent text-center text-[10px] font-black border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-0.5"
+                                                    style={{ color: mrnSub === '*****' ? '#cbd5e1' : rtTheme.primary }}
+                                                  />
+                                                </td>
+                                                {showRoutineAfternoon && (
+                                                  <td className="border-r p-1 align-middle text-center" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                                    <input 
+                                                      type="text"
+                                                      value={aftSub === '*****' ? '' : aftSub}
+                                                      onChange={(e) => {
+                                                        const updated = [...routineData];
+                                                        const subjects = updated[dayIdx].afternoon.subjects;
+                                                        const foundIdx = subjects.findIndex((s: any) => s.classId === cls.id);
+                                                        if (foundIdx > -1) {
+                                                          subjects[foundIdx].subject = e.target.value;
+                                                        } else {
+                                                          subjects.push({
+                                                            classId: cls.id,
+                                                            className: cls.class_name,
+                                                            subject: e.target.value
+                                                          });
+                                                        }
+                                                        setRoutineData(updated);
+                                                      }}
+                                                      placeholder="-"
+                                                      className="w-full bg-transparent text-center text-[10px] font-black border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-0.5"
+                                                      style={{ color: aftSub === '*****' ? '#cbd5e1' : rtTheme.primary }}
+                                                    />
+                                                  </td>
+                                                )}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </tr>
+                                      ));
+                                    })()}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
+                                <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: rtTheme.primary }}>
+                                  <thead>
+                                    <tr className="text-white h-11" style={{ backgroundColor: rtTheme.primary }}>
+                                      <th className="border-r p-2 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3` }}>
+                                        {lang === 'bn' ? 'বার / তারিখ' : 'Day / Date'}
+                                      </th>
+                                      <th className="border-r p-2 text-xs font-black" style={{ borderColor: `${rtTheme.primary}b3` }}>
+                                        {lang === 'bn' ? `সকাল (${routineMorningTime.split(' - ')[0]})` : `Morning (${routineMorningTime.split(' - ')[0]})`}
+                                      </th>
+                                      {showRoutineAfternoon && (
+                                        <th className="p-2 text-xs font-black w-48">
+                                          {lang === 'bn' ? `বিকাল (${routineAfternoonTime.split(' - ')[0]})` : `Afternoon (${routineAfternoonTime.split(' - ')[0]})`}
+                                        </th>
+                                      )}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(() => {
+                                      const activeClassObj = classes.find(c => c.id === selectedRoutineClassId) || classes[0];
+                                      const getSubjectForClassAndDayAndShift = (cls: any, dayIdx: number, shift: 'morning' | 'afternoon') => {
+                                        const dayObj = routineData[dayIdx];
+                                        if (!dayObj) return '*****';
+                                        const slots = dayObj[shift]?.subjects || [];
+                                        const found = slots.find((s: any) => 
+                                          s.classId === cls?.id || 
+                                          s.className === cls?.class_name || 
+                                          (s.className && cls?.class_name && (s.className.includes(cls.class_name) || cls.class_name.includes(s.className)))
+                                        );
+                                        return found ? found.subject : '*****';
+                                      };
+
+                                      return routineData.map((row, idx) => (
+                                        <tr key={row.id || idx} className="border-b h-[3.25rem] relative group" style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
+                                          <td className="border-r p-2 text-center relative group" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: `${rtTheme.light}4d` }}>
+                                            <button 
+                                              onClick={() => handleRemoveRoutineDay(row.id)}
+                                              className="absolute -left-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
+                                              title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete Row'}
+                                            >
+                                              <Trash2 size={12} />
+                                            </button>
+                                            <div className="relative group/date border rounded-lg p-1 transition-colors" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                              <input 
+                                                type="date"
+                                                value={row.isoDate || ''}
+                                                onChange={(e) => {
+                                                  const selectedDate = e.target.value;
+                                                  if (!selectedDate) return;
+                                                  
+                                                  const d = new Date(selectedDate);
+                                                  const formattedDate = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                                  const formattedDay = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+                                                  
+                                                  const updated = [...routineData];
+                                                  updated[idx].isoDate = selectedDate;
+                                                  updated[idx].date = formattedDate;
+                                                  updated[idx].day = formattedDay;
+                                                  setRoutineData(updated);
+                                                }}
+                                                className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
+                                              />
+                                              <div className="flex flex-col items-center">
+                                                <p className="text-[10px] font-black leading-none mb-0.5" style={{ color: rtTheme.primary }}>
+                                                  {row.day}
+                                                </p>
+                                                <p className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
+                                                  <Calendar size={8} />
+                                                  {row.date}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </td>
+                                          
+                                          {/* Morning subject for selected class */}
+                                          <td className="border-r p-2 align-middle" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                            <input 
+                                              type="text"
+                                              value={getSubjectForClassAndDayAndShift(activeClassObj, idx, 'morning')}
+                                              onChange={(e) => {
+                                                const updated = [...routineData];
+                                                const subjects = updated[idx].morning.subjects;
+                                                const foundIdx = subjects.findIndex((s: any) => s.classId === activeClassObj?.id);
+                                                if (foundIdx > -1) {
+                                                  subjects[foundIdx].subject = e.target.value;
+                                                } else {
+                                                  subjects.push({
+                                                    classId: activeClassObj?.id || '',
+                                                    className: activeClassObj?.class_name || '',
+                                                    subject: e.target.value
+                                                  });
+                                                }
+                                                setRoutineData(updated);
+                                              }}
+                                              className="bg-transparent text-center font-black text-xs w-full border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-1"
+                                              style={{ color: rtTheme.primary }}
+                                              placeholder={lang === 'bn' ? 'বিষয়ের নাম লেখুন' : 'Enter Topic'}
+                                            />
+                                          </td>
+
+                                          {/* Afternoon items */}
+                                          {showRoutineAfternoon && (
+                                            <td className="p-2 align-middle">
+                                              <input 
+                                                type="text"
+                                                value={getSubjectForClassAndDayAndShift(activeClassObj, idx, 'afternoon')}
+                                                onChange={(e) => {
+                                                  const updated = [...routineData];
+                                                  const subjects = updated[idx].afternoon.subjects;
+                                                  const foundIdx = subjects.findIndex((s: any) => s.classId === activeClassObj?.id);
+                                                  if (foundIdx > -1) {
+                                                    subjects[foundIdx].subject = e.target.value;
+                                                  } else {
+                                                    subjects.push({
+                                                      classId: activeClassObj?.id || '',
+                                                      className: activeClassObj?.class_name || '',
+                                                      subject: e.target.value
+                                                    });
+                                                  }
+                                                  setRoutineData(updated);
+                                                }}
+                                                className="bg-transparent text-center font-black text-xs w-full border-none focus:ring-1 focus:ring-emerald-400 rounded outline-none p-1"
+                                                style={{ color: rtTheme.primary }}
+                                                placeholder={lang === 'bn' ? 'বিষয়ের নাম লেখুন' : 'Enter Topic'}
+                                              />
+                                            </td>
+                                          )}
+                                        </tr>
+                                      ));
+                                    })()}
+                                  </tbody>
+                                </table>
+                              )}
+
+                              {/* Natural Watermark stamp */}
+                              <div className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none -rotate-12 select-none">
+                                {madrasah?.logo_url ? (
+                                  <img src={madrasah.logo_url} className="w-[330px] h-[330px] object-contain" alt="" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="text-9xl font-black" style={{ color: rtTheme.primary }}>{madrasah?.name?.slice(0, 1) || 'ম'}</div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Footer Block matching image exactly */}
+                            <div className="mt-2 flex justify-between items-end pt-3 border-t" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                              {/* Left Column: Special Instructions list */}
+                              <div className="max-w-[430px] text-left leading-relaxed">
+                                <div className="text-white px-3 py-1 rounded-lg inline-flex items-center gap-1.5 text-[11px] font-black mb-1.5 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary }}>
+                                  <span>📖</span>
+                                  {lang === 'bn' ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
+                                </div>
+                                <ul className="space-y-0.5 max-h-[105px] overflow-hidden pr-2">
+                                  {(() => {
+                                    const previewInstructionsToShow = routineInstructions.length > 0 ? routineInstructions.filter(Boolean) : [
+                                      lang === 'bn' ? 'পরীক্ষার ফি, রশিদ যোগ ও বকেয়ার রশিদ সংগ্রহে অনুরোধ রইল।' : 'Required exam fees and pending dues must be paid.',
+                                      lang === 'bn' ? 'প্রবেশ পত্র সংগ্রহ করতে হবে।' : 'Collect the exam admit card on time.',
+                                      lang === 'bn' ? 'পরীক্ষার শুরু ১৫ মিনিট পূর্বে উপস্থিত থাকতে হবে।' : 'Be present in the exam hall 15 minutes before.',
+                                      lang === 'bn' ? 'পরীক্ষার সময় কোনো প্রকার মোবাইল ব্যবহার সম্পূর্ণ নিষিদ্ধ থাকবে।' : 'Smartphones and electronical devices are strictly prohibited.',
+                                      lang === 'bn' ? 'পরীক্ষায় নকল করা সম্পূর্ণ নিষিদ্ধ।' : 'Cheating is strictly prohibited.'
+                                    ];
+
+                                    return previewInstructionsToShow.map((inst, i) => (
+                                      <li key={i} className="flex gap-1.5 text-[10px] font-bold text-slate-600 leading-normal">
+                                        <span className="font-extrabold" style={{ color: rtTheme.primary }}>{i + 1} ।</span>
+                                        <span>{inst}</span>
+                                      </li>
+                                    ));
+                                  })()}
+                                </ul>
+                              </div>
+
+                              {/* Right Column: Sign Box matching bottom-right of image */}
+                              <div className="text-center min-w-[200px]">
+                                <div className="border rounded-xl p-4 relative" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: `${rtTheme.light}26` }}>
+                                  <p className="text-[11px] font-black mb-6" style={{ color: `${rtTheme.primary}e6` }}>{lang === 'bn' ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
+                                  <div className="h-px bg-slate-200 w-full mb-1"></div>
+                                  <p className="text-[11px] font-black" style={{ color: rtTheme.primary }}>
+                                    {routinePrincipalName || (lang === 'bn' ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exam')}
+                                  </p>
+                                  <p className="text-[9px] font-bold text-slate-400 mt-0.5">{madrasah?.name}</p>
+                                  {routinePrincipalMobile && (
+                                    <p className="text-[9px] font-black mt-0.5 inline-flex items-center gap-0.5" style={{ color: `${rtTheme.primary}cc` }}>
+                                      📞 {routinePrincipalMobile}
+                                    </p>
+                                  )}
+                                  <div className="absolute -top-1 -right-1 w-3.5 h-3.5 border-t border-r rounded-tr-md" style={{ borderColor: rtTheme.primary }}></div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Deenora Portal bottom tagline */}
+                            <div className="text-center mt-3 pt-1 text-[8px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
+                              {lang === 'bn' ? 'দ্বীনোরা শিক্ষাবর্ষ ২০২৬ • তৈরি করতে ভিজিট করুন deenora.com' : 'DEENORA PORTAL • POWERED BY DEENORA'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Routine Success/Confirm Modal Popup Block */}
+          <AnimatePresence>
+            {showRoutineSuccessModal && (
+              <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowRoutineSuccessModal(false)}
+                  className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
+                />
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                  className={`relative w-full max-w-sm rounded-[3rem] shadow-2xl border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}
+                >
+                  <div className="p-8 text-center">
+                    <div className="relative inline-block mb-6">
+                      <motion.div 
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
+                        className={`w-24 h-24 ${routineModalMode === 'success' ? 'bg-emerald-500 shadow-emerald-500/30' : 'bg-amber-500 shadow-amber-500/30'} rounded-[2rem] flex items-center justify-center shadow-lg relative z-10`}
+                      >
+                        {routineModalMode === 'success' ? (
+                          <CheckCircle2 size={48} className="text-white" />
+                        ) : (
+                          <AlertCircle size={48} className="text-white" />
+                        )}
+                      </motion.div>
+                      <motion.div 
+                        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0, 0.3] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className={`absolute inset-0 ${routineModalMode === 'success' ? 'bg-emerald-500' : 'bg-amber-500'} rounded-[2rem] blur-2xl -z-10`}
+                      />
+                    </div>
+                    
+                    <h3 className={`text-2xl font-black mb-2 font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      {routineSuccessTitle || (lang === 'bn' ? 'সফল হয়েছে!' : 'Success!')}
+                    </h3>
+                    <p className={`text-sm font-bold mb-8 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {routineSuccessMessage}
+                    </p>
+                    
+                    {routineModalMode === 'confirm' ? (
+                      <div className="flex gap-3 w-full">
+                        <button 
+                          onClick={() => setShowRoutineSuccessModal(false)}
+                          className={`flex-1 py-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'} font-black rounded-2xl transition-all`}
+                        >
+                          {routineCancelText || (lang === 'bn' ? 'বাতিল' : 'Cancel')}
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setShowRoutineSuccessModal(false);
+                            if (routineOnConfirm) {
+                              routineOnConfirm();
+                            }
+                          }}
+                          className="flex-1 py-4 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-2xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                        >
+                          {routineConfirmText || (lang === 'bn' ? 'নিশ্চিত' : 'Confirm')}
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setShowRoutineSuccessModal(false)}
+                        className="w-full py-5 bg-emerald-500 shadow-emerald-500/20 text-white font-black rounded-2xl shadow-lg active:scale-95 transition-all text-lg"
+                      >
+                        {lang === 'bn' ? 'ঠিক আছে' : 'Awesome'}
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
       )}
 
       {activeTab === 'seat-plan' && (
