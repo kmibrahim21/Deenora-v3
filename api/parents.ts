@@ -121,7 +121,7 @@ export default async function handler(req, res) {
         .eq('student_id', studentId);
 
       // 3. Exam Results
-      const engine = modules.result_engine || 'school';
+      const engine = config.result_engine || 'school';
       let resultsData: any[] = [];
       let allSubjects: any[] = [];
       const allClassStudentsMarks = new Map();
