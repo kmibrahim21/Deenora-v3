@@ -1,0 +1,17 @@
+        // Map reminders to Student-like objects for SMSService
+        const pseudoStudents = reminders.map(r => ({
+          id: r.student_id,
+          student_name: r.student_name,
+          guardian_phone: r.guardian_phone,
+          institution_id: institutionId
+        })) as any[];
+
+        let body = selectedTemplate 
+          ? selectedTemplate.body 
+          : `আস-সালামু আলাইকুম, {student_name} এর {month} মাসের বকেয়া ফি ৳{due_amount} দ্রুত পরিশোধ করার জন্য অনুরোধ করা হলো।`;
+
+        // If using old style templates, convert them
+        if (selectedTemplate) {
+          body = body.replace(/\[month\]/g, '{month}')
+                     .replace(/\[amount\]/g, '{due_amount}')
+                     .replace(/\[name\]/g, '{student_name}');

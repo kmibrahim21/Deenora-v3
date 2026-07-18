@@ -658,7 +658,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             madrasah={madrasah!}
             lang={lang}
             classes={classes}
-            onBack={() => setSelectedStudentForDetail(null)}
+            onBack={() => {
+              setSelectedStudentForDetail(null);
+              handleTriggerRefresh();
+            }}
           />
         )}
       </div>

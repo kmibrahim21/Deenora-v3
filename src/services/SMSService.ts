@@ -87,7 +87,8 @@ export const SMSService = {
       const shortcodeData = await ShortcodeService.fetchShortcodeData(institutionId, students.map(s => s.id));
       
       personalizedMessages = students.map(s => {
-        const data = shortcodeData.find(d => d.id === s.id) || { student_name: s.student_name, guardian_phone: s.guardian_phone };
+        const fetchedData = shortcodeData.find(d => d.id === s.id) || { student_name: s.student_name, guardian_phone: s.guardian_phone };
+        const data = { ...fetchedData, ...s }; // Override fetched data with properties explicitly passed in `s`
         const text = ShortcodeService.replaceShortcodes(message, data);
         const { parts } = getSmsLengthInfo(text);
         return { studentId: s.id, phone: s.guardian_phone, text, parts };

@@ -578,25 +578,32 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const sendBulkReminder = async (type: 'native' | 'system') => {
     if (reminders.length === 0) return;
     
+    if (!selectedTemplate) {
+        alert(lang === 'bn' ? 'দয়া করে একটি এসএমএস টেমপ্লেট নির্বাচন করুন' : 'Please select an SMS template');
+        return;
+    }
+
+    const monthNamesBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+    const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const [yearStr, monthStr] = selectedMonth.split('-');
+    const monthIdx = parseInt(monthStr, 10) - 1;
+    const formattedMonth = lang === 'bn' ? `${monthNamesBn[monthIdx]} ${yearStr}` : `${monthNamesEn[monthIdx]} ${yearStr}`;
+
     if (type === 'native') {
       const phones = reminders.map(r => r.guardian_phone).join(',');
-      let body = selectedTemplate 
-        ? selectedTemplate.body 
-        : `আস-সালামু আলাইকুম, {student_name} এর {month} মাসের বকেয়া ফি ৳{due_amount} দ্রুত পরিশোধ করার জন্য অনুরোধ করা হলো।`;
+      let body = selectedTemplate.body;
       
       // Simple variable replacement if using template
-      if (selectedTemplate) {
-        body = body.replace(/\[month\]/g, '{month}')
-                   .replace(/\[amount\]/g, '{due_amount}')
-                   .replace(/\[name\]/g, '{student_name}');
-      }
+      body = body.replace(/\[month\]/g, '{month}')
+                 .replace(/\[amount\]/g, '{due_amount}')
+                 .replace(/\[name\]/g, '{student_name}');
 
       // For native SMS, we can only send one message to all, so we use the first student's data as a preview
       // But actually native SMS doesn't support shortcodes per recipient.
       // So we'll just use the first student's data for the native SMS body.
       const firstData = {
         student_name: reminders[0].student_name,
-        month: selectedMonth,
+        month: formattedMonth,
         due_amount: Math.max(0, Number(reminders[0].balance_due))
       };
       const finalBody = ShortcodeService.replaceShortcodes(body, firstData);
@@ -612,19 +619,17 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
           id: r.student_id,
           student_name: r.student_name,
           guardian_phone: r.guardian_phone,
-          institution_id: institutionId
+          institution_id: institutionId,
+          month: formattedMonth,
+          due_amount: Math.max(0, Number(r.balance_due))
         })) as any[];
 
-        let body = selectedTemplate 
-          ? selectedTemplate.body 
-          : `আস-সালামু আলাইকুম, {student_name} এর {month} মাসের বকেয়া ফি ৳{due_amount} দ্রুত পরিশোধ করার জন্য অনুরোধ করা হলো।`;
-
+        let body = selectedTemplate.body;
+        
         // If using old style templates, convert them
-        if (selectedTemplate) {
-          body = body.replace(/\[month\]/g, '{month}')
-                     .replace(/\[amount\]/g, '{due_amount}')
-                     .replace(/\[name\]/g, '{student_name}');
-        }
+        body = body.replace(/\[month\]/g, '{month}')
+                   .replace(/\[amount\]/g, '{due_amount}')
+                   .replace(/\[name\]/g, '{student_name}');
 
         await smsApi.sendBulk(institutionId, pseudoStudents, body);
         setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'সফল হয়েছে' : 'Success', message: lang === 'bn' ? 'রিমাইন্ডার সফলভাবে পাঠানো হয়েছে' : 'Reminders sent successfully' });

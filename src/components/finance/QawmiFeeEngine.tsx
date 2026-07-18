@@ -309,12 +309,13 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             const balanceDue = Math.max(0, previousPayable + totalPayable - totalPaidOverall);
             
             let status = 'unpaid';
-            const paidForCurrent = totalPaidOverall - previousPayable;
-            
-            if (totalPayable === 0 && previousPayable === 0) status = 'no_fee';
-            else if (balanceDue <= 0) status = 'paid';
-            else if (paidForCurrent > 0) status = 'partial';
-            else status = 'unpaid';
+            if (totalPayable > 0) {
+                if (totalPaid >= totalPayable) status = 'paid';
+                else if (totalPaid > 0) status = 'partial';
+                else status = 'unpaid';
+            } else {
+                status = totalPaid > 0 ? 'paid' : 'no_fee';
+            }
 
             return {
                 ...student,
@@ -1106,9 +1107,17 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                 totalCash = recordsForMonth.reduce((sum, r) => sum + (Number(r.amount_paid) || 0), 0);
                                 totalDiscount = recordsForMonth.reduce((sum, r) => sum + (Number(r.discount) || 0), 0);
                                 totalProcessed = totalCash + totalDiscount;
-                                if (totalProcessed >= totalPayable && totalPayable > 0) status = 'paid';
-                                else if (totalProcessed > 0) status = 'partial';
-                                else status = 'unpaid';
+                                if (totalPayable > 0) {
+                                    if (totalProcessed >= totalPayable) status = 'paid';
+                                    else if (totalProcessed > 0) status = 'partial';
+                                    else status = 'unpaid';
+                                } else {
+                                    status = totalProcessed > 0 ? 'paid' : 'no_fee';
+                                }
+                            } else if (totalPayable === 0) {
+                                status = 'no_fee';
+                            } else {
+                                status = 'unpaid';
                             }
 
                             return (
@@ -1116,8 +1125,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                     <span className={`text-sm font-black ${status === 'paid' ? (madrasah.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700') : status === 'partial' ? (madrasah.theme === 'dark' ? 'text-orange-400' : 'text-orange-700') : 'text-slate-500'}`}>
                                         {monthName}
                                     </span>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${status === 'paid' ? (madrasah.theme === 'dark' ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : status === 'partial' ? (madrasah.theme === 'dark' ? 'bg-orange-500/30 text-orange-300' : 'bg-orange-200 text-orange-800') : (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600')}`}>
-                                        {status === 'paid' ? 'পরিশোধিত' : status === 'partial' ? 'পরিশোধিত' : 'বকেয়া'}
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${status === 'paid' ? (madrasah.theme === 'dark' ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : status === 'partial' ? (madrasah.theme === 'dark' ? 'bg-orange-500/30 text-orange-300' : 'bg-orange-200 text-orange-800') : status === 'no_fee' ? (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500') : (madrasah.theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600')}`}>
+                                        {status === 'paid' ? 'পরিশোধিত' : status === 'partial' ? 'পরিশোধিত' : status === 'no_fee' ? 'ফি নেই' : 'বকেয়া'}
                                     </span>
                                     {totalProcessed > 0 && (
                                         <div className="flex flex-col items-center mt-1">
