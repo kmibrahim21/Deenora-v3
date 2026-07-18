@@ -121,10 +121,87 @@ export default async function handler(req, res) {
         .eq('student_id', studentId);
 
       // 3. Exam Results
-      const { data: resultsData } = await supabase
-        .from('exam_marks')
-        .select('*, exams(exam_name, exam_date, is_published), exam_subjects(subject_name, full_marks, pass_marks)')
-        .eq('student_id', studentId);
+      const engine = modules.result_engine || 'school';
+      let resultsData: any[] = [];
+      let allSubjects: any[] = [];
+      const allClassStudentsMarks = new Map();
+      let isBefaq = engine === 'befaq';
+      
+      if (isBefaq) {
+        const { data: befaqData } = await supabase
+          .from('befaq_results')
+          .select('*, befaq_exams(exam_name, exam_year, created_at, is_published), befaq_subjects(subject_name, total_marks, passing_marks)')
+          .eq('student_id', studentId);
+        resultsData = befaqData || [];
+        
+        const examIds = Array.from(new Set(resultsData.map(r => r.exam_id).filter(Boolean)));
+        if (examIds.length > 0) {
+          const { data: subjects } = await supabase
+            .from('befaq_subjects')
+            .select('*')
+            .in('exam_id', examIds);
+          allSubjects = subjects || [];
+          
+          const { data: studentsInClass } = await supabase
+            .from('students')
+            .select('id')
+            .eq('class_id', student.class_id);
+          const classStudentIds = studentsInClass?.map(s => s.id) || [];
+          
+          if (classStudentIds.length > 0) {
+            const { data: classMarks } = await supabase
+              .from('befaq_results')
+              .select('student_id, exam_id, marks_obtained')
+              .in('exam_id', examIds)
+              .in('student_id', classStudentIds);
+            
+            classMarks?.forEach(m => {
+              if (!allClassStudentsMarks.has(m.exam_id)) {
+                allClassStudentsMarks.set(m.exam_id, new Map());
+              }
+              const studentSumMap = allClassStudentsMarks.get(m.exam_id);
+              studentSumMap.set(m.student_id, (studentSumMap.get(m.student_id) || 0) + Number(m.marks_obtained || 0));
+            });
+          }
+        }
+      } else {
+        const { data: schoolData } = await supabase
+          .from('exam_marks')
+          .select('*, exams(exam_name, exam_date, is_published), exam_subjects(subject_name, full_marks, pass_marks)')
+          .eq('student_id', studentId);
+        resultsData = schoolData || [];
+        
+        const examIds = Array.from(new Set(resultsData.map(r => r.exam_id).filter(Boolean)));
+        if (examIds.length > 0) {
+          const { data: subjects } = await supabase
+            .from('exam_subjects')
+            .select('*')
+            .in('exam_id', examIds);
+          allSubjects = subjects || [];
+          
+          const { data: studentsInClass } = await supabase
+            .from('students')
+            .select('id')
+            .eq('class_id', student.class_id);
+          const classStudentIds = studentsInClass?.map(s => s.id) || [];
+          
+          if (classStudentIds.length > 0) {
+            const { data: classMarks } = await supabase
+              .from('exam_marks')
+              .select('student_id, exam_id, marks_obtained')
+              .in('exam_id', examIds)
+              .in('student_id', classStudentIds);
+            
+            classMarks?.forEach(m => {
+              if (!allClassStudentsMarks.has(m.exam_id)) {
+                allClassStudentsMarks.set(m.exam_id, new Map());
+              }
+              const studentSumMap = allClassStudentsMarks.get(m.exam_id);
+              studentSumMap.set(m.student_id, (studentSumMap.get(m.student_id) || 0) + Number(m.marks_obtained || 0));
+            });
+          }
+        }
+      }
 
       // 4. Notices (Messages)
       const { data: rawNotices } = await supabase
@@ -176,50 +253,16 @@ export default async function handler(req, res) {
 
       // Also get all subjects for these exams to ensure we show everything even if marks are missing
       const examIds = Array.from(new Set((resultsData || []).map(r => r.exam_id).filter(Boolean)));
-      let allSubjects: any[] = [];
-      if (examIds.length > 0) {
-        const { data: subjects } = await supabase
-          .from('exam_subjects')
-          .select('*')
-          .in('exam_id', examIds);
-        allSubjects = subjects || [];
-      }
-
-      // Fetch all marks for the class to calculate ranks
-      const allClassStudentsMarks = new Map();
-      if (examIds.length > 0) {
-        const { data: studentsInClass } = await supabase
-          .from('students')
-          .select('id')
-          .eq('class_id', student.class_id);
-        
-        const classStudentIds = studentsInClass?.map(s => s.id) || [];
-        
-        if (classStudentIds.length > 0) {
-          const { data: classMarks } = await supabase
-            .from('exam_marks')
-            .select('student_id, exam_id, marks_obtained')
-            .in('exam_id', examIds)
-            .in('student_id', classStudentIds);
-          
-          classMarks?.forEach(m => {
-            if (!allClassStudentsMarks.has(m.exam_id)) {
-              allClassStudentsMarks.set(m.exam_id, new Map());
-            }
-            const studentSumMap = allClassStudentsMarks.get(m.exam_id);
-            studentSumMap.set(m.student_id, (studentSumMap.get(m.student_id) || 0) + Number(m.marks_obtained || 0));
-          });
-        }
-      }
 
       resultsData?.forEach(r => {
-        if (r.exams && r.exams.is_published !== false) {
+        const examRecord = isBefaq ? r.befaq_exams : r.exams;
+        if (examRecord && examRecord.is_published !== false) {
           const examId = r.exam_id;
           if (!examMap.has(examId)) {
             examMap.set(examId, {
               id: examId,
-              name: r.exams.exam_name,
-              date: r.exams.exam_date,
+              name: examRecord.exam_name,
+              date: isBefaq ? (examRecord.created_at || new Date().toISOString()) : examRecord.exam_date,
               marks: [],
               gpa: '0.00',
               gpa_grade: 'F',
@@ -228,10 +271,11 @@ export default async function handler(req, res) {
             });
           }
           
-          const subInfo = Array.isArray(r.exam_subjects) ? r.exam_subjects[0] : r.exam_subjects;
+          const subjectRecord = isBefaq ? r.befaq_subjects : r.exam_subjects;
+          const subInfo = Array.isArray(subjectRecord) ? subjectRecord[0] : subjectRecord;
           const obtained = Number(r.marks_obtained) || 0;
-          const full = subInfo?.full_marks || 100;
-          const pass = subInfo?.pass_marks || 33;
+          const full = isBefaq ? (subInfo?.total_marks || 100) : (subInfo?.full_marks || 100);
+          const pass = isBefaq ? (subInfo?.passing_marks || 33) : (subInfo?.pass_marks || 33);
           const { gpa, grade } = getSubjectGpaAndGrade(obtained, full, pass);
 
           examMap.get(examId).marks.push({
@@ -256,8 +300,8 @@ export default async function handler(req, res) {
               subject_id: s.id,
               subject: s.subject_name || 'অজানা বিষয়',
               obtained: 0,
-              full: s.full_marks || 100,
-              pass: s.pass_marks || 33,
+              full: isBefaq ? (s.total_marks || 100) : (s.full_marks || 100),
+              pass: isBefaq ? (s.passing_marks || 33) : (s.pass_marks || 33),
               gpa: 0,
               grade: 'F'
             });
