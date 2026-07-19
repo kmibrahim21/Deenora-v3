@@ -2018,6 +2018,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                   )}
                                 </div>
 
+                                {parsed.exam && (
+                                  <div className="flex items-center gap-2 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-100 mb-2 w-fit">
+                                    <GraduationCap size={14} className="text-purple-600" />
+                                    <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider font-noto">{parsed.exam}</span>
+                                  </div>
+                                )}
                                 {parsed.subjects && (
                                   <SyllabusAccordion subjects={parsed.subjects} />
                                 )}

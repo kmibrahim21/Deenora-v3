@@ -53,7 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         seat_plan: configObj.modules?.seat_plan ?? true,
         accounting: configObj.modules?.accounting ?? true,
         library: configObj.modules?.library ?? false,
-        academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
+        academic_year_promotion: configObj.modules?.academic_year_promotion ?? false,
         voice_broadcast: configObj.modules?.voice_broadcast ?? true,
         sms: configObj.modules?.sms ?? true,
         messages: configObj.modules?.messages ?? true,
@@ -87,7 +87,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
       'classes': true,
       'students': true,
       'settings': true,
-      'academic-year': modules.modules.academic_year_promotion,
+      'academic-year': true,
       'class-routine': modules.modules.class_routine,
       'certificates': modules.modules.certificates
     };

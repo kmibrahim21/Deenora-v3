@@ -58,6 +58,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const isDark = madrasah?.theme === 'dark';
   const isOnline = useOfflineStatus();
   const feeEngine = madrasah?.config_json?.fee_engine || 'school';
+  const canDeleteAccounting = (madrasah?.config_json as any)?.features?.delete_accounting === true;
 
   const [type, setType] = useState<'income' | 'expense'>('income');
   const [desc, setDesc] = useState('');
@@ -713,7 +714,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 </div>
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2">
-                  {selectedLedgerIds.length > 0 && (
+                  {canDeleteAccounting && selectedLedgerIds.length > 0 && (
                     <button
                       onClick={() => setDeleteConfirm({show: true, ids: selectedLedgerIds})}
                       className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-red-500 text-white shadow-sm hover:bg-red-600 flex items-center gap-1 active:scale-95"
@@ -721,7 +722,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       <span>{selectedLedgerIds.length} টি মুছুন</span>
                     </button>
                   )}
-                  {ledger.length > 0 && (
+                  {canDeleteAccounting && ledger.length > 0 && (
                     <button
                       onClick={() => setDeleteConfirm({show: true, ids: ledger.map(l => l.id)})}
                       className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
@@ -1091,12 +1092,14 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                         </p>
                       </div>
                       
-                      <button 
-                         onClick={() => setDeleteConfirm({show: true, ids: [entry.id]})}
-                        className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center shadow-sm active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-100'}`}
-                      >
-                        মুছুন
-                      </button>
+                      {canDeleteAccounting && (
+                        <button 
+                           onClick={() => setDeleteConfirm({show: true, ids: [entry.id]})}
+                          className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center shadow-sm active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-100'}`}
+                        >
+                          মুছুন
+                        </button>
+                      )}
                     </div>
                   </div>
                 )

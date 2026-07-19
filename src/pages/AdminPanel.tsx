@@ -166,7 +166,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     exam: true,
     accounting: true,
     library: false,
-    academic_year_promotion: true,
+    academic_year_promotion: false,
     voice_broadcast: false,
     sms: true,
     messages: false,
@@ -174,7 +174,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     certificates: false,
     student_photo: false,
     id_cards: false,
-    parent_portal: false
+    parent_portal: false,
+    backup_restore: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -1327,6 +1328,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     delete userModules.admit_card;
     delete userModules.seat_plan;
     delete userModules.exam_routine;
+    delete userModules.sensitive;
 
     const isExamActive = 
       userConfig?.modules?.exam ?? 
@@ -1341,7 +1343,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       exam: isExamActive,
       accounting: true,
       library: false,
-      academic_year_promotion: true,
+      academic_year_promotion: false,
       voice_broadcast: true,
       sms: true,
       messages: false,
@@ -1350,6 +1352,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       id_cards: false,
       student_photo: false,
       parent_portal: false,
+      backup_restore: false,
       ...userModules
     });
 
@@ -1428,6 +1431,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       }
 
       const syncedModules = { ...editModules };
+      delete syncedModules.sensitive;
       if (syncedModules.exam !== undefined) {
         syncedModules.results = syncedModules.exam;
         syncedModules.admit_card = syncedModules.exam;
@@ -3325,7 +3329,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  </h4>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                {Object.entries(editModules).map(([key, value]) => (
+                                {Object.entries(editModules)
+                                  .filter(([key]) => key !== 'sensitive')
+                                  .map(([key, value]) => (
                                   <div key={key} className={`flex items-center justify-between p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100'}`}>
                                     <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{key.replace(/_/g, ' ')}</span>
                                     <button 

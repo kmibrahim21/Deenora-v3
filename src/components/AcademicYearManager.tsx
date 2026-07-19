@@ -40,6 +40,18 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   lang = "en",
 }) => {
   const isDark = institution?.theme === "dark";
+  const isPromotionActive = React.useMemo(() => {
+    let configObj: any = {};
+    if (institution?.config_json) {
+      if (typeof institution.config_json === 'string') {
+        try { configObj = JSON.parse(institution.config_json); } catch (e) { configObj = {}; }
+      } else {
+        configObj = institution.config_json;
+      }
+    }
+    return configObj.modules?.academic_year_promotion ?? false;
+  }, [institution]);
+
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"years" | "promotion" | "reports">(
     "years",
@@ -190,6 +202,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleCreateYear = async () => {
+    if (!isPromotionActive) return;
     if (!newYearName || !startDate || !endDate) return;
     setIsCreatingYear(true);
     try {
@@ -248,6 +261,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleSetActive = async (yearId: string) => {
+    if (!isPromotionActive) return;
     setConfirmModal({
       show: true,
       type: "active",
@@ -322,6 +336,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleArchive = async (yearId: string) => {
+    if (!isPromotionActive) return;
     setConfirmModal({
       show: true,
       type: "archive",
@@ -371,6 +386,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleDeleteYear = async (yearId: string) => {
+    if (!isPromotionActive) return;
     setConfirmModal({
       show: true,
       type: "delete",
@@ -416,6 +432,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleGeneratePreview = async () => {
+    if (!isPromotionActive) return;
     setLoading(true);
     try {
       const promotions: any[] = [];
@@ -507,6 +524,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   const handleExecutePromotion = async () => {
+    if (!isPromotionActive) return;
     setConfirmModal({
       show: true,
       type: "promotion",
@@ -686,6 +704,22 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar w-full max-w-7xl mx-auto">
+        {!isPromotionActive && (
+          <div className={`mb-6 p-5 rounded-[2rem] border flex flex-col sm:flex-row sm:items-center gap-4 ${isDark ? "bg-amber-950/20 border-amber-900/40 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+            <AlertTriangle className="shrink-0" size={24} />
+            <div className="space-y-1">
+              <h4 className="font-black text-xs uppercase tracking-widest">
+                {lang === "bn" ? "রিড-অনলি মোড সক্রিয়" : "Read-Only Mode Active"}
+              </h4>
+              <p className="text-xs font-semibold leading-relaxed">
+                {lang === "bn"
+                  ? "সুপার এডমিন প্যানেল থেকে এই মডিউলটি নিষ্ক্রিয় করা হয়েছে। আপনি তথ্য দেখতে পারবেন কিন্তু কোন পরিবর্তন বা প্রমোশন করতে পারবেন না।"
+                  : "This module has been deactivated from the Super Admin panel. You can view the information, but cannot make any changes or execute promotions."}
+              </p>
+            </div>
+          </div>
+        )}
+
         {activeTab === "years" && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -695,8 +729,12 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                 {lang === "bn" ? "সকল শিক্ষাবর্ষ" : "All Academic Years"}
               </h3>
               <button
-                onClick={() => setShowNewYearModal(true)}
-                className="px-4 py-2 bg-[#2563EB] text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-premium"
+                onClick={() => {
+                  if (!isPromotionActive) return;
+                  setShowNewYearModal(true);
+                }}
+                disabled={!isPromotionActive}
+                className={`px-4 py-2 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-premium ${!isPromotionActive ? "opacity-50 cursor-not-allowed bg-slate-400" : "bg-[#2563EB]"}`}
               >
                 <Plus size={14} />{" "}
                 {lang === "bn" ? "নতুন শিক্ষাবর্ষ" : "New Year"}
@@ -750,8 +788,12 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                   <div className="mt-6 flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     {year.status !== "active" && (
                       <button
-                        onClick={() => handleSetActive(year.id)}
-                        className="flex-1 py-2.5 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+                        onClick={() => {
+                          if (!isPromotionActive) return;
+                          handleSetActive(year.id);
+                        }}
+                        disabled={!isPromotionActive}
+                        className={`flex-1 py-2.5 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}
                       >
                         <Check size={14} />{" "}
                         {lang === "bn" ? "সক্রিয় করুন" : "Set Active"}
@@ -759,19 +801,29 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                     )}
                     {year.status === "active" && (
                       <button
-                        onClick={() => handleArchive(year.id)}
-                        className="flex-1 py-2.5 bg-amber-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+                        onClick={() => {
+                          if (!isPromotionActive) return;
+                          handleArchive(year.id);
+                        }}
+                        disabled={!isPromotionActive}
+                        className={`flex-1 py-2.5 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600"}`}
                       >
                         <Archive size={14} />{" "}
                         {lang === "bn" ? "আর্কাইভ করুন" : "Archive"}
                       </button>
                     )}
                     <button
-                      onClick={() => handleDeleteYear(year.id)}
+                      onClick={() => {
+                        if (!isPromotionActive) return;
+                        handleDeleteYear(year.id);
+                      }}
+                      disabled={!isPromotionActive}
                       className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors border ${
-                        isDark
-                          ? "bg-red-900/20 text-red-400 border-red-900/30 hover:bg-red-900/40"
-                          : "bg-red-50 text-red-500 border-red-100 hover:bg-red-100"
+                        !isPromotionActive
+                          ? "opacity-40 bg-slate-400 text-slate-200 border-slate-300 cursor-not-allowed"
+                          : isDark
+                            ? "bg-red-900/20 text-red-400 border-red-900/30 hover:bg-red-900/40"
+                            : "bg-red-50 text-red-500 border-red-100 hover:bg-red-100"
                       }`}
                       title={lang === "bn" ? "ডিলিট করুন" : "Delete"}
                     >
@@ -1264,8 +1316,12 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
             <div className="flex justify-end pt-4">
               <button
                 onClick={handleGeneratePreview}
-                disabled={loading}
-                className="px-8 py-4 bg-[#2563EB] text-white font-black rounded-2xl shadow-premium hover:scale-105 transition-transform flex items-center gap-2"
+                disabled={loading || !isPromotionActive}
+                className={`px-8 py-4 text-white font-black rounded-2xl shadow-premium flex items-center gap-2 ${
+                  !isPromotionActive
+                    ? "bg-slate-400 cursor-not-allowed opacity-50"
+                    : "bg-[#2563EB] hover:scale-105 transition-transform"
+                } disabled:opacity-50`}
               >
                 {loading ? (
                   <Loader2 className="animate-spin" />
@@ -1401,7 +1457,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
               </button>
               <button
                 onClick={handleExecutePromotion}
-                className="px-8 py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-premium hover:scale-105 transition-transform flex items-center gap-2"
+                disabled={!isPromotionActive}
+                className={`px-8 py-4 text-white font-black rounded-2xl shadow-premium flex items-center gap-2 ${!isPromotionActive ? "opacity-50 cursor-not-allowed bg-slate-400" : "bg-emerald-500 hover:scale-105 transition-transform"}`}
               >
                 <CheckCircle2 size={20} />{" "}
                 {lang === "bn"
@@ -1517,8 +1574,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
               )}
               <button
                 onClick={handleCreateYear}
-                disabled={isCreatingYear}
-                className="w-full h-14 bg-[#2563EB] text-white font-black rounded-2xl shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all"
+                disabled={isCreatingYear || !isPromotionActive}
+                className={`w-full h-14 text-white font-black rounded-2xl shadow-premium flex items-center justify-center gap-2 transition-all ${!isPromotionActive ? "bg-slate-400 cursor-not-allowed opacity-50" : "bg-[#2563EB] active:scale-95"}`}
               >
                 {isCreatingYear ? (
                   <Loader2 className="animate-spin" />

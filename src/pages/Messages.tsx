@@ -138,6 +138,7 @@ export default function Messages({
   // Form states - Syllabus
   const [syllabusTitle, setSyllabusTitle] = useState('');
   const [syllabusClass, setSyllabusClass] = useState('');
+  const [syllabusExam, setSyllabusExam] = useState('');
   const [syllabusSession, setSyllabusSession] = useState('2025-26');
   const [syllabusSubjectList, setSyllabusSubjectList] = useState([
     { subject: 'Quran', details: 'সূরা ইয়াসিন, সূরা রহমান' },
@@ -186,6 +187,7 @@ export default function Messages({
       setSyllabusTitle(item.title);
       setSyllabusClass(item.class_name.replace('APP_SYLLABUS_', ''));
       setSyllabusSession(item.parsedMessage?.session || '2025-26');
+      setSyllabusExam(item.parsedMessage?.exam || '');
       setSyllabusSubjectList(item.parsedMessage?.subjects || []);
       setShowSyllabusModal(true);
     } else if (['APP_NOTICE', 'APP_HOLIDAY', 'APP_PTM', 'APP_DIARY', 'all'].includes(item.class_name)) {
@@ -382,6 +384,7 @@ export default function Messages({
       const payload = { 
         subjects: syllabusSubjectList, 
         session: syllabusSession, 
+        exam: syllabusExam,
         status: isDraft ? 'draft' : 'published' 
       };
 
@@ -693,6 +696,7 @@ export default function Messages({
                       setEditingItem(null); 
                       setSyllabusTitle('');
                       setSyllabusClass('');
+                      setSyllabusExam('');
                       setSyllabusSession('2025-26');
                       setSyllabusSubjectList([
                         { subject: 'Quran', details: 'সূরা ইয়াসিন, সূরা রহমান' },
@@ -1253,7 +1257,7 @@ export default function Messages({
 
                 <form className="space-y-6">
                   {/* Selectors */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 p-5 rounded-3xl border border-slate-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-3xl border border-slate-100">
                     <div>
                       <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 font-bold">শ্রেণী (Class) <span className="text-red-500">*</span></label>
                       <select 
@@ -1265,6 +1269,16 @@ export default function Messages({
                         <option value="">শ্রেণী নির্বাচন করুন...</option>
                         {classes.map(c=><option key={c.id} value={c.class_name}>{c.class_name}</option>)}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 font-bold">পরীক্ষা (Exam) <span className="text-slate-400 font-normal">(ঐচ্ছিক)</span></label>
+                      <input 
+                        type="text"
+                        value={syllabusExam}
+                        onChange={e=>setSyllabusExam(e.target.value)}
+                        placeholder="যেমন: অর্ধবার্ষিক পরীক্ষা"
+                        className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all font-bold text-slate-700 placeholder-slate-400"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 font-bold">শিক্ষাবর্ষ / সেশন (Session) <span className="text-red-500">*</span></label>

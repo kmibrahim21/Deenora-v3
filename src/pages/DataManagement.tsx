@@ -32,6 +32,18 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isUploadActive = React.useMemo(() => {
+    let configObj: any = {};
+    if (madrasah?.config_json) {
+      if (typeof madrasah.config_json === 'string') {
+        try { configObj = JSON.parse(madrasah.config_json); } catch (e) { configObj = {}; }
+      } else {
+        configObj = madrasah.config_json;
+      }
+    }
+    return configObj.modules?.backup_restore ?? false;
+  }, [madrasah]);
+
   useEffect(() => {
     const fetchClasses = async () => {
       if (!madrasah) return;
@@ -198,6 +210,14 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   };
 
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isUploadActive) {
+      setStatus({
+        type: 'error',
+        message: lang === 'bn' ? 'দুঃখিত, সুপার এডমিন থেকে আপলোড অপশন নিষ্ক্রিয় করা রয়েছে।' : 'Sorry, the upload option has been deactivated by the Super Admin.'
+      });
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file || !madrasah) return;
 
@@ -442,7 +462,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
 
         <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} rounded-[3rem] border p-10 shadow-bubble relative overflow-hidden group`}>
           <div className="flex items-center gap-6 mb-8">
-            <div className={`w-16 h-16 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-[1.5rem] flex items-center justify-center border shadow-inner`}>
+            <div className={`w-16 h-16 ${!isUploadActive ? 'bg-red-50 text-red-500 border-red-100' : isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-[1.5rem] flex items-center justify-center border shadow-inner`}>
               <Upload size={32} />
             </div>
             <div>
@@ -454,8 +474,18 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx, .xls, .csv" onChange={handleImportExcel} />
           
           <div 
-            onClick={() => !loading && fileInputRef.current?.click()} 
-            className={`w-full py-12 ${isDark ? 'bg-slate-700/50 border-slate-600 text-blue-400' : 'bg-blue-50 border-[#2563EB]/20 text-[#2563EB]'} border-4 border-dashed rounded-[2.5rem] font-black text-sm flex flex-col items-center justify-center gap-5 transition-all cursor-pointer ${loading ? 'opacity-70 cursor-wait' : 'active:scale-[0.98] hover:bg-blue-100/10'}`}
+            onClick={() => {
+              if (loading) return;
+              if (!isUploadActive) {
+                setStatus({
+                  type: 'error',
+                  message: lang === 'bn' ? 'দুঃখিত, সুপার এডমিন থেকে আপলোড অপশন নিষ্ক্রিয় করা রয়েছে।' : 'Sorry, the upload option has been deactivated by the Super Admin.'
+                });
+                return;
+              }
+              fileInputRef.current?.click();
+            }} 
+            className={`w-full py-12 ${!isUploadActive ? 'opacity-70 cursor-not-allowed bg-red-50/10 border-red-200/50 text-red-500' : isDark ? 'bg-slate-700/50 border-slate-600 text-blue-400 hover:bg-blue-100/10' : 'bg-blue-50 border-[#2563EB]/20 text-[#2563EB] hover:bg-blue-100/10'} border-4 border-dashed rounded-[2.5rem] font-black text-sm flex flex-col items-center justify-center gap-5 transition-all cursor-pointer ${loading ? 'opacity-70 cursor-wait' : 'active:scale-[0.98]'}`}
           >
             {loading ? (
               <>
@@ -464,6 +494,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                    <div className="absolute inset-0 flex items-center justify-center text-xl font-black">{progress}%</div>
                 </div>
                 <span className="font-noto text-lg text-center px-4">আপলোড হচ্ছে, দয়া করে অপেক্ষা করুন...</span>
+              </>
+            ) : !isUploadActive ? (
+              <>
+                <AlertTriangle size={60} className="opacity-80 text-red-500 animate-pulse" />
+                <span className="font-noto text-lg text-red-500 text-center px-4 font-black">
+                  {lang === 'bn' ? 'আপলোড অপশন সুপার এডমিন দ্বারা নিষ্ক্রিয় করা রয়েছে' : 'Upload option is disabled by Super Admin'}
+                </span>
               </>
             ) : (
               <>

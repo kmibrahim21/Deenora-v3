@@ -48,6 +48,7 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
   const [modalLoading, setModalLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Class | null>(null);
   const isDark = madrasah?.theme === 'dark';
+  const canDeleteClass = (madrasah?.config_json as any)?.features?.delete_class === true;
 
   useEffect(() => { 
     if (madrasah?.id) {
@@ -280,10 +281,12 @@ const Classes: React.FC<ClassesProps> = ({ onClassClick, lang, madrasah, dataVer
                       className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB]'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
                       <Edit3 size={14} className="sm:size-4" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(cls); }} 
-                      className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-500'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
-                      <Trash2 size={14} className="sm:size-4" />
-                    </button>
+                    {canDeleteClass && (
+                      <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(cls); }} 
+                        className={`w-9 h-9 sm:w-10 sm:h-10 ${isDark ? 'bg-red-900/30 text-red-400 border-red-900/50' : 'bg-red-50 text-red-500'} rounded-xl flex items-center justify-center border active:scale-90 transition-all shadow-sm`}>
+                        <Trash2 size={14} className="sm:size-4" />
+                      </button>
+                    )}
                   </>
                 )}
                 <ChevronRight className={`${isDark ? 'text-slate-600 group-hover:text-blue-400' : 'text-blue-200 group-hover:text-[#2563EB]'} transition-colors ml-0.5`} size={18} strokeWidth={3} />

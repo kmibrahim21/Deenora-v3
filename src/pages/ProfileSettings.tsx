@@ -15,7 +15,9 @@ import {
   Zap, 
   Settings2,
   Check,
-  Smartphone
+  Smartphone,
+  Trash2,
+  Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
@@ -45,6 +47,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
   const [featureTeacherSalarySms, setFeatureTeacherSalarySms] = useState((madrasah?.config_json as any)?.features?.teacher_salary_sms ?? false);
   const [featureTeacherDeduction, setFeatureTeacherDeduction] = useState((madrasah?.config_json as any)?.features?.teacher_attendance_deduction ?? false);
+
+  const [featureDeleteClass, setFeatureDeleteClass] = useState((madrasah?.config_json as any)?.features?.delete_class ?? false);
+  const [featureDeleteAccounting, setFeatureDeleteAccounting] = useState((madrasah?.config_json as any)?.features?.delete_accounting ?? false);
 
   const isDark = madrasah?.theme === 'dark';
   const modules = (madrasah?.config_json as any)?.modules || {};
@@ -122,7 +127,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           student_attendance_sms: featureStudentAttSms,
           fee_collection_sms: featureFeeSms,
           teacher_salary_sms: featureTeacherSalarySms,
-          teacher_attendance_deduction: featureTeacherDeduction
+          teacher_attendance_deduction: featureTeacherDeduction,
+          delete_class: featureDeleteClass,
+          delete_accounting: featureDeleteAccounting
         }
       };
       
@@ -383,6 +390,37 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-blue-400' : 'text-[#2563EB]') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+               {/* Admin Permissions Card */}
+               <div className={`p-6 md:p-8 rounded-[2.5rem] border space-y-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-[#FFF1F2] border-rose-200/50'}`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600'}`}>
+                    <Shield size={20} />
+                  </div>
+                  <div>
+                    <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>{lang === 'bn' ? 'অ্যাডমিন পারমিশন' : 'Admin Permissions'}</h3>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'bn' ? 'সতর্কতার সাথে ব্যবহার করুন' : 'Use with caution'}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    { label: lang === 'bn' ? 'ক্লাস ডিলিট' : 'Delete Class', description: lang === 'bn' ? 'ক্লাস ডিলিট করার অপশন চালু করুন' : 'Enable option to delete classes', checked: featureDeleteClass, setter: setFeatureDeleteClass },
+                    { label: lang === 'bn' ? 'হিসাব ইতিহাস ডিলিট' : 'Delete Accounting History', description: lang === 'bn' ? 'হিসাবের লেনদেন ডিলিট করুন' : 'Enable option to delete transactions', checked: featureDeleteAccounting, setter: setFeatureDeleteAccounting },
+                  ].map((feature, idx) => (
+                    <label key={idx} className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.02] ${feature.checked ? (isDark ? 'bg-rose-500/10 border-rose-500/30' : 'bg-white border-rose-200 shadow-md shadow-rose-500/5') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white/60 border-transparent')}`}>
+                      <div className="relative inline-flex items-center">
+                        <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => feature.setter(e.target.checked)} />
+                        <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-rose-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-rose-400' : 'text-rose-600') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
                         <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
                       </div>
                     </label>

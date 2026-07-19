@@ -188,7 +188,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       admit_card: configObj.modules?.admit_card ?? true,
       seat_plan: configObj.modules?.seat_plan ?? true,
       accounting: configObj.modules?.accounting ?? true,
-      academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
+      academic_year_promotion: configObj.modules?.academic_year_promotion ?? false,
       voice_broadcast: configObj.modules?.voice_broadcast ?? true,
       sms: configObj.modules?.sms ?? true,
       messages: configObj.modules?.messages ?? true,
@@ -1146,16 +1146,14 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               dark={madrasah?.theme === 'dark'}
             />
             
-            {modules.academic_year_promotion && (
-              <ActionCard
-                icon={GraduationCap}
-                title={lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}
-                subtitle={lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}
-                colorClass="bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
-                onClick={() => setView('academic-year')}
-                dark={madrasah?.theme === 'dark'}
-              />
-            )}
+            <ActionCard
+              icon={GraduationCap}
+              title={lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Year'}
+              subtitle={lang === 'bn' ? 'সেটআপ ও প্রমোশন' : 'Setup & Promotion'}
+              colorClass="bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
+              onClick={() => setView('academic-year')}
+              dark={madrasah?.theme === 'dark'}
+            />
 
             {/* Subscription Card */}
             <ActionCard

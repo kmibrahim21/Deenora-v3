@@ -606,7 +606,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       admit_card: configObj.modules?.admit_card ?? true,
       seat_plan: configObj.modules?.seat_plan ?? true,
       accounting: configObj.modules?.accounting ?? true,
-      academic_year_promotion: configObj.modules?.academic_year_promotion ?? true,
+      academic_year_promotion: configObj.modules?.academic_year_promotion ?? false,
       voice_broadcast: configObj.modules?.voice_broadcast ?? true,
       sms: configObj.modules?.sms ?? true,
     };
