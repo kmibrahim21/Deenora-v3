@@ -698,11 +698,6 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
 
                             {/* Right Column: Solid Premium Box */}
                             <div className="flex-shrink-0 w-[160px] h-[105px] text-white rounded-2xl flex flex-col justify-center p-3 border shadow mr-4" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
-                              <div className="flex items-center justify-center mb-1">
-                                <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center font-black text-sm" style={{ color: rtTheme.primary }}>
-                                  📅
-                                </div>
-                              </div>
                               <div className="text-center leading-tight">
                                 <p className="text-[11px] font-black mb-0.5 uppercase tracking-widest" style={{ color: rtTheme.accent }}>
                                   Class Routine

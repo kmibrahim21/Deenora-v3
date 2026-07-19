@@ -2399,13 +2399,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                               </div>
 
                               {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
-                              <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-between border shadow mr-4`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
-                                <div className="flex items-center justify-center">
-                                  <div className={`${previewCalendarIconSize} rounded-full bg-white flex items-center justify-center font-black`} style={{ color: rtTheme.primary }}>
-                                    📅
-                                  </div>
-                                </div>
-                                <div className="text-center mt-1 leading-normal">
+                              <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-center border shadow mr-4`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
+                                <div className="text-center leading-normal">
                                   <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
                                     {activeExamName ? activeExamName.replace(/পরীক্ষা|Exam/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
                                   </p>

@@ -606,8 +606,23 @@ export const generateFeeReceiptPDF = async (
     const root = createRoot(container);
     const receiptId = `#REC-${Date.now().toString().slice(-6)}`;
     
+    // Convert month string (YYYY-MM) to month name if needed
+    let displayMonth = month;
+    if (month && month.includes('-')) {
+        const [year, monthNum] = month.split('-');
+        const monthIndex = parseInt(monthNum) - 1;
+        const monthNamesBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+        const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        if (lang === 'bn') {
+            displayMonth = `${monthNamesBn[monthIndex]}, ${year.replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d)])}`;
+        } else {
+            displayMonth = `${monthNamesEn[monthIndex]}, ${year}`;
+        }
+    }
+    
     await new Promise<void>((resolve) => {
-        root.render(<FeeReceiptTemplate student={student} month={month} madrasah={madrasah} lang={lang} receiptId={receiptId} />);
+        root.render(<FeeReceiptTemplate student={student} month={displayMonth} madrasah={madrasah} lang={lang} receiptId={receiptId} />);
         setTimeout(resolve, 500);
     });
 

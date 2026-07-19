@@ -197,10 +197,14 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                 <span className="inline-flex items-center gap-0.5 italic" style={{ color: primary }}>
                   {madrasah?.address || 'ঠিকানা'}
                 </span>
-                <span className="text-slate-300">|</span>
-                <span className="inline-flex items-center gap-0.5" style={{ color: primary }}>
-                  {isBn ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone || '০১৭XXXXXXXX'}
-                </span>
+                {(madrasah?.phone) && (
+                  <>
+                    <span className="text-slate-300">|</span>
+                    <span className="inline-flex items-center gap-0.5" style={{ color: primary }}>
+                      {isBn ? 'মোবাইলঃ ' : 'Mobile: '} {isBn ? getBanglaNumber(madrasah.phone) : madrasah.phone}
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* Central pill badge */}
@@ -214,13 +218,8 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             </div>
 
             {/* Right Column: Calendar Box */}
-            <div className={`flex-shrink-0 ${calendarBoxClass} text-white rounded-xl flex flex-col justify-between border shadow mr-2`} style={{ backgroundColor: primary, borderColor: `${primary}b3` }}>
-              <div className="flex items-center justify-center">
-                <div className={`${calendarIconClass} rounded-full bg-white flex items-center justify-center font-black`} style={{ color: primary }}>
-                  📅
-                </div>
-              </div>
-              <div className="text-center mt-0.5 leading-normal">
+            <div className={`flex-shrink-0 ${calendarBoxClass} text-white rounded-xl flex flex-col justify-center border shadow mr-2`} style={{ backgroundColor: primary, borderColor: `${primary}b3` }}>
+              <div className="text-center leading-normal">
                 <p className={`${calendarTextClass1} font-black leading-tight mb-0.5 whitespace-normal break-words px-1`} style={{ color: accent }}>
                   {processedExamName}
                 </p>
@@ -265,14 +264,14 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                         <th className="border-r p-1 text-[11px] font-black font-noto tracking-tighter w-[50px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
                           {isBn ? 'সকাল' : 'Morning'}
                           <span className="block text-[9px] font-bold text-[#475569] mt-0.5 leading-none">
-                            {isBn ? getBanglaNumber(routineMorningTime.split(' ')[0]) : routineMorningTime.split(' ')[0]}
+                            {isBn ? getBanglaNumber(routineMorningTime) : routineMorningTime}
                           </span>
                         </th>
                         {showRoutineAfternoon && (
                           <th className="border-r p-1 text-[11px] font-black font-noto tracking-tighter w-[50px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
                             {isBn ? 'বিকাল' : 'Afternoon'}
                             <span className="block text-[9px] font-bold text-[#475569] mt-0.5 leading-none">
-                              {isBn ? getBanglaNumber(routineAfternoonTime.split(' ')[0]) : routineAfternoonTime.split(' ')[0]}
+                              {isBn ? getBanglaNumber(routineAfternoonTime) : routineAfternoonTime}
                             </span>
                           </th>
                         )}
@@ -404,7 +403,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                 <p className={`${footerSignTextClass} font-black mb-0.5`} style={{ color: `${primary}e6` }}>{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
                 <div className="h-px bg-slate-200 w-full mb-1"></div>
                 <p className={`${footerSignTextClass} font-black leading-tight`} style={{ color: primary }}>
-                  {routinePrincipalName || (isBn ? 'প্রতিষ্ঠাতা পরিচালক' : 'Founding Director')}
+                  {routinePrincipalName || (isBn ? 'পরিচালক' : 'Director')}
                 </p>
                 <p className={`${footerSignSubtextClass} font-bold text-slate-400 mt-0.5 truncate max-w-[150px]`}>{madrasah?.name}</p>
                 {routinePrincipalMobile && (
