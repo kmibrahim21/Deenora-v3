@@ -88,6 +88,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [selectedTemplate, setSelectedTemplate] = useState<SMSTemplate | null>(null);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'yearly' | 'custom'>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(initialMonth || new Date().toISOString().slice(0, 7));
+  const [selectedReminderMonth, setSelectedReminderMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedReminderClassId, setSelectedReminderClassId] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -142,7 +144,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     ];
     const unsubs = keys.map(k => requestManager.subscribe(k, () => fetchAnalytics(true)));
     return () => unsubs.forEach(u => u());
-  }, [institutionId, selectedMonth, selectedYear, selectedDate, dateRange, viewMode, selectedClassId, refreshKey]);
+  }, [institutionId, selectedMonth, selectedReminderMonth, selectedReminderClassId, selectedYear, selectedDate, dateRange, viewMode, selectedClassId, refreshKey]);
 
   const fetchTemplates = async () => {
     if (!isValidUUID(institutionId)) return;
@@ -180,7 +182,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       // Use requestManager for cached data fetches
       const [structuresRes, studentsRes, settingsRes, ledgerRes] = await Promise.all([
         requestManager.cachedFetch('fee_structures', (q) => q.select('id, fee_name, amount, class_id, start_date, due_date').eq('institution_id', institutionId), `fee_structs:${institutionId}`),
-        requestManager.cachedFetch('students', (q) => q.select('id, student_name, class_id, academic_year_id, guardian_phone, roll').eq('institution_id', institutionId), `students:${institutionId}`),
+        requestManager.cachedFetch('students', (q) => q.select('id, student_name, class_id, academic_year_id, guardian_phone, roll, notes').eq('institution_id', institutionId), `students:${institutionId}`),
         requestManager.cachedFetch('student_fee_settings', (q) => q.select('student_id, fee_structure_id, is_enabled, custom_amount').eq('institution_id', institutionId), `fee_settings:${institutionId}`),
         requestManager.cachedFetch('ledger', (q) => q.select('id, transaction_date, amount, type, category, description').eq('institution_id', institutionId), `ledger:${institutionId}`)
       ]);
@@ -365,18 +367,20 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       if (viewMode === 'monthly') {
         const { data: remindersData, error: remError } = await requestManager.cachedRpc('get_fee_reminder_list', { 
           p_institution_id: institutionId, 
-          p_month: selectedMonth,
+          p_month: selectedReminderMonth,
           p_academic_year_id: null 
         });
         if (remindersData) {
-            const getExpectedForStudentAndMonth = (studentId: string, classId: string, monthStr: string) => {
+            const getExpectedForStudentAndMonth = (studentId: string, classId: string, monthStr: string, accStartDate: string) => {
               let totalExpectedVal = 0;
               structures.forEach(s => {
                 if (s.class_id !== null && s.class_id !== classId) return;
 
                 const isExpired = s.due_date && s.due_date.slice(0, 7) < monthStr;
                 const isNotStarted = s.start_date && s.start_date.slice(0, 7) > monthStr;
-                if (isExpired || isNotStarted) return;
+
+                const isBeforeAccStart = accStartDate && monthStr < accStartDate.slice(0, 7);
+                if (isExpired || isNotStarted || isBeforeAccStart) return;
 
                 const setting = allSettings?.find(as => as.student_id === studentId && as.fee_structure_id === s.id);
                 if (setting ? setting.is_enabled : true) {
@@ -393,7 +397,13 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                 const student = activeStudents.find(st => st.id === r.student_id);
                 if (!student) return null;
                 
-                const expected = getExpectedForStudentAndMonth(student.id, student.class_id, selectedMonth);
+                // Filter by Class if selected
+                if (selectedReminderClassId !== 'all' && student.class_id !== selectedReminderClassId) return null;
+                
+                const accMatch = student.notes?.match(/\[ACC_START:(.*?)\]/);
+                const accStartDate = accMatch ? accMatch[1] : '';
+
+                const expected = getExpectedForStudentAndMonth(student.id, student.class_id, selectedReminderMonth, accStartDate);
                 const paid = Number(r.total_paid) || 0;
                 const balance_due = Math.max(0, expected - paid);
                 
@@ -585,7 +595,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
 
     const monthNamesBn = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
     const monthNamesEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const [yearStr, monthStr] = selectedMonth.split('-');
+    const [yearStr, monthStr] = selectedReminderMonth.split('-');
     const monthIdx = parseInt(monthStr, 10) - 1;
     const formattedMonth = lang === 'bn' ? `${monthNamesBn[monthIdx]} ${yearStr}` : `${monthNamesEn[monthIdx]} ${yearStr}`;
 
@@ -927,14 +937,45 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       </div>
 
       {/* Reminders Section */}
-      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-100 text-[#1E293B]'} p-8 rounded-[2.5rem] shadow-bubble border space-y-6`}>
-            <div className="flex items-center justify-between">
+      <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-100 text-[#1E293B]'} p-6 sm:p-8 rounded-[2.5rem] shadow-bubble border space-y-6`}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h3 className="text-xl font-black font-noto">{t('reminders', lang)}</h3>
                 <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">{reminders.length} {localT.studentsPending[lang]}</p>
             </div>
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                <AlertCircle size={24} />
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[140px] flex-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'শ্রেনি নির্বাচন' : 'Select Class'}</label>
+                    <div className="relative group">
+                        <select 
+                            value={selectedReminderClassId}
+                            onChange={(e) => setSelectedReminderClassId(e.target.value)}
+                            className={`w-full h-11 rounded-xl px-4 pr-10 font-black text-xs outline-none transition-all appearance-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 text-white border-slate-800' : 'bg-slate-50 text-[#1E3A8A] border-slate-200'} border-2 focus:border-blue-500`}
+                        >
+                            <option value="all">{lang === 'bn' ? 'সকল শ্রেনি' : 'All Classes'}</option>
+                            {localClasses.map(c => (
+                                <option key={c.id} value={c.id}>{c.class_name}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[140px] flex-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'মাস সিলেক্ট করুন' : 'Select Month'}</label>
+                    <div className="relative group">
+                        <input 
+                            type="month" 
+                            value={selectedReminderMonth}
+                            onChange={(e) => setSelectedReminderMonth(e.target.value)}
+                            className={`w-full h-11 rounded-xl px-4 font-black text-xs outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900 text-white border-slate-800' : 'bg-slate-50 text-[#1E3A8A] border-slate-200'} border-2 focus:border-blue-500`}
+                        />
+                        <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                </div>
+                <div className={`hidden lg:flex w-11 h-11 rounded-xl items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                    <AlertCircle size={20} />
+                </div>
             </div>
             </div>
 
