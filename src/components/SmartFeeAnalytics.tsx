@@ -101,7 +101,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   
   const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const [statusModal, setStatusModal] = useState<{ show: boolean, type: 'success' | 'error' | 'info', title?: string, message: string }>({ show: false, type: 'success', message: '' });
+  const [statusModal, setStatusModal] = useState<{ show: boolean, type: 'success' | 'error' | 'warning' | 'info', title?: string, message: string }>({ show: false, type: 'success', message: '' });
   const [isFetchingVoices, setIsFetchingVoices] = useState(false);
   const [voices, setVoices] = useState<any[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
@@ -589,7 +589,12 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
     if (reminders.length === 0) return;
     
     if (!selectedTemplate) {
-        alert(lang === 'bn' ? 'দয়া করে একটি এসএমএস টেমপ্লেট নির্বাচন করুন' : 'Please select an SMS template');
+        setStatusModal({ 
+            show: true, 
+            type: 'warning', 
+            title: lang === 'bn' ? 'টেমপ্লেট নির্বাচন করুন' : 'Select Template', 
+            message: lang === 'bn' ? 'দয়া করে একটি এসএমএস টেমপ্লেট নির্বাচন করুন' : 'Please select an SMS template' 
+        });
         return;
     }
 
@@ -1199,22 +1204,39 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       {statusModal.show && createPortal(
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
           <div className={`${madrasah?.theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-50" } w-full max-w-sm rounded-[3.5rem] p-10 text-center shadow-2xl border animate-in zoom-in-95 duration-500 relative overflow-hidden`} >
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform duration-700 ${ statusModal.type === "success" ? "bg-emerald-50 text-emerald-500 border-emerald-100" : "bg-red-50 text-red-500 border-red-100" } border-4 shadow-inner`} >
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 transition-transform duration-700 ${ 
+                statusModal.type === "success" ? "bg-emerald-50 text-emerald-500 border-emerald-100" : 
+                statusModal.type === "warning" ? "bg-orange-50 text-orange-500 border-orange-100" :
+                statusModal.type === "info" ? "bg-blue-50 text-blue-500 border-blue-100" :
+                "bg-red-50 text-red-500 border-red-100" 
+            } border-4 shadow-inner`} >
               {statusModal.type === "success" ? (
                 <CheckCircle2 size={40} strokeWidth={2.5} className="animate-in zoom-in duration-500" />
-              ) : (
+              ) : statusModal.type === "warning" || statusModal.type === "error" ? (
                 <AlertCircle size={40} strokeWidth={2.5} className="animate-in zoom-in duration-500" />
+              ) : (
+                <Info size={40} strokeWidth={2.5} className="animate-in zoom-in duration-500" />
               )}
             </div>
             <h3 className={`text-[22px] font-black font-noto leading-tight tracking-tight ${ madrasah?.theme === "dark" ? "text-white" : "text-[#1E3A8A]" }`} >
-              {statusModal.title || (statusModal.type === 'success' ? (lang === 'bn' ? 'সফল হয়েছে' : 'Success') : (lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Failed'))}
+              {statusModal.title || (
+                statusModal.type === 'success' ? (lang === 'bn' ? 'সফল হয়েছে' : 'Success') : 
+                statusModal.type === 'warning' ? (lang === 'bn' ? 'সতর্কতা' : 'Warning') :
+                statusModal.type === 'info' ? (lang === 'bn' ? 'তথ্য' : 'Info') :
+                (lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Failed')
+              )}
             </h3>
             <p className="text-[13px] font-bold text-slate-400 mt-3 font-noto px-4 leading-relaxed whitespace-pre-wrap">
               {statusModal.message}
             </p>
             <button
               onClick={() => setStatusModal({ ...statusModal, show: false })}
-              className={`w-full mt-8 py-4 font-black rounded-full text-xs uppercase tracking-[0.2em] transition-all shadow-premium active:scale-95 ${ statusModal.type === "success" ? "bg-[#2563EB] text-white" : "bg-red-500 text-white" }`}
+              className={`w-full mt-8 py-4 font-black rounded-full text-xs uppercase tracking-[0.2em] transition-all shadow-premium active:scale-95 ${ 
+                statusModal.type === "success" ? "bg-emerald-500 text-white" : 
+                statusModal.type === "warning" ? "bg-orange-500 text-white" :
+                statusModal.type === "info" ? "bg-blue-500 text-white" :
+                "bg-red-500 text-white" 
+              }`}
             >
               {lang === "bn" ? "ঠিক আছে" : "Continue"}
             </button>
