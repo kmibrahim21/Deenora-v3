@@ -282,9 +282,9 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                 
                 <tbody>
                   {/* Classes display rows */}
-                  {displayClasses.map((cls, idx) => {
+                    {displayClasses.map((cls, idx) => {
                     const rowHeightFormatA = displayClasses.length > 8 ? 'h-7' : displayClasses.length > 5 ? 'h-9' : 'h-11';
-                    const cellPaddingFormatA = displayClasses.length > 8 ? 'p-0.5 text-[10.5px]' : displayClasses.length > 5 ? 'p-1 text-[11.5px]' : 'p-1 py-1.5 text-[12.5px]';
+                    const cellPaddingFormatA = displayClasses.length > 8 ? 'p-0.5 text-[10.5px]' : displayClasses.length > 5 ? 'p-1 text-[11px]' : 'p-1 py-1 text-[11.5px]';
 
                     return (
                       <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : `${accent}1a`} border-b ${rowHeightFormatA}`} style={{ borderColor: `${primary}33` }}>
@@ -294,18 +294,25 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                         {routineData.map((_, dayIdx) => {
                           const mrnSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'morning');
                           const aftSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'afternoon');
+                          
+                          const getSubjectFontSize = (text: string) => {
+                            if (text.length > 20) return 'text-[9.5px]';
+                            if (text.length > 15) return 'text-[10px]';
+                            return '';
+                          };
+
                           return (
                             <React.Fragment key={dayIdx}>
                               <td className={`border-r ${cellPaddingFormatA} align-middle text-center overflow-hidden`} style={{ borderColor: `${primary}33` }}>
-                                <span className={`font-black tracking-tight leading-[1.1] block max-h-full whitespace-normal break-words ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: mrnSub === '*****' ? undefined : primary }}>
+                                <div className={`font-black tracking-tighter leading-[1] block max-h-full whitespace-normal break-words ${getSubjectFontSize(mrnSub)} ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: mrnSub === '*****' ? undefined : primary }}>
                                   {mrnSub}
-                                </span>
+                                </div>
                               </td>
                               {showRoutineAfternoon && (
                                 <td className={`border-r ${cellPaddingFormatA} align-middle text-center overflow-hidden`} style={{ borderColor: `${primary}33` }}>
-                                  <span className={`font-black tracking-tight leading-[1.1] block max-h-full whitespace-normal break-words ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: aftSub === '*****' ? undefined : primary }}>
+                                  <div className={`font-black tracking-tighter leading-[1] block max-h-full whitespace-normal break-words ${getSubjectFontSize(aftSub)} ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: aftSub === '*****' ? undefined : primary }}>
                                     {aftSub}
-                                  </span>
+                                  </div>
                                 </td>
                               )}
                             </React.Fragment>
@@ -343,17 +350,21 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                       </td>
                       
                       {/* Morning subject for selected class */}
-                      <td className={`border-r ${tableCellPaddingClass} align-middle`} style={{ borderColor: `${primary}33` }}>
-                        <div className="text-center font-black whitespace-normal break-words leading-tight" style={{ color: primary }}>
-                          {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning')}
+                      <td className={`border-r ${tableCellPaddingClass} align-middle overflow-hidden`} style={{ borderColor: `${primary}33` }}>
+                        <div className="text-center font-black whitespace-normal break-words leading-tight flex items-center justify-center h-full px-1" style={{ color: primary }}>
+                          <span className={`${(getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning') || '').length > 20 ? 'text-[9.5px]' : (getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning') || '').length > 15 ? 'text-[10px]' : ''}`}>
+                            {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning')}
+                          </span>
                         </div>
                       </td>
                       
                       {/* Afternoon items */}
                       {showRoutineAfternoon && (
-                        <td className={`${tableCellPaddingClass} align-middle`}>
-                          <div className="text-center font-black text-slate-800 whitespace-normal break-words leading-tight">
-                            {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon')}
+                        <td className={`${tableCellPaddingClass} align-middle overflow-hidden`}>
+                          <div className="text-center font-black text-slate-800 whitespace-normal break-words leading-tight flex items-center justify-center h-full px-1">
+                            <span className={`${(getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon') || '').length > 20 ? 'text-[9.5px]' : (getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon') || '').length > 15 ? 'text-[10px]' : ''}`}>
+                              {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon')}
+                            </span>
                           </div>
                         </td>
                       )}
