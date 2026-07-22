@@ -1882,7 +1882,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                                     onChange={(e) => {
                                                       const updated = [...routineData];
                                                       const subjects = updated[dayIdx].morning.subjects;
-                                                      const foundIdx = subjects.findIndex((s: any) => s.classId === cls.id);
+                                                      const foundIdx = subjects.findIndex((s: any) => 
+                                                        s.classId === cls.id || 
+                                                        s.className === cls.class_name || 
+                                                        (s.className && cls.class_name && (s.className.includes(cls.class_name) || cls.class_name.includes(s.className)))
+                                                      );
                                                       if (foundIdx > -1) {
                                                         subjects[foundIdx].subject = e.target.value;
                                                       } else {
@@ -1907,7 +1911,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                                       onChange={(e) => {
                                                         const updated = [...routineData];
                                                         const subjects = updated[dayIdx].afternoon.subjects;
-                                                        const foundIdx = subjects.findIndex((s: any) => s.classId === cls.id);
+                                                        const foundIdx = subjects.findIndex((s: any) => 
+                                                          s.classId === cls.id || 
+                                                          s.className === cls.class_name || 
+                                                          (s.className && cls.class_name && (s.className.includes(cls.class_name) || cls.class_name.includes(s.className)))
+                                                        );
                                                         if (foundIdx > -1) {
                                                           subjects[foundIdx].subject = e.target.value;
                                                         } else {
@@ -2016,7 +2024,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                               onChange={(e) => {
                                                 const updated = [...routineData];
                                                 const subjects = updated[idx].morning.subjects;
-                                                const foundIdx = subjects.findIndex((s: any) => s.classId === activeClassObj?.id);
+                                                const foundIdx = subjects.findIndex((s: any) => 
+                                                  s.classId === activeClassObj?.id || 
+                                                  s.className === activeClassObj?.class_name || 
+                                                  (s.className && activeClassObj?.class_name && (s.className.includes(activeClassObj.class_name) || activeClassObj.class_name.includes(s.className)))
+                                                );
                                                 if (foundIdx > -1) {
                                                   subjects[foundIdx].subject = e.target.value;
                                                 } else {
@@ -2043,7 +2055,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                                 onChange={(e) => {
                                                   const updated = [...routineData];
                                                   const subjects = updated[idx].afternoon.subjects;
-                                                  const foundIdx = subjects.findIndex((s: any) => s.classId === activeClassObj?.id);
+                                                  const foundIdx = subjects.findIndex((s: any) => 
+                                                    s.classId === activeClassObj?.id || 
+                                                    s.className === activeClassObj?.class_name || 
+                                                    (s.className && activeClassObj?.class_name && (s.className.includes(activeClassObj.class_name) || activeClassObj.class_name.includes(s.className)))
+                                                  );
                                                   if (foundIdx > -1) {
                                                     subjects[foundIdx].subject = e.target.value;
                                                   } else {
