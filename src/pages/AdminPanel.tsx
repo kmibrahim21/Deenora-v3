@@ -67,6 +67,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   );
   const [paymentTab, setPaymentTab] = useState<'sms' | 'voice' | 'subscription'>('sms');
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const isSuperAdmin = profile?.role === 'super_admin';
+  const isManager = profile?.role === 'manager';
+
+  const [managerPermissions, setManagerPermissions] = useState<Record<string, boolean>>({});
+
+  const canWrite = (moduleKey: string) => {
+    if (isSuperAdmin) return true;
+    if (isManager) {
+      return !!managerPermissions[moduleKey];
+    }
+    return false;
+  };
+
+  const canSaveCurrentTab = () => {
+    if (isSuperAdmin) return true;
+    if (detailsTab === 'institution') return canWrite('institution_info');
+    if (detailsTab === 'api') return canWrite('api_security');
+    if (detailsTab === 'permissions') return canWrite('permissions');
+    if (detailsTab === 'subscription') return canWrite('subscription');
+    return false;
+  };
 
 
 
@@ -668,68 +689,71 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
 
     setDetailedReport(prev => ({ ...prev, loading: true }));
-    let startDate: Date;
-    let endDate: Date;
-    
-    if (detailedFilterMode === 'monthly') {
-      const [year, month] = detailedMonth.split('-');
-      startDate = new Date(Number(year), Number(month) - 1, 1);
-      endDate = new Date(Number(year), Number(month), 0, 23, 59, 59);
-    } else {
-      startDate = new Date(Number(detailedYear), 0, 1);
-      endDate = new Date(Number(detailedYear), 11, 31, 23, 59, 59);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'get_detailed_report',
+          filterMode: detailedFilterMode,
+          month: detailedMonth,
+          year: detailedYear
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch detailed report from API');
+      const reportData = await response.json();
+      
+      const fullReport = { ...reportData, loading: false };
+      adminPanelCache.detailedReport[cacheKey] = fullReport;
+      setDetailedReport(fullReport);
+    } catch (err) {
+      console.error('Error in fetchDetailedReport API call:', err);
+      // Fallback to client-side (might return 0 due to RLS)
+      let startDate: Date;
+      let endDate: Date;
+      
+      if (detailedFilterMode === 'monthly') {
+        const [year, month] = detailedMonth.split('-');
+        startDate = new Date(Number(year), Number(month) - 1, 1);
+        endDate = new Date(Number(year), Number(month), 0, 23, 59, 59);
+      } else {
+        startDate = new Date(Number(detailedYear), 0, 1);
+        endDate = new Date(Number(detailedYear), 11, 31, 23, 59, 59);
+      }
+
+      const startISO = startDate.toISOString();
+      const endISO = endDate.toISOString();
+
+      const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
+        supabase.from('transactions').select('amount, description, module').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(10000),
+        supabase.from('sms_logs').select('*', { count: 'exact', head: true }).gte('created_at', startISO).lte('created_at', endISO),
+        supabase.from('voice_broadcasts').select('total_numbers').gte('created_at', startISO).lte('created_at', endISO).limit(10000)
+      ]);
+      
+      const transactions = txRes.data || [];
+      const subRechargeTotal = transactions.filter(t => t.module === 'subscription').reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+      const smsRechargeTotal = transactions.filter(t => t.module === 'sms').reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+      const voiceRechargeTotal = transactions.filter(t => t.module === 'voice').reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
+      const smsSentNum = smsLogsRes.count || 0;
+      const voiceCallsNum = (voiceBroadcastsRes.data || []).reduce((sum, t) => sum + (Number(t.total_numbers) || 0), 0) || 0;
+
+      const reportData = {
+        smsRechargeTotal,
+        voiceRechargeTotal,
+        subRechargeTotal,
+        smsSentNum,
+        voiceCallsNum,
+        loading: false
+      };
+
+      adminPanelCache.detailedReport[cacheKey] = reportData;
+      setDetailedReport(reportData);
     }
-
-    const startISO = startDate.toISOString();
-    const endISO = endDate.toISOString();
-
-    const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
-      supabase.from('transactions').select('amount, description, module').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(10000),
-      supabase.from('sms_logs').select('*', { count: 'exact', head: true }).gte('created_at', startISO).lte('created_at', endISO),
-      supabase.from('voice_broadcasts').select('total_numbers').gte('created_at', startISO).lte('created_at', endISO).limit(10000)
-    ]);
-    
-    const transactions = txRes.data || [];
-    
-    // Sub/Packages
-    const subTransactions = transactions.filter(t => 
-      t.module === 'subscription' || 
-      (t.description?.toLowerCase().includes('subscription')) || 
-      (t.description?.toLowerCase().includes('package')) ||
-      (t.description?.toLowerCase().includes('renew')) ||
-      (t.description?.toLowerCase().includes('প্যাকেজ')) ||
-      (t.description?.toLowerCase().includes('সাবস্ক্রিপশন'))
-    );
-    const subRechargeTotal = subTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-
-    // SMS
-    const smsTransactions = transactions.filter(t => {
-      const isSmsModule = t.module === 'sms' || !t.module;
-      const desc = (t.description || '').toLowerCase();
-      const isVoice = desc.includes('voice');
-      const isSub = desc.includes('subscription') || desc.includes('package') || desc.includes('renew') || desc.includes('প্যাকেজ') || desc.includes('সাবস্ক্রিপশন');
-      return isSmsModule && !isVoice && !isSub;
-    });
-    const smsRechargeTotal = smsTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-
-    // Voice
-    const voiceTransactions = transactions.filter(t => t.module === 'voice' || (t.module === 'sms' || !t.module ? (t.description || '').toLowerCase().includes('voice') : false));
-    const voiceRechargeTotal = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-
-    const smsSentNum = smsLogsRes.count || 0;
-    const voiceCallsNum = (voiceBroadcastsRes.data || []).reduce((sum, t) => sum + (Number(t.total_numbers) || 0), 0) || 0;
-
-    const reportData = {
-      smsRechargeTotal,
-      voiceRechargeTotal,
-      subRechargeTotal,
-      smsSentNum,
-      voiceCallsNum,
-      loading: false
-    };
-
-    adminPanelCache.detailedReport[cacheKey] = reportData;
-    setDetailedReport(reportData);
   };
 
   useEffect(() => {
@@ -739,97 +763,106 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   }, [detailedFilterMode, detailedMonth, detailedYear, view]);
 
   const fetchGlobalCounts = async () => {
-    // Disabled RPC to use client-side aggregation since RPC schema is currently out of sync
-    const [studentsRes, classesRes, teachersRes, smsAllocRes, currentBalRes, pendingRes, instsRes, stockRes] = await Promise.all([
-      supabase.from('students').select('*', { count: 'exact', head: true }),
-      supabase.from('classes').select('*', { count: 'exact', head: true }),
-      supabase.from('teachers').select('*', { count: 'exact', head: true }),
-      supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(10000),
-      supabase.from('institutions').select('sms_balance, balance, is_active, institution_type').eq('is_super_admin', false),
-      supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('institutions').select('*', { count: 'exact', head: true }).eq('is_super_admin', false),
-      supabase.from('admin_sms_stock').select('remaining_sms').single()
-    ]);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ action: 'get_global_stats' })
+      });
 
-    const totalAllocated = smsAllocRes.data?.reduce((sum, t) => sum + (Number(t.sms_count) || 0), 0) || 0;
-    
-    const subTransactions = smsAllocRes.data?.filter(t => 
-      t.module === 'subscription' || 
-      (t.description?.toLowerCase().includes('subscription')) || 
-      (t.description?.toLowerCase().includes('package')) ||
-      (t.description?.toLowerCase().includes('renew')) ||
-      (t.description?.toLowerCase().includes('প্যাকেজ')) ||
-      (t.description?.toLowerCase().includes('সাবস্ক্রিপশন'))
-    ) || [];
-    const subRev = subTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-    
-    // Revenue based on actual USAGE (Gross vs Net Profit)
-    // 1 SMS sent = 0.10 TK Net Profit (User charges 0.35, buys at 0.25)
-    // 1 Voice call sent = 0.15 TK Net Profit (User charges 0.50, buys at 0.35) -> which is 30% of total Voice Tk spent
-    const totalInWallets = currentBalRes.data?.reduce((sum, m) => sum + (Number(m.sms_balance) || 0), 0) || 0;
-    const sentCount = Math.max(0, totalAllocated - totalInWallets);
-    
-    const voiceTransactions = smsAllocRes.data?.filter(t => t.module === 'voice' || (t.module === 'sms' || !t.module ? (t.description || '').toLowerCase().includes('voice') : false)) || [];
-    const totalVoiceRecharged = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-    const totalVoiceBalance = currentBalRes.data?.reduce((sum, m) => sum + (Number(m.balance) || 0), 0) || 0;
-    const spentVoiceTk = Math.max(0, totalVoiceRecharged - totalVoiceBalance);
-    
-    const smsRev = Math.round(sentCount * 0.10); // Net Profit from used SMS
-    const voiceRev = Math.round((spentVoiceTk / 0.5) * 0.15); // Net Profit from used Voice Calls
-    
-    const monthlySubscriptionRevenue = subTransactions.reduce((acc: Record<string, number>, t) => {
-      const date = new Date(t.created_at);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      acc[monthKey] = (acc[monthKey] || 0) + (Number(t.amount) || 0);
-      return acc;
-    }, {});
+      if (!response.ok) throw new Error('Failed to fetch global stats from API');
+      const data = await response.json();
+      
+      // Also fetch pending approvals via client-side head query (usually allowed for admin/manager)
+      const { count: pendingCount } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      
+      return {
+        ...data,
+        pendingApprovals: pendingCount || 0
+      };
+    } catch (err) {
+      console.error('Error in fetchGlobalCounts API call:', err);
+      // Fallback to client-side (might return 0 due to RLS)
+      const [studentsRes, classesRes, teachersRes, smsAllocRes, currentBalRes, pendingRes, instsRes, stockRes] = await Promise.all([
+        supabase.from('students').select('*', { count: 'exact', head: true }),
+        supabase.from('classes').select('*', { count: 'exact', head: true }),
+        supabase.from('teachers').select('*', { count: 'exact', head: true }),
+        supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(10000),
+        supabase.from('institutions').select('sms_balance, balance, is_active, institution_type').eq('is_super_admin', false),
+        supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('institutions').select('*', { count: 'exact', head: true }).eq('is_super_admin', false),
+        supabase.from('admin_sms_stock').select('remaining_sms').single()
+      ]);
 
-    const totalRevenue = smsRev + voiceRev + subRev;
+      const totalAllocated = smsAllocRes.data?.reduce((sum, t) => sum + (Number(t.sms_count) || 0), 0) || 0;
+      const totalInWallets = currentBalRes.data?.reduce((sum, m) => sum + (Number(m.sms_balance) || 0), 0) || 0;
+      const sentCount = Math.max(0, totalAllocated - totalInWallets);
+      const activeInsts = currentBalRes.data?.filter(m => m.is_active).length || 0;
 
-    const activeInsts = currentBalRes.data?.filter(m => m.is_active).length || 0;
-    const adminStock = stockRes.data?.remaining_sms || 0;
-
-    const typeBreakdown = currentBalRes.data?.reduce((acc: any, m) => {
-      const type = m.institution_type || 'madrasah';
-      acc[type] = (acc[type] || 0) + 1;
-      return acc;
-    }, { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 });
-
-    return {
-      totalStudents: studentsRes.count || 0,
-      totalClasses: classesRes.count || 0,
-      totalTeachers: teachersRes.count || 0,
-      totalDistributedSMS: totalAllocated,
-      totalSentSMS: sentCount,
-      currentInUserWallets: totalInWallets,
-      smsRevenue: smsRev,
-      voiceRevenue: voiceRev,
-      subscriptionRevenue: subRev,
-      monthlySubscriptionRevenue,
-      totalRevenue,
-      pendingApprovals: pendingRes.count || 0,
-      totalInstitutions: instsRes.count || 0,
-      activeInstitutions: activeInsts,
-      totalVoiceBalance,
-      adminSMSStock: adminStock,
-      typeBreakdown
-    };
+      return {
+        totalStudents: studentsRes.count || 0,
+        totalClasses: classesRes.count || 0,
+        totalTeachers: teachersRes.count || 0,
+        totalDistributedSMS: totalAllocated,
+        totalSentSMS: sentCount,
+        currentInUserWallets: totalInWallets,
+        smsRevenue: Math.round(sentCount * 0.10),
+        voiceRevenue: 0,
+        subscriptionRevenue: 0,
+        monthlySubscriptionRevenue: {},
+        totalRevenue: 0,
+        pendingApprovals: pendingRes.count || 0,
+        totalInstitutions: instsRes.count || 0,
+        activeInstitutions: activeInsts,
+        totalVoiceBalance: 0,
+        adminSMSStock: stockRes.data?.remaining_sms || 0,
+        typeBreakdown: { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 }
+      };
+    }
   };
 
   const fetchAllMadrasahs = async () => {
-    const { data, error } = await supabase.from('institutions')
-      .select('*, student_count:students(count), class_count:classes(count)')
-      .eq('is_super_admin', false)
-      .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    
-    return (data || []).map(m => ({
-      ...m,
-      student_count: (m as any).student_count?.[0]?.count || 0,
-      class_count: (m as any).class_count?.[0]?.count || 0
-    }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ action: 'get_all_institutions' })
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch institutions from API');
+      const data = await response.json();
+      const mList = data.institutions || [];
+
+      return mList.map(m => ({
+        ...m,
+        student_count: (m as any).student_count?.[0]?.count || 0,
+        class_count: (m as any).class_count?.[0]?.count || 0
+      }));
+    } catch (err) {
+      console.error('Error in fetchAllMadrasahs API call:', err);
+      // Fallback
+      const { data, error } = await supabase.from('institutions')
+        .select('*, student_count:students(count), class_count:classes(count)')
+        .eq('is_super_admin', false)
+        .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      return (data || []).map(m => ({
+        ...m,
+        student_count: (m as any).student_count?.[0]?.count || 0,
+        class_count: (m as any).class_count?.[0]?.count || 0
+      }));
+    }
   };
 
   const fetchPendingTransactions = async () => {
@@ -974,6 +1007,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     try {
       // Always fetch packages to ensure latest rates
       fetchPackages();
+
+      if (isManager && isMounted) {
+        try {
+          const settings = await smsApi.getGlobalSettings();
+          if (settings && settings.manager_permissions) {
+            setManagerPermissions(settings.manager_permissions);
+          }
+        } catch (err) {
+          console.error("Error loading manager permissions in initData:", err);
+        }
+      }
 
       const { data: sysInst } = await supabase.from('institutions').select('config_json').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
       let isAutoDeact = false;
@@ -1999,42 +2043,44 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               {/* Bento Grid layout for Revenu and Approvals */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
                 {/* Revenue Overview - Span 8 */}
-                <div className={`lg:col-span-8 ${madrasah?.theme === 'dark' ? 'bg-gradient-to-br from-slate-900 to-slate-800 border-slate-800' : 'bg-gradient-to-br from-blue-900 to-[#1E3A8A] border-blue-800 shadow-xl'} p-8 rounded-[3rem] border flex flex-col justify-between overflow-hidden relative group`}>
-                   {/* Decorative circle */}
-                   <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white opacity-5 group-hover:scale-110 transition-transform duration-700 pointer-events-none"></div>
-                   
-                   <div className="mb-8">
-                     <p className={`text-xs font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-blue-200'}`}>Total System Revenue (Net)</p>
-                     <h2 className={`text-4xl md:text-5xl font-black mt-2 text-white`}>৳ {globalStats.totalRevenue?.toLocaleString('bn-BD') || 0}</h2>
-                   </div>
+                {isSuperAdmin && (
+                  <div className={`lg:col-span-8 ${madrasah?.theme === 'dark' ? 'bg-gradient-to-br from-slate-900 to-slate-800 border-slate-800' : 'bg-gradient-to-br from-blue-900 to-[#1E3A8A] border-blue-800 shadow-xl'} p-8 rounded-[3rem] border flex flex-col justify-between overflow-hidden relative group`}>
+                    {/* Decorative circle */}
+                    <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white opacity-5 group-hover:scale-110 transition-transform duration-700 pointer-events-none"></div>
+                    
+                    <div className="mb-8">
+                      <p className={`text-xs font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-blue-200'}`}>Total System Revenue (Net)</p>
+                      <h2 className={`text-4xl md:text-5xl font-black mt-2 text-white`}>৳ {globalStats.totalRevenue?.toLocaleString('bn-BD') || 0}</h2>
+                    </div>
 
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10 w-full">
-                      <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
-                         <div className="flex items-center gap-2 mb-2">
-                           <MessageSquare size={16} className={madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-300'} />
-                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">SMS Profit</p>
-                         </div>
-                         <h4 className="text-2xl font-bold text-white">৳ {globalStats.smsRevenue?.toLocaleString('bn-BD') || 0}</h4>
-                      </div>
-                      <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
-                         <div className="flex items-center gap-2 mb-2">
-                           <Mic size={16} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-300'} />
-                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Voice Profit</p>
-                         </div>
-                         <h4 className="text-2xl font-bold text-white">৳ {globalStats.voiceRevenue?.toLocaleString('bn-BD') || 0}</h4>
-                      </div>
-                      <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
-                         <div className="flex items-center gap-2 mb-2">
-                           <Banknote size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-300'} />
-                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Sub. Revenue</p>
-                         </div>
-                         <h4 className="text-2xl font-bold text-white">৳ {globalStats.subscriptionRevenue?.toLocaleString('bn-BD') || 0}</h4>
-                      </div>
-                   </div>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10 w-full">
+                       <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <MessageSquare size={16} className={madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-300'} />
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">SMS Profit</p>
+                          </div>
+                          <h4 className="text-2xl font-bold text-white">৳ {globalStats.smsRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                       </div>
+                       <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Mic size={16} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-300'} />
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Voice Profit</p>
+                          </div>
+                          <h4 className="text-2xl font-bold text-white">৳ {globalStats.voiceRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                       </div>
+                       <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Banknote size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-300'} />
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Sub. Revenue</p>
+                          </div>
+                          <h4 className="text-2xl font-bold text-white">৳ {globalStats.subscriptionRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                       </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Approvals - Span 4 */}
-                <div className="lg:col-span-4 flex flex-col justify-stretch">
+                <div className={`${isSuperAdmin ? 'lg:col-span-4' : 'lg:col-span-12'} flex flex-col justify-stretch`}>
                   <div onClick={() => setView('approvals')} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-yellow-900' : 'bg-white border-slate-100 shadow-premium hover:border-yellow-200 hover:shadow-xl'} p-8 rounded-[3rem] border flex flex-col justify-between cursor-pointer transition-all active:scale-95 group h-full`}>
                       <div className="flex items-start justify-between w-full">
                         <div>
@@ -2238,7 +2284,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               </div>
 
               {/* Side-by-side Layout of System Breakdown and Monthly Income histories (With Recent Portals and Transactions cleanly removed) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className={`grid grid-cols-1 ${isSuperAdmin ? 'md:grid-cols-2' : ''} gap-4`}>
                 {/* System Breakdown */}
                 <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
                   <div className="flex items-center justify-between">
@@ -2256,7 +2302,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </div>
 
                 {/* Monthly Subscription Income */}
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
+                {isSuperAdmin && (
+                  <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-bubble'} p-8 rounded-[3rem] border space-y-6`}>
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1">
                       <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>মাসিক সাবস্ক্রিপশন আয়</h3>
@@ -2312,6 +2359,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     )}
                   </div>
                 </div>
+              )}
               </div>
 
             </div>
@@ -2327,19 +2375,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage {madrasahs.length} Institutions</p>
                   </div>
                   <div className="hidden sm:flex items-center gap-3">
-                    <button 
-                      onClick={toggleDeactivationMode} 
-                      disabled={isProcessingDeactivationToggle}
-                      title="Turn ON to auto deactivate unpaid institutions after 15th"
-                      className={`h-12 px-4 font-black rounded-2xl shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-widest border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
-                    >
-                      {isProcessingDeactivationToggle ? <Loader2 size={16} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={16} className="text-red-600" /> : <ToggleLeft size={16} />)}
-                      Deactivated Mode
-                    </button>
+                    {isSuperAdmin && (
+                      <button 
+                        onClick={toggleDeactivationMode} 
+                        disabled={isProcessingDeactivationToggle}
+                        title="Turn ON to auto deactivate unpaid institutions after 15th"
+                        className={`h-12 px-4 font-black rounded-2xl shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-widest border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
+                      >
+                        {isProcessingDeactivationToggle ? <Loader2 size={16} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={16} className="text-red-600" /> : <ToggleLeft size={16} />)}
+                        Deactivated Mode
+                      </button>
+                    )}
                     <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
                       <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={() => setShowCreateModal(true)} className="h-12 px-6 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-widest">
+                    <button 
+                      onClick={() => {
+                        if (canWrite('institutions')) {
+                          setShowCreateModal(true);
+                        } else {
+                          setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার নতুন পোর্টাল তৈরি করার অনুমতি নেই।' });
+                        }
+                      }} 
+                      className={`h-12 px-6 bg-blue-600 text-white font-black rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-widest ${!canWrite('institutions') ? 'opacity-50' : ''}`}
+                    >
                       <Plus size={20} /> New Portal
                     </button>
                   </div>
@@ -2360,21 +2419,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
                    {/* Quick Action Icons */}
                    <div className="flex flex-wrap items-center gap-2">
-                     <button 
-                         onClick={toggleDeactivationMode} 
-                         disabled={isProcessingDeactivationToggle}
-                         className={`sm:hidden flex-1 h-12 px-4 flex items-center justify-center gap-2 font-black rounded-[1.5rem] active:scale-95 transition-all text-[10px] uppercase tracking-widest border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
-                     >
-                        {isProcessingDeactivationToggle ? <Loader2 size={16} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={18} /> : <ToggleLeft size={18} />)}
-                        Mode
-                     </button>
-                     <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-[1.5rem] active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
-                        {isSyncingSheet ? <Loader2 size={24} className="animate-spin" /> : <Database size={24} />}
-                     </button>
+                     {isSuperAdmin && (
+                       <>
+                         <button 
+                             onClick={toggleDeactivationMode} 
+                             disabled={isProcessingDeactivationToggle}
+                             className={`sm:hidden flex-1 h-12 px-4 flex items-center justify-center gap-2 font-black rounded-[1.5rem] active:scale-95 transition-all text-[10px] uppercase tracking-widest border ${globalDeactivationMode ? 'bg-red-50 text-red-600 border-red-200' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-500 border-slate-200')} disabled:opacity-50`}
+                         >
+                            {isProcessingDeactivationToggle ? <Loader2 size={16} className="animate-spin" /> : (globalDeactivationMode ? <ToggleRight size={18} /> : <ToggleLeft size={18} />)}
+                            Mode
+                         </button>
+                         <button onClick={handleSyncToSheet} disabled={isSyncingSheet} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50' : 'bg-emerald-50 text-emerald-600 border-emerald-200'} rounded-[1.5rem] active:scale-95 transition-all border shadow-sm disabled:opacity-50`} title="Sync All to Google Sheet">
+                            {isSyncingSheet ? <Loader2 size={24} className="animate-spin" /> : <Database size={24} />}
+                         </button>
+                       </>
+                     )}
                      <button onClick={handleRefresh} className="sm:hidden w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-blue-500 rounded-[1.5rem] active:scale-95 transition-all">
                         <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
                      </button>
-                     <button onClick={() => setShowCreateModal(true)} className="sm:hidden flex-1 h-12 bg-blue-600 text-white font-black rounded-[1.5rem] flex items-center justify-center gap-2 text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20">
+                     <button 
+                       onClick={() => {
+                         if (canWrite('institutions')) {
+                           setShowCreateModal(true);
+                         } else {
+                           setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার নতুন পোর্টাল তৈরি করার অনুমতি নেই।' });
+                         }
+                       }} 
+                       className={`sm:hidden flex-1 h-12 bg-blue-600 text-white font-black rounded-[1.5rem] flex items-center justify-center gap-2 text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20 ${!canWrite('institutions') ? 'opacity-50' : ''}`}
+                     >
                         <Plus size={18} /> New
                      </button>
                    </div>
@@ -3151,49 +3223,61 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                    </div>
 
                    <div className={`space-y-6 pt-4 border-t ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
+                      {!isSuperAdmin && isManager && !canSaveCurrentTab() && (
+                        <div className={`p-4 rounded-2xl border flex items-center gap-3 ${
+                          madrasah?.theme === 'dark' 
+                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                            : 'bg-amber-50 border-amber-200 text-amber-700'
+                        }`}>
+                          <AlertTriangle size={20} className="shrink-0" />
+                          <div className="text-xs font-bold font-noto">
+                            {lang === 'bn' ? 'রিড-অনলি মোড: আপনার এই তথ্য পরিবর্তন করার অনুমতি নেই।' : 'Read-Only Mode: You do not have permission to modify this section.'}
+                          </div>
+                        </div>
+                      )}
                       {detailsTab === 'institution' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Name</label>
-                                 <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editName} onChange={(e) => setEditName(e.target.value)} />
+                                 <input type="text" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editName} onChange={(e) => setEditName(e.target.value)} />
                               </div>
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Gmail / Email</label>
-                                 <input type="email" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                                 <input type="email" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
                               </div>
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Phone</label>
-                                 <input type="tel" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                                 <input type="tel" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                               </div>
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">User PIN / Password</label>
                                  <div className="relative">
-                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
+                                    <input type="text" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} placeholder="Enter new PIN/Password" />
                                     <Shield className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                                  </div>
                               </div>
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-blue-400 uppercase tracking-widest px-2">SMS Balance</label>
                                  <div className="relative">
-                                    <input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editSmsBalance} onChange={(e) => setEditSmsBalance(Number(e.target.value))} />
+                                    <input type="number" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editSmsBalance} onChange={(e) => setEditSmsBalance(Number(e.target.value))} />
                                     <MessageSquare className="absolute right-5 top-1/2 -translate-y-1/2 text-blue-400" size={20} />
                                  </div>
                               </div>
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-2">Voice Balance (৳)</label>
                                  <div className="relative">
-                                    <input type="number" step="0.01" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editBalance} onChange={(e) => setEditBalance(Number(e.target.value))} />
+                                    <input type="number" step="0.01" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editBalance} onChange={(e) => setEditBalance(Number(e.target.value))} />
                                     <Mic className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-400" size={20} />
                                  </div>
                               </div>
                               <div className="space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institute Code</label>
-                                 <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all`} value={editInstituteCode} onChange={(e) => setEditInstituteCode(e.target.value)} placeholder="Enter Institute Code" />
+                                 <input type="text" readOnly={!canWrite('institution_info')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editInstituteCode} onChange={(e) => setEditInstituteCode(e.target.value)} placeholder="Enter Institute Code" />
                               </div>
                               <div className="md:col-span-2 space-y-2">
                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Address</label>
-                                 <textarea className={`w-full h-28 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 py-4 font-black outline-none focus:border-blue-500 transition-all resize-none`} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Enter full address..." />
+                                 <textarea readOnly={!canWrite('institution_info')} className={`w-full h-28 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white focus:bg-slate-800' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-6 py-4 font-black outline-none focus:border-blue-500 transition-all resize-none ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`} value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="Enter full address..." />
                               </div>
                            </div>
 
@@ -3202,7 +3286,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                     <Sliders size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} /> Basic Config
                                  </h4>
-                                 <button onClick={() => setEditActive(!editActive)} className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all w-full md:w-auto ${editActive ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-red-500 text-white shadow-lg shadow-red-500/20'}`}>
+                                 <button 
+                                   onClick={() => {
+                                     if (canWrite('institution_info')) {
+                                       setEditActive(!editActive);
+                                     } else {
+                                       setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পরিবর্তন করার অনুমতি নেই।' });
+                                     }
+                                   }} 
+                                   className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all w-full md:w-auto ${editActive ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-red-500 text-white shadow-lg shadow-red-500/20'} ${!canWrite('institution_info') ? 'opacity-80 cursor-not-allowed' : ''}`}
+                                 >
                                     {editActive ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
                                     <span className="text-[10px] font-black uppercase tracking-widest">{editActive ? 'Active' : 'Inactive'}</span>
                                  </button>
@@ -3211,7 +3304,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Institution Type</label>
                                     <select 
-                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      disabled={!canWrite('institution_info')}
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
                                       value={editInstitutionType}
                                       onChange={(e) => setEditInstitutionType(e.target.value as any)}
                                     >
@@ -3227,7 +3321,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     </label>
                                     <input 
                                       type="number" 
-                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black outline-none focus:border-blue-500 transition-all`}
+                                      readOnly={!canWrite('institution_info')}
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
                                       value={editStudentLimit}
                                       onChange={(e) => setEditStudentLimit(Math.max(0, Number(e.target.value)))}
                                       placeholder="0 for unlimited"
@@ -3246,7 +3341,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Result Engine</label>
                                     <select 
-                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      disabled={!canWrite('institution_info')}
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
                                       value={editResultEngine}
                                       onChange={(e) => setEditResultEngine(e.target.value as any)}
                                     >
@@ -3258,7 +3354,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Result System</label>
                                     <select 
-                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      disabled={!canWrite('institution_info')}
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
                                       value={editResultSystem}
                                       onChange={(e) => setEditResultSystem(e.target.value as any)}
                                     >
@@ -3270,7 +3367,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Accounting Mode</label>
                                     <select 
-                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                                      disabled={!canWrite('institution_info')}
+                                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('institution_info') ? 'cursor-not-allowed opacity-85' : ''}`}
                                       value={editAccountingMode}
                                       onChange={(e) => setEditAccountingMode(e.target.value as any)}
                                     >
@@ -3294,27 +3392,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Voice Sender ID</label>
-                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editVoiceSenderId} onChange={(e) => setEditVoiceSenderId(e.target.value)} placeholder="e.g. 8801..." />
+                                    <input type="text" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editVoiceSenderId} onChange={(e) => setEditVoiceSenderId(e.target.value)} placeholder="e.g. 8801..." />
                                  </div>
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">REVE API Key</label>
-                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="API Key" />
+                                    <input type="text" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editReveApiKey} onChange={(e) => setEditReveApiKey(e.target.value)} placeholder="API Key" />
                                  </div>
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Secret Key</label>
-                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
+                                    <input type="text" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editReveSecretKey} onChange={(e) => setEditReveSecretKey(e.target.value)} placeholder="Secret Key" />
                                  </div>
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Masking / Sender ID</label>
-                                    <input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="e.g. DEENORA" />
+                                    <input type="text" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editReveClientId} onChange={(e) => setEditReveClientId(e.target.value)} placeholder="e.g. DEENORA" />
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">SMS Rate (BDT)</label>
-                                    <input type="number" step="0.01" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editSmsRate} onChange={(e) => setEditSmsRate(Number(e.target.value))} placeholder="0.50" />
+                                    <input type="number" step="0.01" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editSmsRate} onChange={(e) => setEditSmsRate(Number(e.target.value))} placeholder="0.50" />
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Voice Rate (BDT)</label>
-                                    <input type="number" step="0.01" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editVoiceRate} onChange={(e) => setEditVoiceRate(Number(e.target.value))} placeholder="0.50" />
+                                    <input type="number" step="0.01" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editVoiceRate} onChange={(e) => setEditVoiceRate(Number(e.target.value))} placeholder="0.50" />
                                   </div>
                                </div>
                             </div>
@@ -3335,8 +3433,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   <div key={key} className={`flex items-center justify-between p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100'}`}>
                                     <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{key.replace(/_/g, ' ')}</span>
                                     <button 
-                                      onClick={() => setEditModules({...editModules, [key]: !value})}
-                                      className={`w-12 h-6 rounded-full transition-all relative ${value ? 'bg-emerald-500' : (madrasah?.theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200')}`}
+                                      onClick={() => {
+                                        if (canWrite('permissions')) {
+                                          setEditModules({...editModules, [key]: !value});
+                                        } else {
+                                          setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার মডিউল পারমিশন পরিবর্তন করার অনুমতি নেই।' });
+                                        }
+                                      }}
+                                      className={`w-12 h-6 rounded-full transition-all relative ${value ? 'bg-emerald-500' : (madrasah?.theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200')} ${!canWrite('permissions') ? 'cursor-not-allowed opacity-80' : ''}`}
                                     >
                                       <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${value ? 'left-7' : 'left-1'}`} />
                                     </button>
@@ -3357,7 +3461,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">System Type</label>
-                                    <select className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editSubscriptionType} onChange={(e) => setEditSubscriptionType(e.target.value as any)}>
+                                    <select disabled={!canWrite('subscription')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('subscription') ? 'cursor-not-allowed opacity-85' : ''}`} value={editSubscriptionType} onChange={(e) => setEditSubscriptionType(e.target.value as any)}>
                                        <option value="monthly">Monthly Subscription</option>
                                        <option value="quarterly">Quarterly Subscription</option>
                                        <option value="yearly">Yearly Subscription</option>
@@ -3366,7 +3470,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  </div>
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Portal Status</label>
-                                    <select className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
+                                    <select disabled={!canWrite('subscription')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('subscription') ? 'cursor-not-allowed opacity-85' : ''}`} value={editStatus} onChange={(e) => setEditStatus(e.target.value as any)}>
                                        <option value="active">Active</option>
                                        <option value="suspended">Suspended</option>
                                        <option value="trial">Trial Period</option>
@@ -3374,14 +3478,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  </div>
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Subscription End</label>
-                                    <input type="date" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
+                                    <input type="date" readOnly={!canWrite('subscription')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('subscription') ? 'cursor-not-allowed opacity-85' : ''}`} value={editSubscriptionEnd} onChange={(e) => setEditSubscriptionEnd(e.target.value)} />
                                  </div>
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest px-2">Custom Monthly Rate (৳)</label>
                                     <input 
                                        type="number" 
+                                       readOnly={!canWrite('subscription')}
                                        placeholder="Set Custom Rate"
-                                       className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`} 
+                                       className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('subscription') ? 'cursor-not-allowed opacity-85' : ''}`} 
                                        value={editCustomSubscriptionFee} 
                                        onChange={(e) => setEditCustomSubscriptionFee(e.target.value === '' ? '' : Number(e.target.value))} 
                                     />
@@ -3396,10 +3501,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                        <button 
                                          key={pkg.name}
                                          onClick={() => {
-                                           setEditPackageName(pkg.name);
-                                           setEditPackageRate(pkg.rate);
+                                           if (canWrite('payment')) {
+                                             setEditPackageName(pkg.name);
+                                             setEditPackageRate(pkg.rate);
+                                           } else {
+                                             setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
+                                           }
                                          }}
-                                         className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${editPackageName === pkg.name ? (madrasah?.theme === 'dark' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-blue-50 border-blue-200 text-blue-700 shadow-lg shadow-blue-500/10') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
+                                         className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${editPackageName === pkg.name ? (madrasah?.theme === 'dark' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-lg shadow-blue-500/10' : 'bg-blue-50 border-blue-200 text-blue-700 shadow-lg shadow-blue-500/10') : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')} ${!canWrite('payment') ? 'opacity-80 cursor-not-allowed' : ''}`}
                                        >
                                           <span className="text-[11px] font-black uppercase tracking-widest">{pkg.name}</span>
                                           {pkg.name === 'Custom' ? (
@@ -3424,9 +3533,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Months to Pay ({selectedYear})</label>
                                     <div className="flex items-center gap-3">
-                                       <button onClick={() => setSelectedYear(selectedYear - 1)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}><ArrowLeft size={16} /></button>
+                                       <button 
+                                         onClick={() => {
+                                           if (canWrite('payment')) {
+                                             setSelectedYear(selectedYear - 1);
+                                           } else {
+                                             setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
+                                           }
+                                         }} 
+                                         className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'} ${!canWrite('payment') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                       >
+                                         <ArrowLeft size={16} />
+                                       </button>
                                        <span className="text-sm font-black text-blue-500">{selectedYear}</span>
-                                       <button onClick={() => setSelectedYear(selectedYear + 1)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}><ArrowRight size={16} /></button>
+                                       <button 
+                                         onClick={() => {
+                                           if (canWrite('payment')) {
+                                             setSelectedYear(selectedYear + 1);
+                                           } else {
+                                             setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
+                                           }
+                                         }} 
+                                         className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'} ${!canWrite('payment') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                       >
+                                         <ArrowRight size={16} />
+                                       </button>
                                     </div>
                                  </div>
 
@@ -3434,45 +3565,63 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="flex flex-wrap items-center gap-2 px-1">
                                     <button 
                                       onClick={() => {
-                                        const currentYear = new Date().getFullYear();
-                                        const currentMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
-                                        setSelectedMonthsForPayment([`${currentYear}-${currentMonth}`]);
+                                        if (canWrite('payment')) {
+                                          const currentYear = new Date().getFullYear();
+                                          const currentMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
+                                          setSelectedMonthsForPayment([`${currentYear}-${currentMonth}`]);
+                                        } else {
+                                          setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
+                                        }
                                       }}
-                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 1 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 1 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')} ${!canWrite('payment') ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                       Monthly
                                     </button>
                                     <button 
                                       onClick={() => {
-                                        const currentYear = new Date().getFullYear();
-                                        const currentMonth = new Date().getMonth(); // 0-indexed
-                                        const months = [];
-                                        for (let i = 0; i < 3; i++) {
-                                          const d = new Date(currentYear, currentMonth + i, 1);
-                                          months.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
+                                        if (canWrite('payment')) {
+                                          const currentYear = new Date().getFullYear();
+                                          const currentMonth = new Date().getMonth(); // 0-indexed
+                                          const months = [];
+                                          for (let i = 0; i < 3; i++) {
+                                            const d = new Date(currentYear, currentMonth + i, 1);
+                                            months.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
+                                          }
+                                          setSelectedMonthsForPayment(months);
+                                        } else {
+                                          setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
                                         }
-                                        setSelectedMonthsForPayment(months);
                                       }}
-                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 3 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 3 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')} ${!canWrite('payment') ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                       Quarterly
                                     </button>
                                     <button 
                                       onClick={() => {
-                                        const currentYear = new Date().getFullYear();
-                                        const months = [];
-                                        for (let i = 1; i <= 12; i++) {
-                                          months.push(`${currentYear}-${i.toString().padStart(2, '0')}`);
+                                        if (canWrite('payment')) {
+                                          const currentYear = new Date().getFullYear();
+                                          const months = [];
+                                          for (let i = 1; i <= 12; i++) {
+                                            months.push(`${currentYear}-${i.toString().padStart(2, '0')}`);
+                                          }
+                                          setSelectedMonthsForPayment(months);
+                                        } else {
+                                          setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
                                         }
-                                        setSelectedMonthsForPayment(months);
                                       }}
-                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 12 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')}`}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${selectedMonthsForPayment.length === 12 ? 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20' : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')} ${!canWrite('payment') ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                       Yearly
                                     </button>
                                     <button 
-                                      onClick={() => setSelectedMonthsForPayment([])}
-                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'}`}
+                                      onClick={() => {
+                                        if (canWrite('payment')) {
+                                          setSelectedMonthsForPayment([]);
+                                        } else {
+                                          setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
+                                        }
+                                      }}
+                                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'} ${!canWrite('payment') ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                       Clear
                                     </button>
@@ -3557,33 +3706,36 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Discount (৳)</p>
                                        <input 
                                          type="number" 
+                                         readOnly={!canWrite('payment')}
                                          value={editDiscount || ''} 
                                          onChange={(e) => {
                                            setEditDiscount(Number(e.target.value) || 0);
                                            setOverrideTotal('');
                                          }}
                                          placeholder="0"
-                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
+                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'} ${!canWrite('payment') ? 'cursor-not-allowed opacity-85' : ''}`}
                                        />
                                     </div>
                                     <div>
                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>বকেয়া (Due ৳)</p>
                                        <input 
                                          type="number" 
+                                         readOnly={!canWrite('payment')}
                                          value={editDueAmount || ''} 
                                          onChange={(e) => setEditDueAmount(Number(e.target.value))}
                                          placeholder="0"
-                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
+                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'} ${!canWrite('payment') ? 'cursor-not-allowed opacity-85' : ''}`}
                                        />
                                     </div>
                                     <div>
                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Custom Total (৳)</p>
                                        <input 
                                          type="number" 
+                                         readOnly={!canWrite('payment')}
                                          value={overrideTotal} 
                                          onChange={(e) => setOverrideTotal(e.target.value === '' ? '' : Number(e.target.value))}
                                          placeholder="Auto"
-                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'}`}
+                                         className={`w-full h-12 rounded-xl px-4 font-black outline-none border-2 transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-blue-500'} ${!canWrite('payment') ? 'cursor-not-allowed opacity-85' : ''}`}
                                        />
                                     </div>
                                  </div>
@@ -3677,8 +3829,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     setIsUpdatingUser(false);
                                   }
                                 }}
-                                disabled={isUpdatingUser || (overrideTotal !== '' ? overrideTotal : ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length)) <= 0}
-                                className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${isUpdatingUser || (overrideTotal !== '' ? overrideTotal : ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length)) <= 0 ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400') : 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20 active:scale-95'}`}
+                                disabled={isUpdatingUser || !canWrite('payment') || (overrideTotal !== '' ? overrideTotal : ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length)) <= 0}
+                                className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${isUpdatingUser || !canWrite('payment') || (overrideTotal !== '' ? overrideTotal : ((userStats.students > 0 && userStats.students <= 200 ? 1 : userStats.students) * editPackageRate * selectedMonthsForPayment.length)) <= 0 ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20 active:scale-95'}`}
                               >
                                 <Banknote size={24} /> Receive Payment
                               </button>
@@ -3686,10 +3838,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                 <div className="mt-8">
                                   <label className={`block text-[10px] font-black uppercase tracking-[0.2em] mb-3 ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>সাবস্ক্রিপশন নোট (Subscription Note)</label>
                                   <textarea 
+                                    readOnly={!canWrite('subscription')}
                                     value={editSubscriptionNote}
                                     onChange={(e) => setEditSubscriptionNote(e.target.value)}
                                     placeholder="এখানে কিছু লিখে রাখুন..."
-                                    className={`w-full h-32 rounded-2xl border p-5 font-bold text-sm outline-none transition-all resize-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500'}`}
+                                    className={`w-full h-32 rounded-2xl border p-5 font-bold text-sm outline-none transition-all resize-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500'} ${!canWrite('subscription') ? 'cursor-not-allowed opacity-85' : ''}`}
                                   />
                                 </div>
                            </div>
@@ -3746,13 +3899,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                                 >
                                                   <Download size={14} /> Receipt
                                                 </button>
-                                                <button 
-                                                  onClick={(e) => handleDeleteHistory(tr, e)}
-                                                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
-                                                  title="Delete history"
-                                                >
-                                                  <Trash2 size={14} />
-                                                </button>
+                                                {canWrite('history') && (
+                                                  <button 
+                                                    onClick={(e) => handleDeleteHistory(tr, e)}
+                                                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors"
+                                                    title="Delete history"
+                                                  >
+                                                    <Trash2 size={14} />
+                                                  </button>
+                                                )}
                                               </div>
                                            </div>
                                         </div>

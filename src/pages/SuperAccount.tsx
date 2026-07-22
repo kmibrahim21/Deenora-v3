@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, View, SubscriptionPackage } from 'types';
@@ -17,15 +17,20 @@ interface SuperAccountProps {
   setStatusModal: (modal: { show: boolean; type: 'success' | 'error'; title: string; message: string }) => void;
   dataVersion?: number;
   triggerRefresh?: () => void;
+  profile: any;
 }
 
-const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onLogout, onProfileUpdate, initialMadrasah, setStatusModal, dataVersion, triggerRefresh }) => {
+const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onLogout, onProfileUpdate, initialMadrasah, setStatusModal, dataVersion, triggerRefresh, profile }) => {
+  const isSuperAdmin = profile?.role === 'super_admin';
+  const isManager = profile?.role === 'manager';
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingBulkSMS, setIsEditingBulkSMS] = useState(false);
   const [isEditingGlobalUpdate, setIsEditingGlobalUpdate] = useState(false);
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [isEditingPersonalApi, setIsEditingPersonalApi] = useState(false);
+  const [isEditingManagerPermissions, setIsEditingManagerPermissions] = useState(false);
+  const [isEditingStaff, setIsEditingStaff] = useState(false);
   const [isEditingPackages, setIsEditingPackages] = useState(false);
   const [showPackageForm, setShowPackageForm] = useState(false);
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
@@ -41,6 +46,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     support_number: '',
     sms_rate: 0.50,
     voice_rate: 1.00,
+    manager_permissions: {} as any,
     global_update_active: false,
     global_update_message: '',
     global_update_version: 0
@@ -180,6 +186,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       support_number: settings.support_number || '',
       sms_rate: settings.sms_rate || 0.50,
       voice_rate: settings.voice_rate || 1.00,
+      manager_permissions: settings.manager_permissions || {},
       global_update_active: settings.global_update_active || false,
       global_update_message: settings.global_update_message || '',
       global_update_version: settings.global_update_version || 0
@@ -197,7 +204,8 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         reve_client_id: (globalSettings.reve_client_id || '').trim(),
         bkash_number: (globalSettings.bkash_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
-        voice_rate: Number(globalSettings.voice_rate)
+        voice_rate: Number(globalSettings.voice_rate),
+        manager_permissions: globalSettings.manager_permissions
       };
 
       // Only add support_number if it's likely to exist or as a trial
@@ -312,6 +320,110 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     if (onProfileUpdate) onProfileUpdate();
   };
 
+  const handleSaveManagerPermissions = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('system_settings').upsert({
+        id: '00000000-0000-0000-0000-000000000001',
+        reve_api_key: (globalSettings.reve_api_key || '').trim(),
+        reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
+        reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
+        reve_client_id: (globalSettings.reve_client_id || '').trim(),
+        bkash_number: (globalSettings.bkash_number || '').trim(),
+        support_number: (globalSettings.support_number || '').trim(),
+        sms_rate: globalSettings.sms_rate,
+        voice_rate: globalSettings.voice_rate,
+        manager_permissions: globalSettings.manager_permissions,
+        global_update_active: globalSettings.global_update_active,
+        global_update_message: globalSettings.global_update_message,
+        global_update_version: globalSettings.global_update_version
+      });
+      if (error) throw error;
+      setIsEditingManagerPermissions(false);
+      setShowSuccessModal({ show: true, title: 'ম্যানেজার পারমিশন', message: 'ম্যানেজারের গ্লোবাল পারমিশন সফলভাবে আপডেট হয়েছে।' });
+      fetchGlobalSettings();
+    } catch (err: any) { alert(err.message); } finally { setSaving(false); }
+  };
+
+  const [staff, setStaff] = useState<any[]>([]);
+  const [showStaffForm, setShowStaffForm] = useState(false);
+  const [newStaff, setNewStaff] = useState({ name: '', email: '', password: '', role: 'manager' as any });
+
+  const fetchStaff = async () => {
+    try {
+      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').single();
+      if (!sysInst) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('institution_id', sysInst.id)
+        .in('role', ['manager', 'super_admin']);
+      
+      if (error) throw error;
+      setStaff(data || []);
+    } catch (err) {
+      console.error("Error fetching staff:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (isEditingStaff) {
+      fetchStaff();
+    }
+  }, [isEditingStaff]);
+
+  const handleCreateStaff = async () => {
+    if (!newStaff.name || !newStaff.email || !newStaff.password) return;
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'create_staff',
+          ...newStaff
+        })
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+
+      setShowStaffForm(false);
+      setNewStaff({ name: '', email: '', password: '', role: 'manager' });
+      fetchStaff();
+      setShowSuccessModal({ show: true, title: 'স্টাফ তৈরি', message: 'নতুন স্টাফ সফলভাবে তৈরি হয়েছে।' });
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteStaff = async (id: string) => {
+    if (!confirm('আপনি কি এই স্টাফ মেম্বারকে ডিলিট করতে চান?')) return;
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      fetchStaff();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const toggleManagerPermission = (perm: string) => {
+    setGlobalSettings(prev => ({
+      ...prev,
+      manager_permissions: {
+        ...prev.manager_permissions,
+        [perm]: !prev.manager_permissions[perm]
+      }
+    }));
+  };
+
   const displayName = lang === 'bn' ? 'সুপার অ্যাডমিন' : 'Super Admin';
 
   return (
@@ -405,44 +517,81 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
           </div>
         </button>
         
-        <button 
-          onClick={() => setIsEditingPackages(true)}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Package size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'প্যাকেজসমূহ' : 'Packages'}</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Subscription Plans</p>
-          </div>
-        </button>
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setIsEditingManagerPermissions(true)}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Shield size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ম্যানেজার পারমিশন' : 'Manager Permissions'}</h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Global Role Config</p>
+            </div>
+          </button>
+        )}
 
-        <button 
-          onClick={() => setIsEditingPersonalApi(true)}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <ShieldCheck size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Personal Gateway</p>
-          </div>
-        </button>
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setIsEditingStaff(true)}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users2 size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'স্টাফ ম্যানেজমেন্ট' : 'Staff Management'}</h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Managers</p>
+            </div>
+          </button>
+        )}
 
-        <button 
-          onClick={() => setIsEditingPayment(true)}
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <CreditCard size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Master Payment</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{globalSettings.bkash_number || 'N/A'}</p>
-          </div>
-        </button>
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setIsEditingPackages(true)}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Package size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'প্যাকেজসমূহ' : 'Packages'}</h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Subscription Plans</p>
+            </div>
+          </button>
+        )}
+
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setIsEditingPersonalApi(true)}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security'}</h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Personal Gateway</p>
+            </div>
+          </button>
+        )}
+
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setIsEditingPayment(true)}
+            className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+          >
+            <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <CreditCard size={24} />
+            </div>
+            <div>
+              <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Master Payment</h5>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{globalSettings.bkash_number || 'N/A'}</p>
+            </div>
+          </button>
+        )}
+
 
         <div className={`col-span-2 p-6 rounded-[3rem] border shadow-sm flex items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
           <div className="flex items-center gap-4">
@@ -506,6 +655,205 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
           </div>
         </button>
       </div>
+
+      {isEditingManagerPermissions && createPortal(
+        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className={`w-full max-w-xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[85vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className="p-5 shrink-0 relative overflow-hidden">
+                 <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-3">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400 border-blue-900/50' : 'bg-blue-50 text-blue-600 border-blue-100'}`}><Shield size={20} strokeWidth={2.5} /></div>
+                       <div><h3 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ম্যানেজার পারমিশন' : 'Manager Permissions'}</h3><p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em]">Global Role Config</p></div>
+                    </div>
+                    <button onClick={() => setIsEditingManagerPermissions(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500 border-slate-700' : 'bg-slate-50 text-slate-300 border-slate-100'}`}><X size={18} /></button>
+                 </div>
+              </div>
+              <div className="px-6 pb-8 space-y-6 overflow-y-auto custom-scrollbar flex-1 relative z-10">
+                 <div className="p-5 rounded-[2rem] border space-y-4 bg-amber-50/50 border-amber-100 dark:bg-amber-900/10 dark:border-amber-900/30">
+                    <p className="text-[11px] font-bold text-amber-700 dark:text-amber-400 leading-relaxed">
+                      {lang === 'bn' 
+                        ? 'এখানে আপনি সিস্টেমের "ম্যানেজার" রোলের জন্য গ্লোবাল পারমিশন সেট করতে পারবেন। আপনি যা সিলেক্ট করবেন, সকল মাদ্রাসার ম্যানেজাররা সেই পারমিশনগুলো পাবেন।' 
+                        : 'Here you can set global permissions for the "Manager" role in the system. Managers of all institutions will inherit these permissions.'}
+                    </p>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { id: 'institutions', label: lang === 'bn' ? 'প্রতিষ্ঠান ম্যানেজ (নতুন প্রতিষ্ঠান এড)' : 'Manage Institutions (Add New)' },
+                      { id: 'institution_info', label: lang === 'bn' ? 'প্রতিষ্ঠান তথ্য' : 'Institution Info' },
+                      { id: 'api_security', label: lang === 'bn' ? 'এপিআই সিকিউরিটি' : 'API Security' },
+                      { id: 'permissions', label: lang === 'bn' ? 'পারমিশন' : 'Permissions' },
+                      { id: 'subscription', label: lang === 'bn' ? 'সাবস্ক্রিপশন' : 'Subscription' },
+                      { id: 'history', label: lang === 'bn' ? 'ইতিহাস' : 'History' },
+                      { id: 'payment', label: lang === 'bn' ? 'পেমেন্ট' : 'Payment' },
+                      { id: 'contact', label: lang === 'bn' ? 'যোগাযোগ' : 'Contact' },
+                      { id: 'tutorials', label: lang === 'bn' ? 'টিউটোরিয়াল ম্যানেজ' : 'Manage Tutorials' },
+                      { id: 'voice_dashboard', label: lang === 'bn' ? 'ভয়েস ড্যাশবোর্ড' : 'Voice Dashboard' },
+                      { id: 'packages', label: lang === 'bn' ? 'প্যাকেজসমূহ' : 'Packages' }
+                    ].map((perm) => (
+                      <button
+                        key={perm.id}
+                        onClick={() => toggleManagerPermission(perm.id)}
+                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-95 ${
+                          globalSettings.manager_permissions?.[perm.id]
+                            ? 'bg-blue-50 border-blue-200 text-[#2563EB]'
+                            : 'bg-slate-50 border-slate-100 text-slate-500 hover:border-slate-200'
+                        }`}
+                      >
+                        <span className="text-xs font-black font-noto">{perm.label}</span>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          globalSettings.manager_permissions?.[perm.id] ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300'
+                        }`}>
+                          {globalSettings.manager_permissions?.[perm.id] && <CheckCircle2 size={12} />}
+                        </div>
+                      </button>
+                    ))}
+                 </div>
+
+                 <button onClick={handleSaveManagerPermissions} disabled={saving} className="relative w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/20 text-[13px] uppercase tracking-[0.25em] mt-2">
+                    {saving ? <Loader2 className="animate-spin" size={22} /> : <>Update Manager Access</>}
+                 </button>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Staff Management Modal */}
+      {isEditingStaff && createPortal(
+        <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[9999] flex items-center justify-center p-4">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-2xl rounded-[3rem] shadow-2xl border overflow-hidden flex flex-col max-h-[90vh]`}>
+            <div className={`p-8 border-b flex items-center justify-between shrink-0 ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
+              <div>
+                <h3 className={`text-2xl font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#2E0B5E]'}`}>
+                  {lang === 'bn' ? 'স্টাফ ম্যানেজমেন্ট' : 'Staff Management'}
+                </h3>
+                <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Manage Global Managers</p>
+              </div>
+              <button onClick={() => setIsEditingStaff(false)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-8 overflow-y-auto flex-1 space-y-6">
+              <div className="flex justify-between items-center">
+                <h4 className={`font-bold font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                  {lang === 'bn' ? 'স্টাফ মেম্বার তালিকা' : 'Staff List'} ({staff.length})
+                </h4>
+                <button 
+                  onClick={() => setShowStaffForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] text-white rounded-xl text-sm font-bold active:scale-95 transition-all"
+                >
+                  <UserPlus size={18} />
+                  {lang === 'bn' ? 'নতুন স্টাফ' : 'New Staff'}
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {staff.map(s => (
+                  <div key={s.id} className={`p-4 rounded-2xl border flex items-center justify-between ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center font-bold text-lg">
+                        {s.full_name?.charAt(0)}
+                      </div>
+                      <div>
+                        <h5 className={`font-bold font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{s.full_name}</h5>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${s.role === 'super_admin' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                            {s.role}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteStaff(s.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+                    >
+                      <Trash size={18} />
+                    </button>
+                  </div>
+                ))}
+                {staff.length === 0 && (
+                  <div className="text-center py-12 text-slate-400 font-noto">
+                    কোনো স্টাফ মেম্বার পাওয়া যায়নি
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {showStaffForm && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-md rounded-[2.5rem] shadow-2xl border overflow-hidden p-8`}>
+                <h4 className={`text-xl font-black font-noto mb-6 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#2E0B5E]'}`}>
+                  {lang === 'bn' ? 'নতুন স্টাফ তৈরি করুন' : 'Create New Staff'}
+                </h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">Full Name</label>
+                    <input 
+                      type="text" 
+                      value={newStaff.name}
+                      onChange={e => setNewStaff({...newStaff, name: e.target.value})}
+                      className={`w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                      placeholder="Enter name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">Email Address</label>
+                    <input 
+                      type="email" 
+                      value={newStaff.email}
+                      onChange={e => setNewStaff({...newStaff, email: e.target.value})}
+                      className={`w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                      placeholder="Enter email"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">Password</label>
+                    <input 
+                      type="password" 
+                      value={newStaff.password}
+                      onChange={e => setNewStaff({...newStaff, password: e.target.value})}
+                      className={`w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                      placeholder="Min 6 characters"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block px-1">System Role</label>
+                    <select 
+                      value={newStaff.role}
+                      onChange={e => setNewStaff({...newStaff, role: e.target.value as any})}
+                      className={`w-full p-4 rounded-2xl border focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold appearance-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}
+                    >
+                      <option value="manager">Manager</option>
+                      <option value="super_admin">Super Admin</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-8">
+                  <button 
+                    onClick={() => setShowStaffForm(false)}
+                    className={`flex-1 p-4 rounded-2xl font-bold transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                  >
+                    {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                  </button>
+                  <button 
+                    onClick={handleCreateStaff}
+                    disabled={saving}
+                    className="flex-1 p-4 bg-[#2563EB] text-white rounded-2xl font-bold shadow-lg shadow-blue-500/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                    {lang === 'bn' ? 'তৈরি করুন' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
 
       {isEditingPackages && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">

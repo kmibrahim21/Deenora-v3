@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     institution_id UUID REFERENCES institutions(id) ON DELETE SET NULL,
     full_name TEXT NOT NULL,
-    role TEXT CHECK (role IN ('super_admin', 'madrasah_admin', 'accountant', 'teacher')) DEFAULT 'madrasah_admin',
+    role TEXT CHECK (role IN ('super_admin', 'madrasah_admin', 'manager', 'accountant', 'teacher')) DEFAULT 'madrasah_admin',
     permissions JSONB DEFAULT '{}'::jsonb,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -407,6 +407,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
     bkash_number TEXT,
     sms_rate DECIMAL(5, 2) DEFAULT 0.50,
     voice_rate DECIMAL(5, 2) DEFAULT 1.00,
+    manager_permissions JSONB DEFAULT '{}'::jsonb,
+    support_number TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

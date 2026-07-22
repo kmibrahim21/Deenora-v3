@@ -30,6 +30,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const isSuperAdmin = profile?.role === 'super_admin';
+  const isManager = profile?.role === 'manager';
+  const isSystemStaff = isSuperAdmin || isManager;
   const role = profile?.role || 'teacher';
   
   // Dynamic module configuration
@@ -73,7 +75,15 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
   }, [madrasah]) as any;
 
   const canAccess = (module: string) => {
-    if (profile?.role === 'super_admin') return true;
+    if (isSuperAdmin) return true;
+    
+    // For managers, check their specific permissions for system views
+    if (isManager) {
+      if (module === 'dashboard') return !!profile?.permissions?.dashboard;
+      if (module === 'institutions') return !!profile?.permissions?.institutions;
+      if (module === 'approvals') return !!profile?.permissions?.approvals;
+      if (module === 'tutorials') return !!profile?.permissions?.tutorials;
+    }
     
     // For regular admins, check module permissions
     const moduleMap: Record<string, boolean> = {
@@ -114,7 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
   const isTabActive = (tab: string) => {
     if (tab === 'home' && currentView === 'home') return true;
     if (tab === 'account' && (currentView === 'account' || currentView === 'super-account' || currentView === 'admin-voice-service' || currentView === 'admin-tutorials')) return true;
-    if (tab === 'list' && currentView === 'admin-panel') return true;
+    if (tab === 'list' && (currentView === 'admin-panel' || currentView === 'admin-institutions')) return true;
     if (tab === 'institutions' && currentView === 'admin-institutions') return true;
     if (tab === 'dashboard' && currentView === 'admin-dashboard') return true;
     if (tab === 'approvals' && currentView === 'admin-approvals') return true;
@@ -148,16 +158,16 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
           </div>
           <div className="min-w-0 flex-1">
             <h1 className={`text-lg font-black leading-tight tracking-tight font-noto line-clamp-3 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
-              {isSuperAdmin ? (lang === 'bn' ? 'সুপার অ্যাডমিন' : 'Super Admin') : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
+              {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
             </h1>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 font-noto">
-              {role === 'super_admin' ? 'Super Admin Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
+              {role === 'super_admin' ? 'Super Admin Portal' : role === 'manager' ? 'Manager Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
             </p>
           </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-          {isSuperAdmin ? (
+          {isSystemStaff ? (
             <>
               {canAccess('dashboard') && (
                 <button onClick={() => setView('admin-dashboard')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('dashboard') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
@@ -177,7 +187,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-sm font-bold font-noto">{t('approvals', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
-              {isSuperAdmin && (
+              {isSystemStaff && (
                 <>
                   <button onClick={() => setView('sms-voice-menu')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                     <MessageSquare size={22} strokeWidth={isTabActive('sms-voice-menu') ? 2.5 : 2} />
@@ -268,16 +278,16 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             <div className="flex items-center gap-4 flex-1 min-w-0">
             <div className="relative shrink-0">
               <div className={`w-11 h-11 rounded-full flex items-center justify-center shadow-sm border overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                {isSuperAdmin ? <ShieldCheck size={24} className="text-[#2563EB]" /> : (madrasah?.logo_url ? <img src={madrasah.logo_url} className="w-full h-full object-contain" alt="Logo" /> : <BookOpen size={22} className="text-[#2563EB]" />)}
+                {isSystemStaff ? <ShieldCheck size={24} className="text-[#2563EB]" /> : (madrasah?.logo_url ? <img src={madrasah.logo_url} className="w-full h-full object-contain" alt="Logo" /> : <BookOpen size={22} className="text-[#2563EB]" />)}
               </div>
               <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 ${madrasah?.theme === 'dark' ? 'border-slate-900' : 'border-white'} ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
             </div>
             <div className="min-w-0 flex-1">
               <h1 className={`text-[16px] font-black leading-[1.2] tracking-tight font-noto line-clamp-3 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'}`}>
-                {isSuperAdmin ? (lang === 'bn' ? 'সুপার অ্যাডমিন' : 'Super Admin') : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
+                {isSystemStaff ? (lang === 'bn' ? (isSuperAdmin ? 'সুপার অ্যাডমিন' : 'ম্যানেজার') : (isSuperAdmin ? 'Super Admin' : 'Manager')) : (madrasah?.name || (madrasah?.institution_type === 'school' ? 'Deenora' : 'Deenora'))}
               </h1>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1 font-noto">
-                {role === 'super_admin' ? 'Super Admin Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
+                {role === 'super_admin' ? 'Super Admin Portal' : role === 'manager' ? 'Manager Portal' : role === 'teacher' ? 'Teacher Portal' : role === 'accountant' ? 'Accounts Portal' : 'Admin Portal'}
               </p>
             </div>
           </div>
@@ -322,7 +332,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
           <div className="fixed md:hidden bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md w-full z-[200]">
             <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble flex justify-around items-center px-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
 
-          {isSuperAdmin ? (
+          {isSystemStaff ? (
             <>
               {canAccess('dashboard') && (
                 <button onClick={() => setView('admin-dashboard')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('dashboard') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
@@ -342,7 +352,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-[9px] font-black font-noto opacity-80">{t('approvals', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
-              {isSuperAdmin && (
+              {isSystemStaff && (
                 <>
                   <button onClick={() => setView('sms-voice-menu')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
                     <MessageSquare size={20} />
@@ -411,7 +421,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             </>
           )}
           
-          <button onClick={() => setView(isSuperAdmin ? 'super-account' : 'account')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
+          <button onClick={() => setView(isSystemStaff ? 'super-account' : 'account')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
             <User size={20} />
             <span className="text-[9px] font-black font-noto opacity-80">{t('account', lang, madrasah?.institution_type)}</span>
           </button>

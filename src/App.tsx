@@ -134,7 +134,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (profile?.role === "super_admin" && view === "home") {
+    if ((profile?.role === "super_admin" || profile?.role === "manager") && view === "home") {
       setView("admin-dashboard");
     }
   }, [profile?.role, view]);
@@ -337,7 +337,7 @@ const App: React.FC = () => {
     // parsedConfig is now at top level
     const activeYearId = parsedConfig?.active_academic_year_id;
     
-    const isAdmin = role === "madrasah_admin" || role === "super_admin";
+    const isAdmin = role === "madrasah_admin" || role === "super_admin" || role === "manager";
 
     if (role === "parent") {
       const parentSession = JSON.parse(localStorage.getItem('parent_session') || '{}');
@@ -367,6 +367,7 @@ const App: React.FC = () => {
       !activeYearId &&
       !allowedViews.includes(view) &&
       role !== "super_admin" &&
+      role !== "manager" &&
       madrasah
     ) {
       return (
@@ -559,7 +560,7 @@ const App: React.FC = () => {
           />
         );
       case "super-account":
-        if (role !== "super_admin") {
+        if (role !== "super_admin" && role !== "manager") {
           setView("home");
           return null;
         }
@@ -577,13 +578,14 @@ const App: React.FC = () => {
             setStatusModal={setStatusModal}
             dataVersion={dataVersion}
             triggerRefresh={triggerRefresh}
+            profile={profile}
           />
         );
       case "admin-panel":
       case "admin-institutions":
       case "admin-approvals":
       case "admin-dashboard":
-        if (role !== "super_admin") {
+        if (role !== "super_admin" && role !== "manager") {
           setView("home");
           return null;
         }
@@ -630,7 +632,7 @@ const App: React.FC = () => {
           />
         );
       case "admin-voice-service":
-        if (role !== "super_admin") {
+        if (role !== "super_admin" && role !== "manager") {
           setView("home");
           return null;
         }
@@ -642,7 +644,7 @@ const App: React.FC = () => {
           />
         );
       case "admin-tutorials":
-        if (role !== "super_admin") {
+        if (role !== "super_admin" && role !== "manager") {
           setView("home");
           return null;
         }

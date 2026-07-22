@@ -1,6 +1,40 @@
 
 import { supabase } from 'lib/supabase';
 
+const formatMonthToBengaliName = (monthVal: any): string => {
+  if (!monthVal) return '-';
+  const str = String(monthVal).trim();
+  if (!str || str === '-') return '-';
+
+  const bnMonths = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
+
+  // Match YYYY-MM (e.g. 2026-07)
+  const match = str.match(/^(\d{4})-(\d{2})$/);
+  if (match) {
+    const monthNum = parseInt(match[2], 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return bnMonths[monthNum - 1];
+    }
+  }
+
+  // Match DD-MM-YYYY
+  const matchDmy = str.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (matchDmy) {
+    const monthNum = parseInt(matchDmy[2], 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return bnMonths[monthNum - 1];
+    }
+  }
+
+  // Numeric month 1-12
+  const num = parseInt(str, 10);
+  if (!isNaN(num) && num >= 1 && num <= 12 && str.length <= 2) {
+    return bnMonths[num - 1];
+  }
+
+  return str;
+};
+
 export const ShortcodeService = {
   /**
    * Replaces shortcodes in a message with student-specific data.
@@ -25,7 +59,7 @@ export const ShortcodeService = {
       '{exam_subject}': data.exam_subject || '-',
       '{attendance_percentage}': data.attendance_percentage !== undefined ? `${data.attendance_percentage}%` : '-',
       '{institution_name}': data.institution_name || '-',
-      '{month}': data.month || '-',
+      '{month}': data.month ? formatMonthToBengaliName(data.month) : '-',
       '{date}': new Date().toLocaleDateString('bn-BD'),
     };
 

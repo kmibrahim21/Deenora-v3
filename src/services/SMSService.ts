@@ -33,6 +33,7 @@ export const SMSService = {
         reve_client_id: '',
         sms_rate: 0.50,
         voice_rate: 1.00,
+        manager_permissions: {} as any,
         global_update_active: false,
         global_update_message: '',
         global_update_version: 0
@@ -48,6 +49,7 @@ export const SMSService = {
         reve_client_id: (data.reve_client_id || defaults.reve_client_id).trim(),
         sms_rate: data.sms_rate || defaults.sms_rate,
         voice_rate: data.voice_rate || defaults.voice_rate,
+        manager_permissions: data.manager_permissions || {},
         global_update_active: data.global_update_active || false,
         global_update_message: data.global_update_message || '',
         global_update_version: data.global_update_version || 0
@@ -62,6 +64,7 @@ export const SMSService = {
         reve_client_id: '',
         sms_rate: 0.50,
         voice_rate: 1.00,
+        manager_permissions: {},
         global_update_active: false,
         global_update_message: '',
         global_update_version: 0

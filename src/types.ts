@@ -5,7 +5,7 @@
 
 export type Language = 'bn' | 'en';
 
-export type UserRole = 'super_admin' | 'madrasah_admin' | 'accountant' | 'teacher' | 'parent';
+export type UserRole = 'super_admin' | 'madrasah_admin' | 'manager' | 'accountant' | 'teacher' | 'parent';
 
 export interface Institution {
   id: string;
@@ -538,4 +538,18 @@ export interface SubscriptionPackage {
   features: string[];
   sort_order: number;
   created_at?: string;
+}
+
+export interface SystemSettings {
+  id: string;
+  reve_api_key?: string;
+  reve_secret_key?: string;
+  reve_caller_id?: string;
+  reve_client_id?: string;
+  bkash_number?: string;
+  sms_rate: number;
+  voice_rate: number;
+  manager_permissions?: Profile['permissions'];
+  support_number?: string;
+  updated_at?: string;
 }

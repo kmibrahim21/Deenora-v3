@@ -75,9 +75,31 @@ export const useAuth = () => {
       const singleProfileData = Array.isArray(profileData) ? profileData[0] : profileData;
 
       if (singleProfileData) {
-        const finalProfile = isSuperAdminEmail 
+        let finalProfile = isSuperAdminEmail 
           ? { ...singleProfileData, role: 'super_admin' as const } 
           : singleProfileData;
+          
+        // If the user is a manager, fetch global manager permissions from system_settings
+        if (finalProfile.role === 'manager') {
+          try {
+            const { data: sysSettings } = await requestManager.cachedFetch(
+              'system_settings',
+              (q) => q.select('manager_permissions').eq('id', '00000000-0000-0000-0000-000000000001').single(),
+              'global_manager_permissions'
+            );
+            if (sysSettings?.manager_permissions) {
+              finalProfile = {
+                ...finalProfile,
+                permissions: {
+                  ...finalProfile.permissions,
+                  ...sysSettings.manager_permissions
+                }
+              };
+            }
+          } catch (err) {
+            console.error("Error fetching global manager permissions:", err);
+          }
+        }
           
         setProfile(finalProfile);
         OfflineService.setCache('user_profile', finalProfile);
