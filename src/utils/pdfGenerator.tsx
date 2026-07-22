@@ -159,7 +159,8 @@ export const generateSeatPlanPDF = async (
     assignments: any[],
     madrasah: any,
     templateId: string = 'list',
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    examName?: string
 ) => {
     const container = document.createElement('div');
     container.style.position = 'absolute';
@@ -169,7 +170,7 @@ export const generateSeatPlanPDF = async (
     const root = createRoot(container);
     
     await new Promise<void>((resolve) => {
-        root.render(<SeatPlanTemplate assignments={assignments} madrasah={madrasah} templateId={templateId} lang={lang} />);
+        root.render(<SeatPlanTemplate assignments={assignments} madrasah={madrasah} templateId={templateId} lang={lang} examName={examName} />);
         setTimeout(resolve, 500); // Give more time for fonts/images
     });
 

@@ -5,9 +5,10 @@ interface SeatPlanProps {
   madrasah: { name: string };
   templateId: string;
   lang: 'en' | 'bn';
+  examName?: string;
 }
 
-export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasah, templateId, lang }) => {
+export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasah, templateId, lang, examName }) => {
   const isBangla = lang === 'bn';
   const t = {
     title: isBangla ? 'আসন বিন্যাস' : 'Seat Plan',
@@ -51,7 +52,7 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
             <div className="text-center border-b-2 border-double border-gray-800 pb-4 mb-6">
               <h1 className="text-3xl font-black text-gray-900 mb-2 tracking-tight" style={{ lineHeight: '1.2' }}>{madrasah.name}</h1>
               <div className="inline-block bg-gray-900 text-white px-5 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-3 text-center">
-                {t.title}
+                {t.title} {examName ? ` - ${examName}` : ''}
               </div>
               <div className="flex justify-center items-center gap-4 text-lg font-bold text-gray-700">
                 <span className="bg-gray-100 px-4 py-1 rounded-lg border border-gray-200">
@@ -63,24 +64,39 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
             {templateId === 'grid' ? (
               <div className="grid grid-cols-3 gap-5">
                 {page.students.map((a: any, idx: number) => (
-                  <div key={a.id || idx} className="relative border-2 border-gray-300 rounded-xl p-4 flex flex-col justify-between h-[138px] shadow-sm bg-slate-50/30 overflow-hidden">
-                    <div className="absolute top-0 right-0 bg-gray-800 text-white px-3 py-1 rounded-bl-xl text-sm font-black z-10">
-                      {a.seat_number}
-                    </div>
-                    
-                    <div className="mt-1 flex-1 min-h-0 relative z-0 pr-8">
-                      <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.name}</div>
-                      <div className="text-[15px] font-black text-gray-800 leading-tight break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.student_name}</div>
+                  <div key={a.id || idx} className="relative border-2 border-gray-300 rounded-xl p-3 flex flex-col justify-between h-[150px] shadow-sm bg-slate-50/30 overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-gray-800 text-white px-2.5 py-0.5 rounded-bl-xl text-[10px] font-black z-10">
+                      {isBangla ? `আসন ${a.seat_number}` : `Seat ${a.seat_number}`}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 border-t border-gray-200 pt-2 shrink-0">
+                    <div className="border-b border-dashed border-gray-200 pb-1.5 px-6 text-center shrink-0">
+                      <div className="text-[10px] font-black text-gray-900 leading-tight break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {madrasah.name}
+                      </div>
+                      {examName ? (
+                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-none mt-1">
+                          {examName}
+                        </div>
+                      ) : (
+                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-none mt-1">
+                          {isBangla ? 'আসন কার্ড' : 'Seat Card'}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="mt-1 flex-1 min-h-0 relative z-0 pr-2">
+                      <div className="text-[8px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.name}</div>
+                      <div className="text-[13px] font-black text-gray-800 leading-snug break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.student_name}</div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 border-t border-gray-200 pt-1 shrink-0">
                       <div>
-                        <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.class}</div>
+                        <div className="text-[8px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.class}</div>
                         <div className="text-xs font-bold text-gray-700 truncate">{a.class_name}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.roll}</div>
-                        <div className="text-sm font-black font-mono text-gray-800 truncate">{a.roll}</div>
+                        <div className="text-[8px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.roll}</div>
+                        <div className="text-xs font-black font-mono text-gray-800 truncate">{a.roll}</div>
                       </div>
                     </div>
                   </div>

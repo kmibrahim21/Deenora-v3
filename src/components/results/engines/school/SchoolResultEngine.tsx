@@ -28,6 +28,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [exams, setExams] = useState<Exam[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
+  const [selectedSeatPlanExamId, setSelectedSeatPlanExamId] = useState<string>('');
   const [subjects, setSubjects] = useState<ExamSubject[]>([]);
   const [marksData, setMarksData] = useState<any>({});
   const [rankingData, setRankingData] = useState<any[]>([]);
@@ -37,6 +38,18 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [rooms, setRooms] = useState<ExamRoom[]>([{ id: '1', room_name: 'Room 101', capacity: 30 }]);
   const [seatAssignments, setSeatAssignments] = useState<SeatAssignment[]>([]);
   const [selectedClassesForSeatPlan, setSelectedClassesForSeatPlan] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (selectedSeatPlanExamId) {
+      const activeExam = exams.find(e => e.id === selectedSeatPlanExamId);
+      if (activeExam) {
+        const isClassSelected = selectedClassesForSeatPlan.includes(activeExam.class_id);
+        if (selectedClassesForSeatPlan.length > 0 && !isClassSelected) {
+          setSelectedSeatPlanExamId('');
+        }
+      }
+    }
+  }, [selectedClassesForSeatPlan, exams, selectedSeatPlanExamId]);
   const [seatPlanConfig, setSeatPlanConfig] = useState({
       randomize: false
   });
@@ -733,6 +746,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (madrasah) {
       if (activeTab === 'exam-routine') {
         fetchExams(routineSelectionMode === 'all' ? null : selectedRoutineClassId);
+      } else if (activeTab === 'seat-plan') {
+        fetchExams(null);
       } else if (selectedClassId) {
         fetchExams(selectedClassId);
       }
@@ -1264,11 +1279,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       
       setIsDownloading(true);
       try {
+        const seatPlanExamName = exams.find(e => e.id === selectedSeatPlanExamId)?.exam_name || '';
         await generateSeatPlanPDF(
             seatAssignments,
             madrasah,
             selectedSeatPlanTemplate,
-            downloadLang
+            downloadLang,
+            seatPlanExamName
         );
       } catch (e) {
           console.error(e);
@@ -1784,6 +1801,24 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                             </button>
                         ))}
                     </div>
+                </div>
+
+                {/* Exam Selection */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'পরীক্ষা নির্বাচন করুন' : 'Select Exam'}</label>
+                    <select
+                        value={selectedSeatPlanExamId}
+                        onChange={(e) => setSelectedSeatPlanExamId(e.target.value)}
+                        className={`w-full h-11 px-3.5 py-2 text-xs font-black rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-600 focus:border-blue-500'} outline-none`}
+                    >
+                        <option value="">{lang === 'bn' ? '-- পরীক্ষা নির্বাচন করুন (ঐচ্ছিক) --' : '-- Select Exam (Optional) --'}</option>
+                        {exams
+                            .filter(e => selectedClassesForSeatPlan.length === 0 || selectedClassesForSeatPlan.includes(e.class_id))
+                            .map(e => (
+                                <option key={e.id} value={e.id}>{e.exam_name}</option>
+                            ))
+                        }
+                    </select>
                 </div>
 
                 {/* Room Configuration */}

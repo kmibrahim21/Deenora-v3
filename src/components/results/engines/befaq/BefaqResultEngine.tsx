@@ -29,6 +29,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [exams, setExams] = useState<BefaqExam[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedExam, setSelectedExam] = useState<BefaqExam | null>(null);
+  const [selectedSeatPlanExamId, setSelectedSeatPlanExamId] = useState<string>('');
   const [subjects, setSubjects] = useState<BefaqSubject[]>([]);
   const [marksData, setMarksData] = useState<any>({});
   const [students, setStudents] = useState<Student[]>([]);
@@ -626,6 +627,18 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [rooms, setRooms] = useState<ExamRoom[]>([{ id: '1', room_name: 'Room 101', capacity: 30 }]);
   const [seatAssignments, setSeatAssignments] = useState<SeatAssignment[]>([]);
   const [selectedClassesForSeatPlan, setSelectedClassesForSeatPlan] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (selectedSeatPlanExamId) {
+      const activeExam = exams.find(e => e.id === selectedSeatPlanExamId);
+      if (activeExam) {
+        const isClassSelected = selectedClassesForSeatPlan.includes(activeExam.marhala_id);
+        if (selectedClassesForSeatPlan.length > 0 && !isClassSelected) {
+          setSelectedSeatPlanExamId('');
+        }
+      }
+    }
+  }, [selectedClassesForSeatPlan, exams, selectedSeatPlanExamId]);
   const [seatPlanConfig, setSeatPlanConfig] = useState({
       randomize: false,
       template: 'list'
@@ -648,10 +661,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   }, [madrasah?.id]);
 
   useEffect(() => {
-    if (madrasah && (selectedClassId || view !== 'list')) {
+    if (madrasah && (selectedClassId || view !== 'list' || activeTab === 'seat-plan')) {
       fetchExams();
     }
-  }, [madrasah?.id, selectedClassId, view]);
+  }, [madrasah?.id, selectedClassId, view, activeTab]);
 
   const fetchExams = async () => {
     const activeYearId = madrasah?.config_json?.active_academic_year_id;
@@ -666,7 +679,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       }
     }
 
-    if (selectedClassId) {
+    if (selectedClassId && activeTab !== 'seat-plan') {
       query = query.eq('marhala_id', selectedClassId);
     }
 
@@ -682,7 +695,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         fallbackQuery = fallbackQuery.gte('created_at', yearStart);
       }
       
-      if (selectedClassId) {
+      if (selectedClassId && activeTab !== 'seat-plan') {
         fallbackQuery = fallbackQuery.eq('marhala_id', selectedClassId);
       }
       
@@ -844,7 +857,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const handleDownloadSeatPlan = async (downloadLang: 'en' | 'bn' = lang) => {
       if (seatAssignments.length === 0 || !madrasah) return;
       try {
-          await generateSeatPlanPDF(seatAssignments, madrasah, selectedSeatPlanTemplate, downloadLang);
+          const seatPlanExamName = exams.find(e => e.id === selectedSeatPlanExamId)?.exam_name || '';
+          await generateSeatPlanPDF(seatAssignments, madrasah, selectedSeatPlanTemplate, downloadLang, seatPlanExamName);
       } catch (error) {
           console.error('Download error:', error);
           alert('Error downloading Seat Plan');
@@ -2231,6 +2245,24 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                             </button>
                         ))}
                     </div>
+                </div>
+
+                {/* Exam Selection */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'পরীক্ষা নির্বাচন করুন' : 'Select Exam'}</label>
+                    <select
+                        value={selectedSeatPlanExamId}
+                        onChange={(e) => setSelectedSeatPlanExamId(e.target.value)}
+                        className={`w-full h-11 px-3.5 py-2 text-xs font-black rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-600 focus:border-emerald-500'} outline-none`}
+                    >
+                        <option value="">{lang === 'bn' ? '-- পরীক্ষা নির্বাচন করুন (ঐচ্ছিক) --' : '-- Select Exam (Optional) --'}</option>
+                        {exams
+                            .filter(e => selectedClassesForSeatPlan.length === 0 || selectedClassesForSeatPlan.includes(e.marhala_id))
+                            .map(e => (
+                                <option key={e.id} value={e.id}>{e.exam_name}</option>
+                            ))
+                        }
+                    </select>
                 </div>
 
                 <div className="space-y-2">
