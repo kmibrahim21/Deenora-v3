@@ -576,9 +576,24 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
             : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
           
+          const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+          const date = new Date(selectedMonth + '-01');
+          const formattedMonth = lang === 'bn' ? bnMonths[date.getMonth()] : date.toLocaleString('en-US', { month: 'long' });
+          const stName = selectedStudent.student_name || '';
+          const fatherName = selectedStudent.father_name || '';
+          const stRoll = selectedStudent.roll || '';
+          const stClass = classes.find(c => c.id === selectedStudent.class_id)?.class_name || '';
+          const currentDue = Math.max(0, Number(selectedStudent.balance_due || 0) - totalAmt - totalDiscount);
+
           let collectMsg = template
-             .replace(/\{student_name\}/g, selectedStudent.student_name)
-             .replace(/\{amount\}/g, totalAmt.toString());
+             .replace(/\{student_name\}/g, stName)
+             .replace(/\{father_name\}/g, fatherName)
+             .replace(/\{class\}/g, stClass)
+             .replace(/\{roll\}/g, stRoll)
+             .replace(/\{month\}/g, formattedMonth)
+             .replace(/\{paid_amount\}/g, totalAmt.toString())
+             .replace(/\{amount\}/g, totalAmt.toString())
+             .replace(/\{due_amount\}/g, currentDue.toString());
             
           await smsApiModule.sendBulk(madrasah.id, [selectedStudent], collectMsg);
         } catch (smsError: any) {
