@@ -206,12 +206,12 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                   <td className="border border-slate-900 py-1 px-4 font-bold font-tiro text-slate-800 leading-tight">
                     {m.subject_name} {m.is_optional ? <span className="text-[9px] font-black text-blue-400 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none">Optional</span> : ''}
                   </td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-600">{m.full_marks || '100'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-600">{m.pass_marks || '33'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-slate-600 text-[14px] bg-slate-50/30">{(m.class_highest !== undefined && m.class_highest !== null) ? m.class_highest.toString().padStart(2, '0') : '-'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-[#1E3A8A] bg-blue-50/20 text-[15px]">{(m.marks_obtained || 0).toString().padStart(2, '0')}</td>
-                  <td className={`border border-slate-900 py-1 px-1 text-center font-black text-[15px] ${m.grade === 'F' ? 'text-red-500 bg-red-50/20' : 'text-[#1E3A8A]'}`}>{m.grade || '-'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-bold font-mono text-slate-700 text-[13px]">{m.grade_point || '0.00'}</td>
+                  <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{m.full_marks || '100'}</td>
+                  <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{m.pass_marks || '33'}</td>
+                  <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-slate-900 text-[14px] bg-slate-50/30">{(m.class_highest !== undefined && m.class_highest !== null) ? m.class_highest.toString().padStart(2, '0') : '-'}</td>
+                  <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-blue-900 bg-blue-50/20 text-[15px]">{(m.marks_obtained || 0).toString().padStart(2, '0')}</td>
+                  <td className={`border border-slate-900 py-1 px-1 text-center font-black text-[15px] ${m.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-blue-900'}`}>{m.grade || '-'}</td>
+                  <td className="border border-slate-900 py-1 px-1 text-center font-bold font-mono text-slate-900 text-[13px]">{m.grade_point || '0.00'}</td>
                 </tr>
               ))}
               {Array.from({ length: Math.max(0, 10 - marks.length) }).map((_, i) => (
@@ -247,8 +247,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                 <h4 className="text-[22px] font-black font-mono text-blue-900 leading-tight">{averageGpa}</h4>
               </div>
               <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
-                <p className="text-[10px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.status}</p>
-                <h4 className={`text-[14px] font-black ${isPassed ? 'text-emerald-600' : 'text-red-500'} leading-tight uppercase`}>{isPassed ? t.passed : t.failed}</h4>
+                <p className="text-[10px] font-black uppercase text-slate-500 mb-0.5 leading-none">{t.status}</p>
+                <h4 className={`text-[14px] font-black ${isPassed ? 'text-emerald-800' : 'text-red-800'} leading-tight uppercase`}>{isPassed ? t.passed : t.failed}</h4>
               </div>
               <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
                 <p className="text-[10px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.rank}</p>

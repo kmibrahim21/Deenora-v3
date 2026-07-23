@@ -40,7 +40,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
             <div className="text-center mb-6 border-b-2 border-slate-900 pb-4">
               <h1 className="text-4xl font-black text-slate-900 mb-1 uppercase tracking-tight">{madrasah.name}</h1>
               <div className="text-xl font-bold text-[#2563EB] mb-2">{title}</div>
-              <div className="flex justify-center gap-6 text-xs font-bold uppercase tracking-widest text-slate-400">
+              <div className="flex justify-center gap-6 text-xs font-bold uppercase tracking-widest text-slate-900">
                 <span>{t.class}: {className}</span>
                 <span>{t.date}: {new Date().toLocaleDateString(isBangla ? 'bn-BD' : 'en-US')}</span>
               </div>
@@ -69,16 +69,16 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                 <tbody className="divide-y divide-slate-100">
                   {pageData.map((std, idx) => (
                     <tr key={std.id || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-500 border-r border-slate-100 text-[14px]">{std.roll || '-'}</td>
-                      <td className="px-2 py-1.5 font-bold text-slate-700 border-r border-slate-100 truncate max-w-[120px] text-[13px]">{std.student_name}</td>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[14px]">{std.roll || '-'}</td>
+                      <td className="px-2 py-1.5 font-bold text-slate-900 border-r border-slate-100 truncate max-w-[120px] text-[13px]">{std.student_name}</td>
                       {subjects.map(sub => (
-                        <td key={sub} className="px-1 py-1.5 text-center font-mono text-slate-600 border-r border-slate-100 text-[14px]">
+                        <td key={sub} className="px-1 py-1.5 text-center font-mono text-slate-900 border-r border-slate-100 text-[14px]">
                           {std.marks[sub] || '-'}
                         </td>
                       ))}
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-[#2563EB] border-r border-slate-100 bg-blue-50/30 text-[14px]">{std.total}</td>
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-700 border-r border-slate-100 bg-slate-50/30 text-[14px]">{std.gpa}</td>
-                      <td className={`px-2 py-1.5 text-center font-black border-r border-slate-100 bg-slate-50/30 text-[14px] ${std.grade === 'F' ? 'text-red-600' : 'text-green-600'}`}>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[14px]">{std.total}</td>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{std.gpa}</td>
+                      <td className={`px-2 py-1.5 text-center font-black border-r border-slate-100 bg-slate-50/30 text-[14px] ${std.grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
                         {std.grade}
                       </td>
                       <td className="px-2 py-1.5 text-center font-black text-[#2563EB] bg-blue-50/20 text-[14px]">#{std.rank}</td>

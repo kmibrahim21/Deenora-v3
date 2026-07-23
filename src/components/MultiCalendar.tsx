@@ -531,9 +531,9 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
                     className={`group relative p-6 rounded-[2rem] border transition-all hover:scale-[1.02] hover:shadow-xl ${isDark ? "bg-slate-800/40 border-slate-700 hover:bg-slate-800" : "bg-white border-slate-100 hover:shadow-slate-200/50"}`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
                         <div
-                          className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${
+                          className={`w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center shadow-inner ${
                             eventType === "holiday"
                               ? isDark
                                 ? "bg-red-900/30 text-red-400"
@@ -555,9 +555,9 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
                             <Flower size={22} />
                           )}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <h4
-                            className={`text-base font-black truncate leading-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}
+                            className={`text-sm font-black line-clamp-2 leading-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}
                           >
                             {event.title}
                           </h4>
@@ -590,9 +590,9 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
                          <div
-                           className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] leading-none ${
+                           className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] leading-none whitespace-nowrap ${
                              eventType === "holiday"
                                ? isDark
                                  ? "bg-red-500/10 text-red-400 border border-red-500/20"
@@ -609,20 +609,20 @@ const MultiCalendar: React.FC<MultiCalendarProps> = ({
                            {eventType}
                          </div>
                          {isAdmin && (
-                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                           <div className="flex items-center gap-1 transition-all">
                              <button
                                onClick={() => {
                                  setSelectedEvent(event);
                                  setSelectedDate(new Date(event.event_date));
                                  setShowEventModal(true);
                                }}
-                               className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isDark ? "bg-slate-700 text-blue-400 hover:bg-blue-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white"}`}
+                               className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shadow-sm ${isDark ? "bg-slate-700 text-blue-400 hover:bg-blue-500 hover:text-white" : "bg-slate-100 text-slate-500 hover:bg-blue-600 hover:text-white"}`}
                              >
                                <Edit2 size={14} />
                              </button>
                              <button
                                onClick={() => setEventToDelete(event.id)}
-                               className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isDark ? "bg-slate-700 text-red-400 hover:bg-red-500 hover:text-white" : "bg-slate-50 text-slate-400 hover:bg-red-600 hover:text-white"}`}
+                               className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shadow-sm ${isDark ? "bg-slate-700 text-red-400 hover:bg-red-500 hover:text-white" : "bg-slate-100 text-slate-500 hover:bg-red-600 hover:text-white"}`}
                              >
                                <Trash2 size={14} />
                              </button>

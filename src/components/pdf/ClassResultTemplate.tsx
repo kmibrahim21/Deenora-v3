@@ -53,7 +53,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                   </div>
                   <div className="h-[1px] w-12 bg-slate-200"></div>
               </div>
-              <div className="flex justify-center gap-12 text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">
+              <div className="flex justify-center gap-12 text-[10px] font-black uppercase tracking-[0.4em] text-slate-900">
                 <div className="flex items-center gap-2">
                     <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
                     <span>{t.exam}: {exam.exam_name}</span>
@@ -101,17 +101,17 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
 
                     return (
                       <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                        <td className="px-2 py-1 font-mono font-black text-slate-400 border-r border-slate-100 text-[14px]">{student.roll}</td>
-                        <td className="px-2 py-1 font-black text-slate-700 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[13px] leading-tight">{student.student_name}</td>
+                        <td className="px-2 py-1 font-mono font-black text-slate-900 border-r border-slate-100 text-[14px]">{student.roll}</td>
+                        <td className="px-2 py-1 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[13px] leading-tight">{student.student_name}</td>
                         {subjects.map(s => (
-                          <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-600 border-r border-slate-100 text-[14px]">
+                          <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[14px]">
                             {studentMarks[s.id] || '0'}
                           </td>
                         ))}
-                        <td className="px-2 py-1 text-center font-mono font-black text-[#2563EB] border-r border-slate-100 bg-blue-50/30 text-[14px]">{total}</td>
-                        <td className="px-1 py-1 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30 text-[14px]">{avg}%</td>
-                        <td className="px-2 py-1 text-center font-mono font-black text-slate-700 border-r border-slate-100 bg-slate-50/30 text-[14px]">{gpa}</td>
-                        <td className={`px-2 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 text-[14px] ${grade === 'F' ? 'text-red-500' : 'text-emerald-600'}`}>
+                        <td className="px-2 py-1 text-center font-mono font-black text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[14px]">{total}</td>
+                        <td className="px-1 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{avg}%</td>
+                        <td className="px-2 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{gpa}</td>
+                        <td className={`px-2 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 text-[14px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
                           <span className="inline-flex items-center justify-center w-8 h-6 rounded-lg bg-white border border-slate-100 shadow-sm">
                               {grade}
                           </span>
