@@ -164,6 +164,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
+  const [profileSubTab, setProfileSubTab] = useState<'basic' | 'family' | 'address'>('basic');
 
   const CACHE_KEY = `parent_data_v2_${studentId}`;
 
@@ -1314,171 +1315,236 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           )}
 
           {activeTab === 'profile' && (
-            <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6 pb-20">
-               {/* Hero Header Card */}
-               <div className="text-center p-12 bg-white rounded-[3.5rem] border border-slate-100 relative shadow-premium overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/10 via-indigo-500/5 to-transparent pointer-events-none" />
-                  <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl" />
+            <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-4 md:space-y-6 pb-20">
+               {/* Hero Header Card - Redesigned to be horizontal, super clean, compact on mobile */}
+               <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 relative shadow-premium overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/5 via-indigo-500/5 to-transparent pointer-events-none" />
+                  <div className="absolute -top-16 -right-16 w-48 h-48 bg-blue-100/10 rounded-full blur-2xl" />
                   
-                  <div className="relative inline-block mt-4 mb-8">
-                    <div className="w-40 h-40 bg-white rounded-[3.5rem] p-1.5 shadow-2xl border border-slate-100">
-                      {student?.photo_url ? (
-                         <img src={student.photo_url} alt="" className="w-full h-full object-cover rounded-[3.2rem]" />
-                      ) : (
-                         <div className="w-full h-full bg-slate-50 flex items-center justify-center rounded-[3.2rem]">
-                            <User size={64} className="text-slate-300" />
-                         </div>
-                      )}
+                  <div className="relative flex flex-row items-center gap-4 text-left w-full">
+                    {/* Avatar with smaller size */}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-16 h-16 md:w-24 md:h-24 bg-white rounded-2xl p-1 shadow-md border border-slate-100">
+                        {student?.photo_url ? (
+                           <img src={student.photo_url} alt="" className="w-full h-full object-cover rounded-xl" />
+                        ) : (
+                           <div className="w-full h-full bg-slate-50 flex items-center justify-center rounded-xl">
+                              <User size={32} className="text-slate-300" />
+                           </div>
+                        )}
+                      </div>
+                      <motion.div 
+                        initial={{ scale: 0, rotate: -45 }} 
+                        animate={{ scale: 1, rotate: 0 }} 
+                        className="absolute -bottom-1 -right-1 bg-emerald-500 p-1 md:p-1.5 rounded-lg border-2 border-white shadow-md text-white"
+                      >
+                        <CheckCircle2 size={12} className="w-3 h-3 md:w-4 md:h-4" />
+                      </motion.div>
                     </div>
-                    <motion.div 
-                      initial={{ scale: 0, rotate: -45 }} 
-                      animate={{ scale: 1, rotate: 0 }} 
-                      className="absolute -bottom-2 -right-2 bg-emerald-500 p-3.5 rounded-2xl border-[6px] border-white shadow-xl text-white"
-                    >
-                      <CheckCircle2 size={24} />
-                    </motion.div>
-                  </div>
 
-                  <h3 className="text-3xl font-black text-slate-900 mb-2 font-noto tracking-tight">{student?.student_name}</h3>
-                  <div className="flex flex-wrap items-center justify-center gap-3">
-                     <span className="px-5 py-2 bg-blue-50 text-blue-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-blue-100/50 font-noto">
-                       শ্রেণী: {student?.classes?.class_name || 'N/A'}
-                     </span>
-                     <span className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-indigo-100/50 font-noto">
-                       রেজিষ্ট্রেশন নম্বর: {student?.registration_number || '---'}
-                     </span>
-                     {student?.section && (
-                       <span className="px-5 py-2 bg-emerald-50 text-emerald-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-emerald-100/50 font-noto">
-                         বিভাগ/শাখা: {student.section}
-                       </span>
-                     )}
+                    {/* Compact Profile Details */}
+                    <div className="flex-grow min-w-0 font-noto">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[9px] md:text-[10px] font-black border border-emerald-100/50 mb-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        অ্যাক্টিভ শিক্ষার্থী
+                      </span>
+                      <h3 className="text-base md:text-2xl font-black text-slate-900 tracking-tight truncate">
+                        {student?.student_name}
+                      </h3>
+                      
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg text-[9px] md:text-xs font-bold border border-blue-100/30">
+                          শ্রেণী: {student?.classes?.class_name || 'N/A'}
+                        </span>
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-lg text-[9px] md:text-xs font-bold border border-indigo-100/30">
+                          আইডি: {student?.registration_number || '---'}
+                        </span>
+                        {student?.section && (
+                          <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-lg text-[9px] md:text-xs font-bold border border-purple-100/30">
+                            শাখা: {student.section}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                </div>
 
-               {/* Information Sections */}
-               <div className="grid gap-6">
-                 
-                 {/* Basic Info Container */}
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-premium space-y-6">
-                   <div className="flex items-center gap-4 mb-2">
-                     <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                       <User size={20} />
-                     </div>
-                     <h4 className="text-lg font-black text-slate-800 font-noto">ব্যক্তিগত তথ্য</h4>
-                   </div>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                     {[
-                       { label: 'রোল নম্বর', value: student?.roll || '---', icon: Hash, color: 'text-orange-500' },
-                       { label: 'রেজিস্ট্রেশন নং', value: student?.registration_number || '---', icon: CreditCard, color: 'text-indigo-500' },
-                       { label: 'জন্ম তারিখ', value: student?.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : '---', icon: Calendar, color: 'text-emerald-500' },
-                       { label: 'রক্তের গ্রুপ', value: student?.blood_group || '---', icon: Heart, color: 'text-red-500' },
-                       { label: 'ছাত্রের ধরণ', value: student?.student_type === 'boarding' ? 'আবাসিক' : student?.student_type === 'day_scholar' ? 'অনাবাসিক' : student?.student_type || '---', icon: Info, color: 'text-blue-500' },
-                       { label: 'বিভাগ/শাখা', value: student?.section || '---', icon: BookOpen, color: 'text-indigo-600' },
-                       { label: 'বিভাগ', value: student?.department || 'সাধারণ', icon: BookOpen, color: 'text-purple-500' },
-                     ].map((item, i) => (
-                       <div key={i} className="flex items-center gap-4 group">
-                         <div className={`w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center ${item.color} group-hover:bg-white transition-colors border border-transparent group-hover:border-slate-100`}>
-                           <item.icon size={22} />
-                         </div>
-                         <div className="text-left font-noto">
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</p>
-                           <p className="text-sm font-bold text-slate-900">{item.value}</p>
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                 </div>
+               {/* Modern Profile Sub Tabs for scroll-free navigation on mobile */}
+               <div className="flex bg-slate-100 p-1 rounded-2xl gap-1 w-full border border-slate-200/50">
+                 {[
+                   { id: 'basic', label: 'ব্যক্তিগত তথ্য', icon: User },
+                   { id: 'family', label: 'অভিভাবক', icon: Shield },
+                   { id: 'address', label: 'ঠিকানা ও নোট', icon: MapPin }
+                 ].map(tab => {
+                   const isActive = profileSubTab === tab.id;
+                   return (
+                     <button
+                       key={tab.id}
+                       onClick={() => setProfileSubTab(tab.id as any)}
+                       className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap ${
+                         isActive 
+                           ? 'bg-white text-blue-600 shadow-sm border border-blue-50/50 font-black' 
+                           : 'text-slate-400 hover:text-slate-600 font-bold'
+                       }`}
+                     >
+                       <tab.icon size={14} className={isActive ? 'text-blue-500' : 'text-slate-400'} />
+                       {tab.label}
+                     </button>
+                   );
+                 })}
+               </div>
 
-                 {/* Family Info Container */}
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-premium space-y-6">
-                   <div className="flex items-center gap-4 mb-2">
-                     <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-                       <Shield size={20} />
-                     </div>
-                     <h4 className="text-lg font-black text-slate-800 font-noto">অভিভাবকের তথ্য</h4>
-                   </div>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                     {[
-                       { label: 'পিতা/অভিভাবক', value: student?.guardian_name || '---', icon: User, color: 'text-blue-600' },
-                       { label: 'মাতার নাম', value: student?.mother_name || '---', icon: User, color: 'text-pink-500' },
-                       { label: 'জরুরী ফোন', value: student?.guardian_phone || '---', icon: Phone, color: 'text-indigo-600' },
-                       { label: 'বিকল্প ফোন', value: student?.guardian_phone_2 || '---', icon: Smartphone, color: 'text-emerald-600' },
-                     ].map((item, i) => (
-                       <div key={i} className="flex items-center gap-4">
-                         <div className={`w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center ${item.color}`}>
-                           <item.icon size={22} />
+               {/* Information Sections with Tab Transition */}
+               <div className="w-full">
+                 <AnimatePresence mode="wait">
+                   {profileSubTab === 'basic' && (
+                     <motion.div
+                       key="basic-tab"
+                       initial={{ opacity: 0, y: 10 }}
+                       animate={{ opacity: 1, y: 0 }}
+                       exit={{ opacity: 0, y: -10 }}
+                       transition={{ duration: 0.2 }}
+                       className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-premium space-y-4"
+                     >
+                       <div className="flex items-center gap-3 border-b border-slate-50 pb-3">
+                         <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                           <User size={16} />
                          </div>
-                         <div className="text-left font-noto">
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</p>
-                           <p className="text-sm font-bold text-slate-900 leading-tight">
-                             {item.value}
+                         <h4 className="text-sm font-black text-slate-800 font-noto">ব্যক্তিগত তথ্যাবলী</h4>
+                       </div>
+                       
+                       <div className="grid grid-cols-2 gap-3">
+                         {[
+                           { label: 'রোল নম্বর', value: student?.roll || '---', icon: Hash, color: 'text-orange-500', bg: 'bg-orange-50/30' },
+                           { label: 'রেজিস্ট্রেশন নং', value: student?.registration_number || '---', icon: CreditCard, color: 'text-indigo-500', bg: 'bg-indigo-50/30' },
+                           { label: 'জন্ম তারিখ', value: student?.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : '---', icon: Calendar, color: 'text-emerald-500', bg: 'bg-emerald-50/30' },
+                           { label: 'রক্তের গ্রুপ', value: student?.blood_group || '---', icon: Heart, color: 'text-red-500', bg: 'bg-red-50/30' },
+                           { label: 'ছাত্রের ধরণ', value: student?.student_type === 'boarding' ? 'আবাসিক' : student?.student_type === 'day_scholar' ? 'অনাবাসিক' : student?.student_type || '---', icon: Info, color: 'text-blue-500', bg: 'bg-blue-50/30' },
+                           { label: 'বিভাগ/শাখা', value: student?.section || '---', icon: BookOpen, color: 'text-indigo-600', bg: 'bg-indigo-50/30' },
+                           { label: 'শ্রেণী', value: student?.classes?.class_name || 'N/A', icon: GraduationCap, color: 'text-purple-500', bg: 'bg-purple-50/30' },
+                           { label: 'বিভাগ', value: student?.department || 'সাধারণ', icon: BookOpen, color: 'text-slate-600', bg: 'bg-slate-50/30' },
+                         ].map((item, i) => (
+                           <div key={i} className="flex items-center gap-2.5 p-2 bg-slate-50/35 border border-slate-100/60 rounded-xl hover:bg-white hover:shadow-sm hover:border-slate-200/45 transition-all">
+                             <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center ${item.color} shrink-0`}>
+                               <item.icon size={16} />
+                             </div>
+                             <div className="text-left font-noto min-w-0">
+                               <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-wide truncate">{item.label}</p>
+                               <p className="text-[11px] md:text-sm font-black text-slate-800 truncate">{item.value}</p>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     </motion.div>
+                   )}
+
+                   {profileSubTab === 'family' && (
+                     <motion.div
+                       key="family-tab"
+                       initial={{ opacity: 0, y: 10 }}
+                       animate={{ opacity: 1, y: 0 }}
+                       exit={{ opacity: 0, y: -10 }}
+                       transition={{ duration: 0.2 }}
+                       className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-premium space-y-4"
+                     >
+                       <div className="flex items-center gap-3 border-b border-slate-50 pb-3">
+                         <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
+                           <Shield size={16} />
+                         </div>
+                         <h4 className="text-sm font-black text-slate-800 font-noto">অভিভাবকের তথ্যাবলী</h4>
+                       </div>
+                       
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                         {[
+                           { label: 'পিতা/অভিভাবক', value: student?.guardian_name || '---', icon: User, color: 'text-blue-600', bg: 'bg-blue-50/30' },
+                           { label: 'মাতার নাম', value: student?.mother_name || '---', icon: User, color: 'text-pink-500', bg: 'bg-pink-50/30' },
+                           { label: 'জরুরী ফোন', value: student?.guardian_phone || '---', icon: Phone, color: 'text-indigo-600', bg: 'bg-indigo-50/30' },
+                           { label: 'বিকল্প ফোন', value: student?.guardian_phone_2 || '---', icon: Smartphone, color: 'text-emerald-600', bg: 'bg-emerald-50/30' },
+                         ].map((item, i) => (
+                           <div key={i} className="flex items-center gap-3 p-2.5 bg-slate-50/35 border border-slate-100/60 rounded-xl hover:bg-white hover:shadow-sm hover:border-slate-200/45 transition-all">
+                             <div className={`w-9 h-9 rounded-xl ${item.bg} flex items-center justify-center ${item.color} shrink-0`}>
+                               <item.icon size={18} />
+                             </div>
+                             <div className="text-left font-noto min-w-0">
+                               <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-wide truncate">{item.label}</p>
+                               <p className="text-xs md:text-sm font-black text-slate-800 truncate">{item.value}</p>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     </motion.div>
+                   )}
+
+                   {profileSubTab === 'address' && (
+                     <motion.div
+                       key="address-tab"
+                       initial={{ opacity: 0, y: 10 }}
+                       animate={{ opacity: 1, y: 0 }}
+                       exit={{ opacity: 0, y: -10 }}
+                       transition={{ duration: 0.2 }}
+                       className="space-y-4"
+                     >
+                       {/* Address Info Container */}
+                       <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-premium space-y-3">
+                         <div className="flex items-center gap-3 border-b border-slate-50 pb-2">
+                           <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                             <MapPin size={16} />
+                           </div>
+                           <h4 className="text-sm font-black text-slate-800 font-noto">স্থায়ী ঠিকানা</h4>
+                         </div>
+                         
+                         <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100/50 font-noto text-left">
+                           <p className="text-xs md:text-sm font-medium text-slate-600 leading-relaxed">
+                             {student?.address || 'ঠিকানা পাওয়া যায়নি। প্রতিষ্ঠানের অফিস থেকে এটি আপডেট করা যাবে।'}
                            </p>
                          </div>
                        </div>
-                     ))}
-                   </div>
-                 </div>
 
-                 {/* Address Info */}
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-premium space-y-6">
-                   <div className="flex items-center gap-4 mb-2">
-                     <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                       <MapPin size={20} />
-                     </div>
-                     <h4 className="text-lg font-black text-slate-800 font-noto">ঠিকানা</h4>
-                   </div>
-                   
-                   <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 font-noto">
-                     <p className="text-sm font-medium text-slate-600 leading-relaxed">
-                       {student?.address || 'ঠিকানা পাওয়া যায়নি। প্রতিষ্ঠানের অফিস থেকে এটি আপডেট করা যাবে।'}
-                     </p>
-                   </div>
-                 </div>
-
-                 {/* Academic Notes if any */}
-                 {student?.notes && (
-                    <div className="bg-amber-50 p-8 rounded-[3rem] border border-amber-100 shadow-soft space-y-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
-                          <FileText size={20} />
-                        </div>
-                        <h4 className="text-lg font-black text-amber-900 font-noto">শিক্ষক নোট</h4>
-                      </div>
-                      <p className="text-sm font-medium text-amber-800 leading-relaxed bg-white/50 p-6 rounded-2xl border border-amber-200/50 italic">
-                        "{student.notes}"
-                      </p>
-                    </div>
-                 )}
-
+                       {/* Academic Notes if any */}
+                       {student?.notes && (
+                          <div className="bg-amber-50/60 p-4 md:p-6 rounded-3xl border border-amber-100 shadow-soft space-y-3">
+                            <div className="flex items-center gap-3 border-b border-amber-100/55 pb-2">
+                              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                                <FileText size={16} />
+                              </div>
+                              <h4 className="text-sm font-black text-amber-900 font-noto">শিক্ষক নোট / মন্তব্য</h4>
+                            </div>
+                            <p className="text-xs md:text-sm font-medium text-amber-800 leading-relaxed bg-white/60 p-4 rounded-xl border border-amber-200/50 italic text-left font-noto">
+                              "{student.notes}"
+                            </p>
+                          </div>
+                       )}
+                     </motion.div>
+                   )}
+                 </AnimatePresence>
                </div>
 
-               {/* Logout Button */}
+               {/* Modern Minimalist Logout Row */}
                <motion.button 
                   whileTap={{ scale: 0.98 }}
                   onClick={handleLogout} 
-                  className="w-full p-8 bg-red-50 border border-red-100 rounded-[3rem] flex items-center justify-between text-red-600 hover:bg-red-100 transition-all shadow-sm group"
+                  className="w-full p-4 bg-red-50/45 border border-red-100/50 hover:bg-red-50 hover:border-red-200 rounded-3xl flex items-center justify-between text-red-600 transition-all shadow-sm group font-noto font-black"
                >
-                  <div className="flex items-center gap-5 text-left font-noto">
-                     <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center border border-red-100 shadow-sm text-red-600 group-hover:scale-110 transition-transform">
-                        <LogOut size={24} />
+                  <div className="flex items-center gap-3.5 text-left">
+                     <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-red-100 text-red-500 group-hover:scale-105 transition-transform">
+                        <LogOut size={18} />
                      </div>
                      <div className="text-left">
-                        <span className="block font-black text-sm uppercase tracking-widest">লগআউট করুন</span>
-                        <span className="block text-[10px] font-bold text-red-400 tracking-[0.2em] mt-1 uppercase">সেশন ডিলিট হয়ে যাবে</span>
+                        <span className="block font-black text-xs uppercase tracking-wider">অভিভাবক লগআউট</span>
+                        <span className="block text-[8px] font-bold text-red-400 tracking-[0.1em] mt-0.5 uppercase">সেশন ডিলিট হয়ে যাবে</span>
                      </div>
                   </div>
-                  <ChevronRight size={24} />
+                  <ChevronRight size={18} className="text-red-400 group-hover:translate-x-0.5 transition-transform" />
                </motion.button>
                
-               <div className="flex flex-col items-center gap-1 pt-4">
-                  <div className="flex items-center gap-2">
+               {/* Footer brand block */}
+               <div className="flex flex-col items-center gap-0.5 pt-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em]">Deenora App</span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">Deenora App</span>
                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                   </div>
-                  <p className="text-[8px] font-bold text-slate-300 uppercase tracking-[0.2em]">Build v26.06.2023</p>
+                  <p className="text-[7px] font-bold text-slate-300 uppercase tracking-widest">Build v26.06.2023</p>
                </div>
             </motion.div>
           )}
