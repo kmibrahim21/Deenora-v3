@@ -97,6 +97,11 @@ export const RoutinePDFTemplate: React.FC<RoutinePDFTemplateProps> = ({ madrasah
                 </div>
               </div>
             </div>
+
+            {/* System Tagline */}
+            <div className="text-center mt-auto pt-4 text-[9px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono uppercase">
+              Institute Management System
+            </div>
           </div>
         );
       })}

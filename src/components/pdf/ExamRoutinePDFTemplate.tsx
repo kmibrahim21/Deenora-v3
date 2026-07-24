@@ -416,9 +416,9 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             </div>
           </div>
 
-          {/* Deenora Portal bottom tagline */}
-          <div className="text-center mt-1.5 pt-1 text-[9px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
-            {isBn ? `দ্বীনোরা শিক্ষাবর্ষ ${isBn ? getBanglaNumber(examYear) : examYear} • তৈরি করতে ভিজিট করুন deenora.com` : `DEENORA PORTAL • POWERED BY DEENORA ${examYear}`}
+          {/* Institute Management System bottom tagline */}
+          <div className="text-center mt-1.5 pt-1 text-[9px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono uppercase">
+            Institute Management System
           </div>
         </div>
       </div>

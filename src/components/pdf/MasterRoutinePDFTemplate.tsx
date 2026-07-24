@@ -122,7 +122,7 @@ export const MasterRoutinePDFTemplate: React.FC<MasterRoutinePDFTemplateProps> =
            </div>
            <div className="text-center min-w-[120px] relative">
               <div className="flex items-center justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 35}px` }}>
-                {madrasah?.config_json?.signature_url && (
+                {madrasah?.config_json.signature_url && (
                   <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 35}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
                 )}
               </div>
@@ -130,6 +130,11 @@ export const MasterRoutinePDFTemplate: React.FC<MasterRoutinePDFTemplateProps> =
                 <p className="font-bold">অধ্যক্ষ / মুহতামিম</p>
               </div>
            </div>
+        </div>
+
+        {/* System Tagline */}
+        <div className="text-center mt-auto pt-2 text-[9px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono uppercase">
+          Institute Management System
         </div>
       </div>
     </div>
