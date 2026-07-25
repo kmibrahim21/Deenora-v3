@@ -529,7 +529,11 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       setLogoUrl(publicUrl);
       setMadrasah(prev => prev ? { ...prev, logo_url: publicUrl } : null);
       if (onProfileUpdate) onProfileUpdate();
-      setShowSuccessModal({ show: true, title: 'সফল', message: 'লোগো সফলভাবে আপলোড এবং অপ্টিমাইজ করা হয়েছে।' });
+      setShowSuccessModal({ 
+        show: true, 
+        title: lang === 'bn' ? 'সফল' : 'Success', 
+        message: lang === 'bn' ? 'লোগো সফলভাবে আপলোড এবং অপ্টিমাইজ করা হয়েছে।' : 'Logo uploaded and optimized successfully.' 
+      });
     } catch (e: any) { 
       console.error('Upload error:', e);
       alert('Logo upload failed: ' + e.message); 

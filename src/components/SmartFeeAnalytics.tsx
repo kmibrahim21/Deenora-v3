@@ -809,7 +809,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             </div>
             <div className="text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('expected_income', lang)}</p>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.expected_income?.toLocaleString('bn-BD')}</h3>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.expected_income?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</h3>
             </div>
           </div>
           <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
@@ -826,7 +826,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             </div>
             <div className="text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'সংগৃহীত ফি' : 'Collected Fees'}</p>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.prediction?.toLocaleString('bn-BD')}</h3>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.prediction?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</h3>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -851,7 +851,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             </div>
             <div className="text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{localT.totalIncome[lang]}</p>
-              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.total_income?.toLocaleString('bn-BD')}</h3>
+              <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-[#1E3A8A]'}`}>৳ {stats?.total_income?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</h3>
             </div>
           </div>
           <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
@@ -887,7 +887,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             </div>
             <div className="text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{localT.totalExpense[lang]}</p>
-              <h3 className="text-xl font-black text-red-500">৳ {stats?.total_expense?.toLocaleString('bn-BD')}</h3>
+              <h3 className="text-xl font-black text-red-500">৳ {stats?.total_expense?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</h3>
             </div>
           </div>
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{localT.monthlyOutflow[lang]}</p>
@@ -902,7 +902,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             <div className="text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{localT.netIncome[lang]}</p>
               <h3 className={`text-xl font-black ${stats?.net_income >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                ৳ {stats?.net_income?.toLocaleString('bn-BD')}
+                ৳ {stats?.net_income?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}
               </h3>
             </div>
           </div>
@@ -931,8 +931,8 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                  </div>
                  <div className="text-right">
                     <p className="text-[10px] font-black text-slate-400 uppercase">{localT.expectedCollected[lang]}</p>
-                    <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-[#1E3A8A]'}`}>৳{item.expected.toLocaleString()} / <span className="text-emerald-500">৳{item.collected.toLocaleString()}</span></p>
-                    <p className="text-[10px] font-bold text-red-400 mt-1">{localT.due[lang]}: ৳{(item.expected - item.collected).toLocaleString()}</p>
+                    <p className={`text-sm font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-[#1E3A8A]'}`}>৳{item.expected.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')} / <span className="text-emerald-500">৳{item.collected.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</span></p>
+                    <p className="text-[10px] font-bold text-red-400 mt-1">{localT.due[lang]}: ৳{(item.expected - item.collected).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</p>
                  </div>
               </div>
            )) : (
@@ -1163,13 +1163,13 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                       <p className="text-[9px] font-black uppercase tracking-widest text-blue-500/60 mb-1">{lang === 'bn' ? 'মোট প্রাপক' : 'Total Recipients'}</p>
                       <div className="flex items-center gap-2">
                         <Users size={16} className="text-blue-500" />
-                        <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{reminders.filter(r => r.guardian_phone).length.toLocaleString('bn-BD')}</h4>
+                        <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{reminders.filter(r => r.guardian_phone).length.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</h4>
                         <span className="text-xs font-bold text-slate-400">{lang === 'bn' ? 'জন' : 'Students'}</span>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-[9px] font-black uppercase tracking-widest text-blue-500/60 mb-1">{lang === 'bn' ? 'আনুমানিক খরচ' : 'Estimated Cost'}</p>
-                      <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳{(reminders.filter(r => r.guardian_phone).length * voiceRate).toLocaleString('bn-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
+                      <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳{(reminders.filter(r => r.guardian_phone).length * voiceRate).toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
                     </div>
                   </div>
                   <div className={`h-1.5 w-full rounded-full overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>

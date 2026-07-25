@@ -400,7 +400,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
           <button onClick={onBack} className={`w-14 h-14 ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-blue-50 border-blue-100 text-[#2563EB]'} rounded-2xl flex items-center justify-center active:scale-90 transition-all border shadow-sm`}>
             <ArrowLeft size={28} strokeWidth={3} />
           </button>
-          <h1 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E293B]'} font-noto`}>ডাটা ম্যানেজমেন্ট</h1>
+          <h1 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E293B]'} font-noto`}>{lang === 'bn' ? 'ডাটা ম্যানেজমেন্ট' : 'Data Management'}</h1>
         </div>
       </div>
 
@@ -418,7 +418,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
               <Download size={32} />
             </div>
             <div>
-              <h3 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>ডাটা এক্সপোর্ট</h3>
+              <h3 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>{lang === 'bn' ? 'ডাটা এক্সপোর্ট' : 'Data Export'}</h3>
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-1.5">Direct Download File</p>
             </div>
           </div>
@@ -466,7 +466,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
               <Upload size={32} />
             </div>
             <div>
-              <h3 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>ডাটা আপলোড</h3>
+              <h3 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>{lang === 'bn' ? 'ডাটা আপলোড' : 'Data Upload'}</h3>
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-1.5">Select Excel File</p>
             </div>
           </div>
@@ -493,7 +493,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                    <Loader2 size={80} className="animate-spin absolute inset-0 opacity-20" />
                    <div className="absolute inset-0 flex items-center justify-center text-xl font-black">{progress}%</div>
                 </div>
-                <span className="font-noto text-lg text-center px-4">আপলোড হচ্ছে, দয়া করে অপেক্ষা করুন...</span>
+                <span className="font-noto text-lg text-center px-4">{lang === 'bn' ? 'আপলোড হচ্ছে, দয়া করে অপেক্ষা করুন...' : 'Uploading, please wait...'}</span>
               </>
             ) : !isUploadActive ? (
               <>
@@ -505,7 +505,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             ) : (
               <>
                 <FileUp size={60} className="opacity-50" />
-                <span className="font-noto text-lg">এক্সেল ফাইল সিলেক্ট করুন</span>
+                <span className="font-noto text-lg">{lang === 'bn' ? 'এক্সেল ফাইল সিলেক্ট করুন' : 'Select Excel File'}</span>
               </>
             )}
           </div>
@@ -516,16 +516,16 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         <div className={`flex items-center justify-between gap-4 ${isDark ? 'text-white' : 'text-[#1E3A8A]'} px-1`}>
           <div className="flex items-center gap-4">
             <Table size={24} />
-            <h3 className="text-lg font-black font-noto">এক্সেল ফরম্যাট গাইড</h3>
+            <h3 className="text-lg font-black font-noto">{lang === 'bn' ? 'এক্সেল ফরম্যাট গাইড' : 'Excel Format Guide'}</h3>
           </div>
           <button 
             onClick={handleDownloadSample}
             className={`flex items-center gap-2 px-4 py-2 ${isDark ? 'bg-slate-700 text-blue-400 border-slate-600' : 'bg-blue-50 text-[#2563EB] border-blue-100'} rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-100 transition-all border`}
           >
-            <FileSpreadsheet size={16} /> স্যাম্পল ফাইল
+            <FileSpreadsheet size={16} /> {lang === 'bn' ? 'স্যাম্পল ফাইল' : 'Sample File'}
           </button>
         </div>
-        <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-400'} leading-relaxed px-1`}>আপনার এক্সেল ফাইলটি নিচের ১০টি কলামের ফরম্যাটে হতে হবে (অথবা স্যাম্পল ফাইলটি ডাউনলোড করুন):</p>
+        <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-400'} leading-relaxed px-1`}>{lang === 'bn' ? 'আপনার এক্সেল ফাইলটি নিচের ১০টি কলামের ফরম্যাটে হতে হবে (অথবা স্যাম্পল ফাইলটি ডাউনলোড করুন):' : 'Your Excel file must match the following 10 column format (or download the sample file):'}</p>
         <div className="grid grid-cols-5 lg:grid-cols-10 gap-3">
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col A</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Class</p></div>
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col B</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Roll</p></div>

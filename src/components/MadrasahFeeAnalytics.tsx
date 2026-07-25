@@ -236,7 +236,7 @@ const MadrasahFeeAnalytics: React.FC<MadrasahFeeAnalyticsProps> = ({ madrasah, l
               <ArrowUpCircle size={24} />
             </div>
             <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{localT.totalIncome[lang]}</p>
-            <h3 className={`text-3xl font-black ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {data.summary.totalIncome.toLocaleString('bn-BD')}</h3>
+            <h3 className={`text-3xl font-black ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>৳ {data.summary.totalIncome.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</h3>
           </div>
         </div>
 
@@ -249,7 +249,7 @@ const MadrasahFeeAnalytics: React.FC<MadrasahFeeAnalyticsProps> = ({ madrasah, l
               <ArrowDownCircle size={24} />
             </div>
             <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{localT.totalExpense[lang]}</p>
-            <h3 className="text-3xl font-black text-red-500">৳ {data.summary.totalExpense.toLocaleString('bn-BD')}</h3>
+            <h3 className="text-3xl font-black text-red-500">৳ {data.summary.totalExpense.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</h3>
           </div>
         </div>
 
@@ -263,7 +263,7 @@ const MadrasahFeeAnalytics: React.FC<MadrasahFeeAnalyticsProps> = ({ madrasah, l
             </div>
             <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{localT.balance[lang]}</p>
             <h3 className={`text-3xl font-black ${data.summary.balance >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-              ৳ {data.summary.balance.toLocaleString('bn-BD')}
+              ৳ {data.summary.balance.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}
             </h3>
           </div>
         </div>

@@ -1964,7 +1964,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                                   {studentName ? (
                                                     <>
                                                       {studentName}
-                                                      {rollNo && <span className="ml-2 text-[10px] text-slate-400 font-bold">(রোল: {rollNo})</span>}
+                                                      {rollNo && <span className="ml-2 text-[10px] text-slate-400 font-bold">({lang === 'bn' ? 'রোল' : 'Roll'}: {rollNo})</span>}
                                                     </>
                                                   ) : phone}
                                                 </p>
@@ -2141,7 +2141,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       onClick={() => { setStatusModal({ ...statusModal, show: false }); setActiveTab('recharge'); }} 
                       className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-xl shadow-blue-100 active:scale-95 transition-all text-sm uppercase tracking-[0.1em] flex items-center justify-center gap-3"
                     >
-                      <Zap size={18} fill="currentColor" /> রিচার্জ করুন
+                      <Zap size={18} fill="currentColor" /> {lang === 'bn' ? 'রিচার্জ করুন' : 'Recharge Now'}
                     </button>
                     <button 
                       onClick={() => setStatusModal({ ...statusModal, show: false })} 

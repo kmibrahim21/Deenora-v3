@@ -584,7 +584,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   ID: {student.student_id?.slice(-6) || '-'}
                 </span>
                 <span className={`px-3 py-1 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
-                  রোল: {student.roll || '-'}
+                  {lang === 'bn' ? 'রোল' : 'Roll'}: {student.roll || '-'}
                 </span>
               </div>
             </div>
@@ -595,7 +595,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
           <Loader2 className="animate-spin mb-4" size={32} />
-          <p className="text-[10px] font-black uppercase tracking-widest">ডাটা লোড হচ্ছে...</p>
+          <p className="text-[10px] font-black uppercase tracking-widest">{lang === 'bn' ? 'ডাটা লোড হচ্ছে...' : 'Loading data...'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -662,7 +662,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                 <h3 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>
                    <Calendar size={18} />
-                   মাসিক ফি স্ট্যাটাস ({selectedYear})
+                   {lang === 'bn' ? 'মাসিক ফি স্ট্যাটাস' : 'Monthly Fee Status'} ({selectedYear})
                 </h3>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-1.5">
@@ -717,7 +717,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                           <p className={`text-[11px] font-black tracking-tight ${status === 'paid' ? 'text-emerald-600' : status === 'partial' ? 'text-amber-600' : 'text-slate-400'}`}>{monthName}</p>
                           {discountAmt > 0 && (
                             <div className={`text-[8px] font-black px-1.5 py-0.5 rounded-lg border animate-pulse ${isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                               ছাড় ৳{discountAmt}
+                               {lang === 'bn' ? 'ছাড়' : 'Discount'} ৳{discountAmt?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}
                             </div>
                           )}
                         </div>
@@ -734,7 +734,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                             </span>
                             {(paidAmtTotal > 0 || status === 'paid') && (
                               <div className="flex flex-col items-end">
-                                <span className={`text-xs font-black ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>৳{cashPaid}</span>
+                                <span className={`text-xs font-black ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>৳{cashPaid?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</span>
                               </div>
                             )}
                           </div>
@@ -754,7 +754,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
               <div className="flex items-center justify-between mb-4">
                 <h3 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>
                    <Calendar size={18} />
-                   হিসাব শুরুর তারিখ
+                   {lang === 'bn' ? 'হিসাব শুরুর তারিখ' : 'Accounting Start Date'}
                 </h3>
               </div>
               <div className={`flex items-center gap-4 p-5 rounded-2xl border transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-blue-50/30 border-blue-100/50'}`}>
@@ -762,7 +762,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   <Calendar size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">যেই মাস থেকে হিসাব শুরু হবে</p>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'যেই মাস থেকে হিসাব শুরু হবে' : 'The month from which accounting starts'}</p>
                   <input 
                     type="month" 
                     value={accStartDate || (madrasah.config_json?.academic_year_start?.slice(0, 7) || new Date().toISOString().slice(0, 7))}
@@ -774,7 +774,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                 {isUpdatingAccStart && <Loader2 size={16} className="animate-spin text-blue-500" />}
               </div>
               <p className="mt-3 text-[9px] font-medium text-slate-400 leading-relaxed font-noto italic">
-                * এই তারিখের পূর্বের কোনো ফি বকেয়া হিসেবে গণ্য হবে না।
+                *{lang === 'bn' ? ' এই তারিখের পূর্বের কোনো ফি বকেয়া হিসেবে গণ্য হবে না।' : ' Any fees before this date will not be counted as due.'}
               </p>
             </div>
 
@@ -783,7 +783,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
               <div className="flex items-center justify-between mb-8">
                 <h3 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>
                    <DollarSign size={18} />
-                   ফি সেটিংস
+                   {lang === 'bn' ? 'ফি সেটিংস' : 'Fee Settings'}
                 </h3>
               </div>
               
@@ -806,7 +806,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                 {isExpired && <span className="text-[7px] font-black bg-rose-500/10 text-rose-500 border border-rose-500/20 px-1.5 py-0.5 rounded-lg uppercase tracking-widest">Expired</span>}
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[9px] font-black text-slate-400/80 uppercase tracking-widest">ডিফল্ট: ৳{fee.amount}</span>
+                                <span className="text-[9px] font-black text-slate-400/80 uppercase tracking-widest">{lang === 'bn' ? 'ডিফল্ট' : 'Default'}: ৳{fee.amount?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</span>
                               </div>
                             </div>
                             
@@ -836,7 +836,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                   <TrendingUp size={14} />
                                 </div>
                                 <div className="flex-1">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">নির্ধারিত ফি (৳)</p>
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'নির্ধারিত ফি (৳)' : 'Assigned Fee (৳)'}</p>
                                   <input
                                     type="number"
                                     className={`w-full bg-transparent outline-none font-black text-sm placeholder:text-slate-300 ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}
@@ -854,7 +854,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   }) : (
                     <div className="text-center py-10 flex flex-col items-center gap-3">
                        <DollarSign size={32} className="text-slate-200" />
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">কোনো ফি পাওয়া যায়নি</p>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'কোনো ফি পাওয়া যায়নি' : 'No fees found'}</p>
                     </div>
                   )}
                 </div>
@@ -865,7 +865,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
               <div className="flex items-center justify-between mb-8">
                 <h3 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>
                    <Clock size={18} />
-                   লেনদেন ইতিহাস
+                   {lang === 'bn' ? 'লেনদেন ইতিহাস' : 'Transaction History'}
                 </h3>
               </div>
 
@@ -906,7 +906,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                     <div className={`w-16 h-16 rounded-[2rem] flex items-center justify-center ${isDark ? 'bg-slate-800 text-slate-600' : 'bg-slate-50 text-slate-200 shadow-inner'}`}>
                       <FileText size={28} />
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">কোনো লেনদেন নেই</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'কোনো লেনদেন নেই' : 'No transactions found'}</p>
                   </div>
                 )}
               </div>
@@ -939,7 +939,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                         </div>
                         <div>
                           <h2 className={`text-xl font-black font-noto tracking-tight ${isDark ? 'text-white' : 'text-[#1E293B]'}`}>
-                              একাধিক মাসের ফি
+                              {lang === 'bn' ? 'একাধিক মাসের ফি' : 'Multi-month Fees'}
                           </h2>
                           <p className={`text-[9px] font-black uppercase tracking-[0.2em] mt-0.5 ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                             {student.student_name}
@@ -956,7 +956,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                       <div>
                           <p className={`text-[9px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                             <Calendar size={12} className="text-blue-500" />
-                            মাসের বকেয়া নির্বাচন করুন ({selectedYear})
+                            {lang === 'bn' ? 'মাসের বকেয়া নির্বাচন করুন' : 'Select Months Due'} ({selectedYear})
                           </p>
                           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                               {Array.from({ length: 12 }).map((_, i) => {
@@ -979,7 +979,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                           }`}
                                       >
                                           <span className="text-[10px] font-black uppercase tracking-tighter">{monthName}</span>
-                                          <span className={`text-[9px] font-bold ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>৳{due}</span>
+                                          <span className={`text-[9px] font-bold ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>৳{due?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</span>
                                           {isSelected && (
                                             <div 
                                               className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white rounded-full flex items-center justify-center text-blue-600 shadow-md border-2 border-blue-600"
@@ -993,7 +993,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                           </div>
                           {selectedMonthsToPay.length === 0 && (
                             <div className="text-center py-6 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 mt-2">
-                               <p className="text-[10px] font-bold text-slate-400">অনুগ্রহ করে পরিশোধের জন্য মাস নির্বাচন করুন</p>
+                               <p className="text-[10px] font-bold text-slate-400">{lang === 'bn' ? 'অনুগ্রহ করে পরিশোধের জন্য মাস নির্বাচন করুন' : 'Please select months to make a payment'}</p>
                             </div>
                           )}
                       </div>
@@ -1050,7 +1050,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                           ) : (
                               <>
                                 <ArrowUpCircle size={20} />
-                                <span>নিশ্চিত করুন</span>
+                                <span>{lang === 'bn' ? 'নিশ্চিত করুন' : 'Confirm'}</span>
                               </>
                           )}
                       </button>
@@ -1087,7 +1087,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                   
                   <p className={`text-xs font-bold leading-relaxed mb-8 px-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {lang === 'bn' 
-                      ? 'আপনি কি নিশ্চিত যে এই লেনদেনটি মুছে ফেলতে চান? এটি সংশ্লিষ্ট সব ফি রেকর্ডও মুছে ফেলবে।' 
+                      ? (lang === 'bn' ? 'আপনি কি নিশ্চিত যে এই লেনদেনটি মুছে ফেলতে চান? এটি সংশ্লিষ্ট সব ফি রেকর্ডও মুছে ফেলবে।' : 'Are you sure you want to delete this transaction? This will also delete all related fee records.') 
                       : 'Are you sure you want to delete this transaction? It will also remove associated fee records.'}
                   </p>
 

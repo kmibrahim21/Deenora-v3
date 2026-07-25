@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, Plus, Trash2, Calendar, LayoutGrid, Users, Clock, Copy, Save, Loader2, Download, CheckCircle, AlertCircle, Edit3, Palette, X, Check, Coffee, Info, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, Calendar, LayoutGrid, Users, Clock, Copy, Save, Loader2, Download, CheckCircle, AlertCircle, Edit3, Palette, X, Check, Coffee, Info, ZoomIn, ZoomOut, Maximize, Printer, Type } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Profile } from 'types';
 import html2canvas from 'html2canvas';
@@ -31,7 +31,7 @@ const ALL_DAYS_OF_WEEK = [
   { id: 'Friday', bn: 'শুক্রবার', en: 'Friday', index: 5 },
 ];
 
-const RoutineCell = ({ value, onChange, theme, placeholder = '-' }: { value: string, onChange: (val: string) => void, theme: any, placeholder?: string }) => {
+const RoutineCell = ({ value, onChange, theme, placeholder = '-', fontScale = 1 }: { value: string, onChange: (val: string) => void, theme: any, placeholder?: string, fontScale?: number }) => {
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -41,6 +41,9 @@ const RoutineCell = ({ value, onChange, theme, placeholder = '-' }: { value: str
     }
   }, [editing]);
 
+  const mainFontSize = Math.round(14 * fontScale);
+  const subFontSize = Math.max(9.5, Math.round(10.5 * fontScale));
+
   if (editing) {
     return (
       <textarea
@@ -48,8 +51,8 @@ const RoutineCell = ({ value, onChange, theme, placeholder = '-' }: { value: str
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={() => setEditing(false)}
-        className="w-full h-full min-h-[50px] bg-white text-center text-[10px] font-black font-noto resize-none border-none outline-none focus:ring-1 focus:ring-blue-400 rounded p-1 leading-normal absolute inset-0 z-50 shadow-lg"
-        style={{ color: theme.primary }}
+        className="w-full h-full min-h-[52px] bg-white text-center font-black font-noto resize-none border-none outline-none focus:ring-1 focus:ring-blue-400 rounded p-1 leading-normal absolute inset-0 z-50 shadow-lg"
+        style={{ color: theme.primary, fontSize: `${mainFontSize}px` }}
       />
     );
   }
@@ -59,19 +62,19 @@ const RoutineCell = ({ value, onChange, theme, placeholder = '-' }: { value: str
   return (
     <div 
       onClick={() => setEditing(true)}
-      className="w-full min-h-[50px] flex flex-col justify-center items-center cursor-pointer p-1 hover:bg-black/5 transition-colors rounded-sm"
+      className="w-full min-h-[52px] flex flex-col justify-center items-center cursor-pointer p-1 hover:bg-black/5 transition-colors rounded-sm"
     >
       {lines.length > 0 ? (
         <>
-          <span className="text-[12px] font-black leading-tight" style={{ color: theme.primary }}>{lines[0]}</span>
+          <span className="font-black leading-tight tracking-tight text-center" style={{ color: theme.primary, fontSize: `${mainFontSize}px` }}>{lines[0]}</span>
           {lines.length > 1 && (
-            <span className="text-[8.5px] font-bold opacity-80 leading-tight mt-0.5 italic" style={{ color: theme.primary }}>
+            <span className="font-extrabold opacity-85 leading-tight mt-0.5 italic text-center" style={{ color: theme.primary, fontSize: `${subFontSize}px` }}>
               {lines.slice(1).join(' / ')}
             </span>
           )}
         </>
       ) : (
-        <span className="text-slate-300">{placeholder}</span>
+        <span className="text-slate-300 font-bold" style={{ fontSize: `${mainFontSize - 2}px` }}>{placeholder}</span>
       )}
     </div>
   );
@@ -109,6 +112,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
   
   const [layoutType, setLayoutType] = useState<'day_left' | 'period_left' | 'class_left'>('day_left');
   const [selectedDay, setSelectedDay] = useState(activeDays[0]?.id || 'Saturday');
+  const [fontScale, setFontScale] = useState<number>(1.18);
   
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{show: boolean, msg: string, type: 'success' | 'error' | 'info'}>({show: false, msg: '', type: 'info'});
@@ -118,6 +122,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
   const [previewScale, setPreviewScale] = useState<number>(1);
   const [userZoom, setUserZoom] = useState<number>(1);
   const [downloading, setDownloading] = useState(false);
+  const [pdfCopyMode, setPdfCopyMode] = useState<'two' | 'one'>('two');
   
   const canManage = profile?.role !== 'teacher' || profile?.permissions?.can_manage_classes;
 
@@ -262,6 +267,53 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
     showToast(lang === 'bn' ? 'রুটিন এডিট মোডে আনা হয়েছে' : 'Loaded in editor', 'info');
   };
 
+  const handlePrint = async () => {
+    if (!pdfContentRef.current) return;
+    try {
+      showToast(lang === 'bn' ? 'প্রিন্ট মোড চালু হচ্ছে...' : 'Preparing print...', 'info');
+      const { toJpeg } = await import('html-to-image');
+      const dataUrl = await toJpeg(pdfContentRef.current, {
+        quality: 1,
+        pixelRatio: 2.5,
+        backgroundColor: '#ffffff',
+        width: 1123,
+        height: 794,
+        filter: (node: any) => {
+          if (node.getAttribute && node.getAttribute('data-html2canvas-ignore') === 'true') return false;
+          if (node.classList && node.classList.contains('download-hide')) return false;
+          return true;
+        },
+        style: { transform: 'none', borderRadius: '0', margin: '0' }
+      });
+
+      const printWin = window.open('', '_blank');
+      if (printWin) {
+        printWin.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>${routineTitle || 'Class Routine'}</title>
+              <style>
+                @page { size: A4 landscape; margin: 0; }
+                body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
+                img { width: 100%; height: auto; max-height: 100vh; object-fit: contain; }
+              </style>
+            </head>
+            <body>
+              <img src="${dataUrl}" onload="setTimeout(function(){ window.print(); window.close(); }, 300);" />
+            </body>
+          </html>
+        `);
+        printWin.document.close();
+      } else {
+        window.print();
+      }
+    } catch (e) {
+      console.error(e);
+      window.print();
+    }
+  };
+
   const handleDownloadPDF = async (targetRef: React.RefObject<HTMLElement>) => {
     if (!targetRef.current) return;
     setDownloading(true);
@@ -283,7 +335,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
       // We need to capture the PDF content
       const dataUrl = await toJpeg(element, {
         quality: 1,
-        pixelRatio: 2,
+        pixelRatio: 2.5,
         backgroundColor: '#ffffff',
         width: actualWidth,
         height: actualHeight,
@@ -303,19 +355,19 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         }
       });
       
-      if (layoutType === 'day_left') {
+      if (layoutType === 'day_left' && pdfCopyMode === 'two') {
         const pdf = new jsPDF({ 
           orientation: 'portrait', 
-          unit: 'px', 
+          unit: 'mm', 
           format: 'a4' 
         });
         
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
+        const pageWidth = pdf.internal.pageSize.getWidth(); // 210mm
+        const pageHeight = pdf.internal.pageSize.getHeight(); // 297mm
         
-        // Scale to fit half page
-        const maxWidth = pageWidth - 60;
-        const maxHeight = (pageHeight / 2) - 40;
+        const margin = 6;
+        const maxWidth = pageWidth - (margin * 2);
+        const maxHeight = (pageHeight / 2) - (margin * 2);
         const scale = Math.min(maxWidth / actualWidth, maxHeight / actualHeight);
         
         const drawWidth = actualWidth * scale;
@@ -323,25 +375,38 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         const xOffset = (pageWidth - drawWidth) / 2;
 
         // Top copy
-        pdf.addImage(dataUrl, 'JPEG', xOffset, 20, drawWidth, drawHeight);
+        pdf.addImage(dataUrl, 'JPEG', xOffset, margin, drawWidth, drawHeight);
         
         // Dashed divider
-        (pdf as any).setLineDash([10, 10], 0);
+        (pdf as any).setLineDash([3, 3], 0);
         pdf.setDrawColor(200, 200, 200);
-        pdf.line(20, pageHeight / 2, pageWidth - 20, pageHeight / 2);
+        pdf.line(margin, pageHeight / 2, pageWidth - margin, pageHeight / 2);
         
         // Bottom copy
-        pdf.addImage(dataUrl, 'JPEG', xOffset, (pageHeight / 2) + 20, drawWidth, drawHeight);
+        pdf.addImage(dataUrl, 'JPEG', xOffset, (pageHeight / 2) + margin, drawWidth, drawHeight);
         
         pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
       } else {
         const pdf = new jsPDF({ 
           orientation: 'landscape', 
-          unit: 'px', 
-          format: [actualWidth, Math.max(794, actualHeight)] 
+          unit: 'mm', 
+          format: 'a4' 
         });
         
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, actualWidth, actualHeight);
+        const pageWidth = pdf.internal.pageSize.getWidth(); // 297mm
+        const pageHeight = pdf.internal.pageSize.getHeight(); // 210mm
+        
+        const margin = 6;
+        const maxWidth = pageWidth - (margin * 2);
+        const maxHeight = pageHeight - (margin * 2);
+        const scale = Math.min(maxWidth / actualWidth, maxHeight / actualHeight);
+        
+        const drawWidth = actualWidth * scale;
+        const drawHeight = actualHeight * scale;
+        const xOffset = (pageWidth - drawWidth) / 2;
+        const yOffset = (pageHeight - drawHeight) / 2;
+        
+        pdf.addImage(dataUrl, 'JPEG', xOffset, yOffset, drawWidth, drawHeight);
         pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
       }
       
@@ -352,17 +417,47 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
       // Fallback to html2canvas if html-to-image fails
       try {
         const canvas = await html2canvas(targetRef.current, {
-          scale: 2,
+          scale: 2.5,
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
           width: 1123,
           height: 794
         });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
-        const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1123, 794] });
-        pdf.addImage(imgData, 'JPEG', 0, 0, 1123, 794);
-        pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+        if (layoutType === 'day_left' && pdfCopyMode === 'two') {
+          const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const margin = 6;
+          const maxWidth = pageWidth - (margin * 2);
+          const maxHeight = (pageHeight / 2) - (margin * 2);
+          const scale = Math.min(maxWidth / 1123, maxHeight / 794);
+          const drawWidth = 1123 * scale;
+          const drawHeight = 794 * scale;
+          const xOffset = (pageWidth - drawWidth) / 2;
+          
+          pdf.addImage(imgData, 'JPEG', xOffset, margin, drawWidth, drawHeight);
+          (pdf as any).setLineDash([3, 3], 0);
+          pdf.setDrawColor(200, 200, 200);
+          pdf.line(margin, pageHeight / 2, pageWidth - margin, pageHeight / 2);
+          pdf.addImage(imgData, 'JPEG', xOffset, (pageHeight / 2) + margin, drawWidth, drawHeight);
+          pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+        } else {
+          const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const margin = 6;
+          const maxWidth = pageWidth - (margin * 2);
+          const maxHeight = pageHeight - (margin * 2);
+          const scale = Math.min(maxWidth / 1123, maxHeight / 794);
+          const drawWidth = 1123 * scale;
+          const drawHeight = 794 * scale;
+          const xOffset = (pageWidth - drawWidth) / 2;
+          const yOffset = (pageHeight - drawHeight) / 2;
+          pdf.addImage(imgData, 'JPEG', xOffset, yOffset, drawWidth, drawHeight);
+          pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+        }
         showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড হয়েছে (অল্টারনেট পদ্ধতি)!' : 'PDF downloaded (fallback)!', 'success');
       } catch (fbError) {
         showToast(lang === 'bn' ? 'ডাউনলোড করতে সমস্যা হয়েছে' : 'Error generating PDF', 'error');
@@ -540,7 +635,57 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                    </div>
                  </div>
 
-                 {/* Day Selection (Hiding as requested) */}
+                 {/* PDF Download Page Mode Option */}
+                  {layoutType === 'day_left' && (
+                    <div className="space-y-2 md:col-span-2 lg:col-span-1 animate-in fade-in zoom-in-95 duration-200">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Download size={14}/> {lang === 'bn' ? 'ডাউনলোড পেইজ সংখ্যা' : 'Download Page Mode'}
+                      </label>
+                      <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl">
+                        <button 
+                          onClick={() => setPdfCopyMode('two')}
+                          className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center gap-1 ${pdfCopyMode === 'two' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          {lang === 'bn' ? '১ পেইজে ২টি' : '2 per page'}
+                        </button>
+                        <button 
+                          onClick={() => setPdfCopyMode('one')}
+                          className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center gap-1 ${pdfCopyMode === 'one' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          {lang === 'bn' ? '১ পেইজে ১টি' : '1 per page'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Font Size Selector */}
+                  <div className="space-y-2 md:col-span-2 lg:col-span-1 animate-in fade-in zoom-in-95 duration-200">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Type size={14}/> {lang === 'bn' ? 'লেখা/ফন্টের সাইজ' : 'Text Size'}
+                    </label>
+                    <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl">
+                      <button 
+                        onClick={() => setFontScale(1.0)}
+                        className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.0 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'স্বাভাবিক' : 'Normal'}
+                      </button>
+                      <button 
+                        onClick={() => setFontScale(1.2)}
+                        className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.2 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'বড়' : 'Large'}
+                      </button>
+                      <button 
+                        onClick={() => setFontScale(1.4)}
+                        className={`flex-1 h-9 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.4 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'অনেক বড়' : 'XL'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Day Selection (Hiding as requested) */}
                  {layoutType === 'period_left' && (
                    <div className="space-y-2">
                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'বারের তালিকা' : 'Select Day'}</label>
@@ -559,13 +704,17 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                  {/* Action Buttons */}
                  <div className="space-y-2 flex flex-col justify-end lg:col-span-1">
                     <div className="flex gap-2">
-                       <button onClick={handleSaveRoutine} disabled={saving} className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                       <button onClick={handleSaveRoutine} disabled={saving} className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition-all active:scale-95">
                          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16}/>}
                          {lang === 'bn' ? 'সেভ' : 'Save'}
                        </button>
-                       <button onClick={() => handleDownloadPDF(pdfContentRef)} disabled={downloading} className="flex-1 h-12 bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95">
+                       <button onClick={() => handleDownloadPDF(pdfContentRef)} disabled={downloading} className="flex-1 h-12 bg-[#2563EB] hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition-all active:scale-95">
                          {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16}/>}
                          {lang === 'bn' ? 'ডাউনলোড' : 'Download'}
+                       </button>
+                       <button onClick={handlePrint} className="flex-1 h-12 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition-all active:scale-95">
+                         <Printer size={16}/>
+                         {lang === 'bn' ? 'প্রিন্ট' : 'Print'}
                        </button>
                     </div>
                  </div>
@@ -652,60 +801,60 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                         <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 rounded-bl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
                         <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 rounded-br-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
 
-                        <div className="flex-1 flex flex-col justify-between relative z-10">
-                          {/* Banner Block */}
-                          <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
-                            
-                            {/* Left Column: Logotype */}
-                            <div className="flex-shrink-0 flex items-center justify-center pl-4">
-                              <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
-                                {madrasah?.logo_url ? (
-                                  <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain rounded-full bg-white" alt="Logo" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                                ) : (
-                                  <div className="w-[85px] h-[85px] bg-slate-50 rounded-full border border-slate-100 flex items-center justify-center text-slate-400 font-black text-[10px]">LOGO</div>
-                                )}
-                              </div>
-                            </div>
+                         <div className="flex-1 flex flex-col justify-between relative z-10">
+                           {/* Banner Block */}
+                           <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
+                             
+                             {/* Left Column: Logotype */}
+                             <div className="flex-shrink-0 flex items-center justify-center pl-4">
+                               <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
+                                 {madrasah?.logo_url ? (
+                                   <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain rounded-full bg-white" alt="Logo" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                 ) : (
+                                   <div className="w-[85px] h-[85px] bg-slate-50 rounded-full border border-slate-100 flex items-center justify-center text-slate-400 font-black text-[10px]">LOGO</div>
+                                 )}
+                               </div>
+                             </div>
 
-                            {/* Center Column: Madrasah Title, location, etc */}
-                            <div className="flex-1 text-center px-3 leading-normal">
-                              <h1 className="text-[32px] font-black tracking-tight leading-none mb-1 font-noto" style={{ color: rtTheme.primary }}>
-                                {madrasah?.name || 'মাদরাসার নাম'}
-                              </h1>
-                              
-                              <div className="flex items-center justify-center gap-2 text-[12px] font-bold text-[#475569] leading-tight flex-wrap font-noto">
-                                <span className="inline-flex items-center gap-0.5 italic" style={{ color: rtTheme.primary }}>
-                                  {madrasah?.address || 'ঠিকানা'}
-                                </span>
-                                {(madrasah?.phone || madrasah?.phone) && (
-                                  <>
-                                    <span className="text-slate-300">|</span>
-                                    <span className="inline-flex items-center gap-0.5" style={{ color: rtTheme.primary }}>
-                                      {lang === 'bn' ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
+                             {/* Center Column: Madrasah Title, location, etc */}
+                             <div className="flex-1 text-center px-3 leading-normal">
+                               <h1 className="font-black tracking-tight leading-none mb-1 font-noto" style={{ color: rtTheme.primary, fontSize: `${Math.round(32 * fontScale)}px` }}>
+                                 {madrasah?.name || 'মাদরাসার নাম'}
+                               </h1>
+                               
+                               <div className="flex items-center justify-center gap-2 font-bold text-[#475569] leading-tight flex-wrap font-noto" style={{ fontSize: `${Math.round(12 * fontScale)}px` }}>
+                                 <span className="inline-flex items-center gap-0.5 italic" style={{ color: rtTheme.primary }}>
+                                   {madrasah?.address || 'ঠিকানা'}
+                                 </span>
+                                 {(madrasah?.phone || madrasah?.phone) && (
+                                   <>
+                                     <span className="text-slate-300">|</span>
+                                     <span className="inline-flex items-center gap-0.5" style={{ color: rtTheme.primary }}>
+                                       {lang === 'bn' ? 'মোবাইলঃ ' : 'Mobile: '} {madrasah?.phone}
+                                     </span>
+                                   </>
+                                 )}
+                               </div>
 
-                              {/* Center pill badge */}
-                              <div className="mt-2 inline-block">
-                                <div className="text-white px-8 py-2 rounded-2xl shadow-sm text-[14px] font-black tracking-wide border flex items-center gap-2" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}80` }}>
-                                  <LayoutGrid size={16} />
-                                  {routineTitle}
-                                </div>
-                              </div>
-                            </div>
+                               {/* Center pill badge */}
+                               <div className="mt-2 inline-block">
+                                 <div className="text-white px-8 py-2 rounded-2xl shadow-sm font-black tracking-wide border flex items-center gap-2" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}80`, fontSize: `${Math.round(15 * fontScale)}px` }}>
+                                   <LayoutGrid size={16} />
+                                   {routineTitle}
+                                 </div>
+                               </div>
+                             </div>
 
                             {/* Right Column: Solid Premium Box */}
                             <div className="flex-shrink-0 w-[160px] h-[105px] text-white rounded-2xl flex flex-col justify-center p-3 border shadow mr-4" style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
                               <div className="text-center leading-tight">
-                                <p className="text-[11px] font-black mb-0.5 uppercase tracking-widest" style={{ color: rtTheme.accent }}>
+                                <p className="font-black mb-0.5 uppercase tracking-widest" style={{ color: rtTheme.accent, fontSize: `${Math.round(11 * fontScale)}px` }}>
                                   Class Routine
                                 </p>
-                                <p className="text-[11px] font-extrabold block mb-0.5" style={{ color: `${rtTheme.accent}cc` }}>
+                                <p className="font-extrabold block mb-0.5" style={{ color: `${rtTheme.accent}cc`, fontSize: `${Math.round(11 * fontScale)}px` }}>
                                   {lang === 'bn' ? 'শিক্ষাবর্ষ' : 'Academic Session'}
                                 </p>
-                                <p className="text-[10px] font-semibold text-white/70 block">
+                                <p className="font-semibold text-white/70 block" style={{ fontSize: `${Math.round(10.5 * fontScale)}px` }}>
                                   {new Date().getFullYear()} - {new Date().getFullYear() + 1}
                                 </p>
                               </div>
@@ -718,14 +867,14 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                               <table className="w-full border-collapse border-2 rounded-xl shadow-sm text-center table-fixed" style={{ borderColor: rtTheme.primary }}>
                                 <thead>
                                    <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
-                                      <th className="border-r px-2 py-1.5 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                      <th className="border-r px-2 py-1.5 font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
                                          <div className="flex flex-col items-center justify-center leading-tight">
-                                            <span className="text-[11px] tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent }}>{lang === 'bn' ? 'দিন / বার' : 'DAYS'}</span>
-                                            <Clock size={10} className="opacity-50" />
+                                            <span className="tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent, fontSize: `${Math.round(13 * fontScale)}px` }}>{lang === 'bn' ? 'দিন / বার' : 'DAYS'}</span>
+                                            <Clock size={12} className="opacity-70" />
                                          </div>
                                       </th>
                                       {periods.map((p, idx) => (
-                                        <th key={p.id} className={`border-r p-1 text-[11px] font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
+                                        <th key={p.id} className={`border-r p-1 font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
                                            {!p.isBreak ? (
                                              <div className="flex flex-col items-center gap-0.5 font-noto">
                                                 <input 
@@ -736,7 +885,8 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                                     newPeriods[idx].title = e.target.value;
                                                     setPeriods(newPeriods);
                                                   }}
-                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[10px] font-black placeholder-white/50"
+                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 font-black placeholder-white/50"
+                                                  style={{ fontSize: `${Math.round(13 * fontScale)}px` }}
                                                 />
                                                 <input 
                                                   type="text"
@@ -746,7 +896,8 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                                     newPeriods[idx].time = e.target.value;
                                                     setPeriods(newPeriods);
                                                   }}
-                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 text-[8px] opacity-70 font-bold placeholder-white/30"
+                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-white/30 rounded p-0 opacity-80 font-extrabold placeholder-white/30"
+                                                  style={{ fontSize: `${Math.round(10.5 * fontScale)}px` }}
                                                 />
                                              </div>
                                            ) : (
@@ -758,8 +909,8 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                                     newPeriods[idx].title = e.target.value;
                                                     setPeriods(newPeriods);
                                                   }}
-                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-slate-400/30 rounded p-0 text-[8px] font-black uppercase tracking-widest opacity-80 resize-none h-12"
-                                                  style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                                                  className="w-full bg-transparent text-center border-none outline-none focus:ring-1 focus:ring-slate-400/30 rounded p-0 font-black uppercase tracking-widest opacity-80 resize-none h-12"
+                                                  style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: `${Math.round(11 * fontScale)}px` }}
                                                 />
                                              </div>
                                            )}
@@ -776,8 +927,8 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                 </thead>
                                 <tbody>
                                    {activeDays.map((day, dIdx) => (
-                                     <tr key={day.id} className="border-b h-[2.75rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
-                                       <td className="border-r p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
+                                     <tr key={day.id} className="border-b h-[2.85rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: dIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
+                                       <td className="border-r p-2 font-black text-center tracking-tight" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}>
                                          {lang === 'bn' ? day.bn : day.en}
                                        </td>
                                        {periods.map((p, idx) => (
@@ -787,10 +938,11 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                                  value={routineMatrix[`${day.id}_${p.id}`] || ''}
                                                  onChange={(val) => handleCellChange(day.id, p.id, val)}
                                                  theme={rtTheme}
+                                                 fontScale={fontScale}
                                               />
                                             ) : (
-                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-10 gap-1">
-                                                 <Coffee size={18} style={{ color: rtTheme.primary }} />
+                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-15 gap-1">
+                                                 <Coffee size={20} style={{ color: rtTheme.primary }} />
                                               </div>
                                             )}
                                          </td>
@@ -804,24 +956,24 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                               <table className="w-full border-collapse border-2 rounded-xl shadow-sm text-center table-fixed shrink-0" style={{ borderColor: rtTheme.primary }}>
                                 <thead>
                                    <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
-                                      <th className="border-r px-2 py-1.5 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                      <th className="border-r px-2 py-1.5 font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
                                          <div className="flex flex-col items-center justify-center leading-tight">
-                                            <span className="text-[11px] tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent }}>
+                                            <span className="tracking-widest uppercase mb-0.5" style={{ color: rtTheme.accent, fontSize: `${Math.round(13 * fontScale)}px` }}>
                                               {lang === 'bn' ? 'শ্রেণী' : 'Class'}
                                             </span>
-                                            <span className="text-[9px] opacity-70">{lang === 'bn' ? 'রুটিন' : 'Routine'}</span>
+                                            <span className="opacity-70 font-bold" style={{ fontSize: `${Math.round(10 * fontScale)}px` }}>{lang === 'bn' ? 'রুটিন' : 'Routine'}</span>
                                          </div>
                                       </th>
                                       {periods.map((p, idx) => (
-                                        <th key={p.id} className={`border-r p-1 text-[11px] font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
+                                        <th key={p.id} className={`border-r p-1 font-black relative group ${p.isBreak ? 'w-16 bg-emerald-50' : ''} ${idx !== periods.length - 1 ? 'border-r' : ''}`} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: p.isBreak ? `${rtTheme.accent}cc` : rtTheme.primary, color: p.isBreak ? rtTheme.primary : 'white' }}>
                                            {!p.isBreak ? (
                                              <div className="flex flex-col items-center gap-0.5 font-noto">
-                                                <span className="text-[10px] font-black">{p.title}</span>
-                                                <span className="text-[8px] opacity-70 font-bold">{p.time}</span>
+                                                <span className="font-black" style={{ fontSize: `${Math.round(13 * fontScale)}px` }}>{p.title}</span>
+                                                <span className="opacity-80 font-bold" style={{ fontSize: `${Math.round(10.5 * fontScale)}px` }}>{p.time}</span>
                                              </div>
                                            ) : (
                                              <div className="flex flex-col items-center py-1 font-noto">
-                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-80" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                                                <span className="font-black uppercase tracking-widest opacity-80" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: `${Math.round(11 * fontScale)}px` }}>
                                                   {p.title}
                                                 </span>
                                              </div>
@@ -839,8 +991,8 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                 </thead>
                                 <tbody>
                                    {classes.length > 0 ? classes.map((cls, cIdx) => (
-                                     <tr key={cls.id} className="border-b h-[2.75rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: cIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
-                                       <td className="border-r p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
+                                     <tr key={cls.id} className="border-b h-[2.85rem]" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: cIdx % 2 === 0 ? 'white' : `${rtTheme.light}4d` }}>
+                                       <td className="border-r p-2 font-black text-center tracking-tight" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}>
                                          {cls.class_name}
                                        </td>
                                        {periods.map((p, idx) => (
@@ -850,10 +1002,11 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                                  value={routineMatrix[`${cls.id}_${p.id}_${selectedDay}`] || routineMatrix[`${cls.id}_${p.id}`] || (selectedClassId === cls.id ? routineMatrix[`${selectedDay}_${p.id}`] : '')}
                                                  onChange={(val) => handleCellChange(`${cls.id}_${p.id}`, selectedDay, val)}
                                                  theme={rtTheme}
+                                                 fontScale={fontScale}
                                               />
                                             ) : (
-                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-10 gap-1">
-                                                 <Coffee size={18} style={{ color: rtTheme.primary }} />
+                                              <div className="w-full h-full flex flex-col items-center justify-center opacity-15 gap-1">
+                                                 <Coffee size={20} style={{ color: rtTheme.primary }} />
                                               </div>
                                             )}
                                          </td>
@@ -884,13 +1037,13 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                           <div className="mt-2 flex justify-between items-end pt-3 border-t" style={{ borderColor: `${rtTheme.primary}1a` }}>
                             {/* Left Column: Instructions */}
                             <div className="max-w-[430px] text-left leading-relaxed">
-                               <div className="text-white px-3 py-1 rounded-lg inline-flex items-center gap-1.5 text-[11px] font-black mb-1.5 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary }}>
+                               <div className="text-white px-3 py-1 rounded-lg inline-flex items-center gap-1.5 font-black mb-1.5 shadow-sm uppercase font-noto" style={{ backgroundColor: rtTheme.primary, fontSize: `${Math.round(11 * fontScale)}px` }}>
                                  <span>📖</span>
                                  {lang === 'bn' ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
                                </div>
                                <ul className="space-y-0.5 max-h-[105px] overflow-hidden pr-2">
                                   {routineInstructions.filter(Boolean).map((inst, i) => (
-                                    <li key={i} className="flex gap-1.5 text-[10px] font-bold text-slate-600 leading-normal">
+                                    <li key={i} className="flex gap-1.5 font-bold text-slate-600 leading-normal" style={{ fontSize: `${Math.round(10 * fontScale)}px` }}>
                                       <span className="font-extrabold" style={{ color: rtTheme.primary }}>{i + 1} ।</span>
                                       <span>{inst}</span>
                                     </li>

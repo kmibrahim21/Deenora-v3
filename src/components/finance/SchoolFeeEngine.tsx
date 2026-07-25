@@ -1198,8 +1198,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
          <div className={`p-6 rounded-[2.5rem] border shadow-bubble ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h3 className={`text-lg font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>ফি সেটিংস</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">মাদরাসার ফি কাঠামো নির্ধারণ করুন</p>
+                    <h3 className={`text-lg font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ফি সেটিংস' : 'Fee Settings'}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">{lang === 'bn' ? 'মাদরাসার ফি কাঠামো নির্ধারণ করুন' : 'Set up institution fee structures'}</p>
                 </div>
                 <button 
                     onClick={() => {
@@ -1220,7 +1220,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             <div className="space-y-3">
                 {structures.length > 0 ? (
                     Object.entries(structures.reduce((acc: any, s: any) => {
-                        const className = s.classes?.class_name || 'সব শ্রেণি';
+                        const className = s.classes?.class_name || (lang === 'bn' ? 'সব শ্রেণি' : 'All Classes');
                         if (!acc[className]) acc[className] = [];
                         acc[className].push(s);
                         return acc;
@@ -1240,20 +1240,20 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                             </div>
                                             <div>
                                                 <h5 className={`font-black font-noto text-sm ${isDark ? 'text-slate-200' : 'text-[#1E3A8A]'}`}>{s.fee_name}</h5>
-                                                <p className="text-[10px] font-bold text-slate-400">নির্ধারিত ফি {s.due_date && `• শেষ তারিখ: ${new Date(s.due_date).toLocaleDateString('bn-BD')}`}</p>
+                                                <p className="text-[10px] font-bold text-slate-400">{lang === 'bn' ? 'নির্ধারিত ফি' : 'Assigned Fee'} {s.due_date && `• ${lang === 'bn' ? 'শেষ তারিখ' : 'Due Date'}: ${new Date(s.due_date).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US')}`}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <div className={`text-lg font-black ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`}>৳{s.amount}</div>
+                                            <div className={`text-lg font-black ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`}>৳{s.amount?.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}</div>
                                             {deleteConfirmId === s.id ? (
                                                 <div className="flex flex-col items-end gap-1">
-                                                    <span className="text-[9px] font-bold text-red-500">সব ডাটা ডিলিট হয়ে যাবে!</span>
+                                                    <span className="text-[9px] font-bold text-red-500">{lang === 'bn' ? 'সব ডাটা ডিলিট হয়ে যাবে!' : 'All structure data will be deleted!'}</span>
                                                     <div className="flex items-center gap-1">
                                                         <button onClick={async () => {
                                                             const { error } = await supabase.from('fee_structures').delete().eq('id', s.id);
                                                             if (error) {
                                                                 console.error("Delete Error:", error);
-                                                                setActionError("ডিলিট করতে সমস্যা হয়েছে: " + error.message);
+                                                                setActionError((lang === 'bn' ? "ডিলিট করতে সমস্যা হয়েছে: " : "Failed to delete: ") + error.message);
                                                             } else {
                                                                 requestManager.invalidatePattern(`structures:${madrasah.id}`);
                                                                 requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
@@ -1262,8 +1262,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                                                                 fetchData();
                                                             }
                                                             setDeleteConfirmId(null);
-                                                        }} className="bg-red-500 text-white text-[9px] px-2.5 py-1.5 rounded-lg font-black">হ্যাঁ</button>
-                                                        <button onClick={() => setDeleteConfirmId(null)} className={`text-[9px] px-2.5 py-1.5 rounded-lg font-black ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>না</button>
+                                                        }} className="bg-red-500 text-white text-[9px] px-2.5 py-1.5 rounded-lg font-black">{lang === 'bn' ? 'হ্যাঁ' : 'Yes'}</button>
+                                                        <button onClick={() => setDeleteConfirmId(null)} className={`text-[9px] px-2.5 py-1.5 rounded-lg font-black ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>{lang === 'bn' ? 'না' : 'No'}</button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -1295,7 +1295,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                         <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${isDark ? 'bg-slate-800 text-slate-700' : 'bg-white text-slate-200'}`}>
                             <Tag size={24} />
                         </div>
-                        <p className="text-slate-400 uppercase text-[10px] font-black">কোনো ফি আইটেম নেই</p>
+                        <p className="text-slate-400 uppercase text-[10px] font-black">{lang === 'bn' ? 'কোনো ফি আইটেম নেই' : 'No fee structures found'}</p>
                     </div>
                 )}
             </div>
@@ -1306,12 +1306,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
            <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
               <div className={`w-full max-w-sm rounded-[3rem] p-8 space-y-6 animate-in zoom-in-95 shadow-2xl relative ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'}`}>
                  <div className="flex items-center justify-between">
-                   <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{editingStructureId ? 'ফি এডিট করুন' : 'ফি সেটআপ করুন'}</h3>
+                   <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{editingStructureId ? (lang === 'bn' ? 'ফি এডিট করুন' : 'Edit Fee Structure') : (lang === 'bn' ? 'ফি সেটআপ করুন' : 'Setup Fee Structure')}</h3>
                    <button onClick={() => setShowAddStructure(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-50 text-slate-300'}`}><X size={20} /></button>
                  </div>
                  <div className="space-y-4">
                     <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শ্রেণি নির্বাচন করুন (ঐচ্ছিক)</label>
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'শ্রেণি নির্বাচন করুন (ঐচ্ছিক)' : 'Select Class (Optional)'}</label>
                        <button onClick={() => setShowStructureClassDropdown(!showStructureClassDropdown)} className={`w-full h-14 px-6 rounded-2xl border-2 flex items-center justify-between font-black transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`}>
                           <span className="truncate">{classes.find(c => c.id === structureSelectedClass)?.class_name || 'সব শ্রেণি (All Classes)'}</span>
                           <ChevronDown size={20} className="text-slate-300" />
@@ -1326,11 +1326,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        )}
                     </div>
                     <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">ফি-র নাম</label>
-                       <input type="text" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-slate-700 focus:border-[#2563EB]/20'}`} placeholder="যেমন: মাসিক বেতন" value={category} onChange={(e) => setCategory(e.target.value)} />
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'ফি-র নাম' : 'Fee Name'}</label>
+                       <input type="text" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-slate-700 focus:border-[#2563EB]/20'}`} placeholder={lang === 'bn' ? "যেমন: মাসিক বেতন" : "e.g. Monthly Fee"} value={category} onChange={(e) => setCategory(e.target.value)} />
                        <Tag className={`absolute left-4 top-[44px] ${isDark ? 'text-slate-500' : 'text-slate-300'}`} size={20}/>
                        <div className="flex flex-wrap gap-2 mt-2 px-1">
-                          {['পরীক্ষার ফি', 'কোচিং ফি', 'অন্যান্য ফি'].map(suggestion => (
+                          {(lang === 'bn' ? ['পরীক্ষার ফি', 'কোচিং ফি', 'অন্যান্য ফি'] : ['Exam Fee', 'Coaching Fee', 'Other Fee']).map(suggestion => (
                              <button 
                                 key={suggestion}
                                 type="button"
@@ -1343,19 +1343,19 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        </div>
                     </div>
                     <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">টাকার পরিমাণ</label>
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'টাকার পরিমাণ' : 'Amount'}</label>
                        <input type="number" className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
                        <DollarSign className={`absolute left-4 top-[44px] ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
                     </div>
                     <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শুরুর তারিখ</label>
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'শুরুর তারিখ' : 'Start Date'}</label>
                        <div className="relative">
                            <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                            <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`} size={20}/>
                        </div>
                     </div>
                     <div className="relative">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">শেষ তারিখ (Optional)</label>
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'শেষ তারিখ (Optional)' : 'End Date (Optional)'}</label>
                        <div className="relative">
                            <input type="date" className={`w-full h-14 rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'} [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                            <Calendar className={`absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${isDark ? 'text-slate-500' : 'text-slate-400'}`} size={20}/>
@@ -1399,7 +1399,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                            fetchData();
                        } catch (e: any) { setActionError(e.message); } finally { setIsSaving(false); }
                     }} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all text-base">
-                       {isSaving ? <Loader2 className="animate-spin" /> : 'সেভ করুন'}
+                       {isSaving ? <Loader2 className="animate-spin" /> : (lang === 'bn' ? 'সেভ করুন' : 'Save')}
                     </button>
                  </div>
               </div>

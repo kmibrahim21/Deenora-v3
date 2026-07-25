@@ -601,8 +601,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             <Calculator size={18}/>
           </button>
           <div>
-            <h1 className={`text-lg font-black font-noto leading-none ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>ফি ও হিসাব</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">অ্যাকাউন্টিং এবং ফি</p>
+            <h1 className={`text-lg font-black font-noto leading-none ${isDark ? 'text-slate-100' : 'text-[#1E293B]'}`}>{lang === 'bn' ? 'ফি ও হিসাব' : 'Fees & Accounts'}</h1>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">{lang === 'bn' ? 'অ্যাকাউন্টিং এবং ফি' : 'Accounting & Fees'}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -617,7 +617,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
               className={`px-4 h-10 rounded-2xl shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all text-xs font-black uppercase tracking-widest border ${activeTab === 'summary' ? (isDark ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-blue-100') : (isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-600 border-slate-200')}`}
             >
               <BarChart3 size={18}/>
-              <span className="hidden sm:inline">ড্যাশবোর্ড</span>
+              <span className="hidden sm:inline">{lang === 'bn' ? 'ড্যাশবোর্ড' : 'Dashboard'}</span>
             </button>
         </div>
       </div>
@@ -629,25 +629,25 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             onClick={() => { setActiveTab('fees'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'fees' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
-            শিক্ষার্থী ফি
+            {lang === 'bn' ? 'শিক্ষার্থী ফি' : 'Student Fees'}
           </button>
           <button 
             onClick={() => { setActiveTab('structures'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'structures' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
-            ফি সেটিংস
+            {lang === 'bn' ? 'ফি সেটিংস' : 'Fee Settings'}
           </button>
           <button 
             onClick={() => { setActiveTab('add-ledger'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'add-ledger' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
-            লেনদেন
+            {lang === 'bn' ? 'লেনদেন' : 'Transactions'}
           </button>
           <button 
             onClick={() => { setActiveTab('ledger'); setSelectedStudentForDetail(null); }} 
             className={`flex-1 min-w-[90px] py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 ${activeTab === 'ledger' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
           >
-            ইতিহাস
+            {lang === 'bn' ? 'ইতিহাস' : 'History'}
           </button>
         </div>
       </div>
@@ -709,8 +709,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center justify-between sm:justify-start gap-4">
                 <div>
-                  <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>লেনদেনের ইতিহাস</h3>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">{ledger.length} লেনদেন</span>
+                  <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'লেনদেনের ইতিহাস' : 'Transaction History'}</h3>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">{ledger.length} {lang === 'bn' ? 'লেনদেন' : 'Transactions'}</span>
                 </div>
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2">
@@ -719,7 +719,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       onClick={() => setDeleteConfirm({show: true, ids: selectedLedgerIds})}
                       className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-red-500 text-white shadow-sm hover:bg-red-600 flex items-center gap-1 active:scale-95"
                     >
-                      <span>{selectedLedgerIds.length} টি মুছুন</span>
+                      <span>{lang === 'bn' ? `${selectedLedgerIds.length} টি মুছুন` : `Delete ${selectedLedgerIds.length}`}</span>
                     </button>
                   )}
                   {canDeleteAccounting && ledger.length > 0 && (
@@ -727,7 +727,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       onClick={() => setDeleteConfirm({show: true, ids: ledger.map(l => l.id)})}
                       className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
                     >
-                      <span>সব মুছুন</span>
+                      <span>{lang === 'bn' ? 'সব মুছুন' : 'Delete All'}</span>
                     </button>
                   )}
                 </div>
@@ -741,13 +741,13 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                     onClick={() => setHistoryTab('student_history')}
                     className={`flex-1 sm:flex-none text-center px-3 sm:px-5 py-2 sm:py-1.5 rounded-xl text-[10px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'student_history' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
                   >
-                    শিক্ষার্থী ইতিহাস
+                    {lang === 'bn' ? 'শিক্ষার্থী ইতিহাস' : 'Student History'}
                   </button>
                   <button 
                     onClick={() => setHistoryTab('income_expense')}
                     className={`flex-1 sm:flex-none text-center px-3 sm:px-5 py-2 sm:py-1.5 rounded-xl text-[10px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${historyTab === 'income_expense' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
                   >
-                    আয় ব্যয় ইতিহাস
+                    {lang === 'bn' ? 'আয় ব্যয় ইতিহাস' : 'Income & Expenses'}
                   </button>
                 </div>
 
@@ -766,7 +766,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                         <div className="flex items-center gap-2 truncate">
                           <Filter size={12} className={selectedHistoryClass !== 'all' ? 'text-blue-500' : ''} />
                           <span className="truncate">
-                            {selectedHistoryClass === 'all' ? 'সব ক্লাস' : classes.find(c => c.id === selectedHistoryClass)?.class_name}
+                            {selectedHistoryClass === 'all' ? (lang === 'bn' ? 'সব ক্লাস' : 'All Classes') : classes.find(c => c.id === selectedHistoryClass)?.class_name}
                           </span>
                         </div>
                         <ChevronDown size={12} className={`transition-transform duration-300 ${showClassFilterMenu ? 'rotate-180' : ''}`} />
@@ -797,7 +797,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                                       : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50')
                                   }`}
                                 >
-                                  সব ক্লাস
+                                  {lang === 'bn' ? 'সব ক্লাস' : 'All Classes'}
                                   {selectedHistoryClass === 'all' && <Check size={12} />}
                                 </button>
                                 
@@ -915,19 +915,19 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                     onClick={() => setLedgerFilter('all')}
                     className={`flex-1 sm:flex-none px-6 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap snap-start ${ledgerFilter === 'all' ? (isDark ? 'bg-slate-900 text-blue-400 shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
                   >
-                    সব
+                    {lang === 'bn' ? 'সব' : 'All'}
                   </button>
                   <button 
                     onClick={() => setLedgerFilter('income')}
                     className={`flex-1 sm:flex-none px-6 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap snap-start ${ledgerFilter === 'income' ? (isDark ? 'bg-slate-900 text-emerald-400 shadow-sm border border-slate-700/50' : 'bg-white text-emerald-500 shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
                   >
-                    আয়
+                    {lang === 'bn' ? 'আয়' : 'Income'}
                   </button>
                   <button 
                     onClick={() => setLedgerFilter('expense')}
                     className={`flex-1 sm:flex-none px-6 py-2 sm:py-1.5 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap snap-start ${ledgerFilter === 'expense' ? (isDark ? 'bg-slate-900 text-red-400 shadow-sm border border-slate-700/50' : 'bg-white text-red-500 shadow-md border border-slate-200/50') : 'text-slate-500 hover:text-slate-700'}`}
                   >
-                    ব্যয়
+                    {lang === 'bn' ? 'ব্যয়' : 'Expense'}
                   </button>
                 </div>
               </div>
@@ -1088,7 +1088,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                           {formatDate(entry.transaction_date)}
                         </div>
                         <p className={`text-xl sm:text-2xl font-black mt-1 ${entry.type === 'income' ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
-                          {entry.type === 'income' ? '+' : '-'} ৳{entry.amount.toLocaleString()}
+                          {entry.type === 'income' ? '+' : '-'} ৳{entry.amount.toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US')}
                         </p>
                       </div>
                       
@@ -1097,7 +1097,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                            onClick={() => setDeleteConfirm({show: true, ids: [entry.id]})}
                           className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center shadow-sm active:scale-95 ${isDark ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-100'}`}
                         >
-                          মুছুন
+                          {lang === 'bn' ? 'মুছুন' : 'Delete'}
                         </button>
                       )}
                     </div>
@@ -1110,7 +1110,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${isDark ? 'bg-slate-800 text-slate-700' : 'bg-slate-100 text-slate-300'}`}>
                   <FileText size={32} />
                </div>
-               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">কোনো লেনদেন পাওয়া যায়নি</p>
+               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'কোনো লেনদেন পাওয়া যায়নি' : 'No transactions found'}</p>
             </div>
           )}
         </div>
@@ -1120,8 +1120,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         <div className="space-y-8 animate-in slide-in-from-bottom-5 max-w-2xl mx-auto px-2">
           <div className={`rounded-[3rem] p-8 space-y-8 border shadow-xl ${isDark ? 'bg-slate-900 border-slate-800 shadow-slate-950/50' : 'bg-white border-white/20 shadow-blue-900/5'} backdrop-blur-sm`}>
              <div>
-              <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>লেনদেন করুন</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">নতুন লেনদেন যোগ করুন</p>
+              <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'লেনদেন করুন' : 'Add Transaction'}</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{lang === 'bn' ? 'নতুন লেনদেন যোগ করুন' : 'Add new transaction'}</p>
              </div>
 
              <div className={`flex p-1.5 rounded-[1.8rem] border shadow-inner ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200/50'}`}>
@@ -1129,13 +1129,13 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   onClick={() => setType('income')} 
                   className={`flex-1 py-3.5 rounded-[1.4rem] text-[10px] font-black uppercase tracking-widest transition-all ${type === 'income' ? (isDark ? 'bg-slate-900 text-emerald-400 shadow-sm border border-slate-700/50' : 'bg-white text-emerald-500 shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                  আয় (Income)
+                  {lang === 'bn' ? 'আয় (Income)' : 'Income'}
                 </button>
                 <button 
                   onClick={() => setType('expense')} 
                   className={`flex-1 py-3.5 rounded-[1.4rem] text-[10px] font-black uppercase tracking-widest transition-all ${type === 'expense' ? (isDark ? 'bg-slate-900 text-red-400 shadow-sm border border-slate-700/50' : 'bg-white text-red-500 shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                  ব্যয় (Expense)
+                  {lang === 'bn' ? 'ব্যয় (Expense)' : 'Expense'}
                 </button>
              </div>
 
@@ -1147,7 +1147,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   <input 
                     type="number" 
                     className={`w-full h-16 rounded-[1.8rem] pl-14 pr-6 font-black text-xl outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all placeholder:text-slate-300 ${isDark ? 'bg-slate-800 text-slate-100 focus:bg-slate-900' : 'bg-slate-50 text-[#1E293B] focus:bg-white'}`} 
-                    placeholder="টাকার পরিমাণ" 
+                    placeholder={lang === 'bn' ? "টাকার পরিমাণ" : "Amount (৳)"} 
                     value={amount} 
                     onChange={(e) => setAmount(e.target.value)} 
                   />
@@ -1162,7 +1162,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                       <input 
                         type="text" 
                         className={`w-full h-16 rounded-[1.8rem] pl-14 pr-6 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all placeholder:text-slate-300 ${isDark ? 'bg-slate-800 text-slate-100 focus:bg-slate-900' : 'bg-slate-50 text-[#1E293B] focus:bg-white'}`} 
-                        placeholder="ক্যাটাগরি (যেমন: বেতন, বিদ্যুৎ)" 
+                        placeholder={lang === 'bn' ? "ক্যাটাগরি (যেমন: বেতন, বিদ্যুৎ)" : "Category (e.g. Salary, Electricity bill)"} 
                         value={category} 
                         onChange={(e) => setCategory(e.target.value)} 
                       />
@@ -1184,8 +1184,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2 px-1">
                      {(type === 'income' 
-                        ? (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? ['ভর্তি ফি', 'মাসিক বেতন', 'সেশন চার্জ', 'পরীক্ষার ফি'] : ['সদকা সংগ্রহ', 'লিল্লাহ ফান্ড', 'যাকাত ফান্ড']) 
-                        : (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? ['অফিস খরচ', 'বিদ্যুৎ বিল', 'শিক্ষক বেতন', 'অন্যান্য খরচ'] : ['রান্না খরচ', 'খাদ্য খরচ', 'শিক্ষক বেতন', 'মাদরাসা maintenance'])
+                        ? (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? (lang === 'bn' ? ['ভর্তি ফি', 'মাসিক বেতন', 'সেশন চার্জ', 'পরীক্ষার ফি'] : ['Admission Fee', 'Monthly Fee', 'Session Charge', 'Exam Fee']) : (lang === 'bn' ? ['সদকা সংগ্রহ', 'লিল্লাহ ফান্ড', 'যাকাত ফান্ড'] : ['Sadakah Collection', 'Lillah Fund', 'Zakat Fund'])) 
+                        : (madrasah?.institution_type === 'school' || madrasah?.institution_type === 'choching' || madrasah?.institution_type === 'kindergarten' ? (lang === 'bn' ? ['অফিস খরচ', 'বিদ্যুৎ বিল', 'শিক্ষক বেতন', 'অন্যান্য খরচ'] : ['Office Expense', 'Electricity Bill', 'Teacher Salary', 'Other Expenses']) : (lang === 'bn' ? ['রান্না খরচ', 'খাদ্য খরচ', 'শিক্ষক বেতন', 'মাদরাসা maintenance'] : ['Kitchen Expense', 'Food Expense', 'Teacher Salary', 'Maintenance']))
                      ).map(suggestion => (
                         <button 
                            key={suggestion}
@@ -1205,7 +1205,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   </div>
                   <textarea 
                     className={`w-full h-28 rounded-[1.8rem] pl-14 pr-6 py-5 font-bold text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all resize-none placeholder:text-slate-300 ${isDark ? 'bg-slate-800 text-slate-100 focus:bg-slate-900' : 'bg-slate-50 text-[#1E293B] focus:bg-white'}`} 
-                    placeholder="বিবরণ" 
+                    placeholder={lang === 'bn' ? "বিবরণ" : "Description"} 
                     value={desc} 
                     onChange={(e) => setDesc(e.target.value)} 
                   />
@@ -1216,7 +1216,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   disabled={isSaving} 
                   className="w-full h-16 bg-[#2563EB] text-white font-black rounded-[1.8rem] shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all text-sm uppercase tracking-widest disabled:opacity-50 disabled:active:scale-100"
                 >
-                  {isSaving ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20}/> সংরক্ষণ করুন</>}
+                  {isSaving ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20}/> {lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save Transaction'}</>}
                 </button>
              </div>
           </div>

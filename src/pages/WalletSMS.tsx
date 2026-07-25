@@ -914,7 +914,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       onClick={() => { setStatusModal({ ...statusModal, show: false }); setActiveTab('recharge'); }} 
                       className="w-full py-5 bg-[#8D30F4] text-white font-black rounded-full shadow-xl shadow-purple-100 active:scale-95 transition-all text-sm uppercase tracking-[0.1em] flex items-center justify-center gap-3"
                     >
-                      <Zap size={18} fill="currentColor" /> রিচার্জ করুন
+                      <Zap size={18} fill="currentColor" /> {lang === 'bn' ? 'রিচার্জ করুন' : 'Recharge Now'}
                     </button>
                     <button 
                       onClick={() => setStatusModal({ ...statusModal, show: false })} 

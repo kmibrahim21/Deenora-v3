@@ -298,33 +298,33 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           <button onClick={onNavigateToClasses} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><Users size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalStudents}</h4>
-             <p className="text-[10px] lg:text-[12px] font-black text-slate-400 uppercase tracking-widest mt-1 lg:mt-2">শিক্ষার্থী</p>
+             <p className="text-[10px] lg:text-[12px] font-black text-slate-400 uppercase tracking-widest mt-1 lg:mt-2">{lang === 'bn' ? 'শিক্ষার্থী' : 'Students'}</p>
           </button>
         )}
         {canManageStudents && (
           <button onClick={onNavigateToClasses} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-75 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><BookOpen size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalClasses}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>শ্রেনী</p>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'শ্রেনী' : 'Classes'}</p>
           </button>
         )}
         <button onClick={onNavigateToTeachers} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-100 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-green-50 text-green-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><UserIcon size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.totalTeachers}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>শিক্ষক</p>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'শিক্ষক' : 'Teachers'}</p>
         </button>
         {canSendSMS && (
           <button onClick={onNavigateToWallet} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-150 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><Zap size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : stats.smsBalance}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>এসএমএস</p>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'এসএমএস' : 'SMS'}</p>
           </button>
         )}
         {canUseVoice && modules.modules.voice_broadcast && (
           <button onClick={onNavigateToVoiceBroadcast} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-175 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><Mic size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{loadingStats ? '...' : (stats.voiceBalance || 0).toFixed(2)}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>ভয়েস</p>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'ভয়েস' : 'Voice'}</p>
           </button>
         )}
         {canManageAttendance && modules.modules.attendance && (
@@ -338,21 +338,21 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
                   </span>
                 )}
              </div>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>আজকের হাজিরা</p>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'আজকের হাজিরা' : "Today's Attendance"}</p>
           </button>
         )}
         {canManageAccounting && modules.modules.accounting && (
           <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-225 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-emerald-600'}`}>{loadingStats ? '...' : stats.totalIncome.toLocaleString()}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>চলতি মাসের আয়</p>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'চলতি মাসের আয়' : 'Current Month Income'}</p>
           </button>
         )}
         {canManageAccounting && modules.modules.accounting && (
           <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-250 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" style={{ transform: 'rotate(180deg)' }} /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-red-600'}`}>{loadingStats ? '...' : stats.totalExpense.toLocaleString()}</h4>
-             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>চলতি মাসের ব্যয়</p>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'চলতি মাসের ব্যয়' : 'Current Month Expense'}</p>
           </button>
         )}
       </div>
@@ -365,7 +365,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
                <div className="flex items-center gap-3 px-3">
                   <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
                   <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-                    হিসাব রিপোর্ট
+                    {lang === 'bn' ? 'হিসাব রিপোর্ট' : 'Finance Report'}
                   </h2>
                </div>
                <SmartFeeAnalytics 
@@ -388,7 +388,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
                     <div className="flex items-center gap-3 px-3">
                        <div className="w-1.5 h-6 bg-emerald-600 rounded-full"></div>
                        <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-                         ঝুঁকি বিশ্লেষণ
+                         {lang === 'bn' ? 'ঝুঁকি বিশ্লেষণ' : 'Risk Analysis'}
                        </h2>
                     </div>
                     <StudentRiskAnalysis 
@@ -403,7 +403,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
                     <div className="flex items-center gap-3 px-3">
                        <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
                        <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-                         হাজিরা অ্যানালিটিক্স
+                         {lang === 'bn' ? 'হাজিরা অ্যানালিটিক্স' : 'Attendance Analytics'}
                        </h2>
                     </div>
                     <AttendanceAnalyticsDashboard 
@@ -423,7 +423,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
                    <div className="flex items-center gap-3 px-3">
                       <div className="w-1.5 h-6 bg-purple-600 rounded-full"></div>
                       <h2 className={`text-sm lg:text-base font-black uppercase tracking-[0.2em] ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
-                        রেজাল্ট রিপোর্ট
+                        {lang === 'bn' ? 'রেজাল্ট রিপোর্ট' : 'Exam Report'}
                       </h2>
                    </div>
                    <SmartResultAnalytics 

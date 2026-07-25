@@ -493,25 +493,25 @@ export default function Messages({
         <div>
           <h1 className="text-2xl font-black tracking-tight flex items-center gap-3">
             <MessageSquare size={26} />
-            বার্তা ও তথ্য
+            {lang === 'bn' ? 'বার্তা ও তথ্য' : 'Messages & Updates'}
             <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-bold ml-2">
               {messages.length}
             </span>
           </h1>
-          <p className="text-blue-100 font-medium mt-1 text-sm opacity-90">নোটিশ, ক্লাস রুটিন, সিলেবাস এবং অন্যান্য আপডেট</p>
+          <p className="text-blue-100 font-medium mt-1 text-sm opacity-90">{lang === 'bn' ? 'নোটিশ, ক্লাস রুটিন, সিলেবাস এবং অন্যান্য আপডেট' : 'Notice, class routine, syllabus and other updates'}</p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex flex-wrap bg-white border border-slate-200 p-2 rounded-2xl gap-2 shadow-sm">
         <button onClick={() => setActiveTab('messages')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'messages' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'text-slate-500 hover:bg-slate-50'}`}>
-          <BookOpen size={18} /><span>ডায়েরি</span>
+          <BookOpen size={18} /><span>{lang === 'bn' ? 'ডায়েরি' : 'Diary'}</span>
         </button>
         <button onClick={() => setActiveTab('notices')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'notices' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'text-slate-500 hover:bg-slate-50'}`}>
-          <Bell size={18} /><span>নোটিশ</span>
+          <Bell size={18} /><span>{lang === 'bn' ? 'নোটিশ' : 'Notice'}</span>
         </button>
         <button onClick={() => setActiveTab('syllabus')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'syllabus' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'text-slate-500 hover:bg-slate-50'}`}>
-           <BookOpen size={18} /><span>সিলেবাস</span>
+           <BookOpen size={18} /><span>{lang === 'bn' ? 'সিলেবাস' : 'Syllabus'}</span>
         </button>
       </div>
 
@@ -523,7 +523,7 @@ export default function Messages({
               <div className="w-16 h-16 bg-blue-100 rounded-full mb-4 flex items-center justify-center">
                 <MessageSquare className="text-blue-400" size={24} />
               </div>
-              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">লোড হচ্ছে...</p>
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">{lang === 'bn' ? 'লোড হচ্ছে...' : 'Loading...'}</p>
             </div>
          ) : (
            <>
@@ -533,7 +533,7 @@ export default function Messages({
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
                        <BookOpen size={18} className="text-blue-500" />
-                       আজকের ডায়েরি
+                       {lang === 'bn' ? 'আজকের ডায়েরি' : "Today's Diary"}
                     </h2>
                     <button onClick={() => { 
                       setEditingItem(null); 
@@ -548,7 +548,7 @@ export default function Messages({
                       setMsgDate(getTodayDateString());
                       setShowMsgModal(true); 
                     }} className="bg-blue-600 text-white hover:bg-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all">
-                       <Plus size={14} /> ডায়েরি লিখুন
+                       <Plus size={14} /> {lang === 'bn' ? 'ডায়েরি লিখুন' : 'Write Diary'}
                     </button>
                   </div>
                   {studentMsgs.length > 0 ? (
@@ -607,7 +607,7 @@ export default function Messages({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-16 text-slate-400 font-bold">কোনো বার্তা পাঠানো হয়নি</div>
+                    <div className="text-center py-16 text-slate-400 font-bold">{lang === 'bn' ? 'কোনো বার্তা পাঠানো হয়নি' : 'No messages sent'}</div>
                   )}
                 </div>
               )}
@@ -618,7 +618,7 @@ export default function Messages({
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
                        <Bell size={18} className="text-amber-500" />
-                       নোটিশ বোর্ড
+                       {lang === 'bn' ? 'নোটিশ বোর্ড' : 'Notice Board'}
                     </h2>
                     <button onClick={() => { 
                       setEditingItem(null); 
@@ -630,7 +630,7 @@ export default function Messages({
                       setNoticeTarget('All Parents');
                       setShowNoticeModal(true); 
                     }} className="bg-amber-600 text-white hover:bg-amber-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all">
-                       <Plus size={14} /> নোটিশ দিন
+                       <Plus size={14} /> {lang === 'bn' ? 'নোটিশ দিন' : 'Create Notice'}
                     </button>
                   </div>
                   {noticeList.length > 0 ? (
@@ -679,7 +679,7 @@ export default function Messages({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-16 text-slate-400 font-bold">কোনো নোটিশ নেই</div>
+                    <div className="text-center py-16 text-slate-400 font-bold">{lang === 'bn' ? 'কোনো নোটিশ নেই' : 'No notices found'}</div>
                   )}
                 </div>
               )}
@@ -690,7 +690,7 @@ export default function Messages({
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
                        <BookOpen size={18} className="text-purple-500" />
-                       সিলেবাস
+                       {lang === 'bn' ? 'সিলেবাস' : 'Syllabus'}
                     </h2>
                     <button onClick={() => { 
                       setEditingItem(null); 
@@ -701,11 +701,11 @@ export default function Messages({
                       setSyllabusSubjectList([
                         { subject: 'Quran', details: 'সূরা ইয়াসিন, সূরা রহমান' },
                         { subject: 'Arabic', details: 'নাহু - পরিচিতি' },
-                        { subject: 'Tajweed', details: 'মাখারিজ, ওয়াকফ' },
+                        { subject: 'Tajweed', details: 'মাখারিজ, ওয়াকф' },
                       ]);
                       setShowSyllabusModal(true); 
                     }} className="bg-purple-600 text-white hover:bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all">
-                       <Plus size={14} /> সিলেবাস যোগ করুন
+                       <Plus size={14} /> {lang === 'bn' ? 'সিলেবাস যোগ করুন' : 'Add Syllabus'}
                     </button>
                   </div>
                   {syllabusList.length > 0 ? (
@@ -748,7 +748,7 @@ export default function Messages({
                       })()}
                     </div>
                   ) : (
-                    <div className="text-center py-16 text-slate-400 font-bold">সিলেবাসে কোনো টপিক নেই</div>
+                    <div className="text-center py-16 text-slate-400 font-bold">{lang === 'bn' ? 'সিলেবাসে কোনো টপিক নেই' : 'No syllabus topics found'}</div>
                   )}
                 </div>
               )}

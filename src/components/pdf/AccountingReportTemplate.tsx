@@ -76,23 +76,23 @@ export const AccountingReportTemplate: React.FC<AccountingReportProps> = ({ madr
   <div className="grid grid-cols-2 gap-4 mb-8">
     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.expected}</p>
-       <p className="text-lg font-black text-blue-600">৳{stats.expected_income?.toLocaleString('bn-BD')}</p>
+       <p className="text-lg font-black text-blue-600">৳{stats.expected_income?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</p>
     </div>
     <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
        <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">{t.collected}</p>
-       <p className="text-lg font-black text-blue-600">৳{stats.prediction?.toLocaleString('bn-BD')}</p>
+       <p className="text-lg font-black text-blue-600">৳{stats.prediction?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</p>
     </div>
     <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
        <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">{t.totalIncome}</p>
-       <p className="text-lg font-black text-emerald-600">৳{stats.total_income?.toLocaleString('bn-BD')}</p>
+       <p className="text-lg font-black text-emerald-600">৳{stats.total_income?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</p>
     </div>
     <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
        <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">{t.expense}</p>
-       <p className="text-lg font-black text-red-600">৳{stats.total_expense?.toLocaleString('bn-BD')}</p>
+       <p className="text-lg font-black text-red-600">৳{stats.total_expense?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</p>
     </div>
     <div className={`p-4 rounded-2xl border ${stats.net_income >= 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-orange-50 border-orange-100'}`}>
        <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${stats.net_income >= 0 ? 'text-indigo-400' : 'text-orange-400'}`}>{t.net}</p>
-       <p className={`text-lg font-black ${stats.net_income >= 0 ? 'text-indigo-600' : 'text-orange-600'}`}>৳{stats.net_income?.toLocaleString('bn-BD')}</p>
+       <p className={`text-lg font-black ${stats.net_income >= 0 ? 'text-indigo-600' : 'text-orange-600'}`}>৳{stats.net_income?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</p>
     </div>
     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.rate}</p>
@@ -120,9 +120,9 @@ export const AccountingReportTemplate: React.FC<AccountingReportProps> = ({ madr
                 <td className="border-r border-slate-100 p-2 text-xs font-bold text-center text-slate-400">{index + 1}</td>
                 <td className="border-r border-slate-100 p-2 text-xs font-black text-slate-700">{item.name}</td>
                 <td className="border-r border-slate-100 p-2 text-xs font-bold text-center">{item.students}</td>
-                <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">৳{item.expected?.toLocaleString('bn-BD')}</td>
-                <td className="border-r border-slate-100 p-2 text-xs font-bold text-right text-emerald-600">৳{item.collected?.toLocaleString('bn-BD')}</td>
-                <td className="p-2 text-xs font-bold text-right text-red-600">৳{Math.max(0, item.expected - item.collected).toLocaleString('bn-BD')}</td>
+                <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">৳{item.expected?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</td>
+                <td className="border-r border-slate-100 p-2 text-xs font-bold text-right text-emerald-600">৳{item.collected?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</td>
+                <td className="p-2 text-xs font-bold text-right text-red-600">৳{Math.max(0, item.expected - item.collected).toLocaleString(isBangla ? 'bn-BD' : 'en-US')}</td>
               </tr>
             ))}
           </tbody>
@@ -162,7 +162,7 @@ export const AccountingReportTemplate: React.FC<AccountingReportProps> = ({ madr
                     </span>
                   </td>
                   <td className={`p-2 text-[11px] font-black text-right ${entry.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>
-                    ৳{entry.amount?.toLocaleString('bn-BD')}
+                    ৳{entry.amount?.toLocaleString(isBangla ? 'bn-BD' : 'en-US')}
                   </td>
                 </tr>
               ))}
