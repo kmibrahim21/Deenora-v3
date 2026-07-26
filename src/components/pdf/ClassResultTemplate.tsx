@@ -11,7 +11,20 @@ interface ClassResultProps {
 
 export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects, students, marksData, madrasah, lang }) => {
   const isBangla = lang === 'bn';
-  const config = madrasah?.config_json || {};
+  const config = React.useMemo(() => {
+    let cfg = madrasah?.config_json || {};
+    if (typeof cfg === 'string') {
+      try {
+        cfg = JSON.parse(cfg);
+      } catch (e) {
+        cfg = {};
+      }
+    }
+    return cfg;
+  }, [madrasah?.config_json]);
+
+  const isHighSchool = config?.result_system === 'high_school';
+
   const t = {
     title: isBangla ? 'শ্রেণি ভিত্তিক ফলাফল বিবরণী' : 'Class Result Summary',
     rank: isBangla ? 'মেধাস্থান' : 'Rank',
@@ -77,10 +90,8 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                     <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>
                     <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
                     {subjects.filter(s => {
-                      const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
                       return !isHighSchool || !s.pair_with_id;
                     }).map(s => {
-                      const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
                       return (
                         <th key={s.id} className="px-1 py-1 text-center border-r border-white/10">
                           <div className="mx-auto font-black uppercase tracking-widest text-[8px] max-w-[75px] leading-tight break-words whitespace-normal text-center">
@@ -117,11 +128,8 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         <td className="px-2 py-1 font-mono font-black text-slate-900 border-r border-slate-100 text-[14px]">{student.roll}</td>
                         <td className="px-2 py-1 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[13px] leading-tight">{student.student_name}</td>
                         {subjects.filter(sub => {
-                          const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
                           return !isHighSchool || !sub.pair_with_id;
                         }).map(s => {
-                          const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
-                          
                           let total = Number(studentMarks[s.id] || 0);
                           let cq = Number(studentMarks[`${s.id}_cq`] || 0);
                           let mcq = Number(studentMarks[`${s.id}_mcq`] || 0);

@@ -16,7 +16,20 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
   lang,
 }) => {
   const isBangla = lang === "bn";
-  const config = madrasah?.config_json || {};
+  const config = React.useMemo(() => {
+    let cfg = madrasah?.config_json || {};
+    if (typeof cfg === "string") {
+      try {
+        cfg = JSON.parse(cfg);
+      } catch (e) {
+        cfg = {};
+      }
+    }
+    return cfg;
+  }, [madrasah?.config_json]);
+
+  const isHighSchool = config?.result_system === "high_school";
+
   const t = {
     marksheet: isBangla ? "একাডেমিক ট্রান্সক্রিপ্ট" : "ACADEMIC TRANSCRIPT",
     name: isBangla ? "শিক্ষার্থীর নাম" : "Student's Name",
@@ -191,10 +204,16 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               <tr className="bg-[#1E3A8A] text-white text-[11px] font-black uppercase text-center">
                 <th className="border border-slate-900/20 py-2 px-1 w-10">{t.sno}</th>
                 <th className="border border-slate-900/20 py-2 px-4 text-left">{t.subject}</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[50px]">CQ</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[50px]">MCQ</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[50px]">Practical</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[60px]">{t.fullMarks}</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[60px]">{t.passMarks}</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[70px]">{t.classHighest}</th>
+                {isHighSchool && (
+                  <>
+                    <th className="border border-slate-900/20 py-2 px-1 w-[50px]">CQ</th>
+                    <th className="border border-slate-900/20 py-2 px-1 w-[50px]">MCQ</th>
+                    <th className="border border-slate-900/20 py-2 px-1 w-[50px]">Practical</th>
+                  </>
+                )}
                 <th className="border border-slate-900/20 py-2 px-1 w-[60px] bg-blue-900 shadow-inner">{t.obtainedMarks}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.gp}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.grade}</th>
@@ -202,7 +221,6 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             </thead>
             <tbody className="text-[14px]">
               {(() => {
-                const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
                 const rows: any[] = [];
                 let rowCount = 1;
 
@@ -220,6 +238,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                     mcq: m.mcq_marks,
                     pr: m.practical_marks,
                     full: m.full_marks || 100,
+                    pass: m.pass_marks || 33,
+                    highest: m.class_highest || '-',
                     obtained: m.marks_obtained || 0,
                     gp: isParent ? '-' : (m.grade_point || '0.00'),
                     grade: isParent ? '-' : (m.grade || '-'),
@@ -294,9 +314,16 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                     <td className={`border border-slate-900 py-1 px-4 font-bold font-tiro text-slate-800 leading-tight ${row.isParentRow ? 'text-blue-900' : ''}`}>
                       {row.name} {row.is_optional ? <span className="text-[9px] font-black text-blue-400 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none">Optional</span> : ''}
                     </td>
-                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.cq ?? '-'}</td>
-                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.mcq ?? '-'}</td>
-                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.pr ?? '-'}</td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.full}</td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.pass}</td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.highest}</td>
+                    {isHighSchool && (
+                      <>
+                        <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.cq ?? '-'}</td>
+                        <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.mcq ?? '-'}</td>
+                        <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.pr ?? '-'}</td>
+                      </>
+                    )}
                     <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.full}</td>
                     <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-blue-900 bg-blue-50/20 text-[15px]">{String(row.obtained).padStart(2, '0')}</td>
                     <td className={`border border-slate-900 py-1 px-1 text-center font-bold font-mono text-[13px] ${row.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-slate-900'}`}>{row.gp}</td>
@@ -310,7 +337,13 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
-                   <td className="border border-slate-900 py-2.5">&nbsp;</td>
+                   {isHighSchool && (
+                     <>
+                        <td className="border border-slate-900 py-2.5">&nbsp;</td>
+                        <td className="border border-slate-900 py-2.5">&nbsp;</td>
+                        <td className="border border-slate-900 py-2.5">&nbsp;</td>
+                     </>
+                   )}
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
@@ -321,8 +354,12 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             <tfoot>
               <tr className="bg-slate-100 text-[13px] font-black">
                 <td colSpan={2} className="border border-slate-900 py-2 px-4 text-right uppercase tracking-[0.05em] text-[11px] text-slate-500">{t.totalMarks}:</td>
-                <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]" colSpan={3}>-</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]">{totalFull}</td>
+                <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]">-</td>
+                <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]">-</td>
+                {isHighSchool && (
+                  <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]" colSpan={3}>-</td>
+                )}
                 <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[#1E3A8A] text-[18px] bg-blue-100/50">{totalObtained}</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-serif text-[20px] bg-blue-100/50 text-[#1E3A8A]" colSpan={2}>{finalGrade}</td>
               </tr>
