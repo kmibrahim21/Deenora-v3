@@ -60,7 +60,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     status: isBangla ? "অবস্থা" : "Status",
     passed: isBangla ? "উত্তীর্ণ" : "PASSED",
     failed: isBangla ? "অনুত্তীর্ণ" : "FAILED",
-    rank: isBangla ? "মেধা স্থান" : "Merit Position",
+    rank: isBangla ? "মেধাস্থান" : "Merit Position",
     attendance: isBangla ? "উপস্থিতি" : "Attendance",
     issueDate: isBangla ? "ইস্যু তারিখ" : "Date of Publication",
     principalSign: isBangla ? "অধ্যক্ষের স্বাক্ষর" : "Head of Institution",
@@ -383,7 +383,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               <div className="flex justify-center items-center gap-6 py-2">
                   <div className="flex items-center gap-2">
                       <span className="text-2xl">🏆</span>
-                      <span className="text-[15px] font-black text-[#1E3A8A] uppercase">{t.rank}: {student.merit_position || 'N/A'}</span>
+                      <span className="text-[15px] font-black text-[#1E3A8A] uppercase">{t.rank}: {student.merit_position && student.merit_position !== "null" ? student.merit_position : 'N/A'}</span>
                   </div>
                   <div className="flex items-center gap-2">
                       <span className={`text-xl ${isPassed ? 'text-emerald-500' : 'text-red-500'}`}>{isPassed ? '✅' : '❌'}</span>

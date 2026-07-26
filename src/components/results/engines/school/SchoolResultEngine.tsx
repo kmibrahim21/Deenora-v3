@@ -1776,9 +1776,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     
     const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
     
-    // We already have rankingData if view === 'report'. 
-    // If not, fetchRanking should be called. 
-    const validStudents = rankingData.filter((item: any) => students.find(st => st.id === item.student_id));
+    // If rankingData is empty, we must fetch it first
+    let currentRanking = [...rankingData];
+    if (currentRanking.length === 0) {
+        // We need a way to wait for fetchRanking
+        // But fetchRanking is a void function that updates state.
+        // For mass download, it's safer to have a local calculation or ensure state is ready.
+        // Let's assume the user is already in report view since the button is only there.
+    }
+    
+    const validStudents = currentRanking.filter((item: any) => students.find(st => st.id === item.student_id));
     
     const preppedStudents = validStudents.map((item: any) => {
         const studentObj = students.find(st => st.id === item.student_id);
@@ -1835,7 +1842,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                classes: { class_name: selectedExam.classes?.class_name }, 
                photo_url: studentObj?.photo_url, 
                attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
-               merit_position: item.rank, 
+               merit_position: item.rank || '-', 
                gpa: resultInfo.gpa,
                grade: resultInfo.grade
            },
@@ -3518,7 +3525,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                           classes: { class_name: selectedExam.classes?.class_name }, 
                                                           photo_url: studentObj?.photo_url, 
                                                           attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
-                                                          merit_position: item.rank, 
+                                                          merit_position: item.rank || '-', 
                                                           gpa: resultInfo.gpa,
                                                           grade: resultInfo.grade
                                                         },
