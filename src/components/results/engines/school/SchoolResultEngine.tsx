@@ -973,6 +973,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         const studentMarksObjLocal: Record<string, string> = {};
         studentMarksForStudent.forEach(m => {
           studentMarksObjLocal[m.subject_id] = m.marks_obtained;
+          if (m.cq_marks !== undefined && m.cq_marks !== null) studentMarksObjLocal[`${m.subject_id}_cq`] = m.cq_marks;
+          if (m.mcq_marks !== undefined && m.mcq_marks !== null) studentMarksObjLocal[`${m.subject_id}_mcq`] = m.mcq_marks;
+          if (m.practical_marks !== undefined && m.practical_marks !== null) studentMarksObjLocal[`${m.subject_id}_practical`] = m.practical_marks;
         });
 
         const processedSubjectIds = new Set<string>();
@@ -1117,7 +1120,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         let rank = currentRank;
         if (idx > 0) {
           const prev = sortedRanked[idx - 1];
-          if (prev.pass_status === item.pass_status && prev.total_marks === item.total_marks) {
+          if (
+            prev.pass_status === item.pass_status &&
+            prev.gpa === item.gpa &&
+            prev.total_marks === item.total_marks
+          ) {
             rank = lastRank;
           } else {
             rank = currentRank;
@@ -1132,9 +1139,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       });
 
       setRankingData(ranked);
+      return ranked;
     } catch (e) {
       console.error('Frontend Ranking Error:', e);
       setRankingData([]);
+      return [];
     }
     setLoading(false);
   };
@@ -1776,13 +1785,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     
     const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
     
-    // If rankingData is empty, we must fetch it first
+    // If rankingData is empty, fetch it first
     let currentRanking = [...rankingData];
     if (currentRanking.length === 0) {
-        // We need a way to wait for fetchRanking
-        // But fetchRanking is a void function that updates state.
-        // For mass download, it's safer to have a local calculation or ensure state is ready.
-        // Let's assume the user is already in report view since the button is only there.
+        currentRanking = await fetchRanking(selectedExam.id, selectedExam.class_id);
     }
     
     const validStudents = currentRanking.filter((item: any) => students.find(st => st.id === item.student_id));

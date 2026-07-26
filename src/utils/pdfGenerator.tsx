@@ -564,20 +564,31 @@ export const generateClassResultPDF = async (
     calculatedStudents.sort((a, b) => {
         if (a._hasFailed && !b._hasFailed) return 1;
         if (!a._hasFailed && b._hasFailed) return -1;
+        if (a._gpa !== '0.00' || b._gpa !== '0.00') {
+            const gpaDiff = parseFloat(b._gpa) - parseFloat(a._gpa);
+            if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+        }
         return b._total - a._total; // Highest total first
     });
 
     let currentRank = 1;
+    let lastRank = 1;
     calculatedStudents.forEach((std, index) => {
         if (index > 0) {
             const prev = calculatedStudents[index - 1];
-            if (prev._hasFailed === std._hasFailed && prev._total === std._total) {
-                std._rank = prev._rank;
+            if (
+                prev._hasFailed === std._hasFailed &&
+                prev._gpa === std._gpa &&
+                prev._total === std._total
+            ) {
+                std._rank = lastRank;
             } else {
                 std._rank = currentRank;
+                lastRank = currentRank;
             }
         } else {
             std._rank = currentRank;
+            lastRank = currentRank;
         }
         currentRank++;
     });

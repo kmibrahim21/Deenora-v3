@@ -2677,7 +2677,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                     division: failed ? 'রাসিব' : getDivision(totalObtained, totalPossible),
                                     failed
                                 };
-                            }).sort((a, b) => b.totalObtained - a.totalObtained);
+                            }).sort((a, b) => {
+                                if (a.failed && !b.failed) return 1;
+                                if (!a.failed && b.failed) return -1;
+                                return b.totalObtained - a.totalObtained;
+                            });
 
                             let currentRank = 1;
                             let lastRank = 1;
