@@ -162,6 +162,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [showExamDropdown, setShowExamDropdown] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [profileSubTab, setProfileSubTab] = useState<'basic' | 'family' | 'address'>('basic');
@@ -414,6 +416,46 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
   return (
     <AnimatePresence mode="wait">
+      {downloadingReport && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {downloadProgress}%
+              </div>
+            </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {'ফাইল তৈরি হচ্ছে...'}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {'দয়া করে কিছুক্ষণ অপেক্ষা করুন।'}
+            </p>
+          </div>
+        </div>
+      )}
       {error ? (
         <motion.div
           key="error-screen"
@@ -1293,7 +1335,21 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           return Math.round((presentCount / validRecords.length) * 100).toString();
                         })();
 
-                        await generateResultPDF({ ...student, attendance: totalAttendanceRate }, examInfo, marks, madrasah, lang === 'bn' ? 'bn' : 'en');
+                        setDownloadingReport(true);
+                        setDownloadProgress(0);
+                        try {
+                          await generateResultPDF(
+                              { ...student, attendance: totalAttendanceRate }, 
+                              examInfo, 
+                              marks, 
+                              madrasah, 
+                              lang === 'bn' ? 'bn' : 'en',
+                              (p) => setDownloadProgress(p)
+                          );
+                        } finally {
+                          setDownloadingReport(false);
+                          setDownloadProgress(0);
+                        }
                       } catch (err) {
                         console.error('Error generating PDF:', err);
                       }

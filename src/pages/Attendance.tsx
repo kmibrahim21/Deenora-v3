@@ -74,6 +74,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [sendingAlerts, setSendingAlerts] = useState(false);
   const isSendingAlertsRef = useRef(false);
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [sessions, setSessions] = useState<{ id: string; name: string }[]>([]);
@@ -1214,18 +1215,60 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const handleDownloadReportPDF = async () => {
     if (!reportData || reportData.length === 0 || !selectedClass) return;
     setDownloadingReport(true);
+    setDownloadProgress(0);
     try {
         const monthLabel = reportType === 'monthly' ? new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' }) : '';
-        await generateAttendanceReportPDF(reportData, madrasah, selectedClass.class_name, monthLabel, lang);
+        await generateAttendanceReportPDF(reportData, madrasah, selectedClass.class_name, monthLabel, lang, (p) => setDownloadProgress(p));
     } catch (err: any) {
         console.error('Failed to generate PDF:', err);
     } finally {
         setDownloadingReport(false);
+        setDownloadProgress(0);
     }
   };
 
   return (
     <div className={`space-y-6 animate-in fade-in duration-500 pb-20 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+      {downloadingReport && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {downloadProgress}%
+              </div>
+            </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...'}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.'}
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}><ArrowLeft size={20}/></button>

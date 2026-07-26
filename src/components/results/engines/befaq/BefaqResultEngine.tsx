@@ -81,6 +81,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
   const [isRestoringRoutine, setIsRestoringRoutine] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   
   // Custom states for routine modals to avoid overlap
   const [showRoutineSuccessModal, setShowRoutineSuccessModal] = useState(false);
@@ -580,7 +581,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           showRoutineAfternoon,
           examYear: currentYear,
           themeColor: routineThemeColor
-        }
+        },
+        (p) => setDownloadProgress(p)
       );
     } catch (err) {
       console.error(err);
@@ -768,30 +770,37 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const confirmDownloadAdmitCard = async (downloadLang: 'en' | 'bn' = lang) => {
     if (!madrasah || !examForAdmitCard) return;
     
-    // Fetch students for the exam class
-    const { data: stds } = await supabase.from('students')
-      .select('*, classes(class_name)')
-      .eq('class_id', examForAdmitCard.marhala_id)
-      .eq('is_active', true)
-      .order('roll', { ascending: true });
-    
-    if (!stds || stds.length === 0) {
-        alert('No students found for this class');
-        return;
-    }
-
+    setIsDownloading(true);
+    setDownloadProgress(0);
     try {
+        // Fetch students for the exam class
+        const { data: stds } = await supabase.from('students')
+          .select('*, classes(class_name)')
+          .eq('class_id', examForAdmitCard.marhala_id)
+          .eq('is_active', true)
+          .order('roll', { ascending: true });
+        
+        if (!stds || stds.length === 0) {
+            alert('No students found for this class');
+            setIsDownloading(false);
+            return;
+        }
+
         await generateAdmitCardPDF(
             examForAdmitCard,
             stds,
-            { name: madrasah.name, logo_url: madrasah.logo_url },
+            { name: madrasah.name, logo_url: madrasah.logo_url, config_json: madrasah.config_json, institution_type: madrasah.institution_type, address: madrasah.address, phone: madrasah.phone, email: madrasah.email },
             selectedAdmitCardTemplate,
-            downloadLang
+            downloadLang,
+            (p) => setDownloadProgress(p)
         );
         setShowAdmitCardModal(false);
     } catch (error) {
         console.error('Download error:', error);
         alert('Error downloading Admit Cards');
+    } finally {
+        setIsDownloading(false);
+        setDownloadProgress(0);
     }
   };
 
@@ -856,12 +865,24 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
   const handleDownloadSeatPlan = async (downloadLang: 'en' | 'bn' = lang) => {
       if (seatAssignments.length === 0 || !madrasah) return;
+      setIsDownloading(true);
+      setDownloadProgress(0);
       try {
           const seatPlanExamName = exams.find(e => e.id === selectedSeatPlanExamId)?.exam_name || '';
-          await generateSeatPlanPDF(seatAssignments, madrasah, selectedSeatPlanTemplate, downloadLang, seatPlanExamName);
+          await generateSeatPlanPDF(
+            seatAssignments, 
+            madrasah, 
+            selectedSeatPlanTemplate, 
+            downloadLang, 
+            seatPlanExamName,
+            (p) => setDownloadProgress(p)
+          );
       } catch (error) {
           console.error('Download error:', error);
           alert('Error downloading Seat Plan');
+      } finally {
+          setIsDownloading(false);
+          setDownloadProgress(0);
       }
   };
 
@@ -1175,6 +1196,46 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      {isDownloading && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {downloadProgress}%
+              </div>
+            </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...'}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.'}
+            </p>
+          </div>
+        </div>
+      )}
       {activeTab !== 'final-results' && (
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
@@ -1580,6 +1641,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                       setIsDownloading(true);
                                       try {
                                         const tempName = r.customRoutineTitle || r.activeExamName || (lang === 'bn' ? 'বেফাক পরীক্ষার রুটিন' : 'Befaq Exam Routine');
+                                        setDownloadProgress(0);
                                         await generateExamRoutinePDF(
                                           { ...madrasah, name: madrasah?.name || 'Madrasah' } as any,
                                           tempName,
@@ -1597,10 +1659,12 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                             showRoutineAfternoon: r.showRoutineAfternoon,
                                             examYear: currentYear,
                                             themeColor: r.routineThemeColor
-                                          }
+                                          },
+                                          (p) => setDownloadProgress(p)
                                         );
                                       } finally {
                                         setIsDownloading(false);
+                                        setDownloadProgress(0);
                                       }
                                     }}
                                     className="h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
@@ -2688,12 +2752,17 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                     </div>
                 </div>
 
-                <button onClick={() => {
-                    setDownloadAction(() => (l: 'en' | 'bn') => confirmDownloadAdmitCard(l));
-                    setShowDownloadLangModal(true);
-                }} className="w-full py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all">
-                  <Download size={18}/> Download Admit Cards
-                </button>
+                 <button 
+                   onClick={() => {
+                     setDownloadAction(() => (l: 'en' | 'bn') => confirmDownloadAdmitCard(l));
+                     setShowDownloadLangModal(true);
+                   }} 
+                   disabled={isDownloading}
+                   className="w-full py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-premium flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   {isDownloading ? <Loader2 className="animate-spin" size={18} /> : <Download size={18}/>} 
+                   {isDownloading ? (lang === 'bn' ? 'ডাউনলোড হচ্ছে...' : 'Downloading...') : (lang === 'bn' ? 'এডমিট কার্ড ডাউনলোড করুন' : 'Download Admit Cards')}
+                 </button>
              </div>
           </div>
         </div>

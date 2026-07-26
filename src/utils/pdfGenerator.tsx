@@ -108,8 +108,10 @@ export const generateAttendanceReportPDF = async (
     madrasah: any,
     className: string,
     month: string,
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(5);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -125,6 +127,7 @@ export const generateAttendanceReportPDF = async (
         );
         setTimeout(resolve, 1500); 
     });
+    onProgress?.(30);
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -147,12 +150,15 @@ export const generateAttendanceReportPDF = async (
 
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            onProgress?.(30 + Math.floor(((i + 1) / pages.length) * 65));
         }
     }
     
+    onProgress?.(98);
     doc.save(`Attendance_Report_${className}_${month}.pdf`);
     root.unmount();
     document.body.removeChild(container);
+    onProgress?.(100);
 };
 // --- SEAT PLAN GENERATOR ---
 export const generateSeatPlanPDF = async (
@@ -160,8 +166,10 @@ export const generateSeatPlanPDF = async (
     madrasah: any,
     templateId: string = 'list',
     lang: 'en' | 'bn' = 'en',
-    examName?: string
+    examName?: string,
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(5);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -173,6 +181,7 @@ export const generateSeatPlanPDF = async (
         root.render(<SeatPlanTemplate assignments={assignments} madrasah={madrasah} templateId={templateId} lang={lang} examName={examName} />);
         setTimeout(resolve, 500); // Give more time for fonts/images
     });
+    onProgress?.(25);
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -196,6 +205,7 @@ export const generateSeatPlanPDF = async (
 
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            onProgress?.(25 + Math.floor(((i + 1) / roomDivs.length) * 70));
         }
     } else {
         // Fallback if structure is different
@@ -205,12 +215,15 @@ export const generateSeatPlanPDF = async (
             backgroundColor: '#ffffff',
         });
         doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        onProgress?.(90);
     }
     
+    onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
     
     doc.save(`seat-plan-${templateId}.pdf`);
+    onProgress?.(100);
 };
 
 // --- RESULT GENERATOR ---
@@ -219,8 +232,10 @@ export const generateResultPDF = async (
     exam: any,
     marks: any[],
     madrasah: any,
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(10);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -231,6 +246,7 @@ export const generateResultPDF = async (
         root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
         setTimeout(resolve, 1500); // Increased timeout for font loading
     });
+    onProgress?.(50);
 
     const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
         pixelRatio: 2, // Higher quality
@@ -239,6 +255,7 @@ export const generateResultPDF = async (
         width: 794,
         height: 1123,
     });
+    onProgress?.(85);
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -246,18 +263,22 @@ export const generateResultPDF = async (
     
     doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
     
+    onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
     
     doc.save(`Result_${student.student_name}.pdf`);
+    onProgress?.(100);
 };
 
 export const generateMassMarksheetPDF = async (
     preppedStudents: any[],
     exam: any,
     madrasah: any,
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(2);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -282,6 +303,7 @@ export const generateMassMarksheetPDF = async (
         );
         setTimeout(resolve, 1500);
     });
+    onProgress?.(15);
 
     // We want 2 A4 portraits on 1 A4 landscape page.
     const doc = new jsPDF('l', 'mm', 'a4');
@@ -313,13 +335,16 @@ export const generateMassMarksheetPDF = async (
             // A4 landscape width is 297. Half of that is 148.5
             const hw = pageWidth / 2;
             doc.addImage(imgData, 'JPEG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'FAST');
+            onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
         }
     }
     
+    onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
     
     doc.save(`Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+    onProgress?.(100);
 };
 
 // --- CLASS RESULT GENERATOR ---
@@ -329,10 +354,12 @@ export const generateClassResultPDF = async (
     students: any[],
     marksData: any,
     madrasah: { name: string, config_json?: any },
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(5);
     // Pre-calculate totals, GPA, rank
-    const calculatedStudents = students.map(student => {
+    const calculatedStudents = students.map((student, sIdx) => {
         const studentMarks = marksData[student.id] || {};
         let total = 0;
         let totalPossible = 0;
@@ -520,6 +547,8 @@ export const generateClassResultPDF = async (
                 }
             }
         }
+        
+        if (sIdx % 10 === 0) onProgress?.(5 + Math.floor((sIdx / students.length) * 15));
 
         return {
             ...student,
@@ -586,6 +615,7 @@ export const generateClassResultPDF = async (
         );
         setTimeout(resolve, 800);
     });
+    onProgress?.(35);
 
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -604,13 +634,16 @@ export const generateClassResultPDF = async (
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            onProgress?.(35 + Math.floor(((i + 1) / pages.length) * 60));
         }
     }
     
+    onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
     
     doc.save(`Class_Result_${exam.exam_name}.pdf`);
+    onProgress?.(100);
 };
 
 // --- CLASS FEE REPORT GENERATOR ---
@@ -619,8 +652,10 @@ export const generateClassFeeReportPDF = async (
     month: string,
     students: any[],
     madrasah: any,
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(5);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -641,6 +676,7 @@ export const generateClassFeeReportPDF = async (
         totalPaid: students.reduce((sum, s) => sum + (Number(s.total_paid) || 0), 0),
         totalDue: students.reduce((sum, s) => sum + (Number(s.balance_due) || 0), 0),
     };
+    onProgress?.(15);
 
     await new Promise<void>((resolve) => {
         root.render(
@@ -661,6 +697,7 @@ export const generateClassFeeReportPDF = async (
         );
         setTimeout(resolve, 800);
     });
+    onProgress?.(30);
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -679,13 +716,16 @@ export const generateClassFeeReportPDF = async (
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            onProgress?.(30 + Math.floor(((i + 1) / pages.length) * 65));
         }
     }
     
+    onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
     
     doc.save(`Fee-Report-${className}-${month}.pdf`);
+    onProgress?.(100);
 };
 
 // --- INDIVIDUAL FEE RECEIPT GENERATOR ---
@@ -693,8 +733,10 @@ export const generateFeeReceiptPDF = async (
     student: any,
     month: string,
     madrasah: any,
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(10);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -721,6 +763,7 @@ export const generateFeeReceiptPDF = async (
         root.render(<FeeReceiptTemplate student={student} month={displayMonth} madrasah={madrasah} lang={lang} receiptId={receiptId} />);
         setTimeout(resolve, 500);
     });
+    onProgress?.(40);
 
     const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
         pixelRatio: 1.5,
@@ -729,6 +772,7 @@ export const generateFeeReceiptPDF = async (
         width: 794,
         height: 1123,
     });
+    onProgress?.(80);
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -736,10 +780,12 @@ export const generateFeeReceiptPDF = async (
     
     doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
     
+    onProgress?.(95);
     root.unmount();
     document.body.removeChild(container);
     
     doc.save(`Receipt-${student.student_name}-${month}.pdf`);
+    onProgress?.(100);
 };
 
 // --- FINAL RESULT GENERATOR ---
@@ -749,8 +795,10 @@ export const generateFinalResultPDF = async (
     subjects: string[],
     students: any[],
     madrasah: any,
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(5);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -777,6 +825,7 @@ export const generateFinalResultPDF = async (
         );
         setTimeout(resolve, 800);
     });
+    onProgress?.(25);
 
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -795,13 +844,16 @@ export const generateFinalResultPDF = async (
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
         }
     }
     
+    onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
     
     doc.save(`Final_Result_${className}.pdf`);
+    onProgress?.(100);
 };
 
 // --- ACCOUNTING REPORT GENERATOR ---
@@ -868,8 +920,10 @@ export const generateClassRoutinePDF = async (
     routines: ClassRoutine[],
     classes: Class[],
     days: any[],
-    lang: 'en' | 'bn' = 'bn'
+    lang: 'en' | 'bn' = 'bn',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(10);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -885,6 +939,7 @@ export const generateClassRoutinePDF = async (
         );
         setTimeout(resolve, 1000); // Give time for images to load
     });
+    onProgress?.(30);
 
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -909,12 +964,15 @@ export const generateClassRoutinePDF = async (
             if (pageAdded) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
             pageAdded = true;
+            onProgress?.(30 + Math.floor(((i + 1) / pageContainers.length) * 65));
         }
     }
     
+    onProgress?.(98);
     doc.save(`${madrasah?.name || 'Madrasah'}_Class_Routine.pdf`);
     root.unmount();
     document.body.removeChild(container);
+    onProgress?.(100);
 };
 
 export const generateMasterClassRoutinePDF = async (
@@ -922,8 +980,10 @@ export const generateMasterClassRoutinePDF = async (
     routines: ClassRoutine[],
     classes: Class[],
     days: any[],
-    lang: 'en' | 'bn' = 'bn'
+    lang: 'en' | 'bn' = 'bn',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(10);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -939,6 +999,7 @@ export const generateMasterClassRoutinePDF = async (
         );
         setTimeout(resolve, 1500);
     });
+    onProgress?.(40);
 
     const doc = new jsPDF('l', 'mm', 'a4'); // LANDSCAPE
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -955,13 +1016,16 @@ export const generateMasterClassRoutinePDF = async (
                 width: 1123,
                 height: 794,
             });
+            onProgress?.(85);
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
     }
     
+    onProgress?.(98);
     doc.save(`${madrasah?.name || 'Madrasah'}_Master_Routine.pdf`);
     root.unmount();
     document.body.removeChild(container);
+    onProgress?.(100);
 };
 
 // --- EXAM ROUTINE GENERATOR ---
@@ -982,8 +1046,10 @@ export const generateExamRoutinePDF = async (
       showRoutineAfternoon?: boolean;
       examYear?: string;
       themeColor?: string;
-    }
+    },
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(10);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -1005,6 +1071,7 @@ export const generateExamRoutinePDF = async (
         );
         setTimeout(resolve, 1500); 
     });
+    onProgress?.(40);
 
     const isLandscape = true;
     
@@ -1023,13 +1090,16 @@ export const generateExamRoutinePDF = async (
                 width: 1123,
                 height: 794,
             });
+            onProgress?.(85);
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
     }
     
+    onProgress?.(98);
     doc.save(`${madrasah?.name || 'Madrasah'}_Exam_Routine.pdf`);
     root.unmount();
     document.body.removeChild(container);
+    onProgress?.(100);
 };
 
 // --- STUDENT LIST GENERATOR ---
@@ -1037,8 +1107,10 @@ export const generateStudentListPDF = async (
     students: any[],
     madrasah: any,
     className?: string,
-    lang: 'en' | 'bn' = 'en'
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
 ) => {
+    onProgress?.(5);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -1059,6 +1131,7 @@ export const generateStudentListPDF = async (
         );
         setTimeout(resolve, 1500); 
     });
+    onProgress?.(25);
 
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -1076,10 +1149,13 @@ export const generateStudentListPDF = async (
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
         }
     }
     
+    onProgress?.(98);
     doc.save(`Student_List_${className || 'All'}.pdf`);
     root.unmount();
     document.body.removeChild(container);
+    onProgress?.(100);
 };

@@ -57,6 +57,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [showAddExam, setShowAddExam] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [showAddSubject, setShowAddSubject] = useState(false);
@@ -938,7 +939,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       await generateExamRoutinePDF(madrasah, examTitle, routineData, lang, { 
         examYear: currentYear,
         themeColor: routineThemeColor 
-      });
+      }, (p) => setDownloadProgress(p));
     } catch (error) {
       console.error('Error generating routine:', error);
     } finally {
@@ -1350,7 +1351,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             stds,
             madrasah,
             selectedAdmitCardTemplate,
-            downloadLang
+            downloadLang,
+            (p) => setDownloadProgress(p)
         );
         setShowAdmitCardModal(false);
     } catch (error) {
@@ -1426,6 +1428,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       if (seatAssignments.length === 0) return;
       
       setIsDownloading(true);
+      setDownloadProgress(0);
       try {
         const seatPlanExamName = exams.find(e => e.id === selectedSeatPlanExamId)?.exam_name || '';
         await generateSeatPlanPDF(
@@ -1433,13 +1436,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             madrasah,
             selectedSeatPlanTemplate,
             downloadLang,
-            seatPlanExamName
+            seatPlanExamName,
+            (p) => setDownloadProgress(p)
         );
       } catch (e) {
           console.error(e);
           alert('Error downloading Seat Plan');
       } finally {
           setIsDownloading(false);
+          setDownloadProgress(0);
       }
   };
 
@@ -1750,7 +1755,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           students,
           marksData,
           madrasah,
-          downloadLang
+          downloadLang,
+          (p) => setDownloadProgress(p)
       );
     } catch (error) {
       console.error('Download error:', error);
@@ -1842,7 +1848,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           preppedStudents,
           selectedExam,
           madrasah,
-          downloadLang
+          downloadLang,
+          (p) => setDownloadProgress(p)
       );
     } catch (error) {
       console.error('Download error:', error);
@@ -1856,14 +1863,43 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     <div className="space-y-6 animate-in fade-in duration-500 pb-20 relative">
       {/* Download Indicator */}
       {isDownloading && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="bg-white/90 backdrop-blur-md border border-blue-100 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
-                <div className="relative">
-                    <Loader2 className="animate-spin text-blue-600" size={20} />
-                    <div className="absolute inset-0 bg-blue-400/20 blur-sm rounded-full animate-pulse"></div>
-                </div>
-                <span className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest">ডাউনলোড হচ্ছে...</span>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {downloadProgress}%
+              </div>
             </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...'}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.'}
+            </p>
+          </div>
         </div>
       )}
 
@@ -3470,24 +3506,32 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                 const studentObj = students.find(st => st.id === item.student_id);
                                                 const resultInfo = calculateStudentResult(item.student_id, subjects);
                                                 
-                                                fetchClassAttendanceStats(selectedExam.class_id).then(attStats => {
-                                                  generateResultPDF(
-                                                      { 
-                                                        ...studentObj,
-                                                        student_name: item.student_name, 
-                                                        roll: item.roll, 
-                                                        classes: { class_name: selectedExam.classes?.class_name }, 
-                                                        photo_url: studentObj?.photo_url, 
-                                                        attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
-                                                        merit_position: item.rank, 
-                                                        gpa: resultInfo.gpa,
-                                                        grade: resultInfo.grade
-                                                      },
-                                                      selectedExam,
-                                                      preparedMarks,
-                                                      madrasah,
-                                                      lang
-                                                  );
+                                                fetchClassAttendanceStats(selectedExam.class_id).then(async attStats => {
+                                                  setIsDownloading(true);
+                                                  setDownloadProgress(0);
+                                                  try {
+                                                    await generateResultPDF(
+                                                        { 
+                                                          ...studentObj,
+                                                          student_name: item.student_name, 
+                                                          roll: item.roll, 
+                                                          classes: { class_name: selectedExam.classes?.class_name }, 
+                                                          photo_url: studentObj?.photo_url, 
+                                                          attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
+                                                          merit_position: item.rank, 
+                                                          gpa: resultInfo.gpa,
+                                                          grade: resultInfo.grade
+                                                        },
+                                                        selectedExam,
+                                                        preparedMarks,
+                                                        madrasah,
+                                                        lang,
+                                                        (p) => setDownloadProgress(p)
+                                                    );
+                                                  } finally {
+                                                    setIsDownloading(false);
+                                                    setDownloadProgress(0);
+                                                  }
                                                 });
                                               }
                                           }}
@@ -3546,11 +3590,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 ))}
              </div>
 
-             <button onClick={() => {
+             <button 
+               onClick={() => {
                  setDownloadAction(() => (l: 'en' | 'bn') => confirmDownloadAdmitCard(l));
                  setShowDownloadLangModal(true);
-             }} className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all">
-               <Download size={20}/> Download Admit Cards
+               }} 
+               disabled={isDownloading}
+               className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {isDownloading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20}/>} 
+               {isDownloading ? (lang === 'bn' ? 'ডাউনলোড হচ্ছে...' : 'Downloading...') : (lang === 'bn' ? 'এডমিট কার্ড ডাউনলোড করুন' : 'Download Admit Cards')}
              </button>
           </div>
         </div>

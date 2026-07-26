@@ -30,6 +30,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isUploadActive = React.useMemo(() => {
@@ -163,6 +164,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const handleExportPDF = async () => {
     if (!madrasah) return;
     setGeneratingPDF(true);
+    setDownloadProgress(0);
     setStatus({ type: 'idle', message: '' });
     
     try {
@@ -186,7 +188,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         ? undefined 
         : classes.find(c => c.id === selectedClassId)?.class_name;
 
-      await generateStudentListPDF(students, madrasah, className, lang);
+      await generateStudentListPDF(students, madrasah, className, lang, (p) => setDownloadProgress(p));
 
       setStatus({
         type: 'success',
@@ -196,6 +198,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       setStatus({ type: 'error', message: err.message }); 
     } finally { 
       setGeneratingPDF(false); 
+      setDownloadProgress(0);
       setTimeout(() => setStatus({ type: 'idle', message: '' }), 4000);
     }
   };
@@ -395,6 +398,46 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
 
   return (
     <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500 pb-24">
+      {generatingPDF && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {downloadProgress}%
+              </div>
+            </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...'}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.'}
+            </p>
+          </div>
+        </div>
+      )}
       <div className="sticky top-0 z-30 bg-slate-50/80 backdrop-blur-md pb-4 pt-2">
         <div className="flex items-center gap-5 px-2">
           <button onClick={onBack} className={`w-14 h-14 ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-blue-50 border-blue-100 text-[#2563EB]'} rounded-2xl flex items-center justify-center active:scale-90 transition-all border shadow-sm`}>

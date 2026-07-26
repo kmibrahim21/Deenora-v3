@@ -99,9 +99,10 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   const [activeYearEndDate, setActiveYearEndDate] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -648,37 +649,43 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     const className = classes.find(c => c.id === selectedClass)?.class_name || 'All Classes';
 
     setIsDownloading(true);
+    setDownloadProgress(0);
     try {
       await generateClassFeeReportPDF(
           className,
           selectedMonth,
           feesReport,
           madrasah,
-          downloadLang
+          downloadLang,
+          (p) => setDownloadProgress(p)
       );
     } catch (error) {
       console.error('Download error:', error);
       setActionError('Error downloading PDF');
     } finally {
       setIsDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
   const handleDownloadReceipt = async (student: any, downloadLang: 'en' | 'bn' = lang) => {
     const className = classes.find(c => c.id === student.class_id)?.class_name || '';
     setIsDownloading(true);
+    setDownloadProgress(0);
     try {
         await generateFeeReceiptPDF(
             { ...student, class_name: className, section: student.student_type ? student.student_type : '' }, // Assuming student_type might represent section temporarily if none exists
             selectedMonth,
             madrasah,
-            downloadLang
+            downloadLang,
+            (p) => setDownloadProgress(p)
         );
     } catch (error) {
         console.error('Download error:', error);
         setActionError('Error downloading PDF');
     } finally {
         setIsDownloading(false);
+        setDownloadProgress(0);
     }
   };
 
@@ -687,15 +694,44 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       <div className="space-y-4 animate-in slide-in-from-bottom-5 relative">
          {/* Download Indicator */}
          {isDownloading && (
-            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className={`${isDark ? 'bg-slate-800/90 border-slate-700' : 'bg-white/90 border-blue-100'} backdrop-blur-md border px-6 py-3 rounded-full shadow-2xl flex items-center gap-3`}>
-                    <div className="relative">
-                        <Loader2 className={`animate-spin ${isDark ? 'text-blue-400' : 'text-blue-600'}`} size={20} />
-                        <div className={`absolute inset-0 blur-sm rounded-full animate-pulse ${isDark ? 'bg-blue-500/20' : 'bg-blue-400/20'}`}></div>
-                    </div>
-                    <span className={`text-[11px] font-black uppercase tracking-widest ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>ডাউনলোড হচ্ছে...</span>
-                </div>
-            </div>
+           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+             <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+               <div className="relative w-24 h-24 mx-auto mb-6">
+                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                   <circle 
+                     className="text-slate-100 dark:text-slate-800" 
+                     strokeWidth="8" 
+                     stroke="currentColor" 
+                     fill="transparent" 
+                     r="42" 
+                     cx="50" 
+                     cy="50" 
+                   />
+                   <circle 
+                     className="text-blue-600 transition-all duration-300 ease-out" 
+                     strokeWidth="8" 
+                     strokeDasharray={263.89} 
+                     strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                     strokeLinecap="round" 
+                     stroke="currentColor" 
+                     fill="transparent" 
+                     r="42" 
+                     cx="50" 
+                     cy="50" 
+                   />
+                 </svg>
+                 <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                   {downloadProgress}%
+                 </div>
+               </div>
+               <h3 className="text-xl font-black mb-2 dark:text-white">
+                 {lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...'}
+               </h3>
+               <p className="text-slate-500 text-sm">
+                 {lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.'}
+               </p>
+             </div>
+           </div>
          )}
 
          <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[2rem] border shadow-bubble space-y-4`}>
@@ -868,16 +904,16 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                        </button>
                        <button 
                           onClick={() => { setSelectedStudent(item); setCollectAmount(''); setShowFeeCollection(true); }} 
-                          disabled={isFullyPaid || isNoFeeSet || isPartial} 
+                          disabled={isFullyPaid || isNoFeeSet} 
                           className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all shadow-sm ${
                             isFullyPaid ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-600 border border-emerald-200') : 
-                            isPartial ? (isDark ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-600 border border-rose-200') :
+                            isPartial ? (isDark ? 'bg-[#2563EB]/20 text-[#2563EB] border border-[#2563EB]/30' : 'bg-blue-50 text-blue-600 border border-blue-100') :
                             isNoFeeSet ? (isDark ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-not-allowed') : 
                             isUnpaid ? 'bg-orange-500 text-white active:scale-95 shadow-orange-200' : 
                             'bg-[#2563EB] text-white active:scale-95 shadow-blue-200'
                           }`}
                        >
-                          {(isFullyPaid || isPartial) ? 'PAID' : isNoFeeSet ? 'ফি নেই' : 'ফি জমা'}
+                          {isFullyPaid ? 'PAID' : isPartial ? 'PARTIAL' : isNoFeeSet ? 'ফি নেই' : 'ফি জমা'}
                        </button>
                      </div>
                   </div>

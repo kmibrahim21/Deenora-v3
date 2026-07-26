@@ -46,6 +46,8 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
   const [calculatedData, setCalculatedData] = useState<any[]>([]);
   const [resultLoading, setResultLoading] = useState(false);
   const [subjects, setSubjects] = useState<string[]>([]);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => void) | null>(null);
 
@@ -347,6 +349,8 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
   const handleDownloadPDF = async (downloadLang: 'en' | 'bn' = lang) => {
     if (!viewResult || !madrasah) return;
 
+    setIsDownloading(true);
+    setDownloadProgress(0);
     try {
       // Use existing PDF generator but maybe we need a Befaq specific one?
       // For now, reuse the generic one, passing division as grade
@@ -362,16 +366,60 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
           subjects,
           pdfData,
           madrasah,
-          downloadLang
+          downloadLang,
+          (p) => setDownloadProgress(p)
       );
     } catch (error) {
       console.error('Download error:', error);
       alert('Error downloading PDF');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      {isDownloading && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                     cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {downloadProgress}%
+              </div>
+            </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...'}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.'}
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
           <button onClick={viewResult ? () => setViewResult(null) : onBack} className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>

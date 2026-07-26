@@ -33,6 +33,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
   const [calculatedData, setCalculatedData] = useState<any[]>([]);
   const [resultLoading, setResultLoading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
@@ -425,6 +426,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     if (!viewResult || !madrasah) return;
 
     setIsDownloading(true);
+    setDownloadProgress(0);
     try {
       await generateFinalResultPDF(
           viewResult.title,
@@ -432,13 +434,15 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           subjects,
           calculatedData,
           madrasah,
-          downloadLang
+          downloadLang,
+          (p) => setDownloadProgress(p)
       );
     } catch (error) {
       console.error('Download error:', error);
       alert('Error downloading PDF');
     } finally {
       setIsDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
@@ -446,16 +450,45 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       {/* Loading Overlay */}
       {(resultLoading || isDownloading) && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-8 h-8 bg-blue-600 rounded-full animate-pulse"></div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - (isDownloading ? downloadProgress : 0) / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {isDownloading ? `${downloadProgress}%` : <Loader2 className="animate-spin" />}
+              </div>
             </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {isDownloading ? (lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...') : (lang === 'bn' ? 'অপেক্ষা করুন...' : 'Please Wait...')}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {isDownloading 
+                ? (lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.')
+                : (lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait a moment.')}
+            </p>
           </div>
-          <p className="mt-4 text-blue-900 font-black tracking-widest uppercase text-sm animate-pulse">
-            {isDownloading ? (lang === 'bn' ? 'ডাউনলোড হচ্ছে...' : 'Downloading...') : (lang === 'bn' ? 'অপেক্ষা করুন...' : 'Please Wait...')}
-          </p>
         </div>
       )}
       <div className="flex items-center justify-between px-2">

@@ -521,8 +521,10 @@ export const generateAdmitCardPDF = async (
   students: Student[],
   madrasah: any,
   templateId: string = 'modern',
-  lang: 'en' | 'bn' = 'en'
+  lang: 'en' | 'bn' = 'en',
+  onProgress?: (progress: number) => void
 ) => {
+  onProgress?.(2);
   const isAdmission = templateId === 'admission';
   
   const container = document.createElement('div');
@@ -603,8 +605,8 @@ export const generateAdmitCardPDF = async (
       }
 
       const imgData = await toJpeg(element as HTMLElement, {
-        pixelRatio: 4, // Ultra-high resolution
-        quality: 1.0,  // Maximum JPEG quality
+        pixelRatio: 2.5, // High resolution but memory-efficient
+        quality: 0.95,  
         backgroundColor: '#ffffff',
         cacheBust: true,
         style: {
@@ -622,15 +624,8 @@ export const generateAdmitCardPDF = async (
         const xPos = marginX;
         const yPos = marginY + posOnPage * (cardHeightMm + gapY);
 
-        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'NONE');
+        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
         
-        // Add cutting guide marks if requested
-        pdf.setDrawColor(200);
-        pdf.setLineWidth(0.1);
-        if (posOnPage === 0) {
-          const guideY = yPos + cardHeightMm + (gapY / 2);
-          pdf.line(marginX - 5, guideY, marginX + cardWidthMm + 5, guideY);
-        }
       } else {
         // 4 per page
         if (i > 0 && i % 4 === 0) {
@@ -643,18 +638,29 @@ export const generateAdmitCardPDF = async (
         const xPos = marginX + col * (cardWidthMm + gapX);
         const yPos = marginY + row * (cardHeightMm + gapY);
 
-        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'NONE');
+        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
+      }
+
+      onProgress?.(2 + Math.floor(((i + 1) / students.length) * 96));
+
+      // Help GC and prevent UI freeze
+      if (i % 5 === 0) {
+        await new Promise(r => setTimeout(r, 100));
       }
     } catch (err) {
       console.error('Error generating image for student:', student.student_name, err);
     }
   }
 
+  // Clear memory
   setTimeout(() => {
     root.unmount();
-    document.body.removeChild(container);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
   }, 1000);
 
   const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
   pdf.save(`Admit_Cards_${safeExamName}.pdf`);
+  onProgress?.(100);
 };

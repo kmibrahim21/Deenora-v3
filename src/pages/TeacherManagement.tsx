@@ -172,6 +172,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const [reportYear, setReportYear] = useState(() => new Date().getFullYear().toString());
   const [reportDate, setReportDate] = useState(() => getTodayDateString());
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [reportData, setReportData] = useState<Record<string, Record<string, string>>>({});
   const [attendanceDate, setAttendanceDate] = useState(() => getTodayDateString());
   const [isHoliday, setIsHoliday] = useState(false);
@@ -362,14 +363,17 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         alert(lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found to generate report');
         return;
       }
+      setIsGeneratingPDF(true);
+      setDownloadProgress(0);
       console.log("Calling generateAttendanceReportPDF...");
-      await generateAttendanceReportPDF(mappedData, madrasah, lang === 'bn' ? 'শিক্ষক' : 'Teachers', titleStr, lang);
+      await generateAttendanceReportPDF(mappedData, madrasah, lang === 'bn' ? 'শিক্ষক' : 'Teachers', titleStr, lang, (p) => setDownloadProgress(p));
       console.log("PDF generated successfully!");
     } catch (error: any) {
       console.error("PDF generation failed:", error);
       alert(lang === 'bn' ? `পিডিএফ তৈরি করতে ব্যর্থ হয়েছে। ত্রুটি: ${error?.message || 'Unknown'}` : `Failed to generate PDF. Error: ${error?.message || 'Unknown'}`);
     } finally {
       setIsGeneratingPDF(false);
+      setDownloadProgress(0);
     }
   };
 
@@ -770,6 +774,46 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     <div
       className={`min-h-screen pb-20 ${isDark ? "bg-slate-950 text-white" : "text-slate-900"}`}
     >
+      {isGeneratingPDF && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-6">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle 
+                  className="text-slate-100 dark:text-slate-800" 
+                  strokeWidth="8" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+                <circle 
+                  className="text-blue-600 transition-all duration-300 ease-out" 
+                  strokeWidth="8" 
+                  strokeDasharray={263.89} 
+                  strokeDashoffset={263.89 * (1 - downloadProgress / 100)} 
+                  strokeLinecap="round" 
+                  stroke="currentColor" 
+                  fill="transparent" 
+                  r="42" 
+                  cx="50" 
+                  cy="50" 
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl dark:text-white">
+                {downloadProgress}%
+              </div>
+            </div>
+            <h3 className="text-xl font-black mb-2 dark:text-white">
+              {lang === 'bn' ? 'ফাইল তৈরি হচ্ছে...' : 'Generating File...'}
+            </h3>
+            <p className="text-slate-500 text-sm">
+              {lang === 'bn' ? 'দয়া করে কিছুক্ষণ অপেক্ষা করুন।' : 'Please wait while we prepare your document.'}
+            </p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div
         className={`px-4 py-2.5 border-b ${isDark ? "bg-slate-900 border-slate-800" : "bg-transparent border-blue-100"}`}
