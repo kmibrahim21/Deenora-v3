@@ -41,10 +41,10 @@ export const ShortcodeService = {
    */
   replaceShortcodes: (message: string, data: any): string => {
     if (!message) return '';
-    
+
     console.log('Replacing shortcodes in message:', message);
     console.log('Data for replacement:', data);
-    
+
     const shortcodes: Record<string, any> = {
       '{student_name}': data.student_name || '-',
       '{father_name}': data.guardian_name || '-',
@@ -122,24 +122,24 @@ export const ShortcodeService = {
     const currentMonthNum = now.getMonth() + 1; // Assuming English calendar 1-12
 
     const studentBalances: Record<string, { due: number, paid: number }> = {};
-    
+
     students.forEach(s => {
       // Calculate monthly payable for this student
       const studentSettings = settings.filter(set => set.student_id === s.id);
       const studentStructures = structures.filter(fs => fs.class_id === s.class_id || fs.class_id === null);
-      
+
       const monthlyPayable = studentStructures.reduce((sum, fs) => {
         const setting = studentSettings.find(ss => ss.fee_structure_id === fs.id);
         const isEnabled = setting ? setting.is_enabled : true;
         const isExpired = fs.due_date && fs.due_date < today;
         const isNotStarted = fs.start_date && fs.start_date > today;
-        
+
         if (!isEnabled || isExpired || isNotStarted) return sum;
-        
-        const amountToCharge = (setting?.custom_amount !== undefined && setting?.custom_amount !== null) 
-          ? Number(setting.custom_amount) 
+
+        const amountToCharge = (setting?.custom_amount !== undefined && setting?.custom_amount !== null)
+          ? Number(setting.custom_amount)
           : Number(fs.amount || 0);
-        
+
         return sum + amountToCharge;
       }, 0);
 
@@ -178,26 +178,43 @@ export const ShortcodeService = {
              .from('exam_marks')
              .select('student_id, marks_obtained, exam_subjects(full_marks, subject_name, pass_marks, is_optional)')
              .eq('exam_id', latestExam.id);
-           
+
            if (allMarksData) {
              // Calculate totals for everyone in class to determine rank
-             const totals: Record<string, { obtained: number, full: number }> = {};
+             const totals: Record<string, { obtained: number, full: number, hasFailed: boolean }> = {};
              allMarksData.forEach(m => {
-               if (!totals[m.student_id]) totals[m.student_id] = { obtained: 0, full: 0 };
-               const fMarks = Array.isArray(m.exam_subjects) 
-                 ? (m.exam_subjects[0]?.full_marks || 100) 
-                 : ((m.exam_subjects as any)?.full_marks || 100);
-               totals[m.student_id].obtained += Number(m.marks_obtained || 0);
-               totals[m.student_id].full += Number(fMarks);
+               if (!totals[m.student_id]) totals[m.student_id] = { obtained: 0, full: 0, hasFailed: false };
+               const subObj: any = Array.isArray(m.exam_subjects) ? m.exam_subjects[0] : m.exam_subjects;
+               const fMarks = Number(subObj?.full_marks || 100);
+               const pMarks = Number(subObj?.pass_marks || Math.ceil(fMarks * 0.33));
+               const obtained = Number(m.marks_obtained || 0);
+
+               totals[m.student_id].obtained += obtained;
+               totals[m.student_id].full += fMarks;
+               if (!subObj?.is_optional && obtained < pMarks) {
+                 totals[m.student_id].hasFailed = true;
+               }
              });
 
-             // Sort by obtained marks descending
+             // Sort by pass status then obtained marks descending
              const sortedStudents = Object.entries(totals)
-               .map(([id, t]) => ({ id, obtained: t.obtained }))
-               .sort((a, b) => b.obtained - a.obtained);
+               .map(([id, t]) => ({ id, obtained: t.obtained, hasFailed: t.hasFailed }))
+               .sort((a, b) => {
+                 if (!a.hasFailed && b.hasFailed) return -1;
+                 if (a.hasFailed && !b.hasFailed) return 1;
+                 return b.obtained - a.obtained;
+               });
 
+             let currentRank = 1;
              sortedStudents.forEach((st, index) => {
-               meritPositions[st.id] = index + 1;
+               if (index > 0) {
+                 const prev = sortedStudents[index - 1];
+                 const isTie = prev.hasFailed === st.hasFailed && Math.abs(prev.obtained - st.obtained) < 0.001;
+                 if (!isTie) {
+                   currentRank++;
+                 }
+               }
+               meritPositions[st.id] = currentRank;
              });
 
              // Filter marks for requested students only to add to 'marks' array (for grade calculation later)
@@ -207,7 +224,7 @@ export const ShortcodeService = {
                return {
                  student_id: m.student_id,
                  marks_obtained: m.marks_obtained,
-                 exam_subjects: { 
+                 exam_subjects: {
                    full_marks: subjectObj?.full_marks || 100,
                    subject_name: subjectObj?.subject_name || '',
                    pass_marks: subjectObj?.pass_marks || 33,
@@ -237,33 +254,50 @@ export const ShortcodeService = {
              .from('befaq_results')
              .select('student_id, marks_obtained, befaq_subjects(total_marks, subject_name)')
              .eq('exam_id', latestExam.id);
-           
+
            if (allMarksData) {
-             const totals: Record<string, { obtained: number, full: number }> = {};
+             const totals: Record<string, { obtained: number, full: number, hasFailed: boolean }> = {};
              allMarksData.forEach(m => {
-               if (!totals[m.student_id]) totals[m.student_id] = { obtained: 0, full: 0 };
-               const fMarks = Array.isArray(m.befaq_subjects) 
-                 ? (m.befaq_subjects[0]?.total_marks || 100) 
-                 : ((m.befaq_subjects as any)?.total_marks || 100);
-               totals[m.student_id].obtained += Number(m.marks_obtained || 0);
-               totals[m.student_id].full += Number(fMarks);
+               if (!totals[m.student_id]) totals[m.student_id] = { obtained: 0, full: 0, hasFailed: false };
+               const subObj: any = Array.isArray(m.befaq_subjects) ? m.befaq_subjects[0] : m.befaq_subjects;
+               const fMarks = Number(subObj?.total_marks || 100);
+               const pMarks = Math.ceil(fMarks * 0.33);
+               const obtained = Number(m.marks_obtained || 0);
+
+               totals[m.student_id].obtained += obtained;
+               totals[m.student_id].full += fMarks;
+               if (obtained < pMarks) {
+                 totals[m.student_id].hasFailed = true;
+               }
              });
 
              const sortedStudents = Object.entries(totals)
-               .map(([id, t]) => ({ id, obtained: t.obtained }))
-               .sort((a, b) => b.obtained - a.obtained);
+               .map(([id, t]) => ({ id, obtained: t.obtained, hasFailed: t.hasFailed }))
+               .sort((a, b) => {
+                 if (!a.hasFailed && b.hasFailed) return -1;
+                 if (a.hasFailed && !b.hasFailed) return 1;
+                 return b.obtained - a.obtained;
+               });
 
+             let currentRank = 1;
              sortedStudents.forEach((st, index) => {
-               meritPositions[st.id] = index + 1;
+               if (index > 0) {
+                 const prev = sortedStudents[index - 1];
+                 const isTie = prev.hasFailed === st.hasFailed && Math.abs(prev.obtained - st.obtained) < 0.001;
+                 if (!isTie) {
+                   currentRank++;
+                 }
+               }
+               meritPositions[st.id] = currentRank;
              });
 
              const filteredMarks = allMarksData.filter(m => studentIds.includes(m.student_id));
              const normalizedMarks = filteredMarks.map(m => ({
                student_id: m.student_id,
                marks_obtained: m.marks_obtained,
-               exam_subjects: { 
-                 full_marks: Array.isArray(m.befaq_subjects) 
-                   ? (m.befaq_subjects[0]?.total_marks || 100) 
+               exam_subjects: {
+                 full_marks: Array.isArray(m.befaq_subjects)
+                   ? (m.befaq_subjects[0]?.total_marks || 100)
                    : ((m.befaq_subjects as any)?.total_marks || 100),
                  subject_name: Array.isArray(m.befaq_subjects)
                    ? (m.befaq_subjects[0]?.subject_name || '')
@@ -288,7 +322,7 @@ export const ShortcodeService = {
     // Combine all data
     const combinedData = students.map(s => {
       const balance = studentBalances[s.id] || { due: 0, paid: 0 };
-      
+
       const classStudentsMarks = marks.filter(m => {
         const sm = students.find(st => st.id === m.student_id);
         return sm?.class_id === s.class_id;
@@ -305,10 +339,10 @@ export const ShortcodeService = {
       const allClassSubjects = Array.from(uniqueSubjectsMap.values());
 
       const studentMarks = marks.filter(m => m.student_id === s.id);
-      
+
       let totalObtained = 0;
       let totalFull = 0;
-      
+
       let pointsSum = 0;
       let numMainSubjects = 0;
       let hasFailedSub = false;
@@ -356,7 +390,7 @@ export const ShortcodeService = {
       });
 
       const percentage = totalFull > 0 ? (totalObtained / totalFull) * 100 : 0;
-      
+
       let grade = '-';
       let gpa = '-';
 
@@ -391,7 +425,7 @@ export const ShortcodeService = {
                 let avgGp = pointsSum / numMainSubjects;
                 if (avgGp > 5.0) avgGp = 5.0;
                 gpa = avgGp.toFixed(2);
-                
+
                 if (avgGp >= 5.0) grade = 'A+';
                 else if (avgGp >= 4.0) grade = 'A';
                 else if (avgGp >= 3.5) grade = 'A-';

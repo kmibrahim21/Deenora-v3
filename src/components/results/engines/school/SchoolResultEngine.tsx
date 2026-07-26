@@ -1029,11 +1029,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
             if (!sub.is_optional && combinedFailed) passStatus = false;
 
+            totalMarks += combinedObtained;
+            totalPossible += combinedFull;
+
             if (sub.is_optional) {
               if (gp > 2) pointsSum += (gp - 2);
             } else {
-              totalMarks += combinedObtained;
-              totalPossible += combinedFull;
               pointsSum += gp;
               numMainSubjects++;
             }
@@ -1061,18 +1062,17 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             const { gpa: gpStr } = getGradeInfo(pct, !failed);
             const gp = parseFloat(gpStr);
 
+            totalMarks += score;
+            totalPossible += full;
+
             if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
               if (!sub.is_optional) {
-                totalMarks += score;
-                totalPossible += full;
                 pointsSum += gp;
                 numMainSubjects++;
               } else {
                 if (gp > 2) pointsSum += (gp - 2);
               }
             } else {
-              totalMarks += score;
-              totalPossible += full;
               pointsSum += gp;
               numMainSubjects++;
             }
@@ -1106,36 +1106,33 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         if (a.pass_status && !b.pass_status) return -1;
         if (!a.pass_status && b.pass_status) return 1;
         
-        // If GPA exists (grading mode), sort by GPA then total marks
-        if (a.gpa !== '0.00' || b.gpa !== '0.00') {
+        // If both passed and grading system, sort by GPA first
+        if ((resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') && a.pass_status && b.pass_status) {
            const gpaDiff = parseFloat(b.gpa) - parseFloat(a.gpa);
            if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
         }
-        return b.total_marks - a.total_marks;
+        const marksDiff = b.total_marks - a.total_marks;
+        if (Math.abs(marksDiff) > 0.001) return marksDiff;
+
+        const rollA = parseInt(a.roll) || 0;
+        const rollB = parseInt(b.roll) || 0;
+        return rollA - rollB;
       });
 
       let currentRank = 1;
-      let lastRank = 1;
       const ranked = sortedRanked.map((item, idx) => {
-        let rank = currentRank;
         if (idx > 0) {
           const prev = sortedRanked[idx - 1];
-          if (
+          const isTie = (
             prev.pass_status === item.pass_status &&
             prev.gpa === item.gpa &&
-            prev.total_marks === item.total_marks
-          ) {
-            rank = lastRank;
-          } else {
-            rank = currentRank;
-            lastRank = currentRank;
+            Math.abs(prev.total_marks - item.total_marks) < 0.001
+          );
+          if (!isTie) {
+            currentRank++;
           }
-        } else {
-          rank = currentRank;
-          lastRank = currentRank;
         }
-        currentRank++;
-        return { ...item, rank };
+        return { ...item, rank: currentRank };
       });
 
       setRankingData(ranked);
@@ -1258,18 +1255,17 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         const { gpa: gpStr } = getGradeInfo(pct, !failed);
         const gp = parseFloat(gpStr);
 
+        totalMarks += obtained;
+        totalPossible += full;
+
         if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
           if (!s.is_optional) {
-            totalMarks += obtained;
-            totalPossible += full;
             pointsSum += gp;
             numMainSubjects++;
           } else {
             if (gp > 2) pointsSum += (gp - 2);
           }
         } else {
-          totalMarks += obtained;
-          totalPossible += full;
           pointsSum += gp;
           numMainSubjects++;
         }

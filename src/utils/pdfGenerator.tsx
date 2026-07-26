@@ -358,6 +358,14 @@ export const generateClassResultPDF = async (
     onProgress?: (progress: number) => void
 ) => {
     onProgress?.(5);
+
+    let configObj = madrasah?.config_json as any;
+    if (typeof configObj === 'string') {
+        try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
+    }
+    const config = (typeof configObj === 'object' && configObj !== null) ? configObj : {};
+    const resultSystem = config.result_system || 'grading';
+
     // Pre-calculate totals, GPA, rank
     const calculatedStudents = students.map((student, sIdx) => {
         const studentMarks = marksData[student.id] || {};
@@ -367,13 +375,6 @@ export const generateClassResultPDF = async (
 
         let pointsSum = 0;
         let numMainSubjects = 0;
-
-        let configObj = madrasah?.config_json as any;
-        if (typeof configObj === 'string') {
-            try { configObj = JSON.parse(configObj); } catch (e) { configObj = {}; }
-        }
-        const config = (typeof configObj === 'object' && configObj !== null) ? configObj : {};
-        const resultSystem = config.result_system || 'grading';
 
         const processedSubjectIds = new Set<string>();
 
@@ -447,11 +448,12 @@ export const generateClassResultPDF = async (
 
                 if (combinedFailed && !s.is_optional) hasFailed = true;
 
+                total += combinedObtained;
+                totalPossible += combinedFull;
+
                 if (s.is_optional) {
                     if (gp > 2) pointsSum += (gp - 2);
                 } else {
-                    total += combinedObtained;
-                    totalPossible += combinedFull;
                     pointsSum += gp;
                     numMainSubjects++;
                 }
@@ -491,18 +493,17 @@ export const generateClassResultPDF = async (
                         else gp = 1.00;
                     }
 
+                    total += markVal;
+                    totalPossible += fullMarkValue;
+
                     if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
                         if (!isOptional) {
-                            total += markVal;
-                            totalPossible += fullMarkValue;
                             pointsSum += gp;
                             numMainSubjects++;
                         } else if (gp > 2) {
                             pointsSum += (gp - 2);
                         }
                     } else {
-                        total += markVal;
-                        totalPossible += fullMarkValue;
                         pointsSum += gp;
                         numMainSubjects++;
                     }
@@ -564,33 +565,31 @@ export const generateClassResultPDF = async (
     calculatedStudents.sort((a, b) => {
         if (a._hasFailed && !b._hasFailed) return 1;
         if (!a._hasFailed && b._hasFailed) return -1;
-        if (a._gpa !== '0.00' || b._gpa !== '0.00') {
+        if ((resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') && !a._hasFailed && !b._hasFailed) {
             const gpaDiff = parseFloat(b._gpa) - parseFloat(a._gpa);
             if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
         }
-        return b._total - a._total; // Highest total first
+        const totalDiff = b._total - a._total;
+        if (Math.abs(totalDiff) > 0.001) return totalDiff;
+        const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
+        const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || 0 : (b.roll || 0);
+        return rollA - rollB;
     });
 
     let currentRank = 1;
-    let lastRank = 1;
     calculatedStudents.forEach((std, index) => {
         if (index > 0) {
             const prev = calculatedStudents[index - 1];
-            if (
+            const isTie = (
                 prev._hasFailed === std._hasFailed &&
                 prev._gpa === std._gpa &&
-                prev._total === std._total
-            ) {
-                std._rank = lastRank;
-            } else {
-                std._rank = currentRank;
-                lastRank = currentRank;
+                Math.abs(prev._total - std._total) < 0.001
+            );
+            if (!isTie) {
+                currentRank++;
             }
-        } else {
-            std._rank = currentRank;
-            lastRank = currentRank;
         }
-        currentRank++;
+        std._rank = currentRank;
     });
 
     // Sort back by roll for the sheet

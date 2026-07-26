@@ -12,26 +12,31 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
     const isBn = lang === 'bn';
     
     const calculatedData = reportData.map(item => {
-        const late = item.late || item.late_days || 0;
-        const present = item.present_days || 0;
-        const total = item.total_days || 0;
-        const absent = item.absent_days || 0;
-        const holiday = item.holiday_days || 0;
-        const leave = item.leave_days || 0;
-        const pct = (total - holiday) > 0 ? Math.round(((present + late) / (total - holiday)) * 100) : 0;
-        return { ...item, late, present, absent, total, holiday, leave, pct };
+        const late = Number(item.late ?? item.late_days ?? 0);
+        const present = Number(item.present ?? item.present_days ?? 0);
+        const total = Number(item.total ?? item.total_days ?? 0);
+        const absent = Number(item.absent ?? item.absent_days ?? 0);
+        const holiday = Number(item.holiday ?? item.holiday_days ?? 0);
+        const leave = Number(item.leave ?? item.leave_days ?? 0);
+        const halfDay = Number(item.half_day ?? item.half_days ?? 0);
+
+        const effectiveWorkingDays = Math.max(0, total - holiday);
+        const attendedDays = present + late + (halfDay * 0.5);
+        const pct = effectiveWorkingDays > 0 ? Math.min(100, Math.max(0, Math.round((attendedDays / effectiveWorkingDays) * 100))) : 0;
+
+        return { ...item, late, present, absent, total, holiday, leave, halfDay, pct };
     });
 
     // Sort by percentage to calculate rank
     calculatedData.sort((a, b) => b.pct - a.pct);
     let currentRank = 1;
     calculatedData.forEach((item, index) => {
-        if (index > 0 && item.pct === calculatedData[index - 1].pct) {
-            item.rank = calculatedData[index - 1].rank;
-        } else {
-            item.rank = currentRank;
+        if (index > 0) {
+            if (item.pct !== calculatedData[index - 1].pct) {
+                currentRank++;
+            }
         }
-        currentRank++;
+        item.rank = currentRank;
     });
 
     // Sort back by class serial then roll
@@ -103,9 +108,9 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                         <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                                             <td style={tdStyle}>{item.roll || '-'}</td>
                                             <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 'bold' }}>{item.student_name}</td>
-                                            <td style={tdStyle}>{item.total_days}</td>
-                                            <td style={{ ...tdStyle, color: '#16a34a', fontWeight: 'bold' }}>{item.present_days}</td>
-                                            <td style={{ ...tdStyle, color: '#dc2626' }}>{item.absent_days}</td>
+                                            <td style={tdStyle}>{item.total}</td>
+                                            <td style={{ ...tdStyle, color: '#16a34a', fontWeight: 'bold' }}>{item.present}</td>
+                                            <td style={{ ...tdStyle, color: '#dc2626' }}>{item.absent}</td>
                                             <td style={{ ...tdStyle, color: '#d97706' }}>{item.late}</td>
                                             <td style={{ ...tdStyle, color: '#6366f1' }}>{item.leave}</td>
                                             <td style={{ ...tdStyle, color: '#64748b' }}>{item.holiday}</td>

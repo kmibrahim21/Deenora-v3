@@ -313,28 +313,37 @@ const BefaqFinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack
         };
       });
 
-      // Sort by Total (Rank)
-      processed.sort((a, b) => parseFloat(b.total) - parseFloat(a.total));
+      // Sort by Pass status then Total Marks (Rank)
+      processed.sort((a, b) => {
+        const failedA = a.division === 'রাসিব';
+        const failedB = b.division === 'রাসিব';
+        if (!failedA && failedB) return -1;
+        if (failedA && !failedB) return 1;
+
+        const totalDiff = parseFloat(b.total) - parseFloat(a.total);
+        if (Math.abs(totalDiff) > 0.001) return totalDiff;
+
+        const rollA = parseInt(a.roll) || 0;
+        const rollB = parseInt(b.roll) || 0;
+        return rollA - rollB;
+      });
       
-      // Add Rank with tie-handling
+      // Add Rank with tie-handling (Dense Ranking)
       let currentRank = 1;
-      let lastRank = 1;
       const ranked = processed.map((p, i) => {
-        let rank = currentRank;
         if (i > 0) {
           const prev = processed[i - 1];
-          if (parseFloat(prev.total) === parseFloat(p.total)) {
-            rank = lastRank;
-          } else {
-            rank = currentRank;
-            lastRank = currentRank;
+          const failedPrev = prev.division === 'রাসিব';
+          const failedP = p.division === 'রাসিব';
+          const isTie = (
+            failedPrev === failedP &&
+            Math.abs(parseFloat(prev.total) - parseFloat(p.total)) < 0.001
+          );
+          if (!isTie) {
+            currentRank++;
           }
-        } else {
-          rank = currentRank;
-          lastRank = currentRank;
         }
-        currentRank++;
-        return { ...p, rank };
+        return { ...p, rank: currentRank };
       });
       
       setCalculatedData(ranked);

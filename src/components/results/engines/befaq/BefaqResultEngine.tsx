@@ -2684,22 +2684,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                             });
 
                             let currentRank = 1;
-                            let lastRank = 1;
                             return sortedStds.map((std, index) => {
-                                let rank = currentRank;
                                 if (index > 0) {
                                     const prev = sortedStds[index - 1];
-                                    if (prev.totalObtained === std.totalObtained && prev.failed === std.failed) {
-                                        rank = lastRank;
-                                    } else {
-                                        rank = currentRank;
-                                        lastRank = currentRank;
+                                    const isTie = prev.totalObtained === std.totalObtained && prev.failed === std.failed;
+                                    if (!isTie) {
+                                        currentRank++;
                                     }
-                                } else {
-                                    rank = currentRank;
-                                    lastRank = currentRank;
                                 }
-                                currentRank++;
+                                const rank = currentRank;
 
                                 return (
                                     <tr key={std.id} className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800/50' : 'border-slate-50'} last:border-0`}>

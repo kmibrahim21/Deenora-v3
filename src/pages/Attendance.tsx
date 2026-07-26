@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Class, Student, Language, Attendance as AttendanceType, Profile } from 'types';
-import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, XCircle, Clock, Loader2, ArrowLeft, ChevronDown, Save, Calendar, BarChart3, Send, AlertTriangle, FileText, CheckCircle2, AlertCircle, RefreshCw, Settings, TrendingDown, Info, Plus, Trash2, MessageSquare, Download, Phone, CalendarOff, Search, LayoutGrid, ListFilter, Trophy } from 'lucide-react';
 import { getBengaliDate, getHijriDate, getEventsForDate, getTodayDateString, getTodayMonthString } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { t } from 'translations';
@@ -60,6 +60,84 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [reportData, setReportData] = useState<any[]>([]);
   const [reportType, setReportType] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   const [reportView, setReportView] = useState<'list' | 'analytics'>('list');
+  const [reportSearchQuery, setReportSearchQuery] = useState('');
+  const [reportDisplayMode, setReportDisplayMode] = useState<'table' | 'cards'>('table');
+
+  const getRankBadgeLabel = (rank: number, l: Language) => {
+    if (l !== 'bn') return `#${rank}`;
+    const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    const toBn = (n: number) => String(n).replace(/[0-9]/g, d => bnDigits[parseInt(d)]);
+    if (rank === 1) return '১ম';
+    if (rank === 2) return '২য়';
+    if (rank === 3) return '৩য়';
+    if (rank === 4) return '৪র্থ';
+    if (rank === 5) return '৫ম';
+    if (rank === 6) return '৬ষ্ঠ';
+    if (rank === 7) return '৭ম';
+    if (rank === 8) return '৮ম';
+    if (rank === 9) return '৯ম';
+    if (rank === 10) return '১০ম';
+    return `${toBn(rank)}তম`;
+  };
+
+  const processedReportData = useMemo(() => {
+    if (!reportData || reportData.length === 0) return [];
+
+    const withPct = reportData.map(item => {
+      const late = Number(item.late_days || item.late || 0);
+      const present = Number(item.present_days || item.present || 0);
+      const half = Number(item.half_days || item.half || 0);
+      const leave = Number(item.leave_days || item.leave || 0);
+      const absent = Number(item.absent_days || item.absent || 0);
+      const total = Number(item.total_days || item.total || 0);
+
+      const attended = present + late + (half * 0.5);
+      const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((attended / total) * 100))) : 0;
+      
+      const cls = classes.find(c => c.id === item.class_id);
+      return {
+        ...item,
+        late_days: late,
+        present_days: present,
+        half_days: half,
+        leave_days: leave,
+        absent_days: absent,
+        total_days: total,
+        pct,
+        class_name: cls?.class_name || item.class_name || ''
+      };
+    });
+
+    // Dense Ranking (1, 2, 2, 3) based on percentage descending
+    const sortedByPct = [...withPct].sort((a, b) => b.pct - a.pct);
+    let currentRank = 1;
+    sortedByPct.forEach((item, index) => {
+      if (index > 0) {
+        if (item.pct !== sortedByPct[index - 1].pct) {
+          currentRank++;
+        }
+      }
+      item.rank = currentRank;
+    });
+
+    const rankMap = new Map<string, number>();
+    sortedByPct.forEach(item => rankMap.set(item.student_id, item.rank));
+
+    return withPct.map(item => ({
+      ...item,
+      rank: rankMap.get(item.student_id) || 1
+    }));
+  }, [reportData, classes]);
+
+  const filteredReportData = useMemo(() => {
+    if (!reportSearchQuery.trim()) return processedReportData;
+    const q = reportSearchQuery.toLowerCase().trim();
+    return processedReportData.filter(item => 
+      item.student_name?.toLowerCase().includes(q) || 
+      String(item.roll || '').includes(q) ||
+      item.class_name?.toLowerCase().includes(q)
+    );
+  }, [processedReportData, reportSearchQuery]);
   const [selectedYear, setSelectedYear] = useState(activeYear?.start_date ? activeYear.start_date.slice(0, 4) : new Date().getFullYear().toString());
   const [reportDate, setReportDate] = useState(getTodayDateString());
   const [dailyAbsentees, setDailyAbsentees] = useState<any[]>([]);
@@ -422,7 +500,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
            setDailyAbsentees(cachedDaily || []);
         } else {
            const cachedReport = await CacheService.getCachedData('attendance', madrasah?.id || '');
-           const filtered = cachedReport.filter(r => r.class_id === cid);
+           const filtered = (cid && cid !== 'all') ? (cachedReport || []).filter((r: any) => r.class_id === cid) : (cachedReport || []);
            setReportData(filtered);
         }
         setLoading(false);
@@ -567,8 +645,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
         if (reportType === 'monthly') {
             startDate = `${selectedMonth}-01`;
-            const [year, month] = selectedMonth.split('-');
-            endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0];
+            const [yearStr, monthStr] = selectedMonth.split('-');
+            const y = parseInt(yearStr, 10);
+            const m = parseInt(monthStr, 10);
+            const lastDay = new Date(y, m, 0).getDate();
+            endDate = `${yearStr}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         } else {
             startDate = `${selectedYear}-01-01`;
             endDate = `${selectedYear}-12-31`;
@@ -585,30 +666,75 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         const { data: activeStudents, error: stdError } = await stdQuery;
         if (stdError) throw stdError;
 
-        // Fetch attendance records for date range
-        let attQuery = supabase
-          .from('attendance')
-          .select('student_id, status, date, session')
-          .eq('institution_id', madrasah?.id)
-          .gte('date', startDate)
-          .lte('date', endDate);
-        if (cid && cid !== 'all') {
-          attQuery = attQuery.eq('class_id', cid);
+        const activeStudentIds = activeStudents?.map((s: any) => s.id) || [];
+        if (activeStudentIds.length === 0) {
+          setReportData([]);
+          setLoading(false);
+          return;
         }
-        if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
-          attQuery = attQuery.eq('session', selectedSession);
+
+        // Fetch attendance records in paginated batches of 1000 to prevent PostgREST row truncation
+        let allAttRecords: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+          let attQuery = supabase
+            .from('attendance')
+            .select('student_id, status, date, session, class_id')
+            .eq('institution_id', madrasah?.id)
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+          if (cid && cid !== 'all') {
+            attQuery = attQuery.in('student_id', activeStudentIds);
+          }
+          if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+            attQuery = attQuery.eq('session', selectedSession);
+          }
+
+          const { data: pageData, error: attError } = await attQuery;
+          if (attError) throw attError;
+
+          if (pageData && pageData.length > 0) {
+            allAttRecords = allAttRecords.concat(pageData);
+            if (pageData.length < pageSize) {
+              hasMore = false;
+            } else {
+              page++;
+            }
+          } else {
+            hasMore = false;
+          }
         }
-        const { data: attRecords, error: attError } = await attQuery;
-        if (attError) throw attError;
 
         // Perform aggregation client-side so 'leave_days' and 'late_days' are 100% supported
         const attendanceMap: Record<string, { present: number; absent: number; late: number; leave: number; half_day: number; total: number }> = {};
+        const studentClassMap: Record<string, string> = {};
+
         activeStudents?.forEach((s: any) => {
           attendanceMap[s.id] = { present: 0, absent: 0, late: 0, leave: 0, half_day: 0, total: 0 };
+          if (s.id && s.class_id) {
+            studentClassMap[s.id] = s.class_id;
+          }
         });
 
         const studentDailyStatus: Record<string, Record<string, string[]>> = {};
-        attRecords?.forEach((r: any) => {
+        const classUniqueDates: Record<string, Set<string>> = {};
+        const allUniqueDates = new Set<string>();
+
+        allAttRecords.forEach((r: any) => {
+          if (r.date) {
+            allUniqueDates.add(r.date);
+            const cId = r.class_id || studentClassMap[r.student_id] || 'default';
+            if (!classUniqueDates[cId]) {
+              classUniqueDates[cId] = new Set<string>();
+            }
+            classUniqueDates[cId].add(r.date);
+          }
+
           if (!studentDailyStatus[r.student_id]) {
             studentDailyStatus[r.student_id] = {};
           }
@@ -618,31 +744,52 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           studentDailyStatus[r.student_id][r.date].push(r.status);
         });
 
-        Object.entries(studentDailyStatus).forEach(([studentId, dates]) => {
-          const counts = attendanceMap[studentId];
+        activeStudents?.forEach((s: any) => {
+          const studentDates = studentDailyStatus[s.id] || {};
+          const counts = attendanceMap[s.id];
           if (!counts) return;
 
-          Object.entries(dates).forEach(([date, statuses]) => {
-            let finalStatus = 'absent';
-            if (statuses.includes('present')) {
-              finalStatus = 'present';
-            } else if (statuses.includes('late')) {
-              finalStatus = 'late';
-            } else if (statuses.includes('half_day')) {
-              finalStatus = 'half_day';
-            } else if (statuses.includes('leave')) {
-              finalStatus = 'leave';
-            } else if (statuses.includes('absent')) {
-              finalStatus = 'absent';
-            }
+          // Find relevant dates for student's class + any dates where this student has records
+          const baseClassDates = (s.class_id && classUniqueDates[s.class_id] && classUniqueDates[s.class_id].size > 0)
+            ? classUniqueDates[s.class_id]
+            : allUniqueDates;
 
-            counts.total++;
-            if (finalStatus === 'present') counts.present++;
-            else if (finalStatus === 'late') counts.late++;
-            else if (finalStatus === 'half_day') counts.half_day++;
-            else if (finalStatus === 'leave') counts.leave++;
-            else if (finalStatus === 'absent') counts.absent++;
-          });
+          const sClassDates = new Set<string>([
+            ...Array.from(baseClassDates),
+            ...Object.keys(studentDates)
+          ]);
+          const totalWorkingDays = sClassDates.size;
+
+          if (totalWorkingDays > 0) {
+            counts.total = totalWorkingDays;
+            sClassDates.forEach((date) => {
+              const statuses = studentDates[date];
+              if (!statuses || statuses.length === 0) {
+                counts.absent++;
+              } else {
+                let finalStatus = 'absent';
+                if (statuses.includes('present')) {
+                  finalStatus = 'present';
+                } else if (statuses.includes('late')) {
+                  finalStatus = 'late';
+                } else if (statuses.includes('half_day')) {
+                  finalStatus = 'half_day';
+                } else if (statuses.includes('leave')) {
+                  finalStatus = 'leave';
+                } else if (statuses.includes('absent')) {
+                  finalStatus = 'absent';
+                }
+
+                if (finalStatus === 'present') counts.present++;
+                else if (finalStatus === 'late') counts.late++;
+                else if (finalStatus === 'half_day') counts.half_day++;
+                else if (finalStatus === 'leave') counts.leave++;
+                else counts.absent++;
+              }
+            });
+          } else {
+            counts.total = 0;
+          }
         });
 
         const finalData = activeStudents?.map((s: any) => {
@@ -1217,8 +1364,12 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setDownloadingReport(true);
     setDownloadProgress(0);
     try {
-        const monthLabel = reportType === 'monthly' ? new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' }) : '';
-        await generateAttendanceReportPDF(reportData, madrasah, selectedClass.class_name, monthLabel, lang, (p) => setDownloadProgress(p));
+        const titleLabel = reportType === 'monthly'
+          ? new Date(parseInt(selectedMonth.split('-')[0]), parseInt(selectedMonth.split('-')[1]) - 1).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' })
+          : reportType === 'yearly'
+          ? (lang === 'bn' ? `বাৎসরিক রিপোর্ট (${selectedYear})` : `Yearly Report (${selectedYear})`)
+          : (lang === 'bn' ? `দৈনিক রিপোর্ট (${reportDate})` : `Daily Report (${reportDate})`);
+        await generateAttendanceReportPDF(reportData, madrasah, selectedClass.class_name, titleLabel, lang, (p) => setDownloadProgress(p));
     } catch (err: any) {
         console.error('Failed to generate PDF:', err);
     } finally {
@@ -1401,12 +1552,23 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     ) : (
                         <div className="relative">
                             <select className={`w-full h-14 pl-14 pr-6 border-2 rounded-2xl font-black outline-none focus:border-[#2563EB]/20 transition-all appearance-none ${isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
-                                {(activeYear ? 
-                                  Array.from({ length: parseInt(activeYear.end_date.slice(0, 4)) - parseInt(activeYear.start_date.slice(0, 4)) + 1 }, (_, i) => parseInt(activeYear.start_date.slice(0, 4)) + i) :
-                                  Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
-                                ).map(y => (
-                                    <option key={y} value={y}>{y}</option>
-                                ))}
+                                {(() => {
+                                    const currentY = new Date().getFullYear();
+                                    const yearsSet = new Set<number>();
+                                    yearsSet.add(currentY);
+                                    yearsSet.add(currentY - 1);
+                                    yearsSet.add(currentY - 2);
+                                    yearsSet.add(currentY - 3);
+                                    yearsSet.add(currentY + 1);
+                                    if (activeYear?.start_date && activeYear?.end_date) {
+                                        const startY = parseInt(activeYear.start_date.slice(0, 4));
+                                        const endY = parseInt(activeYear.end_date.slice(0, 4));
+                                        for (let y = startY; y <= endY; y++) yearsSet.add(y);
+                                    }
+                                    return Array.from(yearsSet).sort((a, b) => b - a).map(y => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ));
+                                })()}
                             </select>
                             <Calendar className="absolute left-5 top-4 text-[#2563EB]" size={22}/>
                             <ChevronDown className="absolute right-5 top-4 text-slate-400 pointer-events-none" size={20}/>
@@ -1795,22 +1957,53 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
               </div>
             ) : (
               <div>
-                <div className="flex flex-wrap items-center gap-2 mb-6">
-                  {!(selectedClass?.id === 'all') && (
-                  <div className="flex flex-1 gap-2 min-w-[200px]">
-                      <button onClick={() => setReportView('list')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button onClick={() => setReportView('list')} className={`flex-1 sm:flex-initial h-11 sm:h-12 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'list' ? 'bg-[#2563EB] text-white shadow-md' : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-400')}`}>
                         {lang === 'bn' ? 'লিস্ট ভিউ' : 'List View'}
                       </button>
-                      <button onClick={() => setReportView('analytics')} className={`flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>
+                      <button onClick={() => setReportView('analytics')} className={`flex-1 sm:flex-initial h-11 sm:h-12 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${reportView === 'analytics' ? 'bg-[#2563EB] text-white shadow-md' : (isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-400')}`}>
                         {lang === 'bn' ? 'অ্যানালিটিক্স' : 'Analytics'}
                       </button>
                   </div>
+
+                  {reportView === 'list' && reportData.length > 0 && (
+                    <div className="flex items-center gap-2 w-full sm:w-auto flex-1 max-w-md">
+                      <div className={`relative flex items-center flex-1 rounded-xl border px-3 py-1.5 h-11 sm:h-12 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <Search size={16} className="text-slate-400 mr-2 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder={lang === 'bn' ? 'শিক্ষার্থী / রোল খুঁজুন...' : 'Search student or roll...'}
+                          value={reportSearchQuery}
+                          onChange={e => setReportSearchQuery(e.target.value)}
+                          className="bg-transparent border-none outline-none text-xs font-bold w-full text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+                        />
+                      </div>
+
+                      <div className={`flex rounded-xl p-1 border h-11 sm:h-12 shrink-0 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+                        <button
+                          onClick={() => setReportDisplayMode('table')}
+                          title={lang === 'bn' ? 'টেবিল ভিউ' : 'Table View'}
+                          className={`px-2.5 sm:px-3 rounded-lg flex items-center justify-center transition-all ${reportDisplayMode === 'table' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                        >
+                          <ListFilter size={18} />
+                        </button>
+                        <button
+                          onClick={() => setReportDisplayMode('cards')}
+                          title={lang === 'bn' ? 'কার্ড ভিউ' : 'Cards View'}
+                          className={`px-2.5 sm:px-3 rounded-lg flex items-center justify-center transition-all ${reportDisplayMode === 'cards' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                        >
+                          <LayoutGrid size={18} />
+                        </button>
+                      </div>
+                    </div>
                   )}
+
                   {reportData.length > 0 && selectedClass && (
                     <button 
                       onClick={handleDownloadReportPDF} 
                       disabled={downloadingReport}
-                      className={`h-12 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shrink-0 ${isDark ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'} ${selectedClass?.id === 'all' ? 'w-full' : ''}`}
+                      className={`w-full sm:w-auto h-11 sm:h-12 px-5 sm:px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shrink-0 ${isDark ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'}`}
                     >
                       {downloadingReport ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                       {lang === 'bn' ? 'ডাউনলোড PDF' : 'Download PDF'}
@@ -1818,7 +2011,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   )}
                 </div>
 
-                {reportView === 'analytics' || selectedClass?.id === 'all' ? (
+                {reportView === 'analytics' ? (
                 <div className="space-y-6 animate-in fade-in">
                   {reportData.length > 0 ? (
                     <>
@@ -1878,45 +2071,133 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 animate-in slide-in-from-bottom-5">
-                    {reportData.length > 0 ? reportData.map((item: any) => {
-                        const late = item.late_days || 0;
-                        const pct = item.total_days > 0 ? Math.round(((item.present_days + late) / item.total_days) * 100) : 0;
-                        
-                        return (
-                            <div key={item.student_id} className={`p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border shadow-lg space-y-3 sm:space-y-4 group ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/95 border-white'}`}>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4 min-w-0">
-                                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center font-black border shadow-inner shrink-0 ${isDark ? 'bg-slate-900 text-[#A179FF] border-slate-700' : 'bg-slate-50 text-[#A179FF] border-slate-100'}`}>#{item.roll || '-'}</div>
-                                        <div className="min-w-0">
-                                            <h5 className={`font-black font-noto text-sm sm:text-[17px] truncate leading-tight mb-0 sm:mb-0.5 ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.student_name}</h5>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Attendance Status</p>
+                <div className="space-y-4 animate-in slide-in-from-bottom-5">
+                    {filteredReportData.length > 0 ? (
+                      reportDisplayMode === 'table' ? (
+                        <div className={`rounded-2xl sm:rounded-3xl border overflow-hidden shadow-lg ${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'}`}>
+                          <div className="overflow-x-auto scrollbar-thin">
+                            <table className="w-full text-left border-collapse min-w-[680px]">
+                              <thead>
+                                <tr className={`border-b text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${isDark ? 'bg-slate-800/80 text-slate-300 border-slate-700' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                  <th className="py-3 sm:py-4 px-2.5 sm:px-4 text-center whitespace-nowrap">{lang === 'bn' ? 'মেধাস্থান' : 'Rank'}</th>
+                                  <th className="py-3 sm:py-4 px-2.5 sm:px-4 text-center whitespace-nowrap">{lang === 'bn' ? 'রোল' : 'Roll'}</th>
+                                  <th className="py-3 sm:py-4 px-2.5 sm:px-4 whitespace-nowrap">{lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name'}</th>
+                                  {selectedClass?.id === 'all' && <th className="py-3 sm:py-4 px-2.5 sm:px-4 whitespace-nowrap">{lang === 'bn' ? 'শ্রেণি' : 'Class'}</th>}
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center whitespace-nowrap">{lang === 'bn' ? 'মোট দিন' : 'Total'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{lang === 'bn' ? 'উপস্থিত' : 'Present'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-red-600 dark:text-red-400 whitespace-nowrap">{lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-amber-600 dark:text-amber-400 whitespace-nowrap">{lang === 'bn' ? 'বিলম্ব' : 'Late'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{lang === 'bn' ? 'ছুটি' : 'Leave'}</th>
+                                  <th className="py-3 sm:py-4 px-2.5 sm:px-4 text-center whitespace-nowrap">{lang === 'bn' ? 'শতকরা' : 'Percentage'}</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[11px] sm:text-xs font-bold">
+                                {filteredReportData.map((item) => {
+                                  const rankLabel = getRankBadgeLabel(item.rank, lang);
+                                  const isTop3 = item.rank <= 3;
+                                  return (
+                                    <tr key={item.student_id} className={`hover:bg-blue-50/40 dark:hover:bg-slate-800/50 transition-colors ${item.rank === 1 ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}>
+                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center whitespace-nowrap">
+                                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full font-black text-[10px] sm:text-xs ${
+                                          item.rank === 1 ? 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-300' :
+                                          item.rank === 2 ? 'bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:text-slate-200' :
+                                          item.rank === 3 ? 'bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-300' :
+                                          'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                        }`}>
+                                          {isTop3 && <Trophy size={11} className={item.rank === 1 ? 'text-amber-600' : item.rank === 2 ? 'text-slate-500' : 'text-orange-600'} />}
+                                          {rankLabel}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center font-black text-slate-500 whitespace-nowrap">#{item.roll || '-'}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">{item.student_name}</td>
+                                      {selectedClass?.id === 'all' && (
+                                        <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-slate-500 dark:text-slate-400 text-[10px] sm:text-[11px] font-bold whitespace-nowrap">
+                                          {item.class_name || '-'}
+                                        </td>
+                                      )}
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-slate-700 dark:text-slate-300 font-black">{item.total_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-emerald-600 dark:text-emerald-400 font-black">{item.present_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-red-600 dark:text-red-400 font-black">{item.absent_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-amber-600 dark:text-amber-400 font-black">{item.late_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-indigo-600 dark:text-indigo-400 font-black">{item.leave_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center whitespace-nowrap">
+                                        <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                                          <div className="w-12 sm:w-16 h-1.5 sm:h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700 hidden sm:block">
+                                            <div
+                                              className={`h-full transition-all duration-500 ${item.pct >= 90 ? 'bg-emerald-500' : item.pct >= 75 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                              style={{ width: `${item.pct}%` }}
+                                            />
+                                          </div>
+                                          <span className={`font-black text-xs sm:text-sm ${item.pct >= 90 ? 'text-emerald-600 dark:text-emerald-400' : item.pct >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                                            {item.pct}%
+                                          </span>
                                         </div>
-                                    </div>
-                                    <div className={`text-2xl font-black ${pct >= 90 ? 'text-green-500' : pct >= 75 ? 'text-amber-500' : 'text-red-500'}`}>{pct}%</div>
-                                </div>
-                                <div className={`w-full h-2 sm:h-3 rounded-full overflow-hidden border flex shadow-inner ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                                    <div className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)]" style={{ width: `${pct}%` }}></div>
-                                </div>
-                                <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/50 border-slate-50'}`}><p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">{lang === 'bn' ? 'মোট' : 'Total'}</p><p className={`font-black text-sm ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.total_days}</p></div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-green-900/10 border-green-900/20' : 'bg-green-50/50 border-green-50'}`}><p className="text-[8px] font-black text-green-400 uppercase mb-0.5">{t('mark_present', lang, madrasah?.institution_type)}</p><p className="font-black text-green-600 text-sm">{item.present_days}</p></div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[8px] font-black text-red-400 uppercase mb-0.5">{t('mark_absent', lang, madrasah?.institution_type)}</p><p className="font-black text-red-600 text-sm">{item.absent_days}</p></div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-amber-900/10 border-amber-900/20' : 'bg-amber-50/50 border-amber-50'}`}>
-                                      <p className="text-[8px] font-black text-amber-400 uppercase mb-0.5">{t('mark_late', lang, madrasah?.institution_type)}</p>
-                                      <p className="font-black text-amber-600 text-sm">{late}</p>
-                                   </div>
-                                   <div className={`p-2.5 rounded-xl text-center border ${isDark ? 'bg-indigo-900/10 border-indigo-900/20' : 'bg-indigo-50/50 border-indigo-50'}`}>
-                                      <p className="text-[8px] font-black text-indigo-400 uppercase mb-0.5">{t('mark_leave', lang, madrasah?.institution_type)}</p>
-                                      <p className="font-black text-indigo-600 text-sm">{item.leave_days || 0}</p>
-                                   </div>
-                                </div>
-                            </div>
-                        );
-                    }) : <div className={`text-center py-20 rounded-[3rem] border-2 border-dashed mx-2 flex flex-col items-center ${isDark ? 'bg-slate-800/20 border-slate-700' : 'bg-white/10 border-white/20'}`}>
-                            <FileText size={40} className="text-slate-400/20 mb-4" />
-                            <p className="text-slate-400/40 uppercase text-xs font-black tracking-[0.2em]">No Attendance Records</p>
-                         </div>}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                          {filteredReportData.map((item) => {
+                            const rankLabel = getRankBadgeLabel(item.rank, lang);
+                            const isTop3 = item.rank <= 3;
+                            return (
+                              <div key={item.student_id} className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-[2rem] border shadow-md sm:shadow-lg space-y-2.5 sm:space-y-3 relative group transition-all hover:shadow-xl ${isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                                          <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center font-black border shadow-inner shrink-0 text-xs sm:text-base ${isDark ? 'bg-slate-900 text-[#A179FF] border-slate-700' : 'bg-slate-50 text-[#A179FF] border-slate-100'}`}>#{item.roll || '-'}</div>
+                                          <div className="min-w-0">
+                                              <h5 className={`font-black font-noto text-xs sm:text-[16px] truncate leading-tight mb-0.5 ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.student_name}</h5>
+                                              {selectedClass?.id === 'all' && (
+                                                <p className="text-[9px] sm:text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider truncate">{item.class_name}</p>
+                                              )}
+                                              <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'উপস্থিতির তথ্য' : 'Attendance Status'}</p>
+                                          </div>
+                                      </div>
+                                      <div className="flex flex-col items-end shrink-0 gap-0.5 sm:gap-1">
+                                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-black text-[10px] sm:text-[11px] shadow-sm ${
+                                            item.rank === 1 ? 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/60 dark:text-amber-200' :
+                                            item.rank === 2 ? 'bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:text-slate-200' :
+                                            item.rank === 3 ? 'bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/60 dark:text-orange-200' :
+                                            'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                                          }`}>
+                                            {isTop3 && <Trophy size={11} className={item.rank === 1 ? 'text-amber-600' : item.rank === 2 ? 'text-slate-500' : 'text-orange-600'} />}
+                                            {rankLabel} {lang === 'bn' ? 'মেধা' : 'Rank'}
+                                          </span>
+                                          <div className={`text-lg sm:text-xl font-black ${item.pct >= 90 ? 'text-emerald-500' : item.pct >= 75 ? 'text-amber-500' : 'text-red-500'}`}>{item.pct}%</div>
+                                      </div>
+                                  </div>
+                                  <div className={`w-full h-1.5 sm:h-2 rounded-full overflow-hidden border flex shadow-inner ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                                      <div className={`h-full transition-all duration-1000 ${item.pct >= 90 ? 'bg-gradient-to-r from-emerald-400 to-green-500' : item.pct >= 75 ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-gradient-to-r from-red-400 to-red-500'}`} style={{ width: `${item.pct}%` }}></div>
+                                  </div>
+                                  <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
+                                     <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-center border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/50 border-slate-100'}`}><p className="text-[7px] sm:text-[8px] font-black text-slate-400 uppercase mb-0.5 truncate">{lang === 'bn' ? 'মোট' : 'Total'}</p><p className={`font-black text-[11px] sm:text-xs ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.total_days}</p></div>
+                                     <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-center border ${isDark ? 'bg-emerald-900/10 border-emerald-900/20' : 'bg-emerald-50/50 border-emerald-50'}`}><p className="text-[7px] sm:text-[8px] font-black text-emerald-500 uppercase mb-0.5 truncate">{t('mark_present', lang, madrasah?.institution_type)}</p><p className="font-black text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-xs">{item.present_days}</p></div>
+                                     <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-center border ${isDark ? 'bg-red-900/10 border-red-900/20' : 'bg-red-50/50 border-red-50'}`}><p className="text-[7px] sm:text-[8px] font-black text-red-500 uppercase mb-0.5 truncate">{t('mark_absent', lang, madrasah?.institution_type)}</p><p className="font-black text-red-600 dark:text-red-400 text-[11px] sm:text-xs">{item.absent_days}</p></div>
+                                     <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-center border ${isDark ? 'bg-amber-900/10 border-amber-900/20' : 'bg-amber-50/50 border-amber-50'}`}>
+                                        <p className="text-[7px] sm:text-[8px] font-black text-amber-500 uppercase mb-0.5 truncate">{t('mark_late', lang, madrasah?.institution_type)}</p>
+                                        <p className="font-black text-amber-600 dark:text-amber-400 text-[11px] sm:text-xs">{item.late_days}</p>
+                                     </div>
+                                     <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-center border ${isDark ? 'bg-indigo-900/10 border-indigo-900/20' : 'bg-indigo-50/50 border-indigo-50'}`}>
+                                        <p className="text-[7px] sm:text-[8px] font-black text-indigo-500 uppercase mb-0.5 truncate">{t('mark_leave', lang, madrasah?.institution_type)}</p>
+                                        <p className="font-black text-indigo-600 dark:text-indigo-400 text-[11px] sm:text-xs">{item.leave_days}</p>
+                                     </div>
+                                  </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : (
+                      <div className={`text-center py-20 rounded-[3rem] border-2 border-dashed mx-2 flex flex-col items-center ${isDark ? 'bg-slate-800/20 border-slate-700' : 'bg-white/10 border-white/20'}`}>
+                          <FileText size={40} className="text-slate-400/20 mb-4" />
+                          <p className="text-slate-400/40 uppercase text-xs font-black tracking-[0.2em]">{lang === 'bn' ? 'কোনো তথ্য পাওয়া যায়নি' : 'No Records Found'}</p>
+                       </div>
+                    )}
                 </div>
               )}
               </div>

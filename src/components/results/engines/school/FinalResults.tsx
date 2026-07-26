@@ -378,28 +378,43 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         };
       });
 
-      // Sort by Total (Rank)
-      processed.sort((a, b) => parseFloat(b.total) - parseFloat(a.total));
+      // Sort by Pass Status, GPA, and Total Marks
+      processed.sort((a, b) => {
+        const failedA = a.grade === 'F' || parseFloat(a.gpa) === 0;
+        const failedB = b.grade === 'F' || parseFloat(b.gpa) === 0;
+        if (!failedA && failedB) return -1;
+        if (failedA && !failedB) return 1;
+
+        if (!failedA && !failedB && (resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school')) {
+          const gpaDiff = parseFloat(b.gpa) - parseFloat(a.gpa);
+          if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+        }
+
+        const totalDiff = parseFloat(b.total) - parseFloat(a.total);
+        if (Math.abs(totalDiff) > 0.001) return totalDiff;
+
+        const rollA = parseInt(a.roll) || 0;
+        const rollB = parseInt(b.roll) || 0;
+        return rollA - rollB;
+      });
       
-      // Add Rank with tie-handling
+      // Add Rank with tie-handling (Dense Ranking)
       let currentRank = 1;
-      let lastRank = 1;
       const ranked = processed.map((p, i) => {
-        let rank = currentRank;
         if (i > 0) {
           const prev = processed[i - 1];
-          if (parseFloat(prev.total) === parseFloat(p.total)) {
-            rank = lastRank;
-          } else {
-            rank = currentRank;
-            lastRank = currentRank;
+          const failedPrev = prev.grade === 'F' || parseFloat(prev.gpa) === 0;
+          const failedP = p.grade === 'F' || parseFloat(p.gpa) === 0;
+          const isTie = (
+            failedPrev === failedP &&
+            prev.gpa === p.gpa &&
+            Math.abs(parseFloat(prev.total) - parseFloat(p.total)) < 0.001
+          );
+          if (!isTie) {
+            currentRank++;
           }
-        } else {
-          rank = currentRank;
-          lastRank = currentRank;
         }
-        currentRank++;
-        return { ...p, rank };
+        return { ...p, rank: currentRank };
       });
       
       setCalculatedData(ranked);
