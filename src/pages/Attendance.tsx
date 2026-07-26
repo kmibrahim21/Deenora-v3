@@ -2078,48 +2078,73 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           <div className="overflow-x-auto scrollbar-thin">
                             <table className="w-full text-left border-collapse min-w-[680px]">
                               <thead>
-                                <tr className={`border-b text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${isDark ? 'bg-slate-800/80 text-slate-300 border-slate-700' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                <tr className={`border-b text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${isDark ? 'bg-slate-800 text-slate-100 border-slate-700' : 'bg-slate-100 text-slate-800 border-slate-300'}`}>
                                   <th className="py-3 sm:py-4 px-2.5 sm:px-4 text-center whitespace-nowrap">{lang === 'bn' ? 'মেধাস্থান' : 'Rank'}</th>
                                   <th className="py-3 sm:py-4 px-2.5 sm:px-4 text-center whitespace-nowrap">{lang === 'bn' ? 'রোল' : 'Roll'}</th>
                                   <th className="py-3 sm:py-4 px-2.5 sm:px-4 whitespace-nowrap">{lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name'}</th>
                                   {selectedClass?.id === 'all' && <th className="py-3 sm:py-4 px-2.5 sm:px-4 whitespace-nowrap">{lang === 'bn' ? 'শ্রেণি' : 'Class'}</th>}
                                   <th className="py-3 sm:py-4 px-2 sm:px-3 text-center whitespace-nowrap">{lang === 'bn' ? 'মোট দিন' : 'Total'}</th>
-                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{lang === 'bn' ? 'উপস্থিত' : 'Present'}</th>
-                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-red-600 dark:text-red-400 whitespace-nowrap">{lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}</th>
-                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-amber-600 dark:text-amber-400 whitespace-nowrap">{lang === 'bn' ? 'বিলম্ব' : 'Late'}</th>
-                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{lang === 'bn' ? 'ছুটি' : 'Leave'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{lang === 'bn' ? 'উপস্থিত' : 'Present'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-red-700 dark:text-red-400 whitespace-nowrap">{lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-amber-700 dark:text-amber-400 whitespace-nowrap">{lang === 'bn' ? 'বিলম্ব' : 'Late'}</th>
+                                  <th className="py-3 sm:py-4 px-2 sm:px-3 text-center text-indigo-700 dark:text-indigo-400 whitespace-nowrap">{lang === 'bn' ? 'ছুটি' : 'Leave'}</th>
                                   <th className="py-3 sm:py-4 px-2.5 sm:px-4 text-center whitespace-nowrap">{lang === 'bn' ? 'শতকরা' : 'Percentage'}</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[11px] sm:text-xs font-bold">
-                                {filteredReportData.map((item) => {
+                              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-[11px] sm:text-xs font-bold">
+                                {filteredReportData.map((item, index) => {
                                   const rankLabel = getRankBadgeLabel(item.rank, lang);
                                   const isTop3 = item.rank <= 3;
                                   return (
-                                    <tr key={item.student_id} className={`hover:bg-blue-50/40 dark:hover:bg-slate-800/50 transition-colors ${item.rank === 1 ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}>
+                                    <tr 
+                                      key={item.student_id} 
+                                      className={`hover:bg-blue-50/60 dark:hover:bg-slate-800/60 transition-colors ${
+                                        item.rank === 1 
+                                          ? 'bg-amber-50/40 dark:bg-amber-950/20' 
+                                          : index % 2 === 0 
+                                            ? 'bg-slate-50/60 dark:bg-slate-900/30' 
+                                            : 'bg-white dark:bg-slate-950/30'
+                                      }`}
+                                    >
                                       <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center whitespace-nowrap">
                                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full font-black text-[10px] sm:text-xs ${
-                                          item.rank === 1 ? 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-300' :
+                                          item.rank === 1 ? 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-300' :
                                           item.rank === 2 ? 'bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:text-slate-200' :
                                           item.rank === 3 ? 'bg-orange-100 text-orange-800 border border-orange-300 dark:bg-orange-900/50 dark:text-orange-300' :
-                                          'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                          'bg-slate-100 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
                                         }`}>
                                           {isTop3 && <Trophy size={11} className={item.rank === 1 ? 'text-amber-600' : item.rank === 2 ? 'text-slate-500' : 'text-orange-600'} />}
                                           {rankLabel}
                                         </span>
                                       </td>
-                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center font-black text-slate-500 whitespace-nowrap">#{item.roll || '-'}</td>
-                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">{item.student_name}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center font-black text-slate-900 dark:text-slate-100 whitespace-nowrap">#{item.roll || '-'}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 font-black text-slate-950 dark:text-white whitespace-nowrap">{item.student_name}</td>
                                       {selectedClass?.id === 'all' && (
-                                        <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-slate-500 dark:text-slate-400 text-[10px] sm:text-[11px] font-bold whitespace-nowrap">
+                                        <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-slate-900 dark:text-slate-100 text-[10px] sm:text-[11px] font-bold whitespace-nowrap">
                                           {item.class_name || '-'}
                                         </td>
                                       )}
-                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-slate-700 dark:text-slate-300 font-black">{item.total_days}</td>
-                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-emerald-600 dark:text-emerald-400 font-black">{item.present_days}</td>
-                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-red-600 dark:text-red-400 font-black">{item.absent_days}</td>
-                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-amber-600 dark:text-amber-400 font-black">{item.late_days}</td>
-                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-indigo-600 dark:text-indigo-400 font-black">{item.leave_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-slate-950 dark:text-slate-50 font-black bg-slate-100/40 dark:bg-slate-800/30">{item.total_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center">
+                                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full font-black text-xs min-w-[32px] bg-emerald-600 text-white dark:bg-emerald-950/50 dark:text-emerald-400 dark:border dark:border-emerald-800">
+                                          {item.present_days}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center">
+                                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full font-black text-xs min-w-[32px] bg-red-600 text-white dark:bg-red-950/50 dark:text-red-400 dark:border dark:border-red-800">
+                                          {item.absent_days}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center">
+                                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full font-black text-xs min-w-[32px] bg-amber-600 text-white dark:bg-amber-950/50 dark:text-amber-400 dark:border dark:border-amber-800">
+                                          {item.late_days}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center">
+                                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full font-black text-xs min-w-[32px] bg-indigo-600 text-white dark:bg-indigo-950/50 dark:text-indigo-400 dark:border dark:border-indigo-800">
+                                          {item.leave_days}
+                                        </span>
+                                      </td>
                                       <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center whitespace-nowrap">
                                         <div className="flex items-center justify-center gap-1.5 sm:gap-2">
                                           <div className="w-12 sm:w-16 h-1.5 sm:h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700 hidden sm:block">
@@ -2128,7 +2153,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                               style={{ width: `${item.pct}%` }}
                                             />
                                           </div>
-                                          <span className={`font-black text-xs sm:text-sm ${item.pct >= 90 ? 'text-emerald-600 dark:text-emerald-400' : item.pct >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                                          <span className={`inline-flex items-center justify-center px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-black text-xs min-w-[44px] ${
+                                            item.pct >= 90 
+                                              ? 'bg-emerald-600 text-white dark:bg-emerald-950/50 dark:text-emerald-400 dark:border dark:border-emerald-800' 
+                                              : item.pct >= 75 
+                                                ? 'bg-amber-600 text-white dark:bg-amber-950/50 dark:text-amber-400 dark:border dark:border-amber-800' 
+                                                : 'bg-red-600 text-white dark:bg-red-950/50 dark:text-red-400 dark:border dark:border-red-800'
+                                          }`}>
                                             {item.pct}%
                                           </span>
                                         </div>
