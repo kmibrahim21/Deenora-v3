@@ -109,8 +109,8 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                     })}
                     <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.total}</th>
                     <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.avg}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.grade}</th>
+                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
                     <th className="px-1 py-2 text-center font-black uppercase tracking-widest bg-blue-900 w-10">{t.rank}</th>
                   </tr>
                 </thead>
@@ -162,12 +162,12 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         })}
                         <td className="px-2 py-1 text-center font-mono font-black text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[14px]">{total}</td>
                         <td className="px-1 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{avg}%</td>
-                        <td className="px-2 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{gpa}</td>
                         <td className={`px-2 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 text-[14px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
                           <span className="inline-flex items-center justify-center w-8 h-6 rounded-lg bg-white border border-slate-100 shadow-sm">
                               {grade}
                           </span>
                         </td>
+                        <td className="px-2 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{gpa}</td>
                         <td className="px-1 py-1 text-center font-mono font-black text-[#2563EB] bg-blue-50/20 text-[14px]">{rank}</td>
                       </tr>
                     );

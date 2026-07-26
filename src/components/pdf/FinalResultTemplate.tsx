@@ -18,8 +18,8 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
     roll: isBangla ? 'রোল' : 'Roll',
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     total: isBangla ? 'মোট' : 'Total',
+    grade: isBangla ? 'গ্রেড' : 'GRADE',
     gpa: isBangla ? 'জিপিএ' : 'GPA',
-    grade: isBangla ? 'গ্রেড' : 'Grade',
     date: isBangla ? 'তারিখ' : 'Date',
     examController: isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Exam Controller',
     principal: isBangla ? 'অধ্যক্ষ' : 'Principal',
@@ -61,8 +61,8 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                       </th>
                     ))}
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.total}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.gpa}</th>
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.grade}</th>
+                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.gpa}</th>
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest bg-slate-800 w-10">{t.rank}</th>
                   </tr>
                 </thead>
@@ -77,10 +77,10 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                         </td>
                       ))}
                       <td className="px-2 py-1.5 text-center font-mono font-bold text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[14px]">{std.total}</td>
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{std.gpa}</td>
                       <td className={`px-2 py-1.5 text-center font-black border-r border-slate-100 bg-slate-50/30 text-[14px] ${std.grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
                         {std.grade}
                       </td>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{std.gpa}</td>
                       <td className="px-2 py-1.5 text-center font-black text-[#2563EB] bg-blue-50/20 text-[14px]">#{std.rank}</td>
                     </tr>
                   ))}

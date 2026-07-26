@@ -47,11 +47,11 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     sno: isBangla ? "ক্রমিক" : "S.L",
     subject: isBangla ? "বিষয়ের নাম" : "Name of Subjects",
     code: isBangla ? "কোড" : "Code",
-    fullMarks: isBangla ? "পূর্ণমান" : "Full Marks",
-    passMarks: isBangla ? "পাস মার্ক" : "Pass Marks",
-    obtainedMarks: isBangla ? "প্রাপ্ত নম্বর" : "Obtained",
+    fullMarks: isBangla ? "পূর্ণমান" : "FULL MARKS",
+    passMarks: isBangla ? "পাস মার্ক" : "PASS MARKS",
+    obtainedMarks: isBangla ? "প্রাপ্ত নম্বর" : "OBTAINED",
     total: isBangla ? "মোট" : "Total",
-    grade: isBangla ? "গ্রেড" : "Grade",
+    grade: isBangla ? "গ্রেড" : "GRADE",
     gp: isBangla ? "পয়েন্ট" : "GPA",
     summary: isBangla ? "ফলাফল সংক্ষেপ" : "Result Summary",
     totalMarks: isBangla ? "মোট প্রাপ্ত নম্বর" : "Total Marks",
@@ -67,7 +67,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     controllerSign: isBangla ? "পরীক্ষা নিয়ন্ত্রক" : "Controller of Exam",
     guardianSign: isBangla ? "অভিভাবকের স্বাক্ষর" : "Guardian's Signature",
     eiin: isBangla ? "ইআইআইএন" : "EIIN",
-    classHighest: isBangla ? "শ্রেণী সর্বোচ্চ" : "Class Highest",
+    classHighest: isBangla ? "শ্রেণি সর্বোচ্চ" : "CLASS HIGHEST",
   };
 
   const totalObtained = marks.filter(m => !m.is_optional).reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
@@ -215,8 +215,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                   </>
                 )}
                 <th className="border border-slate-900/20 py-2 px-1 w-[60px] bg-blue-900 shadow-inner">{t.obtainedMarks}</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.gp}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.grade}</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.gp}</th>
               </tr>
             </thead>
             <tbody className="text-[14px]">
@@ -324,10 +324,9 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                         <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.pr ?? '-'}</td>
                       </>
                     )}
-                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.full}</td>
                     <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-blue-900 bg-blue-50/20 text-[15px]">{String(row.obtained).padStart(2, '0')}</td>
-                    <td className={`border border-slate-900 py-1 px-1 text-center font-bold font-mono text-[13px] ${row.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-slate-900'}`}>{row.gp}</td>
                     <td className={`border border-slate-900 py-1 px-1 text-center font-black text-[15px] ${row.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-blue-900'}`}>{row.grade}</td>
+                    <td className={`border border-slate-900 py-1 px-1 text-center font-bold font-mono text-[13px] ${row.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-slate-900'}`}>{row.gp}</td>
                   </tr>
                 ));
               })()}
@@ -361,7 +360,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                   <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]" colSpan={3}>-</td>
                 )}
                 <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[#1E3A8A] text-[18px] bg-blue-100/50">{totalObtained}</td>
-                <td className="border border-slate-900 py-2 px-1 text-center font-serif text-[20px] bg-blue-100/50 text-[#1E3A8A]" colSpan={2}>{finalGrade}</td>
+                <td className="border border-slate-900 py-2 px-1 text-center font-serif text-[20px] bg-blue-100/50 text-[#1E3A8A]">{finalGrade}</td>
+                <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[18px] bg-blue-100/50 text-[#1E3A8A]">{averageGpa}</td>
               </tr>
             </tfoot>
           </table>
