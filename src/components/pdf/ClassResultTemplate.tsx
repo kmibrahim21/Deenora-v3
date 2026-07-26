@@ -76,13 +76,26 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                   <tr className="bg-[#1E3A8A] text-white">
                     <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>
                     <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
-                    {subjects.map(s => (
-                      <th key={s.id} className="px-1 py-1 text-center border-r border-white/10">
-                        <div className="mx-auto font-black uppercase tracking-widest text-[8px] max-w-[75px] leading-tight break-words whitespace-normal text-center">
-                          {s.subject_name}
-                        </div>
-                      </th>
-                    ))}
+                    {subjects.filter(s => {
+                      const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
+                      return !isHighSchool || !s.pair_with_id;
+                    }).map(s => {
+                      const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
+                      return (
+                        <th key={s.id} className="px-1 py-1 text-center border-r border-white/10">
+                          <div className="mx-auto font-black uppercase tracking-widest text-[8px] max-w-[75px] leading-tight break-words whitespace-normal text-center">
+                            {s.subject_name}
+                            {isHighSchool && (
+                              <div className="flex justify-center gap-1 mt-0.5 opacity-60 text-[6px]">
+                                <span>C</span>
+                                <span>M</span>
+                                <span>P</span>
+                              </div>
+                            )}
+                          </div>
+                        </th>
+                      );
+                    })}
                     <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.total}</th>
                     <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.avg}</th>
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
@@ -103,11 +116,42 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                       <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
                         <td className="px-2 py-1 font-mono font-black text-slate-900 border-r border-slate-100 text-[14px]">{student.roll}</td>
                         <td className="px-2 py-1 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[13px] leading-tight">{student.student_name}</td>
-                        {subjects.map(s => (
-                          <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[14px]">
-                            {studentMarks[s.id] || '0'}
-                          </td>
-                        ))}
+                        {subjects.filter(sub => {
+                          const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
+                          return !isHighSchool || !sub.pair_with_id;
+                        }).map(s => {
+                          const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
+                          
+                          let total = Number(studentMarks[s.id] || 0);
+                          let cq = Number(studentMarks[`${s.id}_cq`] || 0);
+                          let mcq = Number(studentMarks[`${s.id}_mcq`] || 0);
+                          let pr = Number(studentMarks[`${s.id}_practical`] || 0);
+
+                          if (isHighSchool) {
+                            const children = subjects.filter(child => child.pair_with_id === s.id);
+                            children.forEach(child => {
+                                total += Number(studentMarks[child.id] || 0);
+                                cq += Number(studentMarks[`${child.id}_cq`] || 0);
+                                mcq += Number(studentMarks[`${child.id}_mcq`] || 0);
+                                pr += Number(studentMarks[`${child.id}_practical`] || 0);
+                            });
+                          }
+
+                          return (
+                            <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[12px]">
+                              {isHighSchool ? (
+                                <div className="flex flex-col leading-none">
+                                  <span>{total}</span>
+                                  <div className="flex justify-center gap-0.5 text-[6px] opacity-40 font-normal">
+                                    <span>{cq || 0}</span>
+                                    <span>{mcq || 0}</span>
+                                    <span>{pr || 0}</span>
+                                  </div>
+                                </div>
+                              ) : total}
+                            </td>
+                          );
+                        })}
                         <td className="px-2 py-1 text-center font-mono font-black text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[14px]">{total}</td>
                         <td className="px-1 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{avg}%</td>
                         <td className="px-2 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{gpa}</td>

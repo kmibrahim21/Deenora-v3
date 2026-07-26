@@ -35,7 +35,7 @@ export interface Institution {
       parent_portal?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
-    result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional';
+    result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional' | 'high_school';
     attendance_type: 'daily' | 'period';
     fee_structure: 'monthly' | 'session';
     ui_mode: 'madrasah' | 'school';
@@ -257,8 +257,12 @@ export interface ExamSubject {
   subject_name: string;
   full_marks: number;
   pass_marks: number;
+  cq_full_marks?: number;
+  mcq_full_marks?: number;
+  practical_full_marks?: number;
   sort_order?: number;
   is_optional?: boolean;
+  pair_with_id?: string;
 }
 
 export interface ExamMark {
@@ -267,6 +271,9 @@ export interface ExamMark {
   student_id: string;
   subject_id: string;
   marks_obtained: number;
+  cq_marks?: number;
+  mcq_marks?: number;
+  practical_marks?: number;
 }
 
 export interface Attendance {

@@ -294,7 +294,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           if (subjectMaxMarks > 0) {
             const pct = (weightedSum / subjectMaxMarks) * 100;
             
-            const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+            const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
             const failedCombined = weightedSum < subjectPassMarks;
             
             if (!isOptionalEffectively && failedCombined) {
@@ -305,7 +305,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
             const { gpa: gpStr } = getGradeInfo(pct, failedCombined);
             const gp = parseFloat(gpStr);
             
-            if (resultSystem === 'grading_optional') {
+            if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
                 if (isOptional) {
                     if (gp > 2) pointsSum += (gp - 2);
                 } else {
@@ -334,7 +334,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         let finalGpa = '0.00';
         let finalGradeStr = 'F';
 
-        if ((resultSystem === 'grading' || resultSystem === 'grading_optional') && numMainSubjects > 0) {
+        if ((resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') && numMainSubjects > 0) {
            if (hasFailedAny) {
              finalGpa = '0.00';
              finalGradeStr = 'F';

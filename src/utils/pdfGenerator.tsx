@@ -348,21 +348,68 @@ export const generateClassResultPDF = async (
         const config = (typeof configObj === 'object' && configObj !== null) ? configObj : {};
         const resultSystem = config.result_system || 'grading';
 
+        const processedSubjectIds = new Set<string>();
+
         subjects.forEach(s => {
-            const m = studentMarks[s.id];
-            const fullMarkValue = Number(s.full_marks || 100);
-            const passMarkValue = Number(s.pass_marks || 33);
-            const isOptional = !!s.is_optional;
+            if (processedSubjectIds.has(s.id)) return;
 
-            if (m !== undefined && m !== '') {
-                const markVal = Number(m);
-                const failed = markVal < passMarkValue;
-                const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
-                if (!isOptionalEffectively && failed) hasFailed = true;
+            // Handle High School combinations
+            const children = resultSystem === 'high_school' ? subjects.filter(child => child.pair_with_id === s.id) : [];
+            const isParent = children.length > 0;
+            const isChild = resultSystem === 'high_school' && !!s.pair_with_id;
 
-                const pct = (markVal / fullMarkValue) * 100;
+            if (isChild) {
+                // Individual marks for child will be processed but they don't contribute to GPA here
+                // (they will be handled when their parent is processed)
+                return;
+            }
+
+            if (isParent) {
+                let combinedObtained = 0;
+                let combinedFull = s.full_marks || 100;
+                let combinedFailed = false;
+
+                // Parent marks
+                const mP = studentMarks[s.id];
+                const markValP = mP !== undefined && mP !== '' ? Number(mP) : 0;
+                combinedObtained += markValP;
+
+                // Check Parent Breakdown
+                if (resultSystem === 'high_school') {
+                    const cq = Number(studentMarks[`${s.id}_cq`] || 0);
+                    const mcq = Number(studentMarks[`${s.id}_mcq`] || 0);
+                    const pr = Number(studentMarks[`${s.id}_practical`] || 0);
+                    if (s.cq_full_marks && cq < Math.ceil(s.cq_full_marks * 0.33)) combinedFailed = true;
+                    if (s.mcq_full_marks && mcq < Math.ceil(s.mcq_full_marks * 0.33)) combinedFailed = true;
+                    if (s.practical_full_marks && pr < Math.ceil(s.practical_full_marks * 0.33)) combinedFailed = true;
+                }
+                if (markValP < (s.pass_marks || Math.ceil((s.full_marks || 100) * 0.33))) combinedFailed = true;
+
+                // Children marks
+                children.forEach(child => {
+                    const mC = studentMarks[child.id];
+                    const markValC = mC !== undefined && mC !== '' ? Number(mC) : 0;
+                    combinedObtained += markValC;
+                    combinedFull += (child.full_marks || 100);
+
+                    // Check Child Breakdown
+                    if (resultSystem === 'high_school') {
+                        const cq = Number(studentMarks[`${child.id}_cq`] || 0);
+                        const mcq = Number(studentMarks[`${child.id}_mcq`] || 0);
+                        const pr = Number(studentMarks[`${child.id}_practical`] || 0);
+                        if (child.cq_full_marks && cq < Math.ceil(child.cq_full_marks * 0.33)) combinedFailed = true;
+                        if (child.mcq_full_marks && mcq < Math.ceil(child.mcq_full_marks * 0.33)) combinedFailed = true;
+                        if (child.practical_full_marks && pr < Math.ceil(child.practical_full_marks * 0.33)) combinedFailed = true;
+                    }
+                    processedSubjectIds.add(child.id);
+                });
+
+                // Overall combined pass
+                if (combinedObtained < Math.ceil(combinedFull * 0.33)) combinedFailed = true;
+
+                const pct = (combinedObtained / combinedFull) * 100;
                 let gp = 0.00;
-                if (!failed) {
+                if (!combinedFailed) {
                     if (pct >= 80) gp = 5.00;
                     else if (pct >= 70) gp = 4.00;
                     else if (pct >= 60) gp = 3.50;
@@ -371,28 +418,76 @@ export const generateClassResultPDF = async (
                     else gp = 1.00;
                 }
 
-                if (resultSystem === 'grading_optional') {
-                    if (!isOptional) {
+                if (combinedFailed && !s.is_optional) hasFailed = true;
+
+                if (s.is_optional) {
+                    if (gp > 2) pointsSum += (gp - 2);
+                } else {
+                    total += combinedObtained;
+                    totalPossible += combinedFull;
+                    pointsSum += gp;
+                    numMainSubjects++;
+                }
+                processedSubjectIds.add(s.id);
+
+            } else {
+                // Standard subject
+                const m = studentMarks[s.id];
+                const fullMarkValue = Number(s.full_marks || 100);
+                const passMarkValue = Number(s.pass_marks || Math.ceil(fullMarkValue * 0.33));
+                const isOptional = !!s.is_optional;
+
+                if (m !== undefined && m !== '') {
+                    const markVal = Number(m);
+                    let failed = markVal < passMarkValue;
+
+                    if (resultSystem === 'high_school') {
+                        const cq = Number(studentMarks[`${s.id}_cq`] || 0);
+                        const mcq = Number(studentMarks[`${s.id}_mcq`] || 0);
+                        const pr = Number(studentMarks[`${s.id}_practical`] || 0);
+                        if (s.cq_full_marks && cq < Math.ceil(s.cq_full_marks * 0.33)) failed = true;
+                        if (s.mcq_full_marks && mcq < Math.ceil(s.mcq_full_marks * 0.33)) failed = true;
+                        if (s.practical_full_marks && pr < Math.ceil(s.practical_full_marks * 0.33)) failed = true;
+                    }
+
+                    const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
+                    if (!isOptionalEffectively && failed) hasFailed = true;
+
+                    const pct = (markVal / fullMarkValue) * 100;
+                    let gp = 0.00;
+                    if (!failed) {
+                        if (pct >= 80) gp = 5.00;
+                        else if (pct >= 70) gp = 4.00;
+                        else if (pct >= 60) gp = 3.50;
+                        else if (pct >= 50) gp = 3.00;
+                        else if (pct >= 40) gp = 2.00;
+                        else gp = 1.00;
+                    }
+
+                    if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
+                        if (!isOptional) {
+                            total += markVal;
+                            totalPossible += fullMarkValue;
+                            pointsSum += gp;
+                            numMainSubjects++;
+                        } else if (gp > 2) {
+                            pointsSum += (gp - 2);
+                        }
+                    } else {
                         total += markVal;
                         totalPossible += fullMarkValue;
                         pointsSum += gp;
                         numMainSubjects++;
-                    } else if (gp > 2) {
-                        pointsSum += (gp - 2);
                     }
                 } else {
-                    total += markVal;
-                    totalPossible += fullMarkValue;
-                    pointsSum += gp;
-                    numMainSubjects++;
+                    const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
+                    if (!isOptionalEffectively) {
+                        hasFailed = true;
+                        totalPossible += fullMarkValue;
+                        numMainSubjects++;
+                    }
                 }
-            } else {
-                const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
-                if (!isOptionalEffectively) {
-                    hasFailed = true;
-                    totalPossible += fullMarkValue;
-                    numMainSubjects++;
-                }
+                processedSubjectIds.add(s.id);
             }
         });
         
@@ -403,7 +498,7 @@ export const generateClassResultPDF = async (
 
         if (numMainSubjects > 0) {
             if (!hasFailed) {
-                if (resultSystem === 'grading' || resultSystem === 'grading_optional') {
+                if (resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') {
                     let avgGp = pointsSum / numMainSubjects;
                     if (avgGp > 5.0) avgGp = 5.0;
                     gpa = avgGp.toFixed(2);

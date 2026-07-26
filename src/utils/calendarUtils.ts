@@ -145,7 +145,6 @@ export const ISLAMIC_HOLIDAYS = [
   { date: '2026-02-18', title: 'Ramadan Starts', type: 'islamic' },
   { date: '2026-03-20', title: 'Eid-ul-Fitr', type: 'islamic' },
   { date: '2026-05-27', title: 'Eid-ul-Adha', type: 'islamic' },
-  { date: '2026-07-26', title: 'Ashura', type: 'islamic' },
   { date: '2026-02-03', title: 'Shab-e-Barat', type: 'islamic' },
   { date: '2026-08-25', title: 'Milad-un-Nabi', type: 'islamic' },
 ];

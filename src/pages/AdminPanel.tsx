@@ -202,7 +202,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
   const [editStatus, setEditStatus] = useState<'active' | 'suspended' | 'trial'>('active');
   const [editResultEngine, setEditResultEngine] = useState<'school' | 'befaq' | 'qawmi_custom'>('school');
-  const [editResultSystem, setEditResultSystem] = useState<'grading' | 'marks' | 'grading_optional'>('grading');
+  const [editResultSystem, setEditResultSystem] = useState<'grading' | 'marks' | 'grading_optional' | 'high_school'>('grading');
   const [editFeeStructure, setEditFeeStructure] = useState<'monthly' | 'session'>('monthly');
   const [editInstitutionType, setEditInstitutionType] = useState<'madrasah' | 'school' | 'kindergarten' | 'choching' | 'system'>('madrasah');
   const [editFeeEngine, setEditFeeEngine] = useState<'school' | 'qawmi' | 'kindergarten' | 'simple'>('school');
@@ -3361,6 +3361,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                     >
                                       <option value="grading">Grading (GPA)</option>
                                       <option value="grading_optional">Grading (+ 4th Sub)</option>
+                                      <option value="high_school">High School (CQ/MCQ)</option>
                                       <option value="marks">Marks Only</option>
                                     </select>
                                  </div>

@@ -57,8 +57,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     classHighest: isBangla ? "শ্রেণী সর্বোচ্চ" : "Class Highest",
   };
 
-  const totalObtained = marks.reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
-  const totalFull = marks.reduce((sum, m) => sum + Number(m.full_marks || 100), 0);
+  const totalObtained = marks.filter(m => !m.is_optional).reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
+  const totalFull = marks.filter(m => !m.is_optional).reduce((sum, m) => sum + Number(m.full_marks || 100), 0);
   
   const averageGpa = student.gpa && student.gpa !== "0.00" 
     ? student.gpa 
@@ -191,31 +191,122 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               <tr className="bg-[#1E3A8A] text-white text-[11px] font-black uppercase text-center">
                 <th className="border border-slate-900/20 py-2 px-1 w-10">{t.sno}</th>
                 <th className="border border-slate-900/20 py-2 px-4 text-left">{t.subject}</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[70px]">{t.fullMarks}</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[70px]">{t.passMarks}</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[75px]">{t.classHighest}</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[80px] bg-blue-900 shadow-inner">{t.obtainedMarks}</th>
-                <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.grade}</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[50px]">CQ</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[50px]">MCQ</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[50px]">Practical</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[60px]">{t.fullMarks}</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[60px] bg-blue-900 shadow-inner">{t.obtainedMarks}</th>
                 <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.gp}</th>
+                <th className="border border-slate-900/20 py-2 px-1 w-[55px]">{t.grade}</th>
               </tr>
             </thead>
             <tbody className="text-[14px]">
-              {marks.map((m, i) => (
-                <tr key={i} className={`${i % 2 === 0 ? "bg-white" : "bg-blue-50/10"}`}>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[11px] font-bold text-slate-400">{String(i + 1).padStart(2, '0')}</td>
-                  <td className="border border-slate-900 py-1 px-4 font-bold font-tiro text-slate-800 leading-tight">
-                    {m.subject_name} {m.is_optional ? <span className="text-[9px] font-black text-blue-400 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none">Optional</span> : ''}
-                  </td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{m.full_marks || '100'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{m.pass_marks || '33'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-slate-900 text-[14px] bg-slate-50/30">{(m.class_highest !== undefined && m.class_highest !== null) ? m.class_highest.toString().padStart(2, '0') : '-'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-blue-900 bg-blue-50/20 text-[15px]">{(m.marks_obtained || 0).toString().padStart(2, '0')}</td>
-                  <td className={`border border-slate-900 py-1 px-1 text-center font-black text-[15px] ${m.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-blue-900'}`}>{m.grade || '-'}</td>
-                  <td className="border border-slate-900 py-1 px-1 text-center font-bold font-mono text-slate-900 text-[13px]">{m.grade_point || '0.00'}</td>
-                </tr>
-              ))}
-              {Array.from({ length: Math.max(0, 10 - marks.length) }).map((_, i) => (
+              {(() => {
+                const isHighSchool = madrasah?.config_json?.result_system === 'high_school';
+                const rows: any[] = [];
+                let rowCount = 1;
+
+                marks.forEach((m, i) => {
+                  const children = isHighSchool ? marks.filter(child => child.pair_with_id === m.id) : [];
+                  const isParent = children.length > 0;
+                  const isChild = isHighSchool && !!m.pair_with_id;
+
+                  // Add the current row (Individual Paper)
+                  rows.push({
+                    sl: rowCount++,
+                    name: m.subject_name,
+                    is_optional: m.is_optional,
+                    cq: m.cq_marks,
+                    mcq: m.mcq_marks,
+                    pr: m.practical_marks,
+                    full: m.full_marks || 100,
+                    obtained: m.marks_obtained || 0,
+                    gp: isParent ? '-' : (m.grade_point || '0.00'),
+                    grade: isParent ? '-' : (m.grade || '-'),
+                    isChild: isChild,
+                    isParentRow: false
+                  });
+
+                  // If it's a parent, add the combined row after its children are processed? 
+                  // In the image, Bangla 1st, Bangla 2nd, then Bangla (Combined).
+                  // So we need to make sure we don't repeat children if they are already in the list.
+                  // The loop iterates over all marks. If we hit a parent, we might want to group them.
+                  
+                  if (isParent && isHighSchool) {
+                    let cCQ = Number(m.cq_marks || 0);
+                    let cMCQ = Number(m.mcq_marks || 0);
+                    let cPR = Number(m.practical_marks || 0);
+                    let cFull = Number(m.full_marks || 100);
+                    let cObtained = Number(m.marks_obtained || 0);
+                    let cFailed = false;
+
+                    // Breakdown fail check for parent
+                    if (m.cq_full_marks && cCQ < Math.ceil(m.cq_full_marks * 0.33)) cFailed = true;
+                    if (m.mcq_full_marks && cMCQ < Math.ceil(m.mcq_full_marks * 0.33)) cFailed = true;
+                    if (m.practical_full_marks && cPR < Math.ceil(m.practical_full_marks * 0.33)) cFailed = true;
+
+                    children.forEach(child => {
+                        cCQ += Number(child.cq_marks || 0);
+                        cMCQ += Number(child.mcq_marks || 0);
+                        cPR += Number(child.practical_marks || 0);
+                        cFull += Number(child.full_marks || 100);
+                        cObtained += Number(child.marks_obtained || 0);
+                        
+                        if (child.cq_full_marks && Number(child.cq_marks || 0) < Math.ceil(child.cq_full_marks * 0.33)) cFailed = true;
+                        if (child.mcq_full_marks && Number(child.mcq_marks || 0) < Math.ceil(child.mcq_full_marks * 0.33)) cFailed = true;
+                        if (child.practical_full_marks && Number(child.practical_marks || 0) < Math.ceil(child.practical_full_marks * 0.33)) cFailed = true;
+                    });
+
+                    if (cObtained < Math.ceil(cFull * 0.33)) cFailed = true;
+
+                    const pct = (cObtained / cFull) * 100;
+                    let cGrade = 'F';
+                    let cGp = '0.00';
+                    if (!cFailed) {
+                        if (pct >= 80) { cGrade = 'A+'; cGp = '5.00'; }
+                        else if (pct >= 70) { cGrade = 'A'; cGp = '4.00'; }
+                        else if (pct >= 60) { cGrade = 'A-'; cGp = '3.50'; }
+                        else if (pct >= 50) { cGrade = 'B'; cGp = '3.00'; }
+                        else if (pct >= 40) { cGrade = 'C'; cGp = '2.00'; }
+                        else if (pct >= 33) { cGrade = 'D'; cGp = '1.00'; }
+                    }
+
+                    rows.push({
+                      sl: rowCount++,
+                      name: `${m.subject_name.replace(/1st|2nd|Paper/gi, '').trim()} (Combined)`,
+                      is_optional: m.is_optional,
+                      cq: cCQ,
+                      mcq: cMCQ,
+                      pr: cPR,
+                      full: cFull,
+                      obtained: cObtained,
+                      gp: cGp,
+                      grade: cGrade,
+                      isChild: false,
+                      isParentRow: true
+                    });
+                  }
+                });
+
+                return rows.map((row, i) => (
+                  <tr key={i} className={`${row.isParentRow ? "bg-blue-50/50 font-black" : (i % 2 === 0 ? "bg-white" : "bg-slate-50/10")}`}>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[11px] font-bold text-slate-400">{String(row.sl).padStart(2, '0')}</td>
+                    <td className={`border border-slate-900 py-1 px-4 font-bold font-tiro text-slate-800 leading-tight ${row.isParentRow ? 'text-blue-900' : ''}`}>
+                      {row.name} {row.is_optional ? <span className="text-[9px] font-black text-blue-400 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none">Optional</span> : ''}
+                    </td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.cq ?? '-'}</td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.mcq ?? '-'}</td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.pr ?? '-'}</td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-mono text-[13px] text-slate-900">{row.full}</td>
+                    <td className="border border-slate-900 py-1 px-1 text-center font-black font-mono text-blue-900 bg-blue-50/20 text-[15px]">{String(row.obtained).padStart(2, '0')}</td>
+                    <td className={`border border-slate-900 py-1 px-1 text-center font-bold font-mono text-[13px] ${row.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-slate-900'}`}>{row.gp}</td>
+                    <td className={`border border-slate-900 py-1 px-1 text-center font-black text-[15px] ${row.grade === 'F' ? 'text-red-800 bg-red-50/20' : 'text-blue-900'}`}>{row.grade}</td>
+                  </tr>
+                ));
+              })()}
+              {Array.from({ length: Math.max(0, 12 - marks.length) }).map((_, i) => (
                 <tr key={`pad-${i}`}>
+                   <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
                    <td className="border border-slate-900 py-2.5">&nbsp;</td>
@@ -230,44 +321,54 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             <tfoot>
               <tr className="bg-slate-100 text-[13px] font-black">
                 <td colSpan={2} className="border border-slate-900 py-2 px-4 text-right uppercase tracking-[0.05em] text-[11px] text-slate-500">{t.totalMarks}:</td>
+                <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]" colSpan={3}>-</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[15px]">{totalFull}</td>
-                <td className="border border-slate-900 py-2 px-1 text-center">-</td>
-                <td className="border border-slate-900 py-2 px-1 text-center font-mono text-slate-600 text-[14px]">-</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-mono text-[#1E3A8A] text-[18px] bg-blue-100/50">{totalObtained}</td>
                 <td className="border border-slate-900 py-2 px-1 text-center font-serif text-[20px] bg-blue-100/50 text-[#1E3A8A]" colSpan={2}>{finalGrade}</td>
               </tr>
             </tfoot>
           </table>
 
-          {/* Summary & Remarks Row */}
-          <div className="flex gap-4 h-[80px]">
-            <div className="flex-1 grid grid-cols-4 gap-3">
-              <div className="p-2 border-2 border-blue-900 rounded-2xl bg-blue-50/20 text-center flex flex-col justify-center">
-                <p className="text-[10px] font-black uppercase text-blue-900/40 mb-0.5 leading-none">{t.gpa}</p>
-                <h4 className="text-[22px] font-black font-mono text-blue-900 leading-tight">{averageGpa}</h4>
+          {/* GPA & Merit Info */}
+          <div className="space-y-1.5 mb-4">
+              <div className="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-lg px-6 py-2">
+                  <span className="text-[14px] font-black text-slate-500 uppercase">{isBangla ? 'মোট নম্বর' : 'Total Obtained'}: <span className="text-blue-900 ml-2">{totalObtained}</span></span>
+                  <span className="text-[14px] font-black text-slate-500 uppercase">{isBangla ? 'জিপিএ' : 'GPA'}: <span className="text-blue-900 ml-2">{averageGpa}</span></span>
               </div>
-              <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
-                <p className="text-[10px] font-black uppercase text-slate-500 mb-0.5 leading-none">{t.status}</p>
-                <h4 className={`text-[14px] font-black ${isPassed ? 'text-emerald-800' : 'text-red-800'} leading-tight uppercase`}>{isPassed ? t.passed : t.failed}</h4>
-              </div>
-              <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
-                <p className="text-[10px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.rank}</p>
-                <h4 className="text-[16px] font-black font-mono text-slate-700 leading-tight">#{student.merit_position || 'N/A'}</h4>
-              </div>
-              <div className="p-2 border border-slate-200 rounded-2xl bg-white text-center flex flex-col justify-center">
-                <p className="text-[10px] font-black uppercase text-slate-400 mb-0.5 leading-none">{t.attendance}</p>
-                <h4 className="text-[16px] font-black font-mono text-slate-700 leading-tight">{student.attendance ? `${student.attendance}%` : 'N/A'}</h4>
-              </div>
-            </div>
-            
-            <div className="w-[180px] border border-slate-200 rounded-2xl bg-white flex flex-col overflow-hidden shadow-sm">
-                <div className="px-3 py-1 bg-slate-50 border-b border-slate-100">
-                    <span className="text-[9px] font-black uppercase text-slate-500 leading-none">{isBangla ? 'মন্তব্য' : 'Remarks'}</span>
+              
+              {student.gpa_without_optional && (
+                <div className="flex justify-between items-center border border-slate-100 rounded-lg px-6 py-1.5 text-slate-500">
+                    <span className="text-[11px] font-bold uppercase">{isBangla ? '৪র্থ বিষয় ছাড়া জিপিএ' : 'GPA Without 4th Subject'}:</span>
+                    <span className="text-[12px] font-black font-mono">{student.gpa_without_optional}</span>
                 </div>
-                <div className="flex-1 p-2 text-[10px] font-noto text-slate-600 leading-tight">
-                    {student.remarks || (isPassed ? (isBangla ? 'অভিনন্দন! চমৎকার ফলাফল।' : 'Great result!') : (isBangla ? 'অধ্যবসায়ে মনোযোগী হও।' : 'Need more effort.'))}
-                </div>
-            </div>
+              )}
+
+              <div className="flex justify-center items-center gap-6 py-2">
+                  <div className="flex items-center gap-2">
+                      <span className="text-2xl">🏆</span>
+                      <span className="text-[15px] font-black text-[#1E3A8A] uppercase">{t.rank}: {student.merit_position || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <span className={`text-xl ${isPassed ? 'text-emerald-500' : 'text-red-500'}`}>{isPassed ? '✅' : '❌'}</span>
+                      <span className={`text-[15px] font-black ${isPassed ? 'text-emerald-600' : 'text-red-600'} uppercase`}>{isPassed ? t.passed : t.failed}</span>
+                  </div>
+              </div>
+          </div>
+
+          {/* Remarks & Overall Grade */}
+          <div className="grid grid-cols-12 gap-4 border-2 border-slate-900 rounded-xl overflow-hidden mb-4">
+              <div className="col-span-8 p-3 border-r border-slate-200 bg-white">
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1 leading-none">{isBangla ? 'উপস্থিতি' : 'Attendance'}: {student.attendance || '0'}/120</p>
+                  <div className="border-t border-slate-100 pt-2">
+                      <p className="text-[12px] font-black text-center text-slate-700 italic">
+                        {isBangla ? 'সার্বিক মূল্যায়ন' : 'Overall Assessment'}: {finalGrade === 'A+' ? 'Excellent performance!' : finalGrade === 'A' ? 'Very good result.' : isPassed ? 'Satisfactory, keep it up.' : 'Hard work needed.'}
+                      </p>
+                  </div>
+              </div>
+              <div className="col-span-4 p-3 bg-slate-50 flex flex-col items-center justify-center text-center">
+                  <p className="text-[10px] font-black text-slate-500 uppercase mb-1 leading-none">{isBangla ? 'সর্বমোট গ্রেড' : 'Overall Grade'}</p>
+                  <h2 className="text-[32px] font-black text-[#1E3A8A] leading-none">{finalGrade}</h2>
+              </div>
           </div>
         </div>
 

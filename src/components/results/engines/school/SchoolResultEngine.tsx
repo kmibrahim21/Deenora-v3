@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -733,6 +733,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [subName, setSubName] = useState('');
   const [fullMarks, setFullMarks] = useState('100');
   const [passMarks, setPassMarks] = useState('33');
+  const [cqFullMarks, setCqFullMarks] = useState('');
+  const [mcqFullMarks, setMcqFullMarks] = useState('');
+  const [practicalFullMarks, setPracticalFullMarks] = useState('');
+  const [pairWithId, setPairWithId] = useState<string>('');
   const [sortOrder, setSortOrder] = useState('0');
   const [isOptional, setIsOptional] = useState(false);
 
@@ -848,6 +852,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         marks.forEach((m: any) => {
             if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
             initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
+            if (m.cq_marks !== undefined) initialMarks[m.student_id][`${m.subject_id}_cq`] = m.cq_marks;
+            if (m.mcq_marks !== undefined) initialMarks[m.student_id][`${m.subject_id}_mcq`] = m.mcq_marks;
+            if (m.practical_marks !== undefined) initialMarks[m.student_id][`${m.subject_id}_practical`] = m.practical_marks;
         });
         
         // Fill manual attendance
@@ -967,6 +974,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           studentMarksObjLocal[m.subject_id] = m.marks_obtained;
         });
 
+        const processedSubjectIds = new Set<string>();
         let totalMarks = 0;
         let totalPossible = 0;
         let passStatus = true;
@@ -974,30 +982,97 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         let numMainSubjects = 0;
 
         subs.forEach(sub => {
-          const score = parseFloat(studentMarksObjLocal[sub.id] || '0');
-          const isOptionalEffectively = !!sub.is_optional && resultSystem === 'grading_optional';
-          const failed = score < (sub.pass_marks || 33);
-          
-          if (!isOptionalEffectively && failed) passStatus = false;
+          if (processedSubjectIds.has(sub.id)) return;
 
-          const pct = (score / (sub.full_marks || 100)) * 100;
-          const { gpa: gpStr } = getGradeInfo(pct, !failed);
-          const gp = parseFloat(gpStr);
+          // Combinations for high_school
+          const children = resultSystem === 'high_school' ? subs.filter(child => child.pair_with_id === sub.id) : [];
+          const isChild = resultSystem === 'high_school' && !!sub.pair_with_id;
 
-          if (resultSystem === 'grading_optional') {
-            if (!sub.is_optional) {
-              totalMarks += score;
-              totalPossible += (sub.full_marks || 100);
+          if (isChild) return;
+
+          if (children.length > 0) {
+            let combinedObtained = parseFloat(studentMarksObjLocal[sub.id] || '0');
+            let combinedFull = sub.full_marks || 100;
+            let combinedFailed = combinedObtained < (sub.pass_marks || Math.ceil(combinedFull * 0.33));
+
+            // Breakdown check for parent
+            const cqP = parseFloat(studentMarksObjLocal[`${sub.id}_cq`] || '0');
+            const mcqP = parseFloat(studentMarksObjLocal[`${sub.id}_mcq`] || '0');
+            const prP = parseFloat(studentMarksObjLocal[`${sub.id}_practical`] || '0');
+            if (sub.cq_full_marks && cqP < Math.ceil(sub.cq_full_marks * 0.33)) combinedFailed = true;
+            if (sub.mcq_full_marks && mcqP < Math.ceil(sub.mcq_full_marks * 0.33)) combinedFailed = true;
+            if (sub.practical_full_marks && prP < Math.ceil(sub.practical_full_marks * 0.33)) combinedFailed = true;
+
+            children.forEach(child => {
+              const childObtained = parseFloat(studentMarksObjLocal[child.id] || '0');
+              combinedObtained += childObtained;
+              combinedFull += (child.full_marks || 100);
+
+              const cqC = parseFloat(studentMarksObjLocal[`${child.id}_cq`] || '0');
+              const mcqC = parseFloat(studentMarksObjLocal[`${child.id}_mcq`] || '0');
+              const prC = parseFloat(studentMarksObjLocal[`${child.id}_practical`] || '0');
+              if (child.cq_full_marks && cqC < Math.ceil(child.cq_full_marks * 0.33)) combinedFailed = true;
+              if (child.mcq_full_marks && mcqC < Math.ceil(child.mcq_full_marks * 0.33)) combinedFailed = true;
+              if (child.practical_full_marks && prC < Math.ceil(child.practical_full_marks * 0.33)) combinedFailed = true;
+              processedSubjectIds.add(child.id);
+            });
+
+            if (combinedObtained < Math.ceil(combinedFull * 0.33)) combinedFailed = true;
+
+            const pct = (combinedObtained / combinedFull) * 100;
+            const { gpa: gpStr } = getGradeInfo(pct, !combinedFailed);
+            const gp = parseFloat(gpStr);
+
+            if (!sub.is_optional && combinedFailed) passStatus = false;
+
+            if (sub.is_optional) {
+              if (gp > 2) pointsSum += (gp - 2);
+            } else {
+              totalMarks += combinedObtained;
+              totalPossible += combinedFull;
               pointsSum += gp;
               numMainSubjects++;
-            } else {
-              if (gp > 2) pointsSum += (gp - 2);
             }
+            processedSubjectIds.add(sub.id);
           } else {
-            totalMarks += score;
-            totalPossible += (sub.full_marks || 100);
-            pointsSum += gp;
-            numMainSubjects++;
+            // Standard
+            const score = parseFloat(studentMarksObjLocal[sub.id] || '0');
+            const full = sub.full_marks || 100;
+            const pass = sub.pass_marks || Math.ceil(full * 0.33);
+            let failed = score < pass;
+
+            if (resultSystem === 'high_school') {
+              const cq = parseFloat(studentMarksObjLocal[`${sub.id}_cq`] || '0');
+              const mcq = parseFloat(studentMarksObjLocal[`${sub.id}_mcq`] || '0');
+              const pr = parseFloat(studentMarksObjLocal[`${sub.id}_practical`] || '0');
+              if (sub.cq_full_marks && cq < Math.ceil(sub.cq_full_marks * 0.33)) failed = true;
+              if (sub.mcq_full_marks && mcq < Math.ceil(sub.mcq_full_marks * 0.33)) failed = true;
+              if (sub.practical_full_marks && pr < Math.ceil(sub.practical_full_marks * 0.33)) failed = true;
+            }
+
+            const isOptionalEffectively = !!sub.is_optional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
+            if (!isOptionalEffectively && failed) passStatus = false;
+
+            const pct = (score / full) * 100;
+            const { gpa: gpStr } = getGradeInfo(pct, !failed);
+            const gp = parseFloat(gpStr);
+
+            if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
+              if (!sub.is_optional) {
+                totalMarks += score;
+                totalPossible += full;
+                pointsSum += gp;
+                numMainSubjects++;
+              } else {
+                if (gp > 2) pointsSum += (gp - 2);
+              }
+            } else {
+              totalMarks += score;
+              totalPossible += full;
+              pointsSum += gp;
+              numMainSubjects++;
+            }
+            processedSubjectIds.add(sub.id);
           }
         });
 
@@ -1005,7 +1080,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         if (subs.length === 0) passStatus = totalMarks > 0;
 
         let finalGpa = '0.00';
-        if ((resultSystem === 'grading' || resultSystem === 'grading_optional') && numMainSubjects > 0) {
+        if ((resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') && numMainSubjects > 0) {
           if (!passStatus) finalGpa = '0.00';
           else {
             let avgGp = pointsSum / numMainSubjects;
@@ -1083,39 +1158,112 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     let pointsSum = 0;
     let numMainSubjects = 0;
 
+    // Handle Subject Combinations for high_school
+    const processedSubjectIds = new Set<string>();
+    const effectiveSubjects = [];
+
     for (const s of currentSubjects) {
-      const obtained = parseFloat(studentMarksObj[s.id] || '0');
-      const pass = s.pass_marks || 33;
-      const full = s.full_marks || 100;
-      
-      const pct = (obtained / full) * 100;
-      const failed = obtained < pass;
+      if (processedSubjectIds.has(s.id)) continue;
 
-      const isOptionalEffectively = s.is_optional && resultSystem === 'grading_optional';
-
-      if (!isOptionalEffectively && failed) {
-        hasFailedSub = true;
+      if (resultSystem === 'high_school' && s.pair_with_id) {
+        // This is a child subject, it will be handled by its parent
+        continue;
       }
 
-      const { gpa: gpStr } = getGradeInfo(pct, !failed);
-      const gp = parseFloat(gpStr);
+      // Check if any other subject is paired with this one
+      const children = currentSubjects.filter(child => child.pair_with_id === s.id);
+      if (resultSystem === 'high_school' && children.length > 0) {
+        // Create a virtual combined subject
+        let combinedObtained = parseFloat(studentMarksObj[s.id] || '0');
+        let combinedFull = s.full_marks || 100;
+        let combinedPass = s.pass_marks || Math.ceil(combinedFull * 0.33);
+        let combinedFailed = combinedObtained < (s.pass_marks || Math.ceil((s.full_marks || 100) * 0.33));
 
-      if (resultSystem === 'grading_optional') {
-        if (!s.is_optional) {
+        // Check breakdown for parent
+        const cqMarksP = parseFloat(studentMarksObj[`${s.id}_cq`] || '0');
+        const mcqMarksP = parseFloat(studentMarksObj[`${s.id}_mcq`] || '0');
+        const prMarksP = parseFloat(studentMarksObj[`${s.id}_practical`] || '0');
+        if (s.cq_full_marks && cqMarksP < Math.ceil(s.cq_full_marks * 0.33)) combinedFailed = true;
+        if (s.mcq_full_marks && mcqMarksP < Math.ceil(s.mcq_full_marks * 0.33)) combinedFailed = true;
+        if (s.practical_full_marks && prMarksP < Math.ceil(s.practical_full_marks * 0.33)) combinedFailed = true;
+
+        for (const child of children) {
+          const childObtained = parseFloat(studentMarksObj[child.id] || '0');
+          combinedObtained += childObtained;
+          combinedFull += (child.full_marks || 100);
+          
+          // Check breakdown for child
+          const cqMarksC = parseFloat(studentMarksObj[`${child.id}_cq`] || '0');
+          const mcqMarksC = parseFloat(studentMarksObj[`${child.id}_mcq`] || '0');
+          const prMarksC = parseFloat(studentMarksObj[`${child.id}_practical`] || '0');
+          if (child.cq_full_marks && cqMarksC < Math.ceil(child.cq_full_marks * 0.33)) combinedFailed = true;
+          if (child.mcq_full_marks && mcqMarksC < Math.ceil(child.mcq_full_marks * 0.33)) combinedFailed = true;
+          if (child.practical_full_marks && prMarksC < Math.ceil(child.practical_full_marks * 0.33)) combinedFailed = true;
+          
+          processedSubjectIds.add(child.id);
+        }
+
+        // Combined pass check (usually 33% of total)
+        if (combinedObtained < Math.ceil(combinedFull * 0.33)) combinedFailed = true;
+
+        const pct = (combinedObtained / combinedFull) * 100;
+        const { gpa: gpStr } = getGradeInfo(pct, !combinedFailed);
+        const gp = parseFloat(gpStr);
+
+        totalMarks += combinedObtained;
+        totalPossible += combinedFull;
+        
+        if (s.is_optional) {
+          if (gp > 2) pointsSum += (gp - 2);
+        } else {
+          pointsSum += gp;
+          numMainSubjects++;
+        }
+        
+        processedSubjectIds.add(s.id);
+      } else {
+        // Regular subject calculation
+        const obtained = parseFloat(studentMarksObj[s.id] || '0');
+        const pass = s.pass_marks || Math.ceil((s.full_marks || 100) * 0.33);
+        const full = s.full_marks || 100;
+        
+        const pct = (obtained / full) * 100;
+        let failed = obtained < pass;
+
+        if (resultSystem === 'high_school') {
+          const cqMarks = parseFloat(studentMarksObj[`${s.id}_cq`] || '0');
+          const mcqMarks = parseFloat(studentMarksObj[`${s.id}_mcq`] || '0');
+          const prMarks = parseFloat(studentMarksObj[`${s.id}_practical`] || '0');
+          const cqFull = s.cq_full_marks || 0;
+          const mcqFull = s.mcq_full_marks || 0;
+          const prFull = s.practical_full_marks || 0;
+          if (cqFull > 0 && cqMarks < Math.ceil(cqFull * 0.33)) failed = true;
+          if (mcqFull > 0 && mcqMarks < Math.ceil(mcqFull * 0.33)) failed = true;
+          if (prFull > 0 && prMarks < Math.ceil(prFull * 0.33)) failed = true;
+        }
+
+        const isOptionalEffectively = s.is_optional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
+        if (!isOptionalEffectively && failed) hasFailedSub = true;
+
+        const { gpa: gpStr } = getGradeInfo(pct, !failed);
+        const gp = parseFloat(gpStr);
+
+        if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
+          if (!s.is_optional) {
+            totalMarks += obtained;
+            totalPossible += full;
+            pointsSum += gp;
+            numMainSubjects++;
+          } else {
+            if (gp > 2) pointsSum += (gp - 2);
+          }
+        } else {
           totalMarks += obtained;
           totalPossible += full;
           pointsSum += gp;
           numMainSubjects++;
-        } else {
-          if (gp > 2) {
-            pointsSum += (gp - 2);
-          }
         }
-      } else {
-        totalMarks += obtained;
-        totalPossible += full;
-        pointsSum += gp;
-        numMainSubjects++;
+        processedSubjectIds.add(s.id);
       }
     }
 
@@ -1127,7 +1275,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       let finalGpa = '0.00';
       let finalGrade = 'F';
 
-      if (resultSystem === 'grading' || resultSystem === 'grading_optional') {
+      if (resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') {
         let avgGp = pointsSum / numMainSubjects;
         if (avgGp > 5.0) avgGp = 5.0;
         finalGpa = avgGp.toFixed(2);
@@ -1415,6 +1563,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       subject_name: subName,
       full_marks: parseInt(fullMarks),
       pass_marks: parseInt(passMarks),
+      cq_full_marks: cqFullMarks ? parseInt(cqFullMarks) : null,
+      mcq_full_marks: mcqFullMarks ? parseInt(mcqFullMarks) : null,
+      practical_full_marks: practicalFullMarks ? parseInt(practicalFullMarks) : null,
+      pair_with_id: pairWithId || null,
       sort_order: parseInt(sortOrder) || 0,
       is_optional: isOptional
     };
@@ -1441,6 +1593,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       setShowAddSubject(false);
       setEditingSubject(null);
       setSubName('');
+      setFullMarks('100');
+      setPassMarks('33');
+      setCqFullMarks('');
+      setMcqFullMarks('');
+      setPracticalFullMarks('');
+      setPairWithId('');
       setSortOrder('0');
       setIsOptional(false);
       fetchSubjects(selectedExam.id);
@@ -1456,6 +1614,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setSubName(subject.subject_name || '');
     setFullMarks(subject.full_marks?.toString() || '100');
     setPassMarks(subject.pass_marks?.toString() || '33');
+    setCqFullMarks(subject.cq_full_marks?.toString() || '');
+    setMcqFullMarks(subject.mcq_full_marks?.toString() || '');
+    setPracticalFullMarks(subject.practical_full_marks?.toString() || '');
+    setPairWithId(subject.pair_with_id || '');
     setSortOrder(subject.sort_order?.toString() || '0');
     setIsOptional(subject.is_optional || false);
     setShowAddSubject(true);
@@ -1492,13 +1654,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setIsSaving(true);
     const payload: any[] = [];
     Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
-        Object.entries(subMarks).forEach(([subjectId, marks]) => {
+        // Filter out attendance and sub-mark keys to get actual subject IDs
+        const actualSubjectIds = Object.keys(subMarks).filter(key => 
+            key !== 'attendance' && !key.endsWith('_cq') && !key.endsWith('_mcq') && !key.endsWith('_practical')
+        );
+
+        actualSubjectIds.forEach((subjectId) => {
+            const marks = subMarks[subjectId];
             if (marks !== undefined && marks !== null && marks !== '') {
               payload.push({
                   exam_id: selectedExam.id,
                   student_id: studentId,
                   subject_id: subjectId,
-                  marks_obtained: parseFloat(marks as string)
+                  marks_obtained: parseFloat(marks as string),
+                  cq_marks: subMarks[`${subjectId}_cq`] !== undefined ? parseFloat(subMarks[`${subjectId}_cq`] as string) : null,
+                  mcq_marks: subMarks[`${subjectId}_mcq`] !== undefined ? parseFloat(subMarks[`${subjectId}_mcq`] as string) : null,
+                  practical_marks: subMarks[`${subjectId}_practical`] !== undefined ? parseFloat(subMarks[`${subjectId}_practical`] as string) : null,
               });
             }
         });
@@ -1631,6 +1802,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             };
 
             return {
+                id: s.id,
                 subject_name: s.subject_name,
                 marks_obtained: obtained,
                 grade: subGradeInfo(pct, hasFailedSub).grade,
@@ -1638,7 +1810,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 full_marks: s.full_marks || 100,
                 pass_marks: s.pass_marks || 33,
                 class_highest: classHighest,
-                is_optional: s.is_optional
+                is_optional: s.is_optional,
+                cq_marks: studentMarks[`${s.id}_cq`] || null,
+                mcq_marks: studentMarks[`${s.id}_mcq`] || null,
+                practical_marks: studentMarks[`${s.id}_practical`] || null,
+                cq_full_marks: s.cq_full_marks,
+                mcq_full_marks: s.mcq_full_marks,
+                practical_full_marks: s.practical_full_marks,
+                pair_with_id: s.pair_with_id
             };
         });
         
@@ -2944,7 +3123,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 <div key={s.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
                    <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-blue-50 text-[#2563EB] rounded-xl flex items-center justify-center"><BookOpen size={20}/></div>
-                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto text-lg`}>{s.subject_name}</h5>
+                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto text-lg flex items-center gap-2`}>
+                        {s.subject_name}
+                        {s.is_optional && (
+                          <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-widest font-black">Optional</span>
+                        )}
+                      </h5>
                    </div>
                    <div className="text-right flex flex-col items-end gap-2">
                       <div className="flex gap-2 items-center">
@@ -2984,7 +3168,18 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         <tr className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
                             <th className={`py-4 px-2 text-[10px] font-black text-slate-400 uppercase border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900 border-b border-b-slate-850' : 'border-slate-100 bg-white border-b border-b-slate-100'} sticky top-0 left-0 z-30 shadow-[2px_2px_5px_-2px_rgba(0,0,0,0.1)] max-w-[100px] truncate`}>Roll/Name</th>
                             {subjects.map(s => (
-                                <th key={s.id} className={`py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4 sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{s.subject_name}</th>
+                                <th key={s.id} className={`py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4 sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>
+                                    {resultSystem === 'high_school' ? (
+                                        <div className="flex flex-col items-center gap-1">
+                                            <span>{s.subject_name}</span>
+                                            <div className="flex gap-2 text-[8px] opacity-60">
+                                                <span>CQ</span>
+                                                <span>MCQ</span>
+                                                <span>PR</span>
+                                            </div>
+                                        </div>
+                                    ) : s.subject_name}
+                                </th>
                             ))}
                             <th className={`py-4 text-[10px] font-black text-amber-500 uppercase text-center min-w-[80px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{lang === 'bn' ? 'উপস্থিতি (%)' : 'Attendance (%)'}</th>
                             <th className={`py-4 text-[10px] font-black text-blue-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{t('total_marks', lang)}</th>
@@ -3003,33 +3198,109 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                 </td>
                                 {subjects.map((sub, idx) => (
                                     <td key={sub.id} className={`py-4 px-2 ${idx === 0 ? 'pl-4' : ''}`}>
-                                        <input 
-                                            type="number" 
-                                            min="0"
-                                            max={sub.full_marks}
-                                            className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-[#2563EB]'} rounded-lg text-center font-black text-xs outline-none transition-all`}
-                                            value={marksData[std.id]?.[sub.id] || ''}
-                                            onChange={(e) => {
-                                                let val = e.target.value;
-                                                if (val !== '') {
-                                                    const num = parseFloat(val);
-                                                    if (!isNaN(num)) {
-                                                        if (num > sub.full_marks) {
-                                                            val = sub.full_marks.toString();
-                                                        } else if (num < 0) {
-                                                            val = '0';
+                                        {resultSystem === 'high_school' ? (
+                                            <div className="flex flex-col gap-1.5 min-w-[120px]">
+                                                <div className="flex gap-1">
+                                                    <input 
+                                                        type="number" 
+                                                        placeholder="CQ"
+                                                        className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
+                                                        value={marksData[std.id]?.[`${sub.id}_cq`] || ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const cq = parseFloat(val) || 0;
+                                                            const mcq = parseFloat(marksData[std.id]?.[`${sub.id}_mcq`] || '0') || 0;
+                                                            const pr = parseFloat(marksData[std.id]?.[`${sub.id}_practical`] || '0') || 0;
+                                                            const total = cq + mcq + pr;
+                                                            
+                                                            setMarksData(prev => ({
+                                                                ...prev,
+                                                                [std.id]: {
+                                                                    ...prev[std.id],
+                                                                    [`${sub.id}_cq`]: val,
+                                                                    [sub.id]: total.toString()
+                                                                }
+                                                            }));
+                                                        }}
+                                                    />
+                                                    <input 
+                                                        type="number" 
+                                                        placeholder="MCQ"
+                                                        className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
+                                                        value={marksData[std.id]?.[`${sub.id}_mcq`] || ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const cq = parseFloat(marksData[std.id]?.[`${sub.id}_cq`] || '0') || 0;
+                                                            const mcq = parseFloat(val) || 0;
+                                                            const pr = parseFloat(marksData[std.id]?.[`${sub.id}_practical`] || '0') || 0;
+                                                            const total = cq + mcq + pr;
+                                                            
+                                                            setMarksData(prev => ({
+                                                                ...prev,
+                                                                [std.id]: {
+                                                                    ...prev[std.id],
+                                                                    [`${sub.id}_mcq`]: val,
+                                                                    [sub.id]: total.toString()
+                                                                }
+                                                            }));
+                                                        }}
+                                                    />
+                                                    <input 
+                                                        type="number" 
+                                                        placeholder="PR"
+                                                        className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
+                                                        value={marksData[std.id]?.[`${sub.id}_practical`] || ''}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const cq = parseFloat(marksData[std.id]?.[`${sub.id}_cq`] || '0') || 0;
+                                                            const mcq = parseFloat(marksData[std.id]?.[`${sub.id}_mcq`] || '0') || 0;
+                                                            const pr = parseFloat(val) || 0;
+                                                            const total = cq + mcq + pr;
+                                                            
+                                                            setMarksData(prev => ({
+                                                                ...prev,
+                                                                [std.id]: {
+                                                                    ...prev[std.id],
+                                                                    [`${sub.id}_practical`]: val,
+                                                                    [sub.id]: total.toString()
+                                                                }
+                                                            }));
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className={`text-[9px] text-center font-bold ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                                                    Total: {marksData[std.id]?.[sub.id] || '0'}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <input 
+                                                type="number" 
+                                                min="0"
+                                                max={sub.full_marks}
+                                                className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-[#2563EB]'} rounded-lg text-center font-black text-xs outline-none transition-all`}
+                                                value={marksData[std.id]?.[sub.id] || ''}
+                                                onChange={(e) => {
+                                                    let val = e.target.value;
+                                                    if (val !== '') {
+                                                        const num = parseFloat(val);
+                                                        if (!isNaN(num)) {
+                                                            if (num > sub.full_marks) {
+                                                                val = sub.full_marks.toString();
+                                                            } else if (num < 0) {
+                                                                val = '0';
+                                                            }
                                                         }
                                                     }
-                                                }
-                                                setMarksData(prev => ({
-                                                    ...prev,
-                                                    [std.id]: {
-                                                        ...prev[std.id],
-                                                        [sub.id]: val
-                                                    }
-                                                }));
-                                            }}
-                                        />
+                                                    setMarksData(prev => ({
+                                                        ...prev,
+                                                        [std.id]: {
+                                                            ...prev[std.id],
+                                                            [sub.id]: val
+                                                        }
+                                                    }));
+                                                }}
+                                            />
+                                        )}
                                     </td>
                                 ))}
                                 <td className="py-4 px-2">
@@ -3051,11 +3322,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     />
                                 </td>
                                 <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
-                                    {(Object.entries(marksData[std.id] || {}).filter(([sid]) => sid !== 'attendance') as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0)}
+                                    {calculateStudentResult(std.id, subjects).total}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
                                     {(() => {
-                                        const total = (Object.entries(marksData[std.id] || {}).filter(([sid]) => sid !== 'attendance') as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0);
+                                        const total = (Object.entries(marksData[std.id] || {}).filter(([sid]) => subjects.some(s => s.id === sid)) as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0);
                                         const avgValue = subjects.length > 0 ? (total / subjects.length) : 0;
                                         return avgValue.toFixed(2);
                                     })()}
@@ -3177,6 +3448,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       return { gpa: '1.00', grade: 'D' };
                                                   };
                                                   return {
+                                                      id: s.id,
                                                       subject_name: s.subject_name,
                                                       marks_obtained: obtained,
                                                       grade: subGradeInfo(pct, hasFailedSub).grade,
@@ -3184,7 +3456,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       full_marks: s.full_marks || 100,
                                                       pass_marks: s.pass_marks || 33,
                                                       class_highest: classHighest,
-                                                      is_optional: s.is_optional
+                                                      is_optional: s.is_optional,
+                                                      cq_marks: studentMarks[`${s.id}_cq`] || null,
+                                                      mcq_marks: studentMarks[`${s.id}_mcq`] || null,
+                                                      practical_marks: studentMarks[`${s.id}_practical`] || null,
+                                                      cq_full_marks: s.cq_full_marks,
+                                                      mcq_full_marks: s.mcq_full_marks,
+                                                      practical_full_marks: s.practical_full_marks,
+                                                      pair_with_id: s.pair_with_id
                                                   };
                                               });
                                               if (selectedExam && madrasah) {
@@ -3447,7 +3726,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
              </div>
              <div className="space-y-4">
                 <div className="relative"><input type="text" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="বিষয়ের নাম (যেমন: কুরআন)" value={subName} onChange={(e) => setSubName(e.target.value)} /><BookOpen size={20} className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" /></div>
-                {resultSystem === 'grading_optional' && (
+                {(resultSystem === 'grading_optional' || resultSystem === 'high_school') && (
                   <div className="flex items-center gap-2 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
                     <input type="checkbox" id="isOptional" checked={isOptional} onChange={(e) => setIsOptional(e.target.checked)} className="w-5 h-5 rounded-lg border-slate-300 text-[#2563EB] focus:ring-[#2563EB]" />
                     <label htmlFor="isOptional" className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-700'}`}>৪র্থ বিষয় / Optional Subject</label>
@@ -3457,6 +3736,37 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পূর্ণমান" value={fullMarks} onChange={(e) => setFullMarks(e.target.value)} /><Star className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
                     <div className="relative"><input type="number" className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="পাস" value={passMarks} onChange={(e) => setPassMarks(e.target.value)} /><AlertCircle className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/></div>
                 </div>
+                {resultSystem === 'high_school' && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase px-1">CQ</label>
+                      <input type="number" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-xl px-4 font-black text-xs outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="CQ" value={cqFullMarks} onChange={(e) => setCqFullMarks(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase px-1">MCQ</label>
+                      <input type="number" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-xl px-4 font-black text-xs outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="MCQ" value={mcqFullMarks} onChange={(e) => setMcqFullMarks(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase px-1">PR</label>
+                      <input type="number" className={`w-full h-12 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-xl px-4 font-black text-xs outline-none border-2 border-transparent focus:border-[#2563EB]/20 transition-all`} placeholder="Prac" value={practicalFullMarks} onChange={(e) => setPracticalFullMarks(e.target.value)} />
+                    </div>
+                  </div>
+                )}
+                {resultSystem === 'high_school' && (
+                  <div className="relative">
+                    <select 
+                      className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 text-white' : 'bg-slate-50 text-[#1E293B]'} rounded-2xl px-12 font-black text-sm outline-none border-2 border-transparent focus:border-[#2563EB]/20 appearance-none transition-all`} 
+                      value={pairWithId} 
+                      onChange={(e) => setPairWithId(e.target.value)}
+                    >
+                        <option value="">কারো সাথে যুক্ত নয় (Not Combined)</option>
+                        {subjects.filter(s => s.id !== editingSubject?.id).map(s => (
+                          <option key={s.id} value={s.id}>{s.subject_name}-এর সাথে যুক্ত করুন</option>
+                        ))}
+                    </select>
+                    <Link className="absolute left-4 top-4 text-slate-300 dark:text-slate-600" size={20}/>
+                  </div>
+                )}
                 <div className="relative">
                     <input 
                       type="number" 
