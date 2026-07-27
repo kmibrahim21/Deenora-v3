@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -66,8 +66,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [showDeleteSubjectConfirm, setShowDeleteSubjectConfirm] = useState(false);
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
   const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
+  const [selectedResultTemplate, setSelectedResultTemplate] = useState<'classic' | 'premium'>('premium');
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
-  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
+  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium') => Promise<void>) | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successTitle, setSuccessTitle] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -1744,7 +1745,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setIsSaving(false);
   };
 
-  const handleDownloadClassResult = async (downloadLang: 'en' | 'bn' = lang) => {
+  const handleDownloadClassResult = async (downloadLang: 'en' | 'bn' = lang, templateId: 'classic' | 'premium' = selectedResultTemplate) => {
     if (!selectedExam || !madrasah) return;
     
     setIsDownloading(true);
@@ -1761,7 +1762,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           marksData,
           madrasah,
           downloadLang,
-          (p) => setDownloadProgress(p)
+          (p) => setDownloadProgress(p),
+          templateId
       );
     } catch (error) {
       console.error('Download error:', error);
@@ -1771,7 +1773,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     }
   };
 
-  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang) => {
+  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, templateId: 'classic' | 'premium' = selectedResultTemplate) => {
     if (!selectedExam || !madrasah) return;
     
     setIsDownloading(true);
@@ -1858,7 +1860,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           selectedExam,
           madrasah,
           downloadLang,
-          (p) => setDownloadProgress(p)
+          (p) => setDownloadProgress(p),
+          templateId
       );
     } catch (error) {
       console.error('Download error:', error);
@@ -1941,14 +1944,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           {activeTab === 'exams' && view === 'report' && (
               <div className="flex items-center gap-2">
                 <button onClick={() => {
-                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadClassResult(l));
+                    setDownloadAction(() => (l: 'en' | 'bn', tId?: 'classic' | 'premium') => handleDownloadClassResult(l, tId));
                     setShowDownloadLangModal(true);
                 }} className="px-2.5 h-8 bg-blue-50 text-[#2563EB] rounded-lg flex items-center justify-center border border-blue-100 hover:bg-blue-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
                     <Download size={14} />
                     {lang === 'bn' ? 'ফলাফল' : 'Result'}
                 </button>
                 <button onClick={() => {
-                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadMassMarksheets(l));
+                    setDownloadAction(() => (l: 'en' | 'bn', tId?: 'classic' | 'premium') => handleDownloadMassMarksheets(l, tId));
                     setShowDownloadLangModal(true);
                 }} className="px-2.5 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center border border-purple-100 hover:bg-purple-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
                     <Printer size={14} />
@@ -3535,7 +3538,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                         preparedMarks,
                                                         madrasah,
                                                         lang,
-                                                        (p) => setDownloadProgress(p)
+                                                        (p) => setDownloadProgress(p),
+                                                        selectedResultTemplate
                                                     );
                                                   } finally {
                                                     setIsDownloading(false);
@@ -3677,53 +3681,99 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       {/* Modals */}
       {showDownloadLangModal && (
           <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[1100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800 shadow-none' : 'bg-white border-white/20 shadow-2xl'} w-full max-w-sm rounded-[3rem] p-8 animate-in zoom-in-95 duration-300 relative overflow-hidden`}>
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800 shadow-none' : 'bg-white border-white/20 shadow-2xl'} w-full max-w-md rounded-[3rem] p-8 animate-in zoom-in-95 duration-300 relative overflow-hidden`}>
                   {/* Decorative Background */}
                   <div className={`absolute top-0 right-0 w-32 h-32 ${madrasah?.theme === 'dark' ? 'bg-blue-500/5' : 'bg-blue-50'} rounded-full -mr-16 -mt-16 opacity-50`}></div>
                   <div className={`absolute bottom-0 left-0 w-24 h-24 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/5' : 'bg-emerald-50'} rounded-full -ml-12 -mb-12 opacity-50`}></div>
 
                   <div className="relative z-10">
-                      <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-200 dark:shadow-none rotate-3">
-                          <Download className="text-white" size={32} strokeWidth={2.5} />
+                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-[1.8rem] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200 dark:shadow-none rotate-3">
+                          <Download className="text-white" size={28} strokeWidth={2.5} />
                       </div>
                       
-                      <div className="text-center mb-8">
-                          <h3 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} leading-tight`}>Select Language</h3>
-                          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">ডাউনলোড ভাষা নির্বাচন করুন</p>
+                      <div className="text-center mb-6">
+                          <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} leading-tight`}>Result Sheet Export</h3>
+                          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest mt-0.5">ডিজাইন টেমপ্লেট ও ভাষা নির্বাচন করুন</p>
                       </div>
-                      
-                      <div className="space-y-3">
+
+                      {/* Template Options */}
+                      <div className="mb-6 space-y-2 text-left">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
+                              {lang === 'bn' ? '১. টেমপ্লেট ডিজাইন (Template Design)' : '1. Select Template Design'}
+                          </label>
+                          <div className="grid grid-cols-2 gap-2.5">
+                              <button
+                                  type="button"
+                                  onClick={() => setSelectedResultTemplate('premium')}
+                                  className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                      selectedResultTemplate === 'premium'
+                                          ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
+                                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                  }`}
+                              >
+                                  <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[8px] font-black rounded-md uppercase tracking-wider shadow-sm">NEW</span>
+                                  <div className="font-bold text-xs flex items-center gap-1.5">
+                                      <Layout size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                                      {lang === 'bn' ? 'প্রিমিয়াম ডিজাইন' : 'Premium Design'}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                                      {lang === 'bn' ? 'অফিসিয়াল একাডেমিক' : 'Academic Official'}
+                                  </div>
+                              </button>
+
+                              <button
+                                  type="button"
+                                  onClick={() => setSelectedResultTemplate('classic')}
+                                  className={`p-3 rounded-2xl border text-left transition-all ${
+                                      selectedResultTemplate === 'classic'
+                                          ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
+                                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                  }`}
+                              >
+                                  <div className="font-bold text-xs flex items-center gap-1.5">
+                                      <FileText size={14} className="text-slate-600 dark:text-slate-400 shrink-0" />
+                                      {lang === 'bn' ? 'ক্লাসিক ডিজাইন' : 'Classic Design'}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                                      {lang === 'bn' ? 'স্ট্যান্ডার্ড ডিফল্ট' : 'Standard Default'}
+                                  </div>
+                              </button>
+                          </div>
+                      </div>
+
+                      <div className="space-y-2.5">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1 text-left">
+                              {lang === 'bn' ? '২. ভাষা নির্বাচন করুন (Select Language)' : '2. Select Language'}
+                          </label>
                           <button 
                               onClick={async () => {
                                   if (downloadAction) {
                                       setShowDownloadLangModal(false);
-                                      setShowAdmitCardModal(false);
-                                      await downloadAction('bn');
+                                      await downloadAction('bn', selectedResultTemplate);
                                   }
                               }}
-                              className="w-full group relative overflow-hidden py-5 bg-emerald-500 text-white font-black rounded-2xl shadow-xl shadow-emerald-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
+                              className="w-full group relative overflow-hidden py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
                           >
                               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                              <span className="relative z-10 text-lg">বাংলা (Bengali)</span>
+                              <span className="relative z-10 text-base">বাংলা (Bengali)</span>
                           </button>
 
                           <button 
                               onClick={async () => {
                                   if (downloadAction) {
                                       setShowDownloadLangModal(false);
-                                      setShowAdmitCardModal(false);
-                                      await downloadAction('en');
+                                      await downloadAction('en', selectedResultTemplate);
                                   }
                               }}
-                              className="w-full group relative overflow-hidden py-5 bg-[#2563EB] text-white font-black rounded-2xl shadow-xl shadow-blue-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
+                              className="w-full group relative overflow-hidden py-4 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
                           >
                               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                              <span className="relative z-10 text-lg">English</span>
+                              <span className="relative z-10 text-base">English</span>
                           </button>
 
                           <button 
                               onClick={() => setShowDownloadLangModal(false)}
-                              className="w-full py-4 text-slate-400 dark:text-slate-500 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-600 dark:hover:text-slate-300 transition-colors mt-2 active:scale-95"
+                              className="w-full py-3 text-slate-400 dark:text-slate-500 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-600 dark:hover:text-slate-300 transition-colors active:scale-95"
                           >
                               Cancel / বাতিল
                           </button>

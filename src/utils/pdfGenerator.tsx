@@ -5,6 +5,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { toJpeg, toPng } from 'html-to-image';
 import { ResultSheetTemplate } from '../components/pdf/ResultSheetTemplate';
+import { PremiumResultSheetTemplate } from '../components/pdf/PremiumResultSheetTemplate';
 import { ClassResultTemplate } from '../components/pdf/ClassResultTemplate';
 import { ClassFeeReportTemplate } from '../components/pdf/ClassFeeReportTemplate';
 import { FeeReceiptTemplate } from '../components/pdf/FeeReceiptTemplate';
@@ -233,27 +234,54 @@ export const generateResultPDF = async (
     marks: any[],
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    templateId: 'classic' | 'premium' = 'classic'
 ) => {
     onProgress?.(10);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '794px';
     document.body.appendChild(container);
     const root = createRoot(container);
     
     await new Promise<void>((resolve) => {
-        root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
+        if (templateId === 'premium') {
+            root.render(
+                <div id="pdf-wrapper">
+                    <PremiumResultSheetTemplate 
+                        exam={exam} 
+                        subjects={marks.map((m: any) => ({
+                            id: m.subject_id || m.id,
+                            subject_name: m.subject_name || m.name,
+                            full_marks: m.full_marks || 100,
+                            pass_marks: m.pass_marks || 33
+                        }))} 
+                        students={[]} 
+                        madrasah={madrasah} 
+                        lang={lang} 
+                        singleStudent={student} 
+                        singleStudentMarks={marks} 
+                    />
+                </div>
+            );
+        } else {
+            root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
+        }
         setTimeout(resolve, 1500); // Increased timeout for font loading
     });
     onProgress?.(50);
 
-    const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
+    const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
+
+    const imgData = await toJpeg(targetEl, {
         pixelRatio: 2, // Higher quality
         quality: 0.95,
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
+        fontEmbedCSS: '',
     });
     onProgress?.(85);
 
@@ -267,7 +295,7 @@ export const generateResultPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`Result_${student.student_name}.pdf`);
+    doc.save(`Result_${student.student_name || student.name || 'Student'}.pdf`);
     onProgress?.(100);
 };
 
@@ -276,7 +304,8 @@ export const generateMassMarksheetPDF = async (
     exam: any,
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    templateId: 'classic' | 'premium' = 'classic'
 ) => {
     onProgress?.(2);
     const container = document.createElement('div');
@@ -290,13 +319,30 @@ export const generateMassMarksheetPDF = async (
             <div id="pdf-wrapper">
                 {preppedStudents.map((std, idx) => (
                     <div key={idx} className="pdf-page-container">
-                        <ResultSheetTemplate 
-                            student={std.info} 
-                            exam={exam} 
-                            marks={std.marks} 
-                            madrasah={madrasah} 
-                            lang={lang} 
-                        />
+                        {templateId === 'premium' ? (
+                            <PremiumResultSheetTemplate 
+                                exam={exam} 
+                                subjects={std.marks.map((m: any) => ({
+                                    id: m.subject_id || m.id,
+                                    subject_name: m.subject_name || m.name,
+                                    full_marks: m.full_marks || 100,
+                                    pass_marks: m.pass_marks || 33
+                                }))} 
+                                students={[]} 
+                                madrasah={madrasah} 
+                                lang={lang} 
+                                singleStudent={std.info} 
+                                singleStudentMarks={std.marks} 
+                            />
+                        ) : (
+                            <ResultSheetTemplate 
+                                student={std.info} 
+                                exam={exam} 
+                                marks={std.marks} 
+                                madrasah={madrasah} 
+                                lang={lang} 
+                            />
+                        )}
                     </div>
                 ))}
             </div>
@@ -315,7 +361,7 @@ export const generateMassMarksheetPDF = async (
         const pages = Array.from(wrapper.children);
         
         for (let i = 0; i < pages.length; i++) {
-            const pageElement = pages[i] as HTMLElement;
+            const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
             
             const imgData = await toJpeg(pageElement, {
                 pixelRatio: 2,
@@ -323,6 +369,7 @@ export const generateMassMarksheetPDF = async (
                 backgroundColor: '#ffffff',
                 width: 794,
                 height: 1123,
+                fontEmbedCSS: '',
             });
             
             const isLeft = (i % 2 === 0);
@@ -355,7 +402,8 @@ export const generateClassResultPDF = async (
     marksData: any,
     madrasah: { name: string, config_json?: any },
     lang: 'en' | 'bn' = 'en',
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    templateId: 'classic' | 'premium' = 'classic'
 ) => {
     onProgress?.(5);
 
@@ -519,6 +567,7 @@ export const generateClassResultPDF = async (
             }
         });
         
+        const hasAnyMark = subjects.some(s => studentMarks[s.id] !== undefined && studentMarks[s.id] !== '' && studentMarks[s.id] !== null);
         const avgPercentage = subjects.length > 0 ? (total / subjects.length) : 0;
         
         let gpa = '0.00';
@@ -553,23 +602,25 @@ export const generateClassResultPDF = async (
 
         return {
             ...student,
-            _total: total,
-            _avg: avgPercentage.toFixed(2),
-            _gpa: gpa,
-            _grade: grade,
-            _hasFailed: hasFailed
+            _total: hasAnyMark ? total : '',
+            _avg: hasAnyMark ? avgPercentage.toFixed(2) : '',
+            _gpa: hasAnyMark ? gpa : '',
+            _grade: hasAnyMark ? grade : '',
+            _hasFailed: hasAnyMark ? hasFailed : true,
+            _hasAnyMark: hasAnyMark
         };
     });
 
     // Sort by rank logic
-    calculatedStudents.sort((a, b) => {
+    const validForRank = calculatedStudents.filter(s => s._hasAnyMark);
+    validForRank.sort((a, b) => {
         if (a._hasFailed && !b._hasFailed) return 1;
         if (!a._hasFailed && b._hasFailed) return -1;
         if ((resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') && !a._hasFailed && !b._hasFailed) {
-            const gpaDiff = parseFloat(b._gpa) - parseFloat(a._gpa);
+            const gpaDiff = parseFloat(b._gpa || '0') - parseFloat(a._gpa || '0');
             if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
         }
-        const totalDiff = b._total - a._total;
+        const totalDiff = (Number(b._total) || 0) - (Number(a._total) || 0);
         if (Math.abs(totalDiff) > 0.001) return totalDiff;
         const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
         const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || 0 : (b.roll || 0);
@@ -577,19 +628,25 @@ export const generateClassResultPDF = async (
     });
 
     let currentRank = 1;
-    calculatedStudents.forEach((std, index) => {
+    validForRank.forEach((std, index) => {
         if (index > 0) {
-            const prev = calculatedStudents[index - 1];
+            const prev = validForRank[index - 1];
             const isTie = (
                 prev._hasFailed === std._hasFailed &&
                 prev._gpa === std._gpa &&
-                Math.abs(prev._total - std._total) < 0.001
+                Math.abs((Number(prev._total) || 0) - (Number(std._total) || 0)) < 0.001
             );
             if (!isTie) {
                 currentRank++;
             }
         }
         std._rank = currentRank;
+    });
+
+    calculatedStudents.forEach(std => {
+        if (!std._hasAnyMark) {
+            std._rank = '';
+        }
     });
 
     // Sort back by roll for the sheet
@@ -606,7 +663,58 @@ export const generateClassResultPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
     
-    // Chunk students for multi-page support
+    if (templateId === 'premium') {
+        await new Promise<void>((resolve) => {
+            root.render(
+                <div id="pdf-wrapper">
+                    <PremiumResultSheetTemplate 
+                        exam={exam} 
+                        subjects={subjects} 
+                        students={calculatedStudents} 
+                        marksData={marksData} 
+                        madrasah={madrasah} 
+                        lang={lang} 
+                    />
+                </div>
+            );
+            setTimeout(resolve, 1200);
+        });
+        onProgress?.(35);
+
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        const wrapper = container.querySelector('#pdf-wrapper');
+        if (wrapper) {
+            const pageElements = Array.from(wrapper.querySelectorAll('.pdf-page-container')) as HTMLElement[];
+            const pagesToRender = pageElements.length > 0 ? pageElements : (Array.from(wrapper.children).filter(el => el.tagName !== 'STYLE') as HTMLElement[]);
+
+            for (let i = 0; i < pagesToRender.length; i++) {
+                const imgData = await toJpeg(pagesToRender[i], {
+                    pixelRatio: 2.5,
+                    quality: 0.98,
+                    backgroundColor: '#ffffff',
+                    width: 794,
+                    height: 1123,
+                    fontEmbedCSS: '',
+                });
+                if (i > 0) doc.addPage();
+                doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                onProgress?.(35 + Math.floor(((i + 1) / pagesToRender.length) * 60));
+            }
+        }
+
+        onProgress?.(98);
+        root.unmount();
+        document.body.removeChild(container);
+
+        doc.save(`Premium_Result_${exam.exam_name || 'Class'}.pdf`);
+        onProgress?.(100);
+        return;
+    }
+
+    // Chunk students for multi-page support in classic template
     const STUDENTS_PER_PAGE = 12; 
     const chunks = [];
     for (let i = 0; i < calculatedStudents.length; i += STUDENTS_PER_PAGE) {

@@ -70,20 +70,26 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     classHighest: isBangla ? "শ্রেণি সর্বোচ্চ" : "CLASS HIGHEST",
   };
 
-  const totalObtained = marks.filter(m => !m.is_optional).reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0);
+  const hasAnyMark = marks.some(m => m.marks_obtained !== undefined && m.marks_obtained !== null && m.marks_obtained !== '');
+
+  const totalObtained = hasAnyMark ? marks.filter(m => !m.is_optional).reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0) : '';
   const totalFull = marks.filter(m => !m.is_optional).reduce((sum, m) => sum + Number(m.full_marks || 100), 0);
   
-  const averageGpa = student.gpa && student.gpa !== "0.00" 
-    ? student.gpa 
-    : marks.length > 0 
-      ? marks.some(m => m.grade === 'F') ? '0.00' : (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(2)
-      : '0.00';
+  const averageGpa = hasAnyMark ? (
+    student.gpa && student.gpa !== "0.00" 
+      ? student.gpa 
+      : marks.length > 0 
+        ? marks.some(m => m.grade === 'F') ? '0.00' : (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(2)
+        : '0.00'
+  ) : '';
 
-  const finalGrade = student.grade && student.grade !== 'F' 
-    ? student.grade 
-    : averageGpa === '5.00' ? 'A+' : averageGpa >= '4.00' ? 'A' : averageGpa >= '3.50' ? 'A-' : averageGpa >= '3.00' ? 'B' : averageGpa >= '2.00' ? 'C' : averageGpa >= '1.00' ? 'D' : 'F';
+  const finalGrade = hasAnyMark ? (
+    student.grade && student.grade !== 'F' 
+      ? student.grade 
+      : averageGpa === '5.00' ? 'A+' : averageGpa >= '4.00' ? 'A' : averageGpa >= '3.50' ? 'A-' : averageGpa >= '3.00' ? 'B' : averageGpa >= '2.00' ? 'C' : averageGpa >= '1.00' ? 'D' : 'F'
+  ) : '';
 
-  const isPassed = finalGrade !== 'F';
+  const isPassed = hasAnyMark && finalGrade !== 'F';
 
   const formattedAttendance = React.useMemo(() => {
     const att = student.attendance;
@@ -94,6 +100,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
   }, [student.attendance]);
 
   const assessmentText = React.useMemo(() => {
+    if (!hasAnyMark) return '-';
     if (isBangla) {
       if (finalGrade === 'A+') return 'চমৎকার';
       if (finalGrade === 'A') return 'উত্তম';
@@ -104,7 +111,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     if (finalGrade === 'A') return 'Very Good';
     if (isPassed) return 'Satisfactory';
     return 'Needs Improvement';
-  }, [isBangla, finalGrade, isPassed]);
+  }, [isBangla, finalGrade, isPassed, hasAnyMark]);
 
   return (
     <div className={`w-[794px] h-[1123px] bg-white p-0 m-0 ${isBangla ? 'font-noto' : 'font-hind'} text-slate-900 relative overflow-hidden print-container shadow-2xl`} style={{ boxSizing: 'border-box' }}>
@@ -262,7 +269,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                       full: m.full_marks || 100,
                       pass: m.pass_marks || 33,
                       highest: m.class_highest || '-',
-                      obtained: m.marks_obtained || 0,
+                      obtained: (m.marks_obtained !== undefined && m.marks_obtained !== null && m.marks_obtained !== '') ? m.marks_obtained : '',
                       gp: isParent ? '-' : (m.grade_point || '0.00'),
                       grade: isParent ? '-' : (m.grade || '-'),
                       isChild: isChild,
@@ -340,7 +347,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                           <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.pr ?? '-'}</td>
                         </>
                       )}
-                      <td className="border border-slate-300 py-1 px-1 text-center font-black font-mono text-slate-950 bg-blue-50/40 text-[13px]">{String(row.obtained).padStart(2, '0')}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-black font-mono text-slate-950 bg-blue-50/40 text-[13px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? String(row.obtained).padStart(2, '0') : ''}</td>
                       <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[13px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
                       <td className={`border border-slate-300 py-1 px-1 text-center font-bold font-mono text-[12px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.gp}</td>
                     </tr>
@@ -374,12 +381,12 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                 <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
                   <span className="text-base">🏆</span>
                   <span className="text-[13px] font-black text-[#1E3A8A] uppercase whitespace-nowrap">
-                    {t.rank}: <span className="text-[#1E3A8A] font-mono text-[15px] font-black ml-1">{student.merit_position && student.merit_position !== "null" ? student.merit_position : 'N/A'}</span>
+                    {t.rank}: <span className="text-[#1E3A8A] font-mono text-[15px] font-black ml-1">{hasAnyMark && student.merit_position && student.merit_position !== "null" && student.merit_position !== "-" ? student.merit_position : '-'}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                  <span className={`text-base ${isPassed ? 'text-emerald-600' : 'text-red-600'}`}>{isPassed ? '✓' : '✗'}</span>
-                  <span className={`text-[13px] font-black ${isPassed ? 'text-emerald-700' : 'text-red-700'} uppercase whitespace-nowrap`}>{isPassed ? t.passed : t.failed}</span>
+                  <span className={`text-base ${hasAnyMark ? (isPassed ? 'text-emerald-600' : 'text-red-600') : 'text-slate-400'}`}>{hasAnyMark ? (isPassed ? '✓' : '✗') : '-'}</span>
+                  <span className={`text-[13px] font-black ${hasAnyMark ? (isPassed ? 'text-emerald-700' : 'text-red-700') : 'text-slate-400'} uppercase whitespace-nowrap`}>{hasAnyMark ? (isPassed ? t.passed : t.failed) : '-'}</span>
                 </div>
               </div>
               <div className="flex justify-between items-center text-[11px] font-bold text-slate-600 px-0.5 gap-2">
@@ -391,8 +398,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             <div className="col-span-4 bg-[#1E3A8A] text-white rounded-xl p-2.5 flex flex-col items-center justify-center text-center shadow-sm">
               <p className="text-[9px] font-black uppercase tracking-wider text-blue-100 mb-1 whitespace-nowrap">{isBangla ? 'সর্বমোট ফলাফল' : 'Final Grade & GPA'}</p>
               <div className="flex items-baseline gap-2 whitespace-nowrap">
-                <h2 className="text-[28px] font-black text-white leading-none">{finalGrade}</h2>
-                <span className="text-[15px] font-black font-mono text-blue-200">({averageGpa})</span>
+                <h2 className="text-[28px] font-black text-white leading-none">{hasAnyMark ? finalGrade : '-'}</h2>
+                {hasAnyMark && averageGpa ? <span className="text-[15px] font-black font-mono text-blue-200">({averageGpa})</span> : null}
               </div>
             </div>
           </div>

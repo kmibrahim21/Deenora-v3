@@ -117,11 +117,16 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                 <tbody className="divide-y divide-slate-100">
                   {pageData.map((student, idx) => {
                     const studentMarks = marksData[student.id] || {};
-                    const total = student._total || 0;
-                    const avg = student._avg || '0.00';
-                    const gpa = student._gpa || '0.00';
-                    const grade = student._grade || 'F';
-                    const rank = student._rank || '-';
+                    const hasAnyMark = subjects.some(s => {
+                      const rawVal = typeof studentMarks[s.id] === 'object' ? studentMarks[s.id]?.obtained : studentMarks[s.id];
+                      return rawVal !== undefined && rawVal !== '' && rawVal !== null;
+                    }) || (student._total !== undefined && student._total !== null && student._total !== '' && Number(student._total) > 0) || student._hasAnyMark === true;
+
+                    const total = hasAnyMark ? (student._total !== undefined && student._total !== '' ? student._total : 0) : '';
+                    const avg = hasAnyMark ? `${student._avg || '0.00'}%` : '';
+                    const gpa = hasAnyMark ? (student._gpa || '0.00') : '';
+                    const grade = hasAnyMark ? (student._grade || 'F') : '';
+                    const rank = hasAnyMark ? (student._rank && student._rank !== '-' ? student._rank : '') : '';
 
                     return (
                       <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
@@ -130,18 +135,20 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         {subjects.filter(sub => {
                           return !isHighSchool || !sub.pair_with_id;
                         }).map(s => {
-                          let total = Number(studentMarks[s.id] || 0);
-                          let cq = Number(studentMarks[`${s.id}_cq`] || 0);
-                          let mcq = Number(studentMarks[`${s.id}_mcq`] || 0);
-                          let pr = Number(studentMarks[`${s.id}_practical`] || 0);
+                          const rawVal = typeof studentMarks[s.id] === 'object' ? studentMarks[s.id]?.obtained : studentMarks[s.id];
+                          const hasMark = rawVal !== undefined && rawVal !== '' && rawVal !== null;
+                          let totalVal: number | string = hasMark ? Number(rawVal) : '';
+                          let cqVal = studentMarks[`${s.id}_cq`];
+                          let mcqVal = studentMarks[`${s.id}_mcq`];
+                          let prVal = studentMarks[`${s.id}_practical`];
 
                           if (isHighSchool) {
                             const children = subjects.filter(child => child.pair_with_id === s.id);
                             children.forEach(child => {
-                                total += Number(studentMarks[child.id] || 0);
-                                cq += Number(studentMarks[`${child.id}_cq`] || 0);
-                                mcq += Number(studentMarks[`${child.id}_mcq`] || 0);
-                                pr += Number(studentMarks[`${child.id}_practical`] || 0);
+                                const cVal = typeof studentMarks[child.id] === 'object' ? studentMarks[child.id]?.obtained : studentMarks[child.id];
+                                if (cVal !== undefined && cVal !== '' && cVal !== null) {
+                                  totalVal = (typeof totalVal === 'number' ? totalVal : 0) + Number(cVal);
+                                }
                             });
                           }
 
@@ -149,23 +156,25 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                             <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[12px]">
                               {isHighSchool ? (
                                 <div className="flex flex-col leading-none">
-                                  <span>{total}</span>
+                                  <span>{totalVal}</span>
                                   <div className="flex justify-center gap-0.5 text-[6px] opacity-40 font-normal">
-                                    <span>{cq || 0}</span>
-                                    <span>{mcq || 0}</span>
-                                    <span>{pr || 0}</span>
+                                    <span>{cqVal !== undefined && cqVal !== '' ? cqVal : ''}</span>
+                                    <span>{mcqVal !== undefined && mcqVal !== '' ? mcqVal : ''}</span>
+                                    <span>{prVal !== undefined && prVal !== '' ? prVal : ''}</span>
                                   </div>
                                 </div>
-                              ) : total}
+                              ) : totalVal}
                             </td>
                           );
                         })}
                         <td className="px-2 py-1 text-center font-mono font-black text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[14px]">{total}</td>
-                        <td className="px-1 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{avg}%</td>
+                        <td className="px-1 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{avg}</td>
                         <td className={`px-2 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 text-[14px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
-                          <span className="inline-flex items-center justify-center w-8 h-6 rounded-lg bg-white border border-slate-100 shadow-sm">
+                          {grade ? (
+                            <span className="inline-flex items-center justify-center w-8 h-6 rounded-lg bg-white border border-slate-100 shadow-sm">
                               {grade}
-                          </span>
+                            </span>
+                          ) : ''}
                         </td>
                         <td className="px-2 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{gpa}</td>
                         <td className="px-1 py-1 text-center font-mono font-black text-[#2563EB] bg-blue-50/20 text-[14px]">{rank}</td>

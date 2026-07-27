@@ -375,8 +375,8 @@ export const SMSService = {
           if (resStr === '1016') {
              throwErrorMsg = 'এসএমএস গেটওয়ে এরর (1016)';
           } else if (resStr === '1011' || resStr === '1012') {
-                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
-                  } else if (isErrorCode) {
+             throwErrorMsg = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
+          } else if (isErrorCode) {
              throwErrorMsg = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
           }
         }
