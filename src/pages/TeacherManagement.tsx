@@ -197,13 +197,18 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
        fetchSalaryMonthAttendance();
     }
     if (activeTab === 'attendance' && attendanceSubTab === 'take' && madrasah?.id) {
-       fetchTeacherAttendance();
        fetchDayEvents();
     }
     if (activeTab === 'attendance' && attendanceSubTab === 'report' && madrasah?.id) {
        fetchAttendanceReport();
     }
   }, [salaryMonth, attendanceDate, attendanceMonth, activeTab, attendanceSubTab, reportType, reportYear, reportDate, madrasah?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'attendance' && attendanceSubTab === 'take' && madrasah?.id) {
+       fetchTeacherAttendance(isHoliday);
+    }
+  }, [isHoliday, attendanceDate, activeTab, attendanceSubTab, madrasah?.id]);
 
   const fetchSalaryMonthAttendance = async () => {
     try {
@@ -236,7 +241,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
-  const fetchTeacherAttendance = async () => {
+  const fetchTeacherAttendance = async (forceHoliday?: boolean) => {
     try {
       const res = await fetch(`/api/teachers/attendance?institute_id=${madrasah!.id}&date=${attendanceDate}`);
       const data = await res.json();
@@ -245,7 +250,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       } else {
         const initial: Record<string, string> = {};
         teachers.forEach(t => {
-          initial[t.id] = 'present';
+          initial[t.id] = forceHoliday ? 'holiday' : 'present';
         });
         setTeacherAttendance(initial);
       }
@@ -257,12 +262,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const fetchDayEvents = async () => {
     if (!madrasah) return;
     try {
-      const { data: customEvents } = await supabase
+      const { data: customEvents, error } = await supabase
         .from('calendar_events')
-        .select('id, institution_id, event_date, title, type')
+        .select('*')
         .eq('institution_id', madrasah.id)
-        .eq('event_date', attendanceDate);
+        .or(`event_date.eq.${attendanceDate},and(event_date.lte.${attendanceDate},end_date.gte.${attendanceDate})`);
       
+      if (error) throw error;
+
       let events = getEventsForDate(new Date(attendanceDate), customEvents || []);
       
       const weeklyHolidays = madrasah.config_json?.weekly_holidays || [5];
@@ -277,11 +284,16 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           title: lang === 'bn' ? `সাপ্তাহিক ছুটি (${dayNamesBn[dayIndex]})` : `Weekly Holiday (${dayNamesEn[dayIndex]})`,
           type: 'holiday',
           id: 'weekly-holiday',
-        });
+        } as any);
       }
       
       setDayEvents(events);
-      setIsHoliday(events.length > 0);
+      
+      const hasHoliday = events.some(e => {
+        const type = e.event_type || e.type;
+        return ['holiday', 'closed', 'islamic'].includes(type);
+      });
+      setIsHoliday(hasHoliday);
     } catch (e) {
       console.error('Error fetching day events:', e);
     }
@@ -293,7 +305,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
     const finalAttendance = { ...teacherAttendance };
     teachers.forEach(t => {
-      if (!finalAttendance[t.id]) finalAttendance[t.id] = 'present';
+      if (!finalAttendance[t.id]) finalAttendance[t.id] = isHoliday ? 'holiday' : 'present';
     });
 
     try {
@@ -1043,19 +1055,19 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
               <div className="space-y-3">
                 {isHoliday ? (
-                  <div className={`p-10 border-2 border-dashed rounded-[3rem] flex flex-col items-center text-center space-y-4 animate-in zoom-in duration-500 ${isDark ? 'bg-slate-900 border-slate-700 shadow-slate-950/50' : 'bg-blue-50 border-blue-200 shadow-blue-900/5'}`}>
+                  <div className={`p-8 border-2 border-dashed rounded-[2rem] flex flex-col items-center text-center space-y-3 animate-in zoom-in duration-500 mb-6 ${isDark ? 'bg-blue-900/10 border-blue-800/30 shadow-slate-950/50' : 'bg-blue-50/50 border-blue-200/50 shadow-blue-900/5'}`}>
                     <div className="relative inline-block">
-                      <div className="absolute inset-0 bg-blue-500 blur-3xl opacity-20 animate-pulse" />
-                      <div className={`relative w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-inner border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-100 text-[#2563EB] border-blue-200'}`}>
-                        <AlertTriangle size={40} />
+                      <div className="absolute inset-0 bg-blue-500 blur-2xl opacity-10 animate-pulse" />
+                      <div className={`relative w-14 h-14 rounded-2xl flex items-center justify-center mx-auto shadow-inner border ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-blue-100 text-[#2563EB] border-blue-200'}`}>
+                        <CalendarOff size={28} />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className={`text-xl font-black font-noto ${isDark ? 'text-slate-100' : 'text-blue-900'}`}>{lang === 'bn' ? 'আজ হাজিরা বন্ধ' : 'Attendance Closed Today'}</h3>
-                      <p className={`text-sm font-bold max-w-[250px] ${isDark ? 'text-slate-400' : 'text-blue-700/70'}`}>
+                    <div className="space-y-1">
+                      <h3 className={`text-lg font-black font-noto ${isDark ? 'text-slate-100' : 'text-blue-900'}`}>{lang === 'bn' ? 'আজ বিশেষ ইভেন্ট বা ছুটি' : 'Special Event or Holiday Today'}</h3>
+                      <p className={`text-[11px] font-bold max-w-[300px] mx-auto ${isDark ? 'text-slate-400' : 'text-blue-700/70'}`}>
                         {dayEvents.map(e => e.title).join(', ') || (lang === 'bn' ? 'আজকের দিনে বিশেষ ইভেন্ট বা ছুটি রয়েছে।' : 'There is a special event or holiday today.')}
                       </p>
-                      <p className={`text-[10px] font-black uppercase tracking-widest pt-2 ${isDark ? 'text-blue-400' : 'text-blue-400'}`}>{lang === 'bn' ? 'ক্যালেন্ডার অনুযায়ী আজ হাজিরা গ্রহণ করা সম্ভব নয়' : 'Based on the calendar, attendance cannot be taken today'}</p>
+                      <p className={`text-[9px] font-black uppercase tracking-widest pt-1 ${isDark ? 'text-blue-400/60' : 'text-blue-400'}`}>{lang === 'bn' ? 'ক্যালেন্ডার অনুযায়ী আজ হাজিরা ছুটির দিন হিসেবে গণ্য হবে' : 'According to calendar, today is a holiday'}</p>
                     </div>
                   </div>
                 ) : teachers.length > 0 ? (
@@ -1118,6 +1130,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     </p>
                   </div>
                 )}
+
               </div>
             </div>
           ) : (

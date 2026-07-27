@@ -72,6 +72,7 @@ interface BreakdownEntry {
 
 const availableShortcodes = [
   { code: '{student_name}', label: 'Student Name' },
+  { code: '{teacher_name}', label: 'Teacher Name' },
   { code: '{month}', label: 'Fee Month' },
   { code: '{due_amount}', label: 'Due Amount' },
   { code: '{roll}', label: 'Roll Number' },

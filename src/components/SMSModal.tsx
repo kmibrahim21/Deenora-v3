@@ -30,6 +30,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
 
   const availableShortcodes = [
     { code: '{student_name}', label: 'Student Name' },
+    { code: '{teacher_name}', label: 'Teacher Name' },
     { code: '{father_name}', label: 'Father Name' },
     { code: '{class}', label: 'Class' },
     { code: '{roll}', label: 'Roll' },

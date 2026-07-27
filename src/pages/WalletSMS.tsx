@@ -54,6 +54,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [templates, setTemplates] = useState<SMSTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [bulkMessage, setBulkMessage] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -67,7 +68,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [showInstitutionDropdown, setShowInstitutionDropdown] = useState(false);
   const [userTransactions, setUserTransactions] = useState<Transaction[]>([]);
   const [allInstitutions, setAllInstitutions] = useState<Institution[]>([]);
-  const [targetType, setTargetType] = useState<'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
+  const [targetType, setTargetType] = useState<'class' | 'teachers' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
   const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<string[]>([]);
   
   const [showAddModal, setShowAddModal] = useState(false);
@@ -84,6 +85,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
+    { code: '{teacher_name}', label: lang === 'bn' ? 'শিক্ষকের নাম' : 'Teacher Name' },
     { code: '{father_name}', label: lang === 'bn' ? 'পিতার নাম' : 'Father Name' },
     { code: '{class}', label: lang === 'bn' ? 'শ্রেণী' : 'Class' },
     { code: '{roll}', label: lang === 'bn' ? 'রোল' : 'Roll' },
@@ -154,7 +156,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
   useEffect(() => { 
     if (activeTab === 'templates') fetchTemplates(); 
-    if (activeTab === 'bulk-sms') { fetchClasses(); fetchTemplates(); }
+    if (activeTab === 'bulk-sms') { fetchClasses(); fetchTeachers(); fetchTemplates(); }
     if (activeTab === 'history') fetchSmsHistory();
     if (activeTab === 'recharge') { fetchSystemSettings(); fetchUserTransactions(); }
     fetchWalletBalance();
@@ -205,6 +207,40 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
       }
     } catch (e) {
       console.error('Error fetching classes in WalletSMS:', e);
+    }
+  };
+
+  const fetchTeachers = async () => {
+    if (!madrasah) return;
+    try {
+      const { data } = await supabase.from('teachers').select('*').eq('institution_id', madrasah.id).eq('is_active', true);
+      if (data) {
+        const today = new Date().toISOString().split('T')[0];
+        const formattedTeachers = data.map(t => {
+          let parsedPermissions: any = {};
+          if (typeof t.permissions === 'string') {
+            try { parsedPermissions = JSON.parse(t.permissions); } catch(e) {}
+          } else {
+            parsedPermissions = t.permissions || {};
+          }
+          return {
+            ...t,
+            name: t.teacher_name,
+            phone: t.mobile,
+            leave_date: parsedPermissions.leave_date
+          };
+        });
+        
+        const activeTeachers = formattedTeachers.filter(t => {
+          if (!t.leave_date) return true;
+          const ld = String(t.leave_date).trim();
+          if (ld === '') return true;
+          return ld > today;
+        });
+        setTeachers(activeTeachers);
+      }
+    } catch (e) {
+      console.error('Error fetching teachers in WalletSMS:', e);
     }
   };
 
@@ -348,7 +384,8 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     if (!bulkMessage.trim() || !madrasah) return;
     
     const isTargetingInstitutions = isSuperAdmin && (targetType === 'all_institutions' || targetType === 'specific_institution');
-    if (!isTargetingInstitutions && (!selectedClassId || classStudents.length === 0)) return;
+    if (!isTargetingInstitutions && targetType === 'class' && (!selectedClassId || classStudents.length === 0)) return;
+    if (!isTargetingInstitutions && targetType === 'teachers' && teachers.length === 0) return;
     if (isTargetingInstitutions && allInstitutions.length === 0) return;
     if (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) return;
 
@@ -377,7 +414,10 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         const phones = targets.map(inst => inst.phone).filter(p => !!p);
         if (phones.length === 0) throw new Error('No institutions with valid phone numbers found.');
         
-        await smsApi.sendBulk(madrasah.id, targets.map(inst => ({ phone_number: inst.phone, student_name: inst.name })) as any[], bulkMessage);
+        await smsApi.sendBulk(madrasah.id, targets.map(inst => ({ guardian_phone: inst.phone, student_name: inst.name })) as any[], bulkMessage);
+      } else if (targetType === 'teachers') {
+        const teacherTargets = teachers.map(t => ({ ...t, guardian_phone: t.phone, student_name: t.name }));
+        await smsApi.sendBulk(madrasah.id, teacherTargets, bulkMessage);
       } else {
         await smsApi.sendBulk(madrasah.id, classStudents, bulkMessage);
       }
@@ -454,6 +494,14 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   return (
     <>
       <div className="space-y-4 animate-in fade-in duration-500 pb-24">
+        <div className="bg-[#2563EB] p-6 rounded-[2.2rem] shadow-premium border border-blue-100 flex items-center justify-between text-white relative">
+           <div className="relative z-10">
+             <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">{t('available_sms', lang)}</p>
+             <h3 className="text-4xl font-black flex items-baseline gap-2">{smsBalance}</h3>
+           </div>
+           <Zap size={40} className="text-white opacity-20" />
+        </div>
+
         <div className="relative p-1.5 bg-slate-50 rounded-[3rem] border border-slate-100 shadow-sm flex items-center h-16 mb-2">
           <div 
             className="absolute h-[calc(100%-12px)] rounded-[2.5rem] bg-[#2563EB] shadow-md transition-all duration-500 z-0"
@@ -528,14 +576,6 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
         {activeTab === 'bulk-sms' && (
           <div className="space-y-5 animate-in slide-in-from-bottom-5">
-            <div className="bg-[#2563EB] p-6 rounded-[2.2rem] shadow-premium border border-blue-100 flex items-center justify-between text-white relative">
-               <div className="relative z-10">
-                 <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">{t('available_sms', lang)}</p>
-                 <h3 className="text-4xl font-black flex items-baseline gap-2">{smsBalance}</h3>
-               </div>
-               <Zap size={40} className="text-white opacity-20" />
-            </div>
-
             <div className="bg-white p-6 rounded-[2.5rem] shadow-bubble border border-slate-100">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
                 <div className="space-y-7">
@@ -566,27 +606,53 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       </div>
                     ) : !isSuperAdmin ? (
                       <div className="relative space-y-3">
-                        <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
-                          <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
-                          <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
-                        </button>
-                        
-                        {selectedClassId && (
-                          <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-top-2">
-                            <Users size={16} className="text-[#2563EB]" />
-                            <p className="text-[11px] font-black text-[#2563EB] uppercase tracking-wider">
-                              {t('total_students', lang)}: {classStudents.length} {t('students_count', lang)}
-                            </p>
-                          </div>
-                        )}
+                        <div className="flex bg-slate-100 p-1 rounded-[1.5rem] mb-4">
+                          <button
+                            onClick={() => setTargetType('class')}
+                            className={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-[1.2rem] transition-all ${targetType === 'class' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
+                          >
+                            {lang === 'bn' ? 'শিক্ষার্থী' : 'Students'}
+                          </button>
+                          <button
+                            onClick={() => { setTargetType('teachers'); setSelectedClassId(''); }}
+                            className={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-[1.2rem] transition-all ${targetType === 'teachers' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
+                          >
+                            {lang === 'bn' ? 'শিক্ষক' : 'Teachers'}
+                          </button>
+                        </div>
 
-                        {showClassDropdown && (
-                          <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                            {classes.map(cls => (
-                              <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
-                                <span className="font-black font-noto">{cls.class_name}</span>
-                              </button>
-                            ))}
+                        {targetType === 'class' ? (
+                          <>
+                            <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
+                              <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
+                              <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
+                            </button>
+                               
+                            {selectedClassId && (
+                              <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-top-2">
+                                <Users size={16} className="text-[#2563EB]" />
+                                <p className="text-[11px] font-black text-[#2563EB] uppercase tracking-wider">
+                                  {t('total_students', lang)}: {classStudents.length} {t('students_count', lang)}
+                                </p>
+                              </div>
+                            )}
+
+                            {showClassDropdown && (
+                              <div className="absolute top-[120px] left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
+                                {classes.map(cls => (
+                                  <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                    <span className="font-black font-noto">{cls.class_name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100 animate-in fade-in slide-in-from-top-2">
+                            <Users size={16} className="text-indigo-600" />
+                            <p className="text-[11px] font-black text-indigo-600 uppercase tracking-wider">
+                              {lang === 'bn' ? 'মোট শিক্ষক' : 'Total Teachers'}: {teachers.length}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -694,7 +760,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                   <div className="grid grid-cols-1 gap-3 mt-auto">
                     <button 
                       onClick={handleSendBulk} 
-                      disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && (!selectedClassId || classStudents.length === 0)) || (targetType === 'all_institutions' && allInstitutions.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || getSmsLengthInfo(bulkMessage).parts > 7} 
+                      disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && (!selectedClassId || classStudents.length === 0)) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'all_institutions' && allInstitutions.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || getSmsLengthInfo(bulkMessage).parts > 7} 
                       className="w-full h-[64px] bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg disabled:opacity-40 active:scale-95 transition-all"
                     >
                       {sendingBulk ? <Loader2 className="animate-spin" size={24} /> : bulkSuccess ? (lang === 'bn' ? 'সফল!' : 'Success!') : (
@@ -707,7 +773,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       )}
                     </button>
                     
-                    <button onClick={handleSendFreeBulk} disabled={sendingBulk || !bulkMessage.trim() || classStudents.length === 0 || getSmsLengthInfo(bulkMessage).parts > 7} className="w-full h-[54px] bg-slate-800 text-white font-black rounded-full shadow-lg flex items-center justify-center gap-3 text-sm disabled:opacity-40 active:scale-95 transition-all">
+                    <button onClick={handleSendFreeBulk} disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && classStudents.length === 0) || (targetType === 'teachers' && teachers.length === 0) || getSmsLengthInfo(bulkMessage).parts > 7} className="w-full h-[54px] bg-slate-800 text-white font-black rounded-full shadow-lg flex items-center justify-center gap-3 text-sm disabled:opacity-40 active:scale-95 transition-all">
                       <Smartphone size={20} /> {t('free_sms_sim', lang)}
                     </button>
                   </div>

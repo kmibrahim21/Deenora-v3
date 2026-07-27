@@ -20,7 +20,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (apiUrls && Array.isArray(apiUrls)) {
       const results = await Promise.allSettled(apiUrls.map(async (url) => {
-        const response = await fetch(url, { method: 'GET' });
+        const parsedUrl = new URL(url);
+        const baseUrl = parsedUrl.origin + parsedUrl.pathname;
+        const body = new URLSearchParams(parsedUrl.search);
+        
+        const response = await fetch(baseUrl, { 
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: body.toString()
+        });
         const text = await response.text();
         return { success: response.ok, response: text, url };
       }));
@@ -52,11 +62,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Create a custom agent to ignore SSL certificate errors if any
+    const parsedUrl = new URL(apiUrl);
+    const baseUrl = parsedUrl.origin + parsedUrl.pathname;
+    const body = new URLSearchParams(parsedUrl.search);
+
     const fetchOptions = {
-      method: 'GET'
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: body.toString()
     };
 
-    const response = await fetch(apiUrl, fetchOptions);
+    const response = await fetch(baseUrl, fetchOptions);
 
     const text = await response.text();
 

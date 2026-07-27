@@ -109,8 +109,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   // Broadcast state
   const [classes, setClasses] = useState<Class[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [allInstitutions, setAllInstitutions] = useState<Institution[]>([]);
-  const [targetType, setTargetType] = useState<'all' | 'class' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
+  const [targetType, setTargetType] = useState<'all' | 'class' | 'teachers' | 'all_institutions' | 'specific_institution'>(isSuperAdmin ? 'all_institutions' : 'class');
   const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<string[]>([]);
   
   const [selectedClassId, setSelectedClassId] = useState<string>('');
@@ -118,6 +119,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [senders, setSenders] = useState<any[]>([]);
   const [selectedSenderId, setSelectedSenderId] = useState<string>('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [classStudents, setClassStudents] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (selectedClassId) fetchClassStudents(selectedClassId); else setClassStudents([]);
+  }, [selectedClassId]);
+
+  const fetchClassStudents = async (cid: string) => {
+    const { data } = await supabase.from('students').select('id, guardian_phone, guardian_phone_2').eq('class_id', cid);
+    if (data) setClassStudents(data);
+  };
 
   useEffect(() => {
     if (isInstPreSelected && isSuperAdmin) {
@@ -390,7 +401,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     fetchWalletBalance();
     if (activeTab === 'templates') fetchVoices();
     if (activeTab === 'broadcast') { 
-      if (madrasah && isValidUUID(madrasah.id)) fetchClasses(); 
+      if (madrasah && isValidUUID(madrasah.id)) {
+        fetchClasses();
+        fetchTeachers();
+      } 
       fetchVoices(); 
       fetchSenders(); 
     }
@@ -627,6 +641,41 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       fetchSenders();
     }
   }, [madrasah]);
+
+  
+  const fetchTeachers = async () => {
+    if (!madrasah) return;
+    try {
+      const { data } = await supabase.from('teachers').select('*').eq('institution_id', madrasah.id).eq('is_active', true);
+      if (data) {
+        const today = new Date().toISOString().split('T')[0];
+        const formattedTeachers = data.map(t => {
+          let parsedPermissions: any = {};
+          if (typeof t.permissions === 'string') {
+            try { parsedPermissions = JSON.parse(t.permissions); } catch(e) {}
+          } else {
+            parsedPermissions = t.permissions || {};
+          }
+          return {
+            ...t,
+            name: t.teacher_name,
+            phone: t.mobile,
+            leave_date: parsedPermissions.leave_date
+          };
+        });
+        
+        const activeTeachers = formattedTeachers.filter(t => {
+          if (!t.leave_date) return true;
+          const ld = String(t.leave_date).trim();
+          if (ld === '') return true;
+          return ld > today;
+        });
+        setTeachers(activeTeachers);
+      }
+    } catch (e) {
+      console.error('Error fetching teachers in VoiceBroadcast:', e);
+    }
+  };
 
   const fetchClasses = async () => {
     if (!madrasah) return;
@@ -1068,7 +1117,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const isTargetingAllStudents = !isSuperAdmin && targetType === 'all';
 
   const handleBroadcast = async () => {
-    if (!madrasah || !selectedVoiceId || (!selectedClassId && !isPreSelected && !isTargetingInstitutions && !isTargetingAllStudents) || !selectedSenderId) {
+    if (!madrasah || !selectedVoiceId || (!selectedClassId && targetType === 'class' && !isPreSelected && !isTargetingInstitutions && !isTargetingAllStudents) || (targetType === 'teachers' && teachers.length === 0) || !selectedSenderId) {
       setStatusModal({
         show: true,
         type: 'error',
@@ -1088,6 +1137,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
     } else if (isPreSelected) {
       count = preSelectedStudentIds.length;
+    } else if (targetType === 'teachers') {
+      count = teachers.length;
     } else if (isTargetingAllStudents) {
       const { count: c } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
       count = c || 0;
@@ -1134,7 +1185,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // Determine target class name
       let targetClassName = null;
       if (!isTargetingInstitutions && !isPreSelected) {
-        if (isTargetingAllStudents) {
+        if (targetType === 'teachers') {
+          targetClassName = lang === 'bn' ? 'সকল শিক্ষক' : 'All Teachers';
+        } else if (isTargetingAllStudents) {
           targetClassName = lang === 'bn' ? 'সকল শিক্ষার্থী' : 'All Students';
         } else {
           const cls = classes.find(c => c.id === selectedClassId);
@@ -1154,6 +1207,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         } else {
           phoneNumbers = allInstitutions.filter(inst => selectedInstitutionIds.includes(inst.id)).map(inst => inst.phone);
         }
+      } else if (targetType === 'teachers') {
+        phoneNumbers = teachers.map(t => t.phone).filter(p => !!p);
       } else {
         let students: any[] = [];
         if (isPreSelected) {
@@ -1174,10 +1229,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
       
       // Normalize phone numbers: 11 digits (01...) for Awaj API
+      const bnToEn = (str: string) => {
+        const numbers: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+        return str.replace(/[০-৯]/g, match => numbers[match]);
+      };
+      
       const normalizedPhoneNumbers = phoneNumbers
         .map(phone => {
           if (!phone) return '';
-          const digits = phone.replace(/[^0-9]/g, '');
+          const enPhone = bnToEn(String(phone));
+          const digits = enPhone.replace(/[^0-9]/g, '');
           if (digits.length === 11 && digits.startsWith('01')) return digits;
           if (digits.length === 13 && digits.startsWith('8801')) return digits.substring(2);
           if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
@@ -1528,23 +1589,59 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       <div className="relative">
                         {!isSuperAdmin ? (
                           <>
-                            {targetType === 'class' ? (
+                            <div className="flex bg-slate-100 p-1 rounded-[1.5rem] mb-4">
+                              <button
+                                onClick={() => setTargetType('class')}
+                                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-[1.2rem] transition-all ${targetType === 'class' || targetType === 'all' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
+                              >
+                                {lang === 'bn' ? 'শিক্ষার্থী' : 'Students'}
+                              </button>
+                              <button
+                                onClick={() => { setTargetType('teachers'); setSelectedClassId(''); }}
+                                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-[1.2rem] transition-all ${targetType === 'teachers' ? 'bg-white shadow-sm text-[#1E3A8A]' : 'text-slate-400'}`}
+                              >
+                                {lang === 'bn' ? 'শিক্ষক' : 'Teachers'}
+                              </button>
+                            </div>
+
+                            {targetType === 'class' || targetType === 'all' ? (
                               <>
                                 <button onClick={() => setShowClassDropdown(!showClassDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between">
                                   <span className="text-base font-black font-noto text-[#1E3A8A]">{getSelectedClassName()}</span>
                                   <ChevronDown className={`text-slate-300 transition-all ${showClassDropdown ? 'rotate-180' : ''}`} size={20} />
                                 </button>
+                                
+                                {selectedClassId && targetType === 'class' && (
+                                  <div className="flex items-center gap-2 px-4 py-2 mt-2 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-top-2">
+                                    <Users size={16} className="text-[#2563EB]" />
+                                    <p className="text-[11px] font-black text-[#2563EB] uppercase tracking-wider">
+                                      {lang === 'bn' ? 'মোট শিক্ষার্থী' : 'Total Students'}: {classStudents.length} {lang === 'bn' ? 'জন' : ''}
+                                    </p>
+                                  </div>
+                                )}
                                 {showClassDropdown && (
-                                  <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
+                                  <div className="absolute top-[120px] left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
+                                    <button onClick={() => { setTargetType('all'); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${targetType === 'all' ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                      <span className="font-black font-noto">{lang === 'bn' ? 'সকল শিক্ষার্থী (সম্পূর্ণ প্রতিষ্ঠান)' : 'All Students (Entire Institution)'}</span>
+                                    </button>
                                     {classes.map(cls => (
-                                      <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                                      <button key={cls.id} onClick={() => { setSelectedClassId(cls.id); setTargetType('class'); setShowClassDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedClassId === cls.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
                                         <span className="font-black font-noto">{cls.class_name}</span>
                                       </button>
                                     ))}
                                   </div>
                                 )}
                               </>
-                            ) : (targetType === 'specific_institution' && isSuperAdmin) ? (
+                            ) : targetType === 'teachers' ? (
+                              <div className="flex items-center gap-2 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100 animate-in fade-in slide-in-from-top-2">
+                                <Users size={16} className="text-indigo-600" />
+                                <p className="text-[11px] font-black text-indigo-600 uppercase tracking-wider">
+                                  {lang === 'bn' ? 'মোট শিক্ষক' : 'Total Teachers'}: {teachers.length}
+                                </p>
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (targetType === 'specific_institution' && isSuperAdmin) ? (
                               <>
                                 <button onClick={() => setShowInstitutionDropdown(!showInstitutionDropdown)} className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-slate-50 border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-all">
                                   <span className={`text-base font-black font-noto ${selectedInstitutionIds.length > 0 ? 'text-[#1E3A8A]' : 'text-slate-400'}`}>
@@ -1624,19 +1721,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                 </div>
                               </div>
                             )}
-                          </>
-                        ) : (
-                          <div className="bg-emerald-50 p-6 rounded-[1.8rem] border border-emerald-100 flex flex-col items-center text-center gap-3">
-                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
-                              <Users size={24} />
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-1">Target: All Active Institutes</p>
-                              <p className="text-lg font-black text-[#1E3A8A]">{allInstitutions.length} Institutions Selected</p>
-                              <p className="text-[10px] font-bold text-slate-400 mt-1">Note: Individual school broadcast is handled via Admin Panel</p>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="w-full h-[60px] px-6 rounded-[1.5rem] border-2 bg-blue-50 border-blue-100 flex items-center justify-between">
@@ -1704,7 +1788,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
                   <button 
                     onClick={handleBroadcast}
-                    disabled={!selectedVoiceId || (!selectedClassId && !isPreSelected && !isTargetingInstitutions) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || !selectedSenderId || isBroadcasting}
+                    disabled={!selectedVoiceId || (targetType === 'class' && !selectedClassId && !isPreSelected && !isTargetingInstitutions) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || !selectedSenderId || isBroadcasting}
                     className="w-full h-[64px] bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg disabled:opacity-40 active:scale-95 transition-all mt-auto"
                   >
                     {isBroadcasting ? <Loader2 className="animate-spin" size={24} /> : (

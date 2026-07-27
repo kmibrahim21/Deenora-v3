@@ -223,70 +223,64 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
 
   return (
-    <div className={`flex flex-col rounded-3xl border shadow-sm overflow-hidden ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"}`}>
+    <div className={`flex flex-col rounded-2xl sm:rounded-3xl border shadow-sm overflow-hidden ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"}`}>
       {/* Header Controls */}
-      <div className={`p-4 sm:p-6 border-b ${isDark ? "border-slate-800" : "border-slate-100"}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h2 className={`text-lg font-black font-noto ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
-              {isBulk ? (isBangla ? 'সকল শিক্ষার্থীর আইডি কার্ড' : 'All Student ID Cards') : t.title}
+      <div className={`p-3 sm:p-6 border-b ${isDark ? "border-slate-800" : "border-slate-100"}`}>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h2 className={`text-base sm:text-lg font-black font-noto ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
+              {isBulk ? (isBangla ? 'সকল আইডি কার্ড' : 'All ID Cards') : t.title}
             </h2>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+               <button
+                onClick={handlePrint}
+                className={`p-2 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold transition-all rounded-lg sm:rounded-xl ${isDark ? "bg-slate-800 text-white hover:bg-slate-700" : "bg-white text-slate-700 border hover:bg-slate-50"}`}
+                title={isBangla ? "প্রিন্ট" : "Print"}
+              >
+                <Printer size={18} />
+                <span className="hidden sm:inline ml-2">{isBangla ? "প্রিন্ট" : "Print"}</span>
+              </button>
+            </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Color Picker (now visible on mobile too) */}
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 p-1.5 sm:p-2 rounded-xl border border-slate-100 overflow-x-auto scrollbar-none">
               {colors.map((c) => (
                 <button
                   key={c}
                   onClick={() => setThemeColor(c)}
-                  className={`w-6 h-6 rounded-full border-2 transition-all ${themeColor === c ? "border-white ring-2 ring-blue-500 scale-110 shadow-sm" : "border-transparent"}`}
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 transition-all shrink-0 ${themeColor === c ? "border-white ring-2 ring-blue-500 scale-110 shadow-sm" : "border-transparent"}`}
                   style={{ backgroundColor: c }}
                   aria-label={`Select color ${c}`}
                 />
               ))}
             </div>
 
-            <button
-              onClick={handlePrint}
-              className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold transition-all rounded-xl ${isDark ? "bg-slate-800 text-white hover:bg-slate-700" : "bg-white text-slate-700 border hover:bg-slate-50"}`}
-            >
-              <Printer size={18} />
-              <span className="hidden sm:inline">{isBangla ? "প্রিন্ট" : "Print"}</span>
-            </button>
             <div className="flex bg-slate-100 rounded-xl p-1 shadow-sm border border-slate-200">
               <button
                 onClick={downloadPdfSingle}
                 disabled={isGenerating || isBulk}
-                className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs sm:text-sm font-bold bg-[#1E3A8A] text-white rounded-lg hover:bg-blue-800 transition-all shadow-sm disabled:opacity-50"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black bg-[#1E3A8A] text-white rounded-lg hover:bg-blue-800 transition-all shadow-sm disabled:opacity-50"
               >
-                <Download size={16} />
-                <span className="hidden sm:inline">{isBangla ? "সিঙ্গেল পিডিএফ" : "Single PDF"}</span>
-                <span className="sm:hidden">{isBangla ? "সিঙ্গেল" : "Single"}</span>
+                <Download size={14} />
+                <span>{isBangla ? "সিঙ্গেল" : "Single"}</span>
               </button>
               <button
                 onClick={downloadPdfMultiple}
                 disabled={isGenerating}
-                className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs sm:text-sm font-bold text-slate-700 hover:bg-white rounded-lg transition-all disabled:opacity-50"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black text-slate-700 hover:bg-white rounded-lg transition-all disabled:opacity-50"
               >
                 {isGenerating ? (
-                  <div className="w-4 h-4 border-2 border-[#1E3A8A]/30 border-t-[#1E3A8A] rounded-full animate-spin flex-shrink-0" />
+                  <div className="w-3.5 h-3.5 border-2 border-[#1E3A8A]/30 border-t-[#1E3A8A] rounded-full animate-spin flex-shrink-0" />
                 ) : (
-                  <Download size={16} />
+                  <Download size={14} />
                 )}
-                <span className="hidden sm:inline">
+                <span>
                   {isGenerating && isBulk
                     ? `${bulkProgress}%`
                     : isBangla
-                      ? "মাল্টিপল (A4)"
-                      : "Multiple (A4)"}
-                </span>
-                <span className="sm:hidden">
-                  {isGenerating && isBulk
-                    ? `${bulkProgress}%`
-                    : isBangla
-                      ? "মাল্টিপল"
-                      : "Multiple"}
+                      ? "A4 গ্রিড"
+                      : "A4 Grid"}
                 </span>
               </button>
             </div>
@@ -295,29 +289,29 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
       </div>
 
       {/* Editor Content Area */}
-      <div className={`p-4 sm:p-8 flex flex-col items-center ${isDark ? "bg-slate-950" : "bg-slate-50/50"}`}>
+      <div className={`p-4 sm:p-8 flex flex-col items-center overflow-x-hidden ${isDark ? "bg-slate-950" : "bg-slate-50/50"}`}>
         
         {/* Toggle buttons for Front / Back Review */}
-        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-8 inline-flex">
+        <div className="flex bg-white dark:bg-slate-900 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 mb-6 sm:mb-8 inline-flex">
           <button 
             onClick={() => setActiveSide('front')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-colors ${activeSide === 'front' ? 'bg-[#1E3A8A] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-4 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${activeSide === 'front' ? 'bg-[#1E3A8A] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           >
-            {isBangla ? 'বডি/সম্মুখ' : 'Front Part'}
+            {isBangla ? 'সম্মুখ ভাগ' : 'Front Part'}
           </button>
           <button 
             onClick={() => setActiveSide('back')}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-colors ${activeSide === 'back' ? 'bg-[#1E3A8A] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-4 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${activeSide === 'back' ? 'bg-[#1E3A8A] text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           >
-            {isBangla ? 'পিছন/নিয়মাবলি' : 'Back Part'}
+            {isBangla ? 'পিছন ভাগ' : 'Back Part'}
           </button>
         </div>
 
         {/* Print Wrapper / Canvas Area */}
-        <div className="print-area flex flex-col md:flex-row gap-8 items-center justify-center w-full pb-8">
+        <div className="print-area flex flex-col items-center justify-center w-full pb-8 scale-[0.85] sm:scale-100 origin-top">
           {/* FRONT SIDE */}
           <div
-            className={`relative overflow-hidden bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-xl border border-slate-200 transition-all shrink-0 flex-col ${activeSide === 'front' || isGenerating ? 'flex' : 'hidden'} md:mx-0`}
+            className={`relative overflow-hidden bg-white shadow-[0_10px_40px_rgb(0,0,0,0.12)] rounded-xl border border-slate-200 transition-all shrink-0 flex-col ${activeSide === 'front' || isGenerating ? 'flex' : 'hidden'}`}
             style={{ 
               width: "280px", 
               height: "448px"

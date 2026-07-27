@@ -47,6 +47,7 @@ export const ShortcodeService = {
 
     const shortcodes: Record<string, any> = {
       '{student_name}': data.student_name || '-',
+      '{teacher_name}': data.teacher_name || data.name || data.student_name || '-',
       '{father_name}': data.guardian_name || '-',
       '{class}': data.class_name || '-',
       '{roll}': data.roll || '-',

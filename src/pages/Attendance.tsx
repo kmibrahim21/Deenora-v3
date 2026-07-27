@@ -203,6 +203,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
+    { code: '{teacher_name}', label: lang === 'bn' ? 'শিক্ষকের নাম' : 'Teacher Name' },
     { code: '{institution_name}', label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name' },
   ];
 
@@ -2118,13 +2119,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                         </span>
                                       </td>
                                       <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-center font-black text-slate-900 dark:text-slate-100 whitespace-nowrap">#{item.roll || '-'}</td>
-                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 font-black text-slate-950 dark:text-white whitespace-nowrap">{item.student_name}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 font-black text-slate-900 dark:text-white whitespace-nowrap bg-slate-50/50 dark:bg-white/5">{item.student_name}</td>
                                       {selectedClass?.id === 'all' && (
                                         <td className="py-2.5 sm:py-3.5 px-2.5 sm:px-4 text-slate-900 dark:text-slate-100 text-[10px] sm:text-[11px] font-bold whitespace-nowrap">
                                           {item.class_name || '-'}
                                         </td>
                                       )}
-                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-slate-950 dark:text-slate-50 font-black bg-slate-100/40 dark:bg-slate-800/30">{item.total_days}</td>
+                                      <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center text-slate-950 dark:text-slate-50 font-black bg-slate-200/40 dark:bg-slate-800/60">{item.total_days}</td>
                                       <td className="py-2.5 sm:py-3.5 px-2 sm:px-3 text-center">
                                         <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full font-black text-xs min-w-[32px] bg-emerald-600 text-white dark:bg-emerald-950/50 dark:text-emerald-400 dark:border dark:border-emerald-800">
                                           {item.present_days}
@@ -2177,7 +2178,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                             const rankLabel = getRankBadgeLabel(item.rank, lang);
                             const isTop3 = item.rank <= 3;
                             return (
-                              <div key={item.student_id} className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-[2rem] border shadow-md sm:shadow-lg space-y-2.5 sm:space-y-3 relative group transition-all hover:shadow-xl ${isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+                              <div key={item.student_id} className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-[2rem] border shadow-bubble space-y-2.5 sm:space-y-3 relative group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
                                   <div className="flex items-start justify-between gap-2">
                                       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                                           <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center font-black border shadow-inner shrink-0 text-xs sm:text-base ${isDark ? 'bg-slate-900 text-[#A179FF] border-slate-700' : 'bg-slate-50 text-[#A179FF] border-slate-100'}`}>#{item.roll || '-'}</div>
