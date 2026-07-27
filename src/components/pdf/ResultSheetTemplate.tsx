@@ -326,23 +326,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
                   return rows.map((row, i) => (
                     <tr key={i} className={`${row.isParentRow ? "bg-blue-50/60 font-black" : (i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}`}>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[11px] font-bold text-slate-500">{String(row.sl).padStart(2, '0')}</td>
-                      <td className={`border border-slate-300 py-1 px-3 font-bold font-tiro text-slate-800 leading-tight ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[11px] font-black text-slate-950">{String(row.sl).padStart(2, '0')}</td>
+                      <td className={`border border-slate-300 py-1 px-3 font-bold font-tiro text-slate-950 leading-tight ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
                         {row.name} {row.is_optional ? <span className="text-[8px] font-black text-blue-500 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
                       </td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] text-slate-800">{row.full}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] text-slate-800">{row.pass}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] text-slate-800">{row.highest}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.full}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.pass}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.highest}</td>
                       {isHighSchool && (
                         <>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] text-slate-800">{row.cq ?? '-'}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] text-slate-800">{row.mcq ?? '-'}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] text-slate-800">{row.pr ?? '-'}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.cq ?? '-'}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.mcq ?? '-'}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.pr ?? '-'}</td>
                         </>
                       )}
-                      <td className="border border-slate-300 py-1 px-1 text-center font-black font-mono text-[#1E3A8A] bg-blue-50/40 text-[13px]">{String(row.obtained).padStart(2, '0')}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[13px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-[#1E3A8A]'}`}>{row.grade}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold font-mono text-[12px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-800'}`}>{row.gp}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-black font-mono text-slate-950 bg-blue-50/40 text-[13px]">{String(row.obtained).padStart(2, '0')}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[13px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold font-mono text-[12px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.gp}</td>
                     </tr>
                   ));
                 })()}
