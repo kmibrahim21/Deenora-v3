@@ -84,7 +84,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
             
             {/* Table */}
             <div className="overflow-hidden rounded-sm border border-slate-200 shadow-sm relative z-10 bg-white min-h-[450px]">
-              <table className="w-full border-collapse text-[10px]">
+              <table className="w-full border-collapse text-[10px] table-fixed">
                 <thead>
                   <tr className="bg-[#1E3A8A] text-white">
                     <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>

@@ -422,38 +422,46 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                 <div className={`border border-slate-300 rounded-lg overflow-hidden ${
                   numStudentsOnPage > 22 ? 'mb-2' : 'mb-3'
                 } shadow-sm`}>
-                  <table className="w-full border-collapse text-center">
+                  <table className="w-full border-collapse text-center table-fixed">
                     <thead>
                       <tr className={`bg-[#1E3A8A] text-white ${
                         numStudentsOnPage > 22 ? 'text-[9.5px]' : 'text-[10.5px]'
                       } font-black uppercase tracking-wider`}>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 w-7' : 'py-1.5 px-1 w-8'} border-r border-white/20`} rowSpan={2}>{t.sl}</th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-1.5 min-w-[110px]' : 'py-1.5 px-2 min-w-[130px]'} border-r border-white/20 text-left`} rowSpan={2}>{t.studentName}</th>
-                        <th className="py-1 px-0.5 border-r border-white/20 text-center" colSpan={subjects.length}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[32px] border-r border-white/20 align-middle`} rowSpan={2}>{t.sl}</th>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} w-[120px] border-r border-white/20 text-left align-middle truncate`} rowSpan={2}>{t.studentName}</th>
+                        <th className="py-1 px-0.5 border-r border-white/20 text-center align-middle" colSpan={subjects.length}>
                           {t.subjectMarks}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 w-10' : 'py-1.5 px-1 w-11'} border-r border-white/20`} rowSpan={2}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[40px] border-r border-white/20 align-middle`} rowSpan={2}>
                           {t.total}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 w-10' : 'py-1.5 px-1 w-11'} border-r border-white/20`} rowSpan={2}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[40px] border-r border-white/20 align-middle`} rowSpan={2}>
                           {t.average}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 w-9' : 'py-1.5 px-1 w-10'} border-r border-white/20`} rowSpan={2}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[38px] border-r border-white/20 align-middle`} rowSpan={2}>
                           {t.gpa}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 w-9' : 'py-1.5 px-1 w-10'} border-r border-white/20`} rowSpan={2}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[36px] border-r border-white/20 align-middle`} rowSpan={2}>
                           {t.grade}
                         </th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 w-10' : 'py-1.5 px-1 w-11'}`} rowSpan={2}>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[40px] align-middle`} rowSpan={2}>
                           {t.rank}
                         </th>
                       </tr>
-                      <tr className={`bg-[#152e72] text-white ${
-                        numStudentsOnPage > 22 ? 'text-[8.5px]' : 'text-[9.5px]'
-                      } font-bold`}>
+                      <tr className="bg-[#152e72] text-white font-bold">
                         {subjects.map((sub) => (
-                          <th key={sub.id} className="py-1 px-0.5 border-r border-white/20 max-w-[65px] truncate">
-                            {sub.subject_name || sub.name}
+                          <th key={sub.id} className="py-1 px-0.5 border-r border-white/20 align-middle overflow-hidden">
+                            <div 
+                              className={`mx-auto font-bold leading-tight break-words text-center line-clamp-2 ${
+                                subjects.length > 12 ? 'text-[7px]' :
+                                subjects.length > 9 ? 'text-[7.5px]' :
+                                subjects.length > 6 ? 'text-[8px]' :
+                                'text-[9px]'
+                              }`}
+                              title={sub.subject_name || sub.name}
+                            >
+                              {sub.subject_name || sub.name}
+                            </div>
                           </th>
                         ))}
                       </tr>
@@ -467,10 +475,10 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
                         return (
                           <tr key={std.id} className={isEven ? 'bg-white' : 'bg-slate-50/60'}>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-1'} font-mono font-bold text-slate-900 border-r border-slate-200`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {globalIndex}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-1.5 max-w-[120px]' : 'py-1.5 px-2 max-w-[140px]'} text-left font-bold text-slate-900 border-r border-slate-200 truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} text-left font-bold text-slate-900 border-r border-slate-200 truncate`} title={std.student_name}>
                               {std.student_name}
                             </td>
 
@@ -483,7 +491,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               return (
                                 <td
                                   key={sub.id}
-                                  className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[9.5px]' : 'py-1.5 px-0.5 text-[11px]'} font-mono border-r border-slate-200 ${
+                                  className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[9.5px]' : 'py-1.5 px-0.5 text-[11px]'} font-mono border-r border-slate-200 text-center truncate ${
                                     !hasMark ? 'text-slate-400 font-normal' : isPass ? 'text-slate-900 font-extrabold' : 'text-red-600 font-black bg-red-50/50'
                                   }`}
                                 >
@@ -492,22 +500,22 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               );
                             })}
 
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-1'} font-mono font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
                               {std.total}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-1'} font-mono font-bold text-slate-900 border-r border-slate-200`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {std.percentage !== '' && std.percentage !== undefined ? `${std.percentage}%` : ''}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-1'} font-mono font-extrabold text-slate-900 border-r border-slate-200`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {std.gpa}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-1'} font-black border-r border-slate-200 ${
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-black border-r border-slate-200 text-center truncate ${
                               std.grade === 'A+' ? 'text-blue-700' :
                               std.grade === 'F' ? 'text-red-600' : 'text-slate-800'
                             }`}>
                               {std.grade}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-1'} font-mono font-black text-blue-900 bg-blue-50/20`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-black text-blue-900 bg-blue-50/20 text-center truncate`}>
                               {std.rank}
                             </td>
                           </tr>
