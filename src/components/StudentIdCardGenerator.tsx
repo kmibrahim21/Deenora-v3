@@ -360,11 +360,11 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                             </div>
                           )}
                        </div>
-                       <div className="flex-1">
-                           <h3 className={`font-bold text-white font-noto tracking-wide drop-shadow-md line-clamp-2 max-w-[200px] ${nameSizeClass}`}>
+                       <div className="flex-1 text-center">
+                           <h3 className={`font-bold text-white font-noto tracking-wide drop-shadow-md line-clamp-2 max-w-[200px] mx-auto text-center ${nameSizeClass}`}>
                             {instName}
                           </h3>
-                          <p className={`text-white/95 font-medium tracking-wide mt-[2px] line-clamp-2 max-w-[200px] ${addressSizeClass}`}>
+                          <p className={`text-white/95 font-medium tracking-wide mt-[2px] line-clamp-2 max-w-[200px] mx-auto text-center ${addressSizeClass}`}>
                             {instAddress}
                           </p>
                        </div>
