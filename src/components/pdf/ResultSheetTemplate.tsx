@@ -203,20 +203,20 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
           <div className="bg-slate-50/80 px-4 py-2.5 rounded-xl border border-slate-200 mb-2.5 grid grid-cols-12 gap-x-4 text-[12px] shadow-sm">
             {/* First Column: Personal Info */}
             <div className="space-y-1 border-r border-slate-200 pr-3 col-span-5">
-              <div className="flex items-start"><span className="w-20 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight line-clamp-1 leading-tight">: {student.student_name}</span></div>
-              <div className="flex items-start"><span className="w-20 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-tight">: {student.guardian_name || '-'}</span></div>
-              <div className="flex items-start"><span className="w-20 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-tight">: {student.mother_name || '-'}</span></div>
+              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight line-clamp-1 leading-tight">: {student.student_name}</span></div>
+              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-tight">: {student.guardian_name || '-'}</span></div>
+              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-tight">: {student.mother_name || '-'}</span></div>
             </div>
             {/* Middle Column: Academic Info */}
             <div className="space-y-1 border-r border-slate-200 pr-3 col-span-4">
-              <div className="flex items-center"><span className="w-16 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-              <div className="flex items-center"><span className="w-16 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
-              <div className="flex items-center"><span className="w-16 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
+              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
+              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
+              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
             </div>
             {/* Last Column: Other Info */}
             <div className="space-y-1 pl-1 col-span-3">
-              <div className="flex items-center"><span className="w-16 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
-              <div className="flex items-center"><span className="w-16 text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
+              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
+              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
             </div>
           </div>
 

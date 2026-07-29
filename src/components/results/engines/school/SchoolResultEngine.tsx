@@ -69,6 +69,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [selectedResultTemplate, setSelectedResultTemplate] = useState<'classic' | 'premium'>('premium');
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium') => Promise<void>) | null>(null);
+  const [downloadActionType, setDownloadActionType] = useState<'marksheet' | 'result-sheet' | 'seat-plan' | 'admit-card' | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successTitle, setSuccessTitle] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -1945,13 +1946,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
               <div className="flex items-center gap-2">
                 <button onClick={() => {
                     setDownloadAction(() => (l: 'en' | 'bn', tId?: 'classic' | 'premium') => handleDownloadClassResult(l, tId));
+                    setDownloadActionType('result-sheet');
                     setShowDownloadLangModal(true);
                 }} className="px-2.5 h-8 bg-blue-50 text-[#2563EB] rounded-lg flex items-center justify-center border border-blue-100 hover:bg-blue-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
                     <Download size={14} />
                     {lang === 'bn' ? 'ফলাফল' : 'Result'}
                 </button>
                 <button onClick={() => {
-                    setDownloadAction(() => (l: 'en' | 'bn', tId?: 'classic' | 'premium') => handleDownloadMassMarksheets(l, tId));
+                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadMassMarksheets(l, 'classic'));
+                    setDownloadActionType('marksheet');
                     setShowDownloadLangModal(true);
                 }} className="px-2.5 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center border border-purple-100 hover:bg-purple-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
                     <Printer size={14} />
@@ -2122,6 +2125,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>Generated Plan</h3>
                         <button onClick={() => {
                             setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadSeatPlan(l));
+                            setDownloadActionType('seat-plan');
                             setShowDownloadLangModal(true);
                         }} className={`px-4 py-2 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-100'} rounded-xl font-black text-xs flex items-center gap-2 border`}>
                             <Printer size={16}/> Print / Download
@@ -3606,6 +3610,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
              <button 
                onClick={() => {
                  setDownloadAction(() => (l: 'en' | 'bn') => confirmDownloadAdmitCard(l));
+                 setDownloadActionType('admit-card');
                  setShowDownloadLangModal(true);
                }} 
                disabled={isDownloading}
@@ -3696,7 +3701,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                           <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest mt-0.5">ডিজাইন টেমপ্লেট ও ভাষা নির্বাচন করুন</p>
                       </div>
 
-                      {/* Template Options */}
+                      {downloadActionType === 'result-sheet' && (
                       <div className="mb-6 space-y-2 text-left">
                           <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
                               {lang === 'bn' ? '১. টেমপ্লেট ডিজাইন (Template Design)' : '1. Select Template Design'}
@@ -3741,7 +3746,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                           </div>
                       </div>
 
-                      <div className="space-y-2.5">
+                      )}
+<div className="space-y-2.5">
                           <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1 text-left">
                               {lang === 'bn' ? '২. ভাষা নির্বাচন করুন (Select Language)' : '2. Select Language'}
                           </label>

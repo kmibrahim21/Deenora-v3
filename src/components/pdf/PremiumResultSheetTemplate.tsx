@@ -428,7 +428,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                         numStudentsOnPage > 22 ? 'text-[9.5px]' : 'text-[10.5px]'
                       } font-black uppercase tracking-wider`}>
                         <th className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} w-[32px] border-r border-white/20 align-middle`} rowSpan={2}>{t.sl}</th>
-                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} w-[120px] border-r border-white/20 text-left align-middle truncate`} rowSpan={2}>{t.studentName}</th>
+                        <th className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} w-[160px] border-r border-white/20 text-left align-middle truncate whitespace-nowrap`} rowSpan={2}>{t.studentName}</th>
                         <th className="py-1 px-0.5 border-r border-white/20 text-center align-middle" colSpan={subjects.length}>
                           {t.subjectMarks}
                         </th>
@@ -478,7 +478,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                             <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {globalIndex}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} text-left font-bold text-slate-900 border-r border-slate-200 truncate`} title={std.student_name}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} text-left font-bold text-slate-900 border-r border-slate-200 truncate whitespace-nowrap`} title={std.student_name}>
                               {std.student_name}
                             </td>
 
