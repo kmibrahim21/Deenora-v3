@@ -385,10 +385,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         if (!failedA && failedB) return -1;
         if (failedA && !failedB) return 1;
 
-        if (!failedA && !failedB && (resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school')) {
-          const gpaDiff = parseFloat(b.gpa) - parseFloat(a.gpa);
-          if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
-        }
+        // Removed GPA sort to prioritize total marks
 
         const totalDiff = parseFloat(b.total) - parseFloat(a.total);
         if (Math.abs(totalDiff) > 0.001) return totalDiff;
@@ -407,7 +404,6 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           const failedP = p.grade === 'F' || parseFloat(p.gpa) === 0;
           const isTie = (
             failedPrev === failedP &&
-            prev.gpa === p.gpa &&
             Math.abs(parseFloat(prev.total) - parseFloat(p.total)) < 0.001
           );
           if (!isTie) {

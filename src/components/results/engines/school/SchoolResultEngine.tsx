@@ -66,7 +66,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [showDeleteSubjectConfirm, setShowDeleteSubjectConfirm] = useState(false);
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
   const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
-  const [selectedResultTemplate, setSelectedResultTemplate] = useState<'classic' | 'premium'>('premium');
+  const [selectedResultTemplate, setSelectedResultTemplate] = useState<'classic' | 'premium'>('classic');
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium') => Promise<void>) | null>(null);
   const [downloadActionType, setDownloadActionType] = useState<'marksheet' | 'result-sheet' | 'seat-plan' | 'admit-card' | null>(null);
@@ -1108,11 +1108,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         if (a.pass_status && !b.pass_status) return -1;
         if (!a.pass_status && b.pass_status) return 1;
         
-        // If both passed and grading system, sort by GPA first
-        if ((resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') && a.pass_status && b.pass_status) {
-           const gpaDiff = parseFloat(b.gpa) - parseFloat(a.gpa);
-           if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
-        }
+        // Removed GPA sort to prioritize total marks
         const marksDiff = b.total_marks - a.total_marks;
         if (Math.abs(marksDiff) > 0.001) return marksDiff;
 
@@ -1127,7 +1123,6 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           const prev = sortedRanked[idx - 1];
           const isTie = (
             prev.pass_status === item.pass_status &&
-            prev.gpa === item.gpa &&
             Math.abs(prev.total_marks - item.total_marks) < 0.001
           );
           if (!isTie) {
@@ -3701,55 +3696,59 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                           <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest mt-0.5">ডিজাইন টেমপ্লেট ও ভাষা নির্বাচন করুন</p>
                       </div>
 
+                      
                       {downloadActionType === 'result-sheet' && (
-                      <div className="mb-6 space-y-2 text-left">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
-                              {lang === 'bn' ? '১. টেমপ্লেট ডিজাইন (Template Design)' : '1. Select Template Design'}
-                          </label>
-                          <div className="grid grid-cols-2 gap-2.5">
-                              <button
-                                  type="button"
-                                  onClick={() => setSelectedResultTemplate('premium')}
-                                  className={`p-3 rounded-2xl border text-left transition-all relative ${
-                                      selectedResultTemplate === 'premium'
-                                          ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                                  }`}
-                              >
-                                  <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[8px] font-black rounded-md uppercase tracking-wider shadow-sm">NEW</span>
-                                  <div className="font-bold text-xs flex items-center gap-1.5">
-                                      <Layout size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
-                                      {lang === 'bn' ? 'প্রিমিয়াম ডিজাইন' : 'Premium Design'}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
-                                      {lang === 'bn' ? 'অফিসিয়াল একাডেমিক' : 'Academic Official'}
-                                  </div>
-                              </button>
+                          <div className="mb-6 space-y-2 text-left">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
+                                  {lang === 'bn' ? '১. টেমপ্লেট ডিজাইন (Template Design)' : '1. Select Template Design'}
+                              </label>
+                              <div className="grid grid-cols-2 gap-2.5">
+                                  <button
+                                      type="button"
+                                      onClick={() => setSelectedResultTemplate('premium')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          selectedResultTemplate === 'premium'
+                                              ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[8px] font-black rounded-md uppercase tracking-wider shadow-sm">NEW</span>
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <Layout size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                                          {lang === 'bn' ? 'প্রিমিয়াম ডিজাইন' : 'Premium Design'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                                          {lang === 'bn' ? 'অফিসিয়াল একাডেমিক' : 'Academic Official'}
+                                      </div>
+                                  </button>
 
-                              <button
-                                  type="button"
-                                  onClick={() => setSelectedResultTemplate('classic')}
-                                  className={`p-3 rounded-2xl border text-left transition-all ${
-                                      selectedResultTemplate === 'classic'
-                                          ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                                  }`}
-                              >
-                                  <div className="font-bold text-xs flex items-center gap-1.5">
-                                      <FileText size={14} className="text-slate-600 dark:text-slate-400 shrink-0" />
-                                      {lang === 'bn' ? 'ক্লাসিক ডিজাইন' : 'Classic Design'}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
-                                      {lang === 'bn' ? 'স্ট্যান্ডার্ড ডিফল্ট' : 'Standard Default'}
-                                  </div>
-                              </button>
+                                  <button
+                                      type="button"
+                                      onClick={() => setSelectedResultTemplate('classic')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          selectedResultTemplate === 'classic'
+                                              ? 'border-blue-600 bg-blue-50/80 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <Layout size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                                          {lang === 'bn' ? 'স্ট্যান্ডার্ড ডিজাইন' : 'Standard Design'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                                          {lang === 'bn' ? 'সাধারণ একাডেমিক' : 'Academic Standard'}
+                                      </div>
+                                  </button>
+                              </div>
                           </div>
-                      </div>
-
                       )}
-<div className="space-y-2.5">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1 text-left">
-                              {lang === 'bn' ? '২. ভাষা নির্বাচন করুন (Select Language)' : '2. Select Language'}
+
+                      <div className="space-y-2.5">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1 text-left font-noto">
+                              {downloadActionType === 'result-sheet'
+                                  ? (lang === 'bn' ? '২. ভাষা নির্বাচন করুন (Select Language)' : '2. Select Language')
+                                  : (lang === 'bn' ? 'ভাষা নির্বাচন করুন (Select Language)' : 'Select Language')
+                              }
                           </label>
                           <button 
                               onClick={async () => {

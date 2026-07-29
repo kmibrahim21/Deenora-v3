@@ -616,10 +616,7 @@ export const generateClassResultPDF = async (
     validForRank.sort((a, b) => {
         if (a._hasFailed && !b._hasFailed) return 1;
         if (!a._hasFailed && b._hasFailed) return -1;
-        if ((resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') && !a._hasFailed && !b._hasFailed) {
-            const gpaDiff = parseFloat(b._gpa || '0') - parseFloat(a._gpa || '0');
-            if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
-        }
+        
         const totalDiff = (Number(b._total) || 0) - (Number(a._total) || 0);
         if (Math.abs(totalDiff) > 0.001) return totalDiff;
         const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
@@ -633,7 +630,6 @@ export const generateClassResultPDF = async (
             const prev = validForRank[index - 1];
             const isTie = (
                 prev._hasFailed === std._hasFailed &&
-                prev._gpa === std._gpa &&
                 Math.abs((Number(prev._total) || 0) - (Number(std._total) || 0)) < 0.001
             );
             if (!isTie) {
