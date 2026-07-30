@@ -176,7 +176,7 @@ export const SMSService = {
 
         if (validMsgs.length > 0) {
           const apiUrls = validMsgs.map(m => {
-            const encodedContent = encodeURIComponent(m.text).replace(/%2B/g, '%252B');
+            const encodedContent = encodeURIComponent(m.text);
             return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(m.phone)}&messageContent=${encodedContent}&type=3`;
           });
 
@@ -266,7 +266,7 @@ export const SMSService = {
 
         if (validMsgs.length > 0) {
           const apiUrls = validMsgs.map(s => {
-            const encodedContent = encodeURIComponent(message).replace(/%2B/g, '%252B');
+            const encodedContent = encodeURIComponent(message);
             return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(s.guardian_phone)}&messageContent=${encodedContent}&type=3`;
           });
           
@@ -355,7 +355,7 @@ export const SMSService = {
     if (!target) {
       finalStatus = 'failed';
     } else {
-      const encodedContent = encodeURIComponent(message).replace(/%2B/g, '%252B');
+      const encodedContent = encodeURIComponent(message);
       let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${target}&messageContent=${encodedContent}&type=3`;
       try { 
         const res = await fetch('/api/sms', { 
