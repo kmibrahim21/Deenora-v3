@@ -270,16 +270,20 @@ export default async function handler(req, res) {
       if (pin) {
         updateData.password_hash = crypto.createHash('sha256').update(pin).digest('hex');
       }
-      const { error: teacherError } = await supabase.from('teachers').update(updateData).eq('id', id);
-      if (teacherError) throw teacherError;
 
-      // ALSO update the profiles table so the logged-in user gets updated permissions
-      await supabase.from('profiles').update({
-        full_name: name,
-        role: 'teacher',
-        permissions: finalPermissions,
-        is_active: is_active ?? true
-      }).eq('id', id);
+      // Run database updates in parallel to improve performance
+      const [teacherResult, profileResult] = await Promise.all([
+        supabase.from('teachers').update(updateData).eq('id', id),
+        supabase.from('profiles').update({
+          full_name: name,
+          role: 'teacher',
+          permissions: finalPermissions,
+          is_active: is_active ?? true
+        }).eq('id', id)
+      ]);
+
+      if (teacherResult.error) throw teacherResult.error;
+      if (profileResult.error) throw profileResult.error;
 
       return res.status(200).json({ success: true });
     }
@@ -290,15 +294,14 @@ export default async function handler(req, res) {
       
       console.log('Deleting teacher:', id);
       
-      // Also delete from profiles and auth if possible
-      const { error } = await supabase.from('teachers').delete().eq('id', id);
-      if (error) throw error;
-      
-      // Cleanup profile too
-      await supabase.from('profiles').delete().eq('id', id);
-      
-      // Cleanup teacher_permissions too
-      await supabase.from('teacher_permissions').delete().eq('teacher_id', id);
+      // Cleanup database records in parallel to improve performance
+      const [teacherResult, profileResult, permResult] = await Promise.all([
+        supabase.from('teachers').delete().eq('id', id),
+        supabase.from('profiles').delete().eq('id', id),
+        supabase.from('teacher_permissions').delete().eq('teacher_id', id)
+      ]);
+
+      if (teacherResult.error) throw teacherResult.error;
       
       // Delete auth user
       try {

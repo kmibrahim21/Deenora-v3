@@ -121,6 +121,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   }
   const isOnline = useOfflineStatus();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const sortedTeachers = React.useMemo(() => {
+    return [...teachers].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  }, [teachers]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -249,7 +252,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         setTeacherAttendance(data.attendance);
       } else {
         const initial: Record<string, string> = {};
-        teachers.forEach(t => {
+        sortedTeachers.forEach(t => {
           initial[t.id] = forceHoliday ? 'holiday' : 'present';
         });
         setTeacherAttendance(initial);
@@ -304,7 +307,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     setSavingAttendance(true);
 
     const finalAttendance = { ...teacherAttendance };
-    teachers.forEach(t => {
+    sortedTeachers.forEach(t => {
       if (!finalAttendance[t.id]) finalAttendance[t.id] = isHoliday ? 'holiday' : 'present';
     });
 
@@ -335,7 +338,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     else if (reportType === 'monthly') titleStr = attendanceMonth;
     else titleStr = reportYear;
 
-    const mappedData = teachers.map(teacher => {
+    const mappedData = sortedTeachers.map(teacher => {
       let presentCount = 0;
       let absentCount = 0;
       let lateCount = 0;
@@ -622,6 +625,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       await CacheService.clearCache('teachers', madrasah.id);
 
       await fetchTeachers();
+      if (activeTab === 'attendance' && attendanceSubTab === 'take') {
+        fetchTeacherAttendance(isHoliday);
+      }
       setShowAddModal(false);
       resetForm();
     } catch (err: any) {
@@ -1070,7 +1076,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       <p className={`text-[9px] font-black uppercase tracking-widest pt-1 ${isDark ? 'text-blue-400/60' : 'text-blue-400'}`}>{lang === 'bn' ? 'ক্যালেন্ডার অনুযায়ী আজ হাজিরা ছুটির দিন হিসেবে গণ্য হবে' : 'According to calendar, today is a holiday'}</p>
                     </div>
                   </div>
-                ) : teachers.length > 0 ? (
+                ) : sortedTeachers.length > 0 ? (
                   <>
                     <div className="flex items-center justify-between px-2 pt-1">
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lang === 'bn' ? 'শিক্ষক তালিকা' : 'Teacher List'}</h4>
@@ -1078,11 +1084,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {teachers.map(teacher => {
-                        // Filter by join date and leave date
-                        if (teacher.join_date && attendanceDate < teacher.join_date) {
-                          return null;
-                        }
+                      {sortedTeachers.map(teacher => {
+                        // Filter by leave date (do not filter active teachers by join date for daily attendance taking)
                         if (teacher.leave_date && attendanceDate > teacher.leave_date) {
                           return null;
                         }
@@ -1191,14 +1194,14 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
               </div>
 
               <div className="space-y-3 pt-2">
-                {teachers.length === 0 ? (
+                {sortedTeachers.length === 0 ? (
                   <div className={`p-8 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                     <Users size={32} className="text-slate-400/20 mb-3" />
                     <p className="text-[13px] font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {teachers.map(teacher => {
+                    {sortedTeachers.map(teacher => {
                       // Filter by join date and leave date
                       if (teacher.join_date) {
                         const [joinYear, joinMonth] = teacher.join_date.split('-').map(Number);
@@ -1315,7 +1318,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {teachers.map(teacher => {
+              {sortedTeachers.map(teacher => {
                 // Filter by join date
                 if (teacher.join_date) {
                   const [joinYear, joinMonth] = teacher.join_date.split('-').map(Number);
