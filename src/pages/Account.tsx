@@ -68,17 +68,21 @@ const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Pr
 const ActionCard = ({ icon: Icon, title, subtitle, colorClass, onClick, dark }: any) => (
   <button 
     onClick={onClick}
-    className={`w-full p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border shadow-bubble transition-all flex flex-col items-center justify-center text-center gap-2 sm:gap-3 active:scale-95 ${dark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'}`}
+    className={`w-full p-4 sm:p-5 rounded-[2rem] border shadow-sm transition-all flex flex-col items-center justify-center text-center gap-3 active:scale-95 duration-300 hover:scale-[1.03] hover:shadow-md ${
+      dark 
+        ? 'bg-slate-800/80 border-slate-700/60 hover:border-slate-600 hover:bg-slate-800' 
+        : 'bg-white border-slate-100 hover:bg-slate-50/50 hover:border-slate-200 shadow-slate-100'
+    }`}
   >
-    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-[1rem] sm:rounded-2xl flex items-center justify-center shrink-0 ${colorClass}`}>
+    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform duration-300 ${colorClass}`}>
       <Icon className="w-6 h-6 sm:w-7 sm:h-7" strokeWidth={1.5} />
     </div>
     <div className="flex-1 w-full flex flex-col items-center justify-center">
-      <h5 className={`text-[12px] sm:text-[14px] font-black font-noto leading-[1.3] text-balance ${dark ? 'text-white' : 'text-slate-800'}`}>
+      <h5 className={`text-xs sm:text-sm font-black font-noto leading-[1.3] text-balance tracking-tight ${dark ? 'text-white' : 'text-[#1E3A8A]'}`}>
         {title}
       </h5>
       {subtitle && (
-        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 tracking-wide">
+        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1.5 uppercase tracking-widest leading-none">
           {subtitle}
         </p>
       )}
@@ -101,6 +105,11 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  // Teacher-specific states
+  const [teacherInfo, setTeacherInfo] = useState<any>(null);
+  const [loadingTeacher, setLoadingTeacher] = useState(false);
+  const [teacherLedgerLogs, setTeacherLedgerLogs] = useState<any[]>([]);
   const [isEditingSubscription, setIsEditingSubscription] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -298,6 +307,172 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       }
     }
   }, [initialMadrasah]);
+
+  useEffect(() => {
+    const isTeacherUser = profile?.role === 'teacher';
+    if (isTeacherUser && profile?.id && madrasah?.id) {
+      const fetchTeacherDashboardData = async () => {
+        setLoadingTeacher(true);
+        try {
+          // 1. Fetch teacher profile details
+          const { data: teacher, error: teacherError } = await supabase
+            .from('teachers')
+            .select('*')
+            .eq('id', profile.id)
+            .maybeSingle();
+
+          if (teacherError) throw teacherError;
+          
+          if (teacher) {
+            let parsedPermissions = teacher.permissions || {};
+            if (typeof teacher.permissions === 'string') {
+              try {
+                parsedPermissions = JSON.parse(teacher.permissions);
+              } catch (e) {
+                parsedPermissions = {};
+              }
+            }
+            setTeacherInfo({
+              ...teacher,
+              name: teacher.teacher_name,
+              phone: teacher.mobile,
+              pin: parsedPermissions.raw_password,
+              address: parsedPermissions.address,
+              join_date: parsedPermissions.join_date,
+              leave_date: parsedPermissions.leave_date,
+              permissions: parsedPermissions
+            });
+          }
+
+          // 2. Fetch teacher salary payment logs from ledger
+          const { data: salaryLogs, error: salaryError } = await supabase
+            .from('ledger')
+            .select('*')
+            .eq('institution_id', madrasah.id)
+            .eq('type', 'expense')
+            .ilike('description', `%[ID:${profile.id}]%`)
+            .order('transaction_date', { ascending: false });
+
+          if (salaryError) throw salaryError;
+          setTeacherLedgerLogs(salaryLogs || []);
+
+        } catch (err) {
+          console.error("Error fetching teacher dashboard data:", err);
+        } finally {
+          setLoadingTeacher(false);
+        }
+      };
+
+      fetchTeacherDashboardData();
+    }
+  }, [profile?.role, profile?.id, madrasah?.id]);
+
+  const teacherAttendanceStats = React.useMemo(() => {
+    if (!madrasah || !profile?.id) return { present: 0, absent: 0, late: 0, half_day: 0, holiday: 0, total: 0, logs: [] };
+    
+    const config = madrasah.config_json as any;
+    const allAttendance = config?.teacher_attendance || {};
+    
+    let present = 0;
+    let absent = 0;
+    let late = 0;
+    let half_day = 0;
+    let holiday = 0;
+    
+    const logs: any[] = [];
+    
+    Object.keys(allAttendance).forEach(date => {
+      const dayData = allAttendance[date] || {};
+      const status = dayData[profile.id];
+      if (status) {
+        if (status === 'present') present++;
+        else if (status === 'absent') absent++;
+        else if (status === 'late') late++;
+        else if (status === 'half_day') half_day++;
+        else if (status === 'holiday') holiday++;
+        
+        logs.push({ date, status });
+      }
+    });
+    
+    // Sort logs by date descending
+    logs.sort((a, b) => b.date.localeCompare(a.date));
+    
+    return {
+      present,
+      absent,
+      late,
+      half_day,
+      holiday,
+      total: present + absent + late + half_day,
+      logs
+    };
+  }, [madrasah?.config_json, profile?.id]);
+
+  const teacherMonthlySalaries = React.useMemo(() => {
+    if (!teacherInfo) return [];
+    
+    const basicSalary = Number(teacherInfo.basic_salary) || 0;
+    const salariesByMonth: Record<string, { month: string, paid: number, transactions: any[] }> = {};
+    
+    // 1. Group transaction logs from ledger by salaryMonth
+    teacherLedgerLogs.forEach(log => {
+      const monthMatch = log.description.match(/Salary paid for (\d{4}-\d{2})/);
+      if (monthMatch && monthMatch[1]) {
+        const month = monthMatch[1];
+        if (!salariesByMonth[month]) {
+          salariesByMonth[month] = { month, paid: 0, transactions: [] };
+        }
+        salariesByMonth[month].paid += Number(log.amount) || 0;
+        salariesByMonth[month].transactions.push(log);
+      }
+    });
+
+    // 2. Generate a list of recent months to show, ensuring at least the last 6 months are represented
+    const list: any[] = [];
+    const today = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const mStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+      
+      const monthData = salariesByMonth[mStr] || { month: mStr, paid: 0, transactions: [] };
+      const due = Math.max(0, basicSalary - monthData.paid);
+      
+      let status = 'unpaid';
+      if (basicSalary > 0) {
+        if (monthData.paid >= basicSalary) status = 'paid';
+        else if (monthData.paid > 0) status = 'partial';
+      } else {
+        if (monthData.paid > 0) status = 'paid';
+      }
+      
+      list.push({
+        month: mStr,
+        basicSalary,
+        paid: monthData.paid,
+        due,
+        status,
+        transactions: monthData.transactions
+      });
+    }
+
+    return list;
+  }, [teacherInfo, teacherLedgerLogs]);
+
+  const formatSalaryMonth = (monthStr: string) => {
+    if (!monthStr) return "";
+    const parts = monthStr.split('-');
+    if (parts.length < 2) return monthStr;
+    const year = parts[0];
+    const month = parts[1];
+    const monthIndex = parseInt(month) - 1;
+    
+    const bnMonths = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
+    const enMonths = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    
+    const monthName = lang === 'bn' ? bnMonths[monthIndex] : enMonths[monthIndex];
+    return `${monthName} ${year}`;
+  };
 
   const fetchPaymentHistory = async () => {
     if (!initialMadrasah) return;
@@ -1065,9 +1240,15 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           <div className="absolute -top-12 sm:-top-16 left-1/2 -translate-x-1/2 z-20">
             <div className="relative group">
               <div className={`w-32 h-32 sm:w-40 sm:h-40 p-3 sm:p-4 rounded-full shadow-bubble border-[8px] sm:border-[12px] flex items-center justify-center overflow-hidden ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-900' : 'bg-white border-slate-50'}`}>
-                {logoUrl ? <img src={logoUrl} className="w-full h-full object-cover rounded-full" alt="Profile" /> : <div className={`w-full h-full rounded-full flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}><UserIcon size={50} className="sm:w-[70px] sm:h-[70px]" strokeWidth={1.5} /></div>}
+                {isTeacher && teacherInfo?.photo_url ? (
+                  <img src={teacherInfo.photo_url} className="w-full h-full object-cover rounded-full" alt="Profile" />
+                ) : logoUrl ? (
+                  <img src={logoUrl} className="w-full h-full object-cover rounded-full" alt="Profile" />
+                ) : (
+                  <div className={`w-full h-full rounded-full flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}><UserIcon size={50} className="sm:w-[70px] sm:h-[70px]" strokeWidth={1.5} /></div>
+                )}
               </div>
-              {madrasah && madrasah.id !== 'super_admin' && (
+              {madrasah && madrasah.id !== 'super_admin' && !isTeacher && (
                 <button 
                   onClick={() => fileInputRef.current?.click()} 
                   className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 w-9 h-9 sm:w-11 sm:h-11 bg-[#2563EB] text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-premium border-4 border-white active:scale-90 transition-all z-30"
@@ -1081,31 +1262,96 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           <div className="space-y-4 mt-2">
              <div className="space-y-1">
                <div className="px-4">
-                 <h2 className={`text-[20px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{madrasah?.name || 'User'}</h2>
+                 <h2 className={`text-[20px] sm:text-[32px] font-black font-noto tracking-tight leading-tight break-words whitespace-normal ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                   {isTeacher ? (teacherInfo?.teacher_name || profile?.full_name || 'Teacher') : (madrasah?.name || 'User')}
+                 </h2>
                </div>
                
                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 mt-1.5 px-2">
-                 {madrasah?.address && (
-                   <div className="flex items-center gap-1.5 text-slate-400">
-                     <MapPin size={11} className="shrink-0" />
-                     <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.address}</p>
-                   </div>
-                 )}
-                 {madrasah?.phone && (
-                   <div className="flex items-center gap-1.5 text-slate-400">
-                     <Smartphone size={11} className="shrink-0" />
-                     <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.phone}</p>
-                   </div>
-                 )}
-                 {madrasah?.email && (
-                   <div className="flex items-center gap-1.5 text-slate-400">
-                     <Mail size={11} className="shrink-0" />
-                     <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.email}</p>
-                   </div>
+                 {isTeacher ? (
+                   <>
+                     {teacherInfo?.designation && (
+                       <div className="flex items-center gap-1.5 text-slate-400">
+                         <Box size={11} className="shrink-0" />
+                         <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{teacherInfo.designation}</p>
+                       </div>
+                     )}
+                     {teacherInfo?.mobile && (
+                       <div className="flex items-center gap-1.5 text-slate-400">
+                         <Smartphone size={11} className="shrink-0" />
+                         <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{teacherInfo.mobile}</p>
+                       </div>
+                     )}
+                     {teacherInfo?.address && (
+                       <div className="flex items-center gap-1.5 text-slate-400">
+                         <MapPin size={11} className="shrink-0" />
+                         <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{teacherInfo.address}</p>
+                       </div>
+                     )}
+                   </>
+                 ) : (
+                   <>
+                     {madrasah?.address && (
+                       <div className="flex items-center gap-1.5 text-slate-400">
+                         <MapPin size={11} className="shrink-0" />
+                         <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.address}</p>
+                       </div>
+                     )}
+                     {madrasah?.phone && (
+                       <div className="flex items-center gap-1.5 text-slate-400">
+                         <Smartphone size={11} className="shrink-0" />
+                         <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.phone}</p>
+                       </div>
+                     )}
+                     {madrasah?.email && (
+                       <div className="flex items-center gap-1.5 text-slate-400">
+                         <Mail size={11} className="shrink-0" />
+                         <p className="text-[10px] sm:text-xs font-bold whitespace-nowrap">{madrasah.email}</p>
+                       </div>
+                     )}
+                   </>
                  )}
                </div>
              </div>
              
+             {isTeacher && (
+               <div className="pt-2 flex flex-wrap gap-3 items-center justify-center">
+                 {teacherInfo?.join_date && (
+                   <div className={`p-3 rounded-2xl border flex items-center gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
+                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-teal-400' : 'bg-white border-slate-100 text-teal-600'}`}>
+                       <CalendarIcon size={16} />
+                     </div>
+                     <div className="text-left">
+                       <p className="text-[7px] font-black text-slate-400 uppercase leading-none mb-0.5">{lang === 'bn' ? 'যোগদানের তারিখ' : 'Joining Date'}</p>
+                       <p className={`text-[11px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{teacherInfo.join_date}</p>
+                     </div>
+                   </div>
+                 )}
+
+                 {teacherInfo?.basic_salary && (
+                   <div className={`p-3 rounded-2xl border flex items-center gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
+                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-white border-slate-100 text-amber-600'}`}>
+                       <CreditCard size={16} />
+                     </div>
+                     <div className="text-left">
+                       <p className="text-[7px] font-black text-slate-400 uppercase leading-none mb-0.5">{lang === 'bn' ? 'मूल वेतन' : 'Basic Salary'}</p>
+                       <p className={`text-[11px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{teacherInfo.basic_salary} ৳</p>
+                     </div>
+                   </div>
+                 )}
+
+                 <div className={`p-3 rounded-2xl border flex items-center gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50/70 border-slate-100'}`}>
+                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shadow-sm border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-white border-slate-100 text-blue-600'}`}>
+                     <GraduationCap size={16} />
+                   </div>
+                   <div className="text-left">
+                     <p className="text-[7px] font-black text-slate-400 uppercase leading-none mb-0.5">{lang === 'bn' ? 'মাদরাসা / প্রতিষ্ঠান' : 'Institution'}</p>
+                     <p className={`text-[11px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{madrasah?.name}</p>
+                   </div>
+                 </div>
+               </div>
+             )}
+
              {madrasah && madrasah.id !== 'super_admin' && !isTeacher && (
                <div className="pt-2">
                   {(madrasah.config_json as any)?.institute_code && (
@@ -1128,6 +1374,323 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
 
 
       {/* Main Options Grid */}
+      {isTeacher ? (
+         <div className="space-y-6 mx-1 text-left">
+            {/* Loading Indicator */}
+            {loadingTeacher ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="animate-spin text-blue-500 mb-3" size={32} />
+                <p className="text-xs text-slate-400 font-bold">{lang === 'bn' ? 'তথ্য লোড হচ্ছে...' : 'Loading teacher details...'}</p>
+              </div>
+            ) : (
+              <>
+                {/* DUAL CARD LAYOUT: Attendance Stats & Basic Salary Summary */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  
+                  {/* Attendance Summary */}
+                  <div className={`p-6 rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-100 shadow-sm'}`}>
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="w-10 h-10 bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 rounded-2xl flex items-center justify-center shrink-0">
+                        <Activity size={20} />
+                      </div>
+                      <div className="text-left">
+                        <h4 className={`text-base font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                          {lang === 'bn' ? 'চলতি শিক্ষাবর্ষের হাজিরা' : 'Attendance Summary'}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          {lang === 'bn' ? 'আজ পর্যন্ত আপনার হাজিরা স্ট্যাটাস' : 'Your attendance summary up to today'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 text-center mb-5">
+                      <div className={`p-2.5 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{lang === 'bn' ? 'উপস্থিতি' : 'Present'}</p>
+                        <p className="text-base font-black text-emerald-500">{teacherAttendanceStats.present}</p>
+                      </div>
+                      <div className={`p-2.5 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}</p>
+                        <p className="text-base font-black text-rose-500">{teacherAttendanceStats.absent}</p>
+                      </div>
+                      <div className={`p-2.5 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{lang === 'bn' ? 'বিলম্ব' : 'Late'}</p>
+                        <p className="text-base font-black text-amber-500">{teacherAttendanceStats.late}</p>
+                      </div>
+                      <div className={`p-2.5 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{lang === 'bn' ? 'অর্ধ-ছুটি' : 'Half Day'}</p>
+                        <p className="text-base font-black text-indigo-500">{teacherAttendanceStats.half_day}</p>
+                      </div>
+                      <div className={`p-2.5 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{lang === 'bn' ? 'সরকারি ছুটি' : 'Holiday'}</p>
+                        <p className="text-base font-black text-slate-400">{teacherAttendanceStats.holiday}</p>
+                      </div>
+                    </div>
+
+                    {/* Progress indicator */}
+                    <div className="space-y-1 text-left">
+                      <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase">
+                        <span>{lang === 'bn' ? 'উপস্থিতির হার' : 'Attendance Rate'}</span>
+                        <span className="text-emerald-500 font-mono">
+                          {teacherAttendanceStats.total > 0 
+                            ? `${Math.round(((teacherAttendanceStats.present + teacherAttendanceStats.late) / teacherAttendanceStats.total) * 100)}%`
+                            : '০%'}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-900 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 rounded-full transition-all" 
+                          style={{ 
+                            width: teacherAttendanceStats.total > 0 
+                              ? `${Math.round(((teacherAttendanceStats.present + teacherAttendanceStats.late) / teacherAttendanceStats.total) * 100)}%`
+                              : '0%' 
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Salary Summary Overview */}
+                  <div className={`p-6 rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-100 shadow-sm'}`}>
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="w-10 h-10 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center shrink-0">
+                        <CreditCard size={20} />
+                      </div>
+                      <div className="text-left">
+                        <h4 className={`text-base font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                          {lang === 'bn' ? 'বেতন রেকর্ড সারসংক্ষেপ' : 'Salary Overview'}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          {lang === 'bn' ? 'আপনার বেতন প্রাপ্তির সংক্ষিপ্ত পরিসংখ্যান' : 'A quick glance at your salary payment records'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-4 text-center">
+                      <div className={`p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{lang === 'bn' ? 'মোট প্রাপ্ত বেতন (চলতি ৬ মাস)' : 'Total Paid (Last 6 Months)'}</p>
+                        <p className="text-xl font-black text-emerald-500">
+                          {teacherMonthlySalaries.reduce((sum, item) => sum + item.paid, 0)} ৳
+                        </p>
+                      </div>
+                      <div className={`p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/50 border-slate-100'}`}>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{lang === 'bn' ? 'বকেয়া বেতন (চলতি ৬ মাস)' : 'Total Due (Last 6 Months)'}</p>
+                        <p className="text-xl font-black text-rose-500">
+                          {teacherMonthlySalaries.reduce((sum, item) => sum + item.due, 0)} ৳
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-left p-3 rounded-2xl border text-[11px] font-extrabold text-slate-400 bg-slate-50/30 dark:bg-slate-900/20 leading-relaxed">
+                      {lang === 'bn' 
+                        ? 'আপনার যদি বেতন বা বকেয়া নিয়ে কোনো অমিল পাওয়া যায়, তাহলে মাদরাসা একাউন্ট্যান্ট বা প্রধান এডমিনের সাথে যোগাযোগ করুন।'
+                        : 'If there is any discrepancy in your salary payments or dues, please contact the institution accountant or chief administrator.'}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* DETAILED MONTHLY SALARY LOG */}
+                <div className={`p-6 rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-100 shadow-sm'}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-700/50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-50 dark:bg-blue-500/10 text-[#2563EB] dark:text-blue-400 rounded-2xl flex items-center justify-center shrink-0">
+                        <History size={20} />
+                      </div>
+                      <div className="text-left">
+                        <h4 className={`text-base font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                          {lang === 'bn' ? 'মাসিক বেতন ও পেমেন্ট হিস্ট্রি' : 'Monthly Salary & Payment History'}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          {lang === 'bn' ? 'মাসভিত্তিক বেতন পরিশোধ, আংশিক গ্রহণ ও বকেয়া স্ট্যাটাস' : 'Monthly basic salary, paid, due and transactions'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto -mx-6 px-6">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 dark:border-slate-800">
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'মাস' : 'Month'}</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">{lang === 'bn' ? 'মূল বেতন' : 'Basic Salary'}</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">{lang === 'bn' ? 'প্রাপ্তি' : 'Received (Paid)'}</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">{lang === 'bn' ? 'বকেয়া' : 'Due'}</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">{lang === 'bn' ? 'অবস্থা' : 'Status'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {teacherMonthlySalaries.map((sal) => (
+                          <React.Fragment key={sal.month}>
+                            <tr className="border-b border-slate-100/50 dark:border-slate-800/30 hover:bg-slate-50/10 transition-all">
+                              <td className="py-4 text-xs font-black text-slate-800 dark:text-slate-200">
+                                <div className="flex flex-col text-left">
+                                  <span>{formatSalaryMonth(sal.month)}</span>
+                                  <span className="text-[9px] text-slate-400 font-bold mt-0.5">{sal.month}</span>
+                                </div>
+                              </td>
+                              <td className="py-4 text-xs font-black text-slate-800 dark:text-slate-200 text-right font-mono">{sal.basicSalary} ৳</td>
+                              <td className="py-4 text-xs font-black text-emerald-500 text-right font-mono">{sal.paid} ৳</td>
+                              <td className={`py-4 text-xs font-black text-right font-mono ${sal.due > 0 ? 'text-rose-500' : 'text-slate-400'}`}>
+                                {sal.due} ৳
+                              </td>
+                              <td className="py-4 text-center">
+                                <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider inline-block ${
+                                  sal.status === 'paid' 
+                                    ? 'bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20' 
+                                    : sal.status === 'partial' 
+                                      ? 'bg-amber-500/10 text-amber-500 dark:bg-amber-500/20' 
+                                      : 'bg-rose-500/10 text-rose-500 dark:bg-rose-500/20'
+                                }`}>
+                                  {sal.status === 'paid' 
+                                    ? (lang === 'bn' ? 'পরিশোধিত' : 'Paid') 
+                                    : sal.status === 'partial' 
+                                      ? (lang === 'bn' ? 'আংশিক পরিশোধ' : 'Partial') 
+                                      : (lang === 'bn' ? 'অপরিশোধিত' : 'Unpaid')}
+                                </span>
+                              </td>
+                            </tr>
+                            
+                            {/* Sub-Rows for individual transaction details if paid > 0 */}
+                            {sal.transactions.length > 0 && (
+                              <tr key={`${sal.month}-transactions`}>
+                                <td colSpan={5} className="p-0 bg-slate-50/30 dark:bg-slate-900/10">
+                                  <div className="px-6 py-3 space-y-2 border-l-2 border-blue-500 text-left">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                      {lang === 'bn' ? 'পেমেন্ট ট্রানজেকশন ট্রেইল' : 'Payment Transaction Trails'}
+                                    </p>
+                                    {sal.transactions.map((t: any) => (
+                                      <div key={t.id} className="flex justify-between items-center text-xs font-bold text-slate-600 dark:text-slate-400 py-1.5 border-b border-dashed border-slate-100 dark:border-slate-800 last:border-0">
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-xs font-black text-slate-700 dark:text-slate-300">{t.description}</span>
+                                          <span className="text-[10px] text-slate-400 font-mono font-medium">{t.transaction_date}</span>
+                                        </div>
+                                        <span className="text-xs font-black text-emerald-500 font-mono shrink-0 ml-4">+{t.amount} ৳</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* DETAILED ATTENDANCE LOG */}
+                <div className={`p-6 rounded-[2.5rem] border ${madrasah?.theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-100 shadow-sm'}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-700/50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 rounded-2xl flex items-center justify-center shrink-0">
+                        <CalendarIcon size={20} />
+                      </div>
+                      <div className="text-left">
+                        <h4 className={`text-base font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                          {lang === 'bn' ? 'বিস্তারিত হাজিরা খাতা' : 'Detailed Attendance Logs'}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                          {lang === 'bn' ? 'তারিখ ভিত্তিক হাজিরা তালিকা' : 'Detailed log of your attendance dates'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {teacherAttendanceStats.logs.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 font-bold text-xs">
+                      {lang === 'bn' ? 'কোনো হাজিরার রেকর্ড পাওয়া যায়নি' : 'No attendance logs found.'}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-left">
+                      {teacherAttendanceStats.logs.slice(0, 18).map((log) => {
+                        const dayName = new Date(log.date).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+                        const dateFormatted = new Date(log.date).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+                        
+                        return (
+                          <div 
+                            key={log.date}
+                            className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
+                              madrasah?.theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50/40 border-slate-100'
+                            }`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-xs font-black text-slate-800 dark:text-slate-200">{dateFormatted}</span>
+                              <span className="text-[10px] text-slate-400 font-bold mt-0.5">{dayName}</span>
+                            </div>
+                            
+                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                              log.status === 'present' 
+                                ? 'bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20' 
+                                : log.status === 'absent' 
+                                  ? 'bg-rose-500/10 text-rose-500 dark:bg-rose-500/20' 
+                                  : log.status === 'late' 
+                                    ? 'bg-amber-500/10 text-amber-500 dark:bg-amber-500/20' 
+                                    : log.status === 'half_day'
+                                      ? 'bg-indigo-500/10 text-indigo-500 dark:bg-indigo-500/20'
+                                      : 'bg-slate-500/10 text-slate-400 dark:bg-slate-500/20'
+                            }`}>
+                              {log.status === 'present' 
+                                ? (lang === 'bn' ? 'উপস্থিত' : 'Present') 
+                                : log.status === 'absent' 
+                                  ? (lang === 'bn' ? 'অনুপস্থিত' : 'Absent') 
+                                  : log.status === 'late' 
+                                    ? (lang === 'bn' ? 'বিলম্ব' : 'Late') 
+                                    : log.status === 'half_day'
+                                      ? (lang === 'bn' ? 'অর্ধ-ছুটি' : 'Half Day')
+                                      : (lang === 'bn' ? 'ছুটি' : 'Holiday')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* OPTIONS ROW (Academic Calendar & Change Password are safe to expose to teachers) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <ActionCard
+                    icon={CalendarIcon}
+                    title={lang === 'bn' ? 'একাডেমিক ক্যালেন্ডার' : 'Academic Calendar'}
+                    subtitle={lang === 'bn' ? 'ছুটি ও ইভেন্ট' : 'Holidays'}
+                    colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+                    onClick={() => setView('academic-calendar')}
+                    dark={madrasah?.theme === 'dark'}
+                  />
+
+                  {modules.class_routine && (
+                    <ActionCard
+                      icon={LayoutDashboard}
+                      title={lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
+                      subtitle={lang === 'bn' ? 'সময়সূচী' : 'Schedule'}
+                      colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                      onClick={() => setView('class-routine')}
+                      dark={madrasah?.theme === 'dark'}
+                    />
+                  )}
+
+                  <ActionCard
+                    icon={Key}
+                    title={lang === 'bn' ? 'পাসওয়ার্ড পরিবর্তন' : 'Change Password'}
+                    subtitle={lang === 'bn' ? 'নিরাপত্তা' : 'Security'}
+                    colorClass="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+                    onClick={() => setIsChangingPassword(true)}
+                    dark={madrasah?.theme === 'dark'}
+                  />
+
+                  {/* Log Out Option for convenience */}
+                  <ActionCard
+                    icon={LogOut}
+                    title={lang === 'bn' ? 'লগ আউট' : 'Log Out'}
+                    subtitle={lang === 'bn' ? 'সেশন শেষ' : 'Sign Out'}
+                    colorClass="bg-slate-100 text-slate-600 dark:bg-slate-500/10 dark:text-slate-400"
+                    onClick={onLogout}
+                    dark={madrasah?.theme === 'dark'}
+                  />
+                </div>
+              </>
+            )}
+         </div>
+      ) : (
       <div className="grid grid-cols-2 gap-3 mx-1">
         {/* Academic Calendar Card */}
         <ActionCard
@@ -1328,6 +1891,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           <ChevronRight className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${madrasah?.theme === 'dark' ? 'text-red-900/50' : 'text-red-200'}`} />
         </button>
       </div>
+      )}
 
       {/* Edit Profile Modal - PORTALED */}
 

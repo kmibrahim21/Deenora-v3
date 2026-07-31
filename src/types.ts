@@ -477,6 +477,7 @@ export type View =
   | 'certificates'
   | 'id-cards'
   | 'super-account'
+  | 'teacheraccount'
   | 'profile-settings';
 
 export interface Tutorial {

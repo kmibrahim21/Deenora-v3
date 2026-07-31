@@ -123,7 +123,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
   const isTabActive = (tab: string) => {
     if (tab === 'home' && currentView === 'home') return true;
-    if (tab === 'account' && (currentView === 'account' || currentView === 'super-account' || currentView === 'admin-voice-service' || currentView === 'admin-tutorials')) return true;
+    if (tab === 'account' && (currentView === 'account' || currentView === 'teacheraccount' || currentView === 'super-account' || currentView === 'admin-voice-service' || currentView === 'admin-tutorials')) return true;
     if (tab === 'list' && (currentView === 'admin-panel' || currentView === 'admin-institutions')) return true;
     if (tab === 'institutions' && currentView === 'admin-institutions') return true;
     if (tab === 'dashboard' && currentView === 'admin-dashboard') return true;
@@ -195,7 +195,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   </button>
                 </>
               )}
-              <button onClick={() => setView(isSuperAdmin ? 'super-account' : 'account')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+              <button onClick={() => setView(isSuperAdmin ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                 <User size={22} strokeWidth={isTabActive('account') ? 2.5 : 2} />
                 <span className="text-sm font-bold font-noto">{t('account', lang, madrasah?.institution_type)}</span>
               </button>
@@ -261,7 +261,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-sm font-bold font-noto">{t('menu_exams', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
-              <button onClick={() => setView('account')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+              <button onClick={() => setView(role === 'teacher' ? 'teacheraccount' : 'account')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                 <User size={22} strokeWidth={isTabActive('account') ? 2.5 : 2} />
                 <span className="text-sm font-bold font-noto">{t('account', lang, madrasah?.institution_type)}</span>
               </button>
@@ -421,7 +421,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             </>
           )}
           
-          <button onClick={() => setView(isSystemStaff ? 'super-account' : 'account')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
+          <button onClick={() => setView(isSystemStaff ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
             <User size={20} />
             <span className="text-[9px] font-black font-noto opacity-80">{t('account', lang, madrasah?.institution_type)}</span>
           </button>

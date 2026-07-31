@@ -30,6 +30,7 @@ const Students = React.lazy(() => import("pages/Students"));
 const StudentDetails = React.lazy(() => import("pages/StudentDetails"));
 const StudentForm = React.lazy(() => import("pages/StudentForm"));
 const Account = React.lazy(() => import("pages/Account"));
+const TeacherAccount = React.lazy(() => import("pages/TeacherAccount"));
 const SuperAccount = React.lazy(() => import("pages/SuperAccount"));
 const AdminPanel = React.lazy(() => import("pages/AdminPanel"));
 const WalletSMS = React.lazy(() => import("pages/WalletSMS"));
@@ -550,6 +551,21 @@ const App: React.FC = () => {
             dataVersion={dataVersion}
           />
         );
+      case "teacheraccount":
+        return (
+          <TeacherAccount
+            lang={lang}
+            setLang={(l) => {
+              setLang(l);
+              localStorage.setItem("app_lang", l);
+            }}
+            madrasah={madrasah}
+            setView={setView}
+            onLogout={handleLogout}
+            profile={profile}
+            dataVersion={dataVersion}
+          />
+        );
       case "academic-year":
         return (
           <AcademicYearManager
@@ -709,7 +725,7 @@ const App: React.FC = () => {
           <AcademicCalendarPage
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             role={role}
           />
         );
@@ -718,7 +734,7 @@ const App: React.FC = () => {
           <Tutorials
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack("account")}
+            onBack={() => handleBack(role === 'teacher' ? 'teacheraccount' : 'account')}
           />
         );
       case "data-management":
@@ -787,7 +803,7 @@ const App: React.FC = () => {
           <ClassRoutine
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             profile={profile}
           />
         );
@@ -796,7 +812,7 @@ const App: React.FC = () => {
           <ProfileSettings
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             onProfileUpdate={refreshMadrasah}
             setStatusModal={setStatusModal}
           />
@@ -806,7 +822,7 @@ const App: React.FC = () => {
           <Certificates
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             profile={profile}
           />
         );
@@ -815,7 +831,7 @@ const App: React.FC = () => {
           <IdCards
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : 'account')}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
             profile={profile}
           />
         );
