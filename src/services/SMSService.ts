@@ -139,6 +139,9 @@ export const SMSService = {
     const secretKey = (mData.reve_secret_key?.trim() || global.reve_secret_key);
     const maskingName = (mData.reve_client_id?.trim() || global.reve_client_id || global.reve_caller_id);
 
+    const allLogs: any[] = [];
+    let sendPromises: Promise<void>[] = [];
+
     if (hasShortcodes) {
       // Send personalized messages in batches
       const chunkSize = 50;
@@ -147,7 +150,7 @@ export const SMSService = {
         batches.push(personalizedMessages.slice(i, i + chunkSize));
       }
 
-      const sendPromises = batches.map(async (chunk) => {
+      sendPromises = batches.map(async (chunk) => {
         const validMsgs: typeof chunk = [];
         const logs: any[] = [];
         let batchErrorStr = '';
@@ -192,10 +195,16 @@ export const SMSService = {
               const parsed = await res.json();
               if (parsed.results) {
                 parsed.results.forEach((r: any, idx: number) => {
-                  const log = logs.find(l => l.recipient === validMsgs[idx].phone);
+                  const log = logs.find(l => l.recipient === validMsgs[idx].phone && l.status === 'sent');
                   const resStr = String(r.response || '').trim();
+                  const resStrLower = resStr.toLowerCase();
                   const isErrorCode = /^\d{4}$/.test(resStr);
-                  const isError = !r.success || resStr.toLowerCase().includes('error') || isErrorCode;
+                  const isError = !r.success || 
+                                  resStrLower.includes('error') || 
+                                  resStrLower.includes('fail') || 
+                                  resStrLower.includes('insufficient') ||
+                                  resStr === '' ||
+                                  isErrorCode;
 
                   if (log && isError) {
                     log.status = 'failed';
@@ -220,14 +229,13 @@ export const SMSService = {
         // Insert logs
         if (logs.length > 0) {
           await supabase.from('sms_logs').insert(logs);
+          allLogs.push(...logs);
         }
 
         if (batchErrorStr) {
           throw new Error(batchErrorStr);
         }
       });
-
-      await Promise.all(sendPromises);
     } else {
       // Original bulk logic (same message for all)
       const chunkSize = 50; 
@@ -236,7 +244,7 @@ export const SMSService = {
         batches.push(students.slice(i, i + chunkSize));
       }
 
-      const sendPromises = batches.map(async (chunkStudents) => {
+      sendPromises = batches.map(async (chunkStudents) => {
         const { parts } = getSmsLengthInfo(message);
         const validMsgs: Student[] = [];
         const logs: any[] = [];
@@ -282,10 +290,16 @@ export const SMSService = {
               const parsed = await res.json();
               if (parsed.results) {
                 parsed.results.forEach((r: any, idx: number) => {
-                  const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone);
+                  const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone && l.status === 'sent');
                   const resStr = String(r.response || '').trim();
+                  const resStrLower = resStr.toLowerCase();
                   const isErrorCode = /^\d{4}$/.test(resStr);
-                  const isError = !r.success || resStr.toLowerCase().includes('error') || isErrorCode;
+                  const isError = !r.success || 
+                                  resStrLower.includes('error') || 
+                                  resStrLower.includes('fail') || 
+                                  resStrLower.includes('insufficient') ||
+                                  resStr === '' ||
+                                  isErrorCode;
 
                   if (log && isError) {
                     log.status = 'failed';
@@ -310,14 +324,50 @@ export const SMSService = {
         // Insert logs
         if (logs.length > 0) {
           await supabase.from('sms_logs').insert(logs);
+          allLogs.push(...logs);
         }
 
         if (batchErrorStr) {
           throw new Error(batchErrorStr);
         }
       });
+    }
 
+    let throwError: Error | null = null;
+    try {
       await Promise.all(sendPromises);
+    } catch (err: any) {
+      throwError = err;
+    } finally {
+      // Calculate total failed SMS parts to refund
+      const totalFailedSms = allLogs
+        .filter(l => l.status === 'failed')
+        .reduce((sum, l) => sum + (Number(l.parts) || 1), 0);
+
+      if (totalFailedSms > 0) {
+        console.log(`Refunding ${totalFailedSms} failed SMS to institution ${institutionId}`);
+        try {
+          const { data: instData } = await supabase
+            .from('institutions')
+            .select('sms_balance')
+            .eq('id', institutionId)
+            .single();
+          
+          if (instData) {
+            const currentBal = instData.sms_balance || 0;
+            await supabase
+              .from('institutions')
+              .update({ sms_balance: currentBal + totalFailedSms })
+              .eq('id', institutionId);
+          }
+        } catch (refundErr) {
+          console.error("Failed to refund SMS balance:", refundErr);
+        }
+      }
+
+      if (throwError) {
+        throw throwError;
+      }
     }
 
     return { success: true };
