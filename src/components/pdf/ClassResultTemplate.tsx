@@ -188,14 +188,9 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
             {/* Footer */}
             <div className="absolute bottom-6 left-10 right-10 flex justify-between items-end px-8 z-10">
               <div className="flex flex-col items-center gap-2">
-                  <div className="h-[1px] w-48 bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
-                  <div className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em]">
-                      Deenora Management System
+                  <div className="text-[10px] font-black text-slate-400">
+                     {isBangla ? 'পৃষ্ঠা' : 'Page'} {pageIndex + 1} / {totalPages}
                   </div>
-              </div>
-
-              <div className="text-[10px] font-black text-slate-400">
-                 {isBangla ? 'পৃষ্ঠা' : 'Page'} {pageIndex + 1} / {totalPages}
               </div>
 
               <div className="flex gap-20 items-end">

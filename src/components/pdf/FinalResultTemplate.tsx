@@ -90,10 +90,6 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
 
             {/* Footer */}
             <div className="absolute bottom-6 left-10 right-10 flex justify-between items-end px-4 z-10">
-              <div className="text-[10px] font-medium text-slate-300 uppercase tracking-widest">
-                Deenora Management System
-              </div>
-              
               <div className="text-[10px] font-black text-slate-400">
                 {t.page} {pageIndex + 1} / {totalPages}
               </div>

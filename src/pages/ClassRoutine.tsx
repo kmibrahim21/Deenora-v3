@@ -1068,10 +1068,6 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                             </div>
                           </div>
 
-                          {/* Deenora Portal bottom tagline */}
-                          <div className="text-center mt-3 pt-1 text-[8px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono">
-                             {lang === 'bn' ? 'মাদরাসা ম্যানেজমেন্ট সিস্টেম ২০২৬ • ডিজিটাল প্রযুক্তি সহায়িকা' : 'MADRASAH MANAGEMENT SYSTEM • POWERED BY DEENORA'}
-                          </div>
                         </div>
                      </div>
                    </div>

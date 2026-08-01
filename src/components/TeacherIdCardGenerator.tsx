@@ -4,6 +4,7 @@ import { Teacher, Institution, Language } from "types";
 import QRCode from "react-qr-code";
 import { jsPDF } from "jspdf";
 import { toPng } from "html-to-image";
+import { solaimanLipiBase64 } from "../utils/fonts";
 
 interface TeacherIdCardGeneratorProps {
   teacher: Teacher;
@@ -51,7 +52,14 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
       const options = {
         pixelRatio: 3,
         cacheBust: true,
-        fontEmbedCSS: "", 
+        fontEmbedCSS: `
+          @font-face {
+            font-family: 'SolaimanLipi';
+            src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+          }
+        `,
         width: 280, 
         height: 448, 
         style: {
@@ -214,7 +222,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
       <div className={`p-3 sm:p-6 border-b ${isDark ? "border-slate-800" : "border-slate-100"}`}>
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <h2 className={`text-base sm:text-lg font-black font-noto ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
+            <h2 className={`text-base sm:text-lg font-black font-solaiman ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
               {isBulk ? (isBangla ? 'সকল আইডি কার্ড' : 'All ID Cards') : t.title}
             </h2>
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -335,7 +343,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                           )}
                        </div>
                        <div className="flex-1 text-center">
-                           <h3 className={`font-bold text-white font-noto tracking-wide drop-shadow-md line-clamp-2 max-w-[200px] mx-auto text-center ${nameSizeClass}`}>
+                           <h3 className={`font-bold text-white font-solaiman tracking-wide drop-shadow-md line-clamp-2 max-w-[200px] mx-auto text-center ${nameSizeClass}`}>
                             {instName}
                           </h3>
                           <p className={`text-white/95 font-medium tracking-wide mt-[2px] line-clamp-2 max-w-[200px] mx-auto text-center ${addressSizeClass}`}>
@@ -358,7 +366,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                       </div>
 
                       <div className="mt-1 text-center px-2">
-                         <h2 className="font-extrabold text-[17px] font-noto leading-snug tracking-tight pt-0.5" style={{ color: themeColor }}>
+                         <h2 className="font-extrabold text-[17px] font-solaiman leading-snug tracking-tight pt-0.5" style={{ color: themeColor }}>
                               {currentRenderTeacher.name || 'Teacher Name'}
                           </h2>
                       </div>
@@ -366,34 +374,34 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
 
                   <div className="pl-10 pr-4 w-full flex flex-col gap-[1.5px] mt-0.5 z-10 relative">
                        <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.designation}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.designation}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-noto">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
                        </div>
                        <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.id}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.id}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-sans tracking-wide">{currentRenderTeacher.id.substring(0, 8).toUpperCase()}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.id.substring(0, 8).toUpperCase()}</span>
                        </div>
                        <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.phone}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.phone}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-sans tracking-wide">{currentRenderTeacher.phone || "-"}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.phone || "-"}</span>
                        </div>
                        <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.joinDate}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.joinDate}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-sans tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
                        </div>
                        <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto shrink-0 mt-[1px]">{t.address}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman shrink-0 mt-[1px]">{t.address}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.1] line-clamp-3 max-w-[155px] font-noto">{currentRenderTeacher.address || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.1] line-clamp-3 max-w-[155px] font-solaiman">{currentRenderTeacher.address || "-"}</span>
                        </div>
                        <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-noto">{t.issueDate}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.issueDate}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-sans tracking-wide">{new Date().toLocaleDateString('en-GB')}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{new Date().toLocaleDateString('en-GB')}</span>
                        </div>
                   </div>
 
@@ -412,7 +420,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                            )}
                            </div>
                            <div className="w-full h-[1px] bg-white/50 mb-0.5" />
-                           <p className="text-[6.5px] font-bold text-white font-noto uppercase tracking-wider shadow-sm">
+                           <p className="text-[6.5px] font-bold text-white font-solaiman uppercase tracking-wider shadow-sm">
                                {t.principal}
                            </p>
                         </div>
@@ -459,7 +467,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                       crossOrigin="anonymous"
                     />
                   )}
-                  <h3 className="font-bold text-[13px] leading-tight font-noto" style={{ color: themeColor }}>
+                  <h3 className="font-bold text-[13px] leading-tight font-solaiman" style={{ color: themeColor }}>
                     {madrasah?.name}
                   </h3>
                </div>
@@ -469,12 +477,12 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
             <div className="px-4 py-1.5 flex-1 flex flex-col z-10 relative">
               <div className="mb-2">
                 <div
-                  className="inline-block px-3 py-0.5 rounded-sm text-white text-[9.5px] font-bold font-noto mb-1.5 shadow-sm"
+                  className="inline-block px-3 py-0.5 rounded-sm text-white text-[9.5px] font-bold font-solaiman mb-1.5 shadow-sm"
                   style={{ backgroundColor: themeColor }}
                 >
                   {t.instructions}
                 </div>
-                <ul className="text-[9px] text-slate-700 font-medium font-noto list-disc pl-4 space-y-1 pr-1">
+                <ul className="text-[9px] text-slate-700 font-medium font-solaiman list-disc pl-4 space-y-1 pr-1">
                   {t.rules.map((rule, idx) => (
                     <li key={idx} className="leading-tight">
                       {rule}
@@ -490,19 +498,19 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                     size={60}
                   />
                 </div>
-                <p className="text-[9px] font-bold tracking-widest text-slate-500 font-sans">
+                <p className="text-[9px] font-bold tracking-widest text-slate-500 font-solaiman">
                   {currentRenderTeacher.id.substring(0, 8).toUpperCase()}
                 </p>
               </div>
 
               <div className="mt-1 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">
                 <div
-                  className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-noto mb-1"
+                  className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-solaiman mb-1"
                   style={{ backgroundColor: themeColor }}
                 >
                   {t.emergency}
                 </div>
-                <div className="flex flex-col gap-1 text-[9px] font-medium text-slate-700 font-sans">
+                <div className="flex flex-col gap-1 text-[9px] font-medium text-slate-700 font-solaiman">
                   <div className="flex items-center gap-1.5">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -540,7 +548,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                     >
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg>
-                    <span className="leading-snug flex-1 font-noto">
+                    <span className="leading-snug flex-1 font-solaiman">
                       {madrasah?.address || "Institution Address Here"}
                     </span>
                   </div>
@@ -562,7 +570,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
 
             <div className="w-full pb-3.5 pt-1 text-center z-10 relative mt-auto px-5">
                <div className="px-4 py-1 rounded-lg inline-block mx-auto shadow-sm border border-white/50" style={{ backgroundColor: themeColor }}>
-                  <p className="text-[8.5px] font-bold text-white font-noto tracking-[0.2em] uppercase">
+                  <p className="text-[8.5px] font-bold text-white font-solaiman tracking-[0.2em] uppercase">
                     {t.motto}
                   </p>
                </div>

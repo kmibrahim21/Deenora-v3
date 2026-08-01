@@ -449,11 +449,6 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Branding Footer */}
-          <div className="mt-1 text-center border-t border-slate-100 pt-1.5 relative z-20">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.4em]">Powered by Deenora SaaS • deenora.com</p>
-          </div>
         </div>
 
         {/* Bottom Decorative Line */}
