@@ -2026,23 +2026,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                  <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'ঠিকানা' : 'Address'}</label><input type="text" className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={newAddress || ''} onChange={(e) => setNewAddress(e.target.value)} /></div>
                  <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t('madrasah_phone', lang)}</label><input type="tel" className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={newPhone || ''} onChange={(e) => setNewPhone(e.target.value)} /></div>
                  
-                 {modules.voice_broadcast && (
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                        {lang === 'bn' ? 'ভয়েস সেন্ডার আইডি' : 'Voice Sender ID'}
-                      </label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. 8801700000000"
-                        className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} 
-                        value={voiceSenderId || ''} 
-                        onChange={(e) => setVoiceSenderId(e.target.value)} 
-                      />
-                      <p className="text-[9px] font-bold text-slate-400 px-1 mt-0.5">
-                        {lang === 'bn' ? 'ভয়েস কলের জন্য অনুমোদিত সেন্ডার আইডি দিন।' : 'Provide approved sender ID for voice calls.'}
-                      </p>
-                    </div>
-                 )}
+
 
                  <div className="space-y-1 opacity-70 cursor-not-allowed">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center justify-between">

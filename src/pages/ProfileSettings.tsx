@@ -291,23 +291,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   </div>
                 ))}
 
-                {modules.voice_broadcast && (
-                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1">{lang === 'bn' ? 'ভয়েস সেন্ডার আইডি' : 'Voice Sender ID'}</label>
-                    <div className="relative group">
-                      <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 ${isDark ? 'text-slate-600 group-focus-within:text-blue-400' : 'text-slate-300 group-focus-within:text-[#2563EB]'}`}>
-                        <Smartphone size={16} />
-                      </div>
-                      <input 
-                        type="text" 
-                        className={`w-full h-12 border-2 rounded-2xl pl-12 pr-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
-                        value={voiceSenderId} 
-                        onChange={(e) => setVoiceSenderId(e.target.value)} 
-                        placeholder="e.g. 88017..."
-                      />
-                    </div>
-                  </div>
-                )}
+
               </div>
             </motion.div>
 
