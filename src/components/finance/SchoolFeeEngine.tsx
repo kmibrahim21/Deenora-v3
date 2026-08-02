@@ -1380,7 +1380,21 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     </div>
                     <div className="relative">
                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'টাকার পরিমাণ' : 'Amount'}</label>
-                       <input type="number" className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                       <input 
+                         type="text" 
+                         inputMode="decimal"
+                         className={`w-full h-14 rounded-2xl px-12 font-black text-lg outline-none border-2 border-transparent transition-all ${isDark ? 'bg-slate-800 text-slate-100 focus:border-blue-500/20' : 'bg-slate-50 text-[#1E293B] focus:border-[#2563EB]/20'}`} 
+                         placeholder="0" 
+                         value={amount} 
+                         onChange={(e) => {
+                           let val = e.target.value;
+                           const numbers: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+                           val = val.replace(/[০-৯]/g, match => numbers[match]);
+                           // Allow only digits and one decimal point
+                           val = val.replace(/[^0-9.]/g, '');
+                           setAmount(val);
+                         }} 
+                       />
                        <DollarSign className={`absolute left-4 top-[44px] ${isDark ? 'text-blue-400' : 'text-[#2563EB]'}`} size={20}/>
                     </div>
                     <div className="relative">
@@ -1399,7 +1413,11 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     </div>
                     
                     <button onClick={async () => {
-                       if (!category || !amount) return;
+                       setActionError(null);
+                       if (!category || !amount) {
+                           setActionError(lang === 'bn' ? 'দয়া করে ফি-র নাম এবং পরিমাণ দিন।' : 'Please enter fee name and amount.');
+                           return;
+                       }
                        setIsSaving(true);
                        try {
                            const payload = {
