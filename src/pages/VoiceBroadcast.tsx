@@ -126,7 +126,11 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }, [selectedClassId]);
 
   const fetchClassStudents = async (cid: string) => {
-    const { data } = await supabase.from('students').select('id, guardian_phone, guardian_phone_2').eq('class_id', cid);
+    let query = supabase.from('students').select('id, guardian_phone, guardian_phone_2').eq('class_id', cid);
+    if ((window as any)._hasIsActive !== false) {
+      query = query.eq('is_active', true);
+    }
+    const { data } = await query;
     if (data) setClassStudents(data);
   };
 
@@ -1140,10 +1144,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     } else if (targetType === 'teachers') {
       count = teachers.length;
     } else if (isTargetingAllStudents) {
-      const { count: c } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
+      let q = supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', madrasah.id);
+      if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
+      const { count: c } = await q;
       count = c || 0;
     } else {
-      const { count: c } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('class_id', selectedClassId);
+      let q = supabase.from('students').select('*', { count: 'exact', head: true }).eq('class_id', selectedClassId);
+      if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
+      const { count: c } = await q;
       count = c || 0;
     }
 
@@ -1212,15 +1220,21 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       } else {
         let students: any[] = [];
         if (isPreSelected) {
-          const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').in('id', preSelectedStudentIds);
+          let q = supabase.from('students').select('guardian_phone, guardian_phone_2').in('id', preSelectedStudentIds);
+          if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
+          const { data, error } = await q;
           if (error) throw error;
           students = data || [];
         } else if (isTargetingAllStudents) {
-          const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').eq('institution_id', madrasah.id);
+          let q = supabase.from('students').select('guardian_phone, guardian_phone_2').eq('institution_id', madrasah.id);
+          if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
+          const { data, error } = await q;
           if (error) throw error;
           students = data || [];
         } else {
-          const { data, error } = await supabase.from('students').select('guardian_phone, guardian_phone_2').eq('class_id', selectedClassId);
+          let q = supabase.from('students').select('guardian_phone, guardian_phone_2').eq('class_id', selectedClassId);
+          if ((window as any)._hasIsActive !== false) q = q.eq('is_active', true);
+          const { data, error } = await q;
           if (error) throw error;
           students = data || [];
         }

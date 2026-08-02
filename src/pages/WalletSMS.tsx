@@ -245,7 +245,11 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   };
 
   const fetchClassStudents = async (cid: string) => {
-    const { data } = await supabase.from('students').select('*').eq('class_id', cid);
+    let query = supabase.from('students').select('*').eq('class_id', cid);
+    if ((window as any)._hasIsActive !== false) {
+      query = query.eq('is_active', true);
+    }
+    const { data } = await query;
     if (data) setClassStudents(data);
   };
 

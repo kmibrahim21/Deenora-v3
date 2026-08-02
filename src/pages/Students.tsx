@@ -199,7 +199,13 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     isSendingRef.current = true;
     setSending(true);
     try {
-      const selectedStudents = students.filter(s => selectedIds.has(s.id));
+      const selectedStudents = students.filter(s => selectedIds.has(s.id) && s.is_active !== false);
+      
+      if (selectedStudents.length === 0) {
+        setStatusModal({ show: true, type: 'error', title: 'Error', message: 'No active students selected.' });
+        return;
+      }
+
       await smsApi.sendBulk(institutionId, selectedStudents, selectedTemplate.body);
       setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: t('sms_success', lang) });
       setIsSelectionMode(false);
