@@ -6,9 +6,23 @@ interface AttendanceReportTemplateProps {
     className: string;
     month?: string; // e.g. "April 2026"
     lang: 'en' | 'bn';
+    arefRuqaaFontBase64?: string | null;
+    amiriFontBase64?: string | null;
+    uthmanTahaFontBase64?: string | null;
+    arabicCalligraphyBase64?: string | null;
 }
 
-export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> = ({ reportData, madrasah, className, month, lang }) => {
+export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> = ({ 
+    reportData, 
+    madrasah, 
+    className, 
+    month, 
+    lang,
+    arefRuqaaFontBase64,
+    amiriFontBase64,
+    uthmanTahaFontBase64,
+    arabicCalligraphyBase64
+}) => {
     const isBn = lang === 'bn';
     
     const calculatedData = reportData.map(item => {
@@ -51,7 +65,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
         return rollA - rollB;
     });
 
-    const ROWS_PER_PAGE = 22;
+    const ROWS_PER_PAGE = 26;
     const totalPages = Math.ceil(calculatedData.length / ROWS_PER_PAGE) || 1;
 
     return (
@@ -61,26 +75,127 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                 
                 return (
                     <div key={pageIndex} className="page-container" style={{ width: '794px', height: '1123px', padding: '40px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box' }}>
-                        {/* Header */}
-                        <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #3b82f6', paddingBottom: '20px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '10px' }}>
+                        {/* Header Banner - Matching Reference Image Style (Borderless Adjustments) */}
+                        <div style={{
+                            width: '100%',
+                            padding: '10px 0 15px 0',
+                            backgroundColor: '#ffffff',
+                            marginBottom: '15px',
+                            borderBottom: '2.5px solid #0c4a7e',
+                            position: 'relative',
+                            height: '140px', 
+                            boxSizing: 'border-box'
+                        }}>
+                            {/* Ornamental Corner Pieces */}
+                            <div style={{ position: 'absolute', top: 0, left: 0, width: '20px', height: '20px', borderTop: '3px solid #0c4a7e', borderLeft: '3px solid #0c4a7e' }}></div>
+                            <div style={{ position: 'absolute', top: 0, right: 0, width: '20px', height: '20px', borderTop: '3px solid #0c4a7e', borderRight: '3px solid #0c4a7e' }}></div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '10px', padding: '0 10px' }}>
+                                
+                                {/* 1. Logo on the Left - Slightly smaller to give more space to calligraphy */}
                                 {madrasah?.logo_url && (
-                                    <img src={madrasah.logo_url} alt="Logo" style={{ width: '60px', height: '60px', objectFit: 'contain' }} crossOrigin="anonymous" />
+                                    <div style={{ flexShrink: 0 }}>
+                                        <img src={madrasah.logo_url} alt="Logo" style={{ width: '85px', height: '85px', borderRadius: '10px', border: '1.5px solid #0c4a7e', padding: '2px', objectFit: 'contain', backgroundColor: '#fff' }} crossOrigin="anonymous" />
+                                    </div>
                                 )}
-                                <h1 style={{ 
-                                    fontSize: (madrasah?.name?.length || 0) > 60 ? '14px' : (madrasah?.name?.length || 0) > 45 ? '18px' : (madrasah?.name?.length || 0) > 30 ? '22px' : '26px', 
-                                    fontWeight: 'bold', 
-                                    margin: '0', 
-                                    color: '#1e3a8a', 
-                                    lineHeight: '1.2', 
-                                    display: 'block',
-                                    flex: 1
-                                }}>{madrasah?.name || 'Madrasah Name'}</h1>
+
+                                {/* 2. Content Column (Calligraphy + Names) */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexGrow: 1, minWidth: 0, height: '100%', justifyContent: 'center' }}>
+                                    
+                                    {/* Arabic Calligraphy - Only for Madrasah */}
+                                    {madrasah?.institution_type === 'madrasah' && arabicCalligraphyBase64 ? (
+                                        <div style={{ height: '85px', width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '0px' }}>
+                                            <img 
+                                                src={`data:image/webp;base64,${arabicCalligraphyBase64}`} 
+                                                alt="Calligraphy" 
+                                                style={{ 
+                                                    height: '100%', 
+                                                    width: `${madrasah?.config_json?.arabic_calligraphy_width || 100}%`, 
+                                                    objectFit: 'contain' 
+                                                }} 
+                                                crossOrigin="anonymous"
+                                            />
+                                        </div>
+                                    ) : null}
+
+                                    {/* Institution Names */}
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center', 
+                                        gap: madrasah?.institution_type === 'madrasah' ? '10px' : '15px',
+                                        width: '100%',
+                                        marginTop: madrasah?.institution_type === 'madrasah' ? '0px' : '5px'
+                                    }}>
+                                        {/* Primary Name (Bengali) */}
+                                        <span style={{ 
+                                            fontSize: madrasah?.institution_type === 'madrasah' ? '26px' : '38px', 
+                                            fontWeight: '900', 
+                                            color: '#0c4a7e',
+                                            fontFamily: "'Tiro Bangla', 'Noto Serif Bengali', serif",
+                                            lineHeight: '1',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {madrasah?.name || 'Institution Name'}
+                                        </span>
+
+                                        {/* Elegant Divider (Optional for School if English name exists) */}
+                                        {(madrasah?.name && (madrasah?.config_json as any)?.name_english) && (
+                                            <div style={{ 
+                                                width: madrasah?.institution_type === 'madrasah' ? '1px' : '1.5px', 
+                                                height: madrasah?.institution_type === 'madrasah' ? '16px' : '22px', 
+                                                backgroundColor: '#cbd5e1' 
+                                            }}></div>
+                                        )}
+
+                                        {/* English Name */}
+                                        {(madrasah?.config_json as any)?.name_english && (
+                                            <span style={{ 
+                                                fontSize: madrasah?.institution_type === 'madrasah' ? '14px' : '18px', 
+                                                fontWeight: '700', 
+                                                color: '#475569', 
+                                                fontFamily: "'Times New Roman', Times, serif",
+                                                letterSpacing: '0.04em',
+                                                textTransform: 'uppercase',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {(madrasah.config_json as any).name_english}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* 3. Contact Details */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '15px',
+                                        fontSize: madrasah?.institution_type === 'madrasah' ? '11px' : '13px',
+                                        color: '#64748b',
+                                        fontWeight: '700',
+                                        marginTop: madrasah?.institution_type === 'madrasah' ? '4px' : '10px'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                            <span style={{ color: '#0c4a7e', fontSize: '10px' }}>●</span>
+                                            <span>{madrasah?.address || ''}</span>
+                                        </div>
+                                        {madrasah?.phone && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                <span style={{ color: '#0c4a7e', fontSize: '10px' }}>●</span>
+                                                <span>{madrasah.phone}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0', color: '#1e40af', marginTop: '10px' }}>
+                        </div>
+
+                        {/* Title & Metadata Details */}
+                        <div style={{ textAlign: 'center', marginBottom: '15px' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0', color: '#1e40af' }}>
                                 {isBn ? 'হাজিরা রিপোর্ট' : 'Attendance Report'}
                             </h2>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', fontSize: '14px', fontWeight: 'bold', color: '#475569' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', fontSize: '14px', fontWeight: 'bold', color: '#475569', borderBottom: '1px dashed #cbd5e1', paddingBottom: '10px' }}>
                                 <span>{isBn ? 'ক্লাস' : 'Class'}: {className}</span>
                                 {month && <span>{isBn ? 'মাস' : 'Month'}: {month}</span>}
                             </div>
@@ -122,24 +237,45 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                             </tbody>
                         </table>
 
-                        {/* Footer - Only on the last page or fixed at bottom */}
-                        <div style={{ position: 'absolute', bottom: '40px', left: '40px', right: '40px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', alignItems: 'flex-end' }}>
+                        {/* Footer - Fixed at bottom */}
+                        <div style={{ 
+                            position: 'absolute', 
+                            bottom: '40px', 
+                            left: '50px', 
+                            right: '50px', 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'flex-end' 
+                        }}>
+                            {/* Teacher Signature */}
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ minHeight: '30px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '5px' }}>
-                                    ................................................
+                                <div style={{ borderTop: '1px solid #1e293b', width: '150px', marginBottom: '8px' }}></div>
+                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#1e293b' }}>
+                                    {isBn ? 'শ্রেণি শিক্ষকের স্বাক্ষর' : 'Teacher Signature'}
                                 </div>
-                                {isBn ? 'শিক্ষকের স্বাক্ষর' : 'Teacher Signature'}
                             </div>
-                            <div style={{ textAlign: 'center', paddingBottom: '10px' }}>Page {pageIndex + 1} of {totalPages}</div>
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ height: `${madrasah?.config_json?.signature_height || 40}px`, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '5px' }}>
-                                    {madrasah?.config_json?.signature_url ? (
-                                        <img src={madrasah.config_json.signature_url} alt="Sig" style={{ height: `${madrasah.config_json.signature_height || 40}px`, objectFit: 'contain' }} crossOrigin="anonymous" />
-                                    ) : (
-                                        <span style={{ color: '#cbd5e1' }}>................................................</span>
+                            
+                            {/* Page Indicator */}
+                            <div style={{ fontSize: '10px', color: '#94a3b8', paddingBottom: '2px' }}>
+                                Page {pageIndex + 1} of {totalPages}
+                            </div>
+                            
+                            {/* Principal Signature */}
+                            <div style={{ textAlign: 'center', position: 'relative' }}>
+                                <div style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px', position: 'relative' }}>
+                                    {madrasah?.config_json?.signature_url && (
+                                        <img 
+                                            src={madrasah.config_json.signature_url} 
+                                            alt="Sig" 
+                                            style={{ height: '100%', objectFit: 'contain', position: 'absolute', bottom: '0' }} 
+                                            crossOrigin="anonymous" 
+                                        />
                                     )}
+                                    <div style={{ borderTop: '1px solid #1e293b', width: '150px', position: 'absolute', bottom: '-8px' }}></div>
                                 </div>
-                                {isBn ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Signature'}
+                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#1e293b', marginTop: '12px' }}>
+                                    {isBn ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Signature'}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -147,6 +283,94 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
             })}
             
             <style>{`
+                ${uthmanTahaFontBase64 ? `
+                @font-face {
+                    font-family: 'KFGQPC Uthman Taha Naskh';
+                    src: url('data:font/ttf;base64,${uthmanTahaFontBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'KFGQPC_Uthmanic_Script_HAFS_Regular';
+                    src: url('data:font/ttf;base64,${uthmanTahaFontBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'KFGQPC Uthmanic Script HAFS Regular';
+                    src: url('data:font/ttf;base64,${uthmanTahaFontBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Scheherazade New';
+                    src: url('data:font/ttf;base64,${uthmanTahaFontBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Noto Naskh Arabic';
+                    src: url('data:font/ttf;base64,${uthmanTahaFontBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                ` : `
+                @font-face {
+                    font-family: 'KFGQPC Uthman Taha Naskh';
+                    src: url('https://fonts.gstatic.com/l/font?kit=4UaZrFhTvxVnHDvUkUiHg8jprP4DCwI&skey=dedc87abea7dfb07&v=v21') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'KFGQPC_Uthmanic_Script_HAFS_Regular';
+                    src: url('https://fonts.gstatic.com/l/font?kit=RrQ5bpV-9Dd1b1OAGA6M9PkyDuVBePeKNaxcsss0Y7bwvc5krQ&skey=bacb52bf696c6ae6&v=v44') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'KFGQPC Uthmanic Script HAFS Regular';
+                    src: url('https://fonts.gstatic.com/l/font?kit=RrQ5bpV-9Dd1b1OAGA6M9PkyDuVBePeKNaxcsss0Y7bwvc5krQ&skey=bacb52bf696c6ae6&v=v44') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Scheherazade New';
+                    src: url('https://fonts.gstatic.com/l/font?kit=4UaZrFhTvxVnHDvUkUiHg8jprP4DCwI&skey=dedc87abea7dfb07&v=v21') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Noto Naskh Arabic';
+                    src: url('https://fonts.gstatic.com/l/font?kit=RrQ5bpV-9Dd1b1OAGA6M9PkyDuVBePeKNaxcsss0Y7bwvc5krQ&skey=bacb52bf696c6ae6&v=v44') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                `}
+
+                ${arefRuqaaFontBase64 ? `
+                @font-face {
+                    font-family: 'Aref Ruqaa Calligraphy';
+                    src: url('data:font/ttf;base64,${arefRuqaaFontBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                ` : `@import url('https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&display=swap');`}
+
+                ${amiriFontBase64 ? `
+                @font-face {
+                    font-family: 'Amiri Calligraphy';
+                    src: url('data:font/ttf;base64,${amiriFontBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                }
+                ` : `@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap');`}
+
+                @import url('https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=El+Messiri:wght@400;500;600;700&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Lateef:wght@200;300;400;500;600;700;800&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Tiro+Bangla&family=Noto+Serif+Bengali:wght@400;700;900&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;700;900&display=swap');
                 div, th, td { font-family: 'Noto Sans Bengali', "Inter", system-ui, sans-serif; }
             `}</style>
         </>
@@ -162,7 +386,7 @@ const thStyle: React.CSSProperties = {
 };
 
 const tdStyle: React.CSSProperties = {
-    padding: '6px 4px',
+    padding: '4.5px 4px',
     borderBottom: '1px solid #e2e8f0',
     textAlign: 'center',
     color: '#334155'

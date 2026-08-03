@@ -66,6 +66,8 @@ export interface Institution {
     seal_url?: string;
     signature_url?: string;
     signature_height?: number;
+    arabic_calligraphy_url?: string;
+    arabic_calligraphy_width?: number;
     exam_manual_attendance?: Record<string, Record<string, string>>;
     package_name?: string;
     features?: {

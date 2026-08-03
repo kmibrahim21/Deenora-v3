@@ -21,6 +21,44 @@ import { StudentListTemplate } from '../components/pdf/StudentListTemplate';
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
 
+const CACHE_KEY_AREF_RUQAA = 'aref_ruqaa_font_base64_v2';
+const CACHE_KEY_AMIRI = 'amiri_font_base64_v2';
+const CACHE_KEY_UTHMAN_TAHA = 'uthman_taha_font_base64_v2';
+
+let arefRuqaaFontBase64: string | null = null;
+let amiriFontBase64: string | null = null;
+let uthmanTahaFontBase64: string | null = null;
+
+const fetchFontAsBase64 = async (url: string, cacheKey: string): Promise<string | null> => {
+    try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached && cached.length > 1000) return cached;
+    } catch (e) {}
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error("Failed to fetch font from:", url);
+            return null;
+        }
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+        }
+        const base64 = window.btoa(binary);
+        try {
+            localStorage.setItem(cacheKey, base64);
+        } catch (e) {}
+        return base64;
+    } catch (e) {
+        console.error("Failed to fetch font:", url, e);
+        return null;
+    }
+};
+
 const loadBengaliFont = async (doc: jsPDF) => {
     if (!bengaliFontBase64) {
         // Try Cache first
@@ -113,6 +151,74 @@ export const generateAttendanceReportPDF = async (
     onProgress?: (progress: number) => void
 ) => {
     onProgress?.(5);
+    
+    // Load Calligraphy image if available
+    let calligraphyBase64: string | null = null;
+    const calligraphyUrl = madrasah?.config_json?.arabic_calligraphy_url;
+    if (calligraphyUrl) {
+        try {
+            // Fetch fresh every time for calligraphy to ensure updates reflect immediately
+            const response = await fetch(calligraphyUrl);
+            if (response.ok) {
+                const buffer = await response.arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+                let binary = '';
+                const chunkSize = 8192;
+                for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+                    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+                }
+                calligraphyBase64 = window.btoa(binary);
+            }
+        } catch (e) {
+            console.error("Failed to fetch calligraphy image", e);
+        }
+    }
+
+    // Load Arabic Fonts as Base64 to bypass CORS constraints inside HTML-to-Image SVG Canvas context
+    let localAref = arefRuqaaFontBase64;
+    let localAmiri = amiriFontBase64;
+    let localUthman = uthmanTahaFontBase64;
+    
+    try {
+        if (!localAref) {
+            localAref = await fetchFontAsBase64(
+                'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/arefruqaa/ArefRuqaa-Regular.ttf',
+                CACHE_KEY_AREF_RUQAA
+            );
+            arefRuqaaFontBase64 = localAref;
+        }
+        if (!localAmiri) {
+            localAmiri = await fetchFontAsBase64(
+                'https://fonts.gstatic.com/l/font?kit=J7aRnpd8CGxBHqUo&skey=159039cc026b7e65&v=v30',
+                CACHE_KEY_AMIRI
+            );
+            amiriFontBase64 = localAmiri;
+        }
+        if (!localUthman) {
+            const sources = [
+                'https://fonts.gstatic.com/l/font?kit=4UaZrFhTvxVnHDvUkUiHg8jprP4DCwI&skey=dedc87abea7dfb07&v=v21', // Scheherazade New (gorgeous classic Quran Naskh style)
+                'https://fonts.gstatic.com/l/font?kit=RrQ5bpV-9Dd1b1OAGA6M9PkyDuVBePeKNaxcsss0Y7bwvc5krQ&skey=bacb52bf696c6ae6&v=v44' // Noto Naskh Arabic (clean Quran style)
+            ];
+            
+            for (const url of sources) {
+                try {
+                    const fetched = await fetchFontAsBase64(url, CACHE_KEY_UTHMAN_TAHA);
+                    if (fetched && fetched.length > 1000) {
+                        localUthman = fetched;
+                        console.log(`Successfully pre-loaded Uthmanic font from: ${url}`);
+                        break;
+                    }
+                } catch (e) {
+                    console.warn(`Failed to pre-load Uthmanic font from: ${url}`, e);
+                }
+            }
+            uthmanTahaFontBase64 = localUthman;
+        }
+    } catch (err) {
+        console.error("Error pre-loading Arabic fonts for PDF generation:", err);
+    }
+    
+    onProgress?.(15);
     const container = document.createElement('div');
     container.style.position = 'absolute';
     container.style.left = '-9999px';
@@ -123,7 +229,17 @@ export const generateAttendanceReportPDF = async (
     await new Promise<void>((resolve) => {
         root.render(
             <div id="pdf-wrapper">
-                <AttendanceReportTemplate reportData={reportData} madrasah={madrasah} className={className} month={month} lang={lang} />
+                <AttendanceReportTemplate 
+                    reportData={reportData} 
+                    madrasah={madrasah} 
+                    className={className} 
+                    month={month} 
+                    lang={lang} 
+                    arefRuqaaFontBase64={localAref}
+                    amiriFontBase64={localAmiri}
+                    uthmanTahaFontBase64={localUthman}
+                    arabicCalligraphyBase64={calligraphyBase64}
+                />
             </div>
         );
         setTimeout(resolve, 1500); 

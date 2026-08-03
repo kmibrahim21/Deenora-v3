@@ -37,11 +37,14 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [newAddress, setNewAddress] = useState(madrasah?.address || '');
   const [newPhone, setNewPhone] = useState(madrasah?.phone || '');
   const [logoUrl, setLogoUrl] = useState(madrasah?.logo_url || '');
+  const [arabicCalligraphyUrl, setArabicCalligraphyUrl] = useState(madrasah?.config_json?.arabic_calligraphy_url || '');
+  const [arabicCalligraphyWidth, setArabicCalligraphyWidth] = useState((madrasah?.config_json as any)?.arabic_calligraphy_width || 100);
   const [voiceSenderId, setVoiceSenderId] = useState(madrasah?.voice_sender_id || '');
   const [newPin, setNewPin] = useState(madrasah?.config_json?.user_pin || '');
   const [saving, setSaving] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState(madrasah?.config_json?.signature_url || '');
   const [signatureHeight, setSignatureHeight] = useState(madrasah?.config_json?.signature_height || 30);
+  const [nameEnglish, setNameEnglish] = useState((madrasah?.config_json as any)?.name_english || '');
 
   const [featureStudentAttSms, setFeatureStudentAttSms] = useState((madrasah?.config_json as any)?.features?.student_attendance_sms ?? false);
   const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
@@ -122,6 +125,9 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         user_pin: newPin.trim(), 
         signature_url: signatureUrl,
         signature_height: signatureHeight,
+        arabic_calligraphy_url: arabicCalligraphyUrl,
+        arabic_calligraphy_width: arabicCalligraphyWidth,
+        name_english: nameEnglish.trim(),
         features: {
           ...((madrasah.config_json as any)?.features || {}),
           student_attendance_sms: featureStudentAttSms,
@@ -160,32 +166,141 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature' | 'calligraphy') => {
     const file = e.target.files?.[0];
     if (!file || !madrasah) return;
     setSaving(true);
     try {
-      // Delete old file if exists
-      const oldUrl = type === 'logo' ? logoUrl : signatureUrl;
+      // Delete old file if exists if it belongs to this madrasah
+      const oldUrl = type === 'logo' ? logoUrl : (type === 'signature' ? signatureUrl : arabicCalligraphyUrl);
       if (oldUrl && oldUrl.includes('madrasah-assets/')) {
-        const oldFileName = oldUrl.split('madrasah-assets/').pop();
-        if (oldFileName) {
-          await supabase.storage.from('madrasah-assets').remove([oldFileName]);
-        }
+        try {
+          const oldFileName = oldUrl.split('madrasah-assets/').pop();
+          if (oldFileName) {
+            await supabase.storage.from('madrasah-assets').remove([oldFileName]);
+          }
+        } catch (e) { console.error("Error removing old file", e); }
       }
 
-      const size = type === 'signature' ? 200 : 600;
+      const size = type === 'logo' ? 600 : (type === 'calligraphy' ? 1200 : 250);
       const compressedBlob = await compressAndResizeImage(file, size, size);
-      const fileName = `${type}_${madrasah.id}_${Date.now()}.webp`;
-      try { await supabase.storage.createBucket('madrasah-assets', { public: true }); } catch (bucketError) {}
-      const { error: uploadError } = await supabase.storage.from('madrasah-assets').upload(fileName, compressedBlob, { contentType: 'image/webp', upsert: true });
+      
+      const fileExt = 'webp';
+      const fileName = `${type}_${madrasah.id}_${Date.now()}.${fileExt}`;
+      
+      // Ensure bucket exists (ignoring errors if it does)
+      await supabase.storage.createBucket('madrasah-assets', { public: true }).catch(() => {});
+      
+      const { data, error: uploadError } = await supabase.storage.from('madrasah-assets').upload(fileName, compressedBlob, { 
+        contentType: `image/${fileExt}`,
+        upsert: true 
+      });
+      
       if (uploadError) throw uploadError;
+      
       const { data: { publicUrl } } = supabase.storage.from('madrasah-assets').getPublicUrl(fileName);
       
       if (type === 'logo') setLogoUrl(publicUrl);
       else if (type === 'signature') setSignatureUrl(publicUrl);
+      else if (type === 'calligraphy') setArabicCalligraphyUrl(publicUrl);
+      
+      // Auto-save the URL to database to prevent loss on refresh
+      try {
+        const { data: currentData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
+        const currentConfig = (typeof currentData?.config_json === 'string' ? JSON.parse(currentData.config_json) : currentData?.config_json) || {};
+        
+        let updatedConfig = { ...currentConfig };
+        let updateData: any = {};
+
+        if (type === 'logo') {
+          updateData.logo_url = publicUrl;
+        } else {
+          const updateKey = type === 'signature' ? 'signature_url' : 'arabic_calligraphy_url';
+          updatedConfig[updateKey] = publicUrl;
+          updateData.config_json = updatedConfig;
+        }
+
+        const { error: autoSaveError } = await supabase.from('institutions').update(updateData).eq('id', madrasah.id);
+        
+        if (!autoSaveError) {
+          // Update local cache so refresh doesn't show old data
+          try {
+            const { OfflineService } = await import('../services/OfflineService');
+            const cachedMadrasah = OfflineService.getCache('profile');
+            if (cachedMadrasah && cachedMadrasah.id === madrasah.id) {
+              const newCachedData = { 
+                ...cachedMadrasah, 
+                logo_url: type === 'logo' ? publicUrl : cachedMadrasah.logo_url,
+                config_json: type !== 'logo' ? updatedConfig : cachedMadrasah.config_json 
+              };
+              OfflineService.setCache('profile', newCachedData);
+            }
+          } catch(e) { console.error("Error updating offline cache", e); }
+          
+          if (onProfileUpdate) onProfileUpdate();
+        }
+      } catch (e) {
+        console.error("Auto-save failed", e);
+      }
+
+      console.log(`${type} uploaded and auto-saved successfully:`, publicUrl);
     } catch (error: any) {
-      alert("Error uploading photo: " + error.message);
+      console.error(`Error uploading ${type}:`, error);
+      alert(`Error uploading ${type}: ` + (error.message || "Unknown error"));
+    } finally {
+      setSaving(false);
+      // Reset input value so same file can be selected again
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleDeleteCalligraphy = async () => {
+    if (!madrasah || !arabicCalligraphyUrl) return;
+    
+    const confirmDelete = window.confirm(lang === 'bn' ? 'আপনি কি নিশ্চিত যে আপনি ক্যালিগ্রাফি ছবিটি ডিলিট করতে চান?' : 'Are you sure you want to delete the calligraphy image?');
+    if (!confirmDelete) return;
+
+    setSaving(true);
+    try {
+      // 1. Remove from storage if it belongs to this madrasah
+      if (arabicCalligraphyUrl.includes('madrasah-assets/')) {
+        try {
+          const fileName = arabicCalligraphyUrl.split('madrasah-assets/').pop();
+          if (fileName) {
+            await supabase.storage.from('madrasah-assets').remove([fileName]);
+          }
+        } catch (e) { console.error("Error removing file from storage", e); }
+      }
+
+      // 2. Update state
+      setArabicCalligraphyUrl('');
+
+      // 3. Update Database
+      const { data: currentData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
+      const currentConfig = (typeof currentData?.config_json === 'string' ? JSON.parse(currentData.config_json) : currentData?.config_json) || {};
+      
+      let updatedConfig = { ...currentConfig };
+      delete updatedConfig.arabic_calligraphy_url;
+
+      const { error } = await supabase.from('institutions').update({ 
+        config_json: updatedConfig 
+      }).eq('id', madrasah.id);
+
+      if (error) throw error;
+
+      // 4. Update local cache
+      try {
+        const { OfflineService } = await import('../services/OfflineService');
+        const cachedMadrasah = OfflineService.getCache('profile');
+        if (cachedMadrasah && cachedMadrasah.id === madrasah.id) {
+          OfflineService.setCache('profile', { ...cachedMadrasah, config_json: updatedConfig });
+        }
+      } catch(e) {}
+
+      if (onProfileUpdate) onProfileUpdate();
+      setStatusModal({ show: true, type: 'success', title: 'সাফল্য', message: lang === 'bn' ? 'ক্যালিগ্রাফি ডিলিট করা হয়েছে' : 'Calligraphy deleted successfully' });
+    } catch (err: any) {
+      alert(err.message);
     } finally {
       setSaving(false);
     }
@@ -291,7 +406,91 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   </div>
                 ))}
 
+                {madrasah?.institution_type === 'madrasah' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1">
+                        {lang === 'bn' ? 'প্রতিষ্ঠানের নাম (ইংরেজি) - ঐচ্ছিক' : 'Institution Name (English) - Optional'}
+                      </label>
+                      <div className="relative group">
+                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300 ${isDark ? 'text-slate-600 group-focus-within:text-blue-400' : 'text-slate-300 group-focus-within:text-[#2563EB]'}`}>
+                          <Building2 size={16} />
+                        </div>
+                        <input 
+                          type="text" 
+                          className={`w-full h-12 border-2 rounded-2xl pl-12 pr-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
+                          value={nameEnglish} 
+                          onChange={(e) => setNameEnglish(e.target.value)} 
+                          placeholder={lang === 'bn' ? 'ইংরেজি নাম লিখুন' : 'Enter English name'}
+                        />
+                      </div>
+                    </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1">
+                        {lang === 'bn' ? 'আরবি ক্যালিগ্রাফি ইমেজ (ঐচ্ছিক)' : 'Arabic Calligraphy Image (Optional)'}
+                      </label>
+                      <div className={`relative p-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        {arabicCalligraphyUrl ? (
+                          <div className="relative group/calligraphy w-full flex flex-col items-center">
+                            <div className={`p-4 rounded-xl border mb-4 flex items-center justify-center bg-white ${isDark ? 'border-slate-700' : 'border-slate-100'}`} style={{ width: '100%', height: '120px' }}>
+                              <img 
+                                src={arabicCalligraphyUrl} 
+                                alt="Calligraphy" 
+                                className="max-h-full object-contain" 
+                                crossOrigin="anonymous" 
+                                style={{ width: `${arabicCalligraphyWidth}%` }} 
+                              />
+                            </div>
+                            
+                            <div className="w-full space-y-3 mb-4">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'ক্যালিগ্রাফির সাইজ (প্রস্থ)' : 'Calligraphy Scale (Width)'}</label>
+                                <span className={`px-2 py-0.5 rounded-md font-black text-[11px] ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>{arabicCalligraphyWidth}%</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min="30" 
+                                max="100" 
+                                value={arabicCalligraphyWidth} 
+                                onChange={(e) => setArabicCalligraphyWidth(Number(e.target.value))} 
+                                className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              <button 
+                                onClick={handleDeleteCalligraphy}
+                                className="flex items-center gap-1.5 text-[10px] font-black text-rose-500 uppercase tracking-widest hover:underline"
+                              >
+                                <Trash2 size={12} />
+                                {lang === 'bn' ? 'ডিলিট করুন' : 'Delete'}
+                              </button>
+                              <label className="text-[10px] font-black text-blue-500 cursor-pointer uppercase tracking-widest hover:underline">
+                                {lang === 'bn' ? 'ছবি পরিবর্তন করুন' : 'Change Image'}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePhotoUpload(e, 'calligraphy')} disabled={saving} />
+                              </label>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload size={24} className="text-slate-300" />
+                            <label className="text-center cursor-pointer">
+                              <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest block">
+                                {lang === 'bn' ? 'ক্যালিগ্রাফি ছবি আপলোড করুন' : 'Upload Calligraphy Image'}
+                              </span>
+                              <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block mt-1">
+                                {lang === 'bn' ? 'PDF রিপোর্টে নামের পরিবর্তে এটি ব্যবহার হবে' : 'This will be used instead of text in PDF reports'}
+                              </span>
+                              <input type="file" accept="image/*" className="hidden" onChange={(e) => handlePhotoUpload(e, 'calligraphy')} disabled={saving} />
+                            </label>
+                          </>
+                        )}
+                        {saving && <div className="absolute inset-0 bg-white/40 dark:bg-black/40 backdrop-blur-sm rounded-2xl flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={24} /></div>}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
 
