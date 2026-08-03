@@ -102,6 +102,21 @@ interface AccountProps {
 }
 
 const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setView, initialMadrasah, onLogout, profile, dataVersion = 0 }) => {
+  const getEnglishPkgName = (name: string) => {
+    if (!name) return '';
+    const mapping: { [key: string]: string } = {
+      'স্টার্টার': 'Starter',
+      'বেসিক': 'Basic',
+      'স্মার্ট': 'Smart',
+      'একাডেমিক': 'Academic',
+      'স্ট্যান্ডার্ড': 'Standard',
+      'ফিনান্স': 'Finance',
+      'প্রফেশনাল': 'Professional',
+      'এন্টারপ্রাইজ': 'Enterprise'
+    };
+    return mapping[name] || name;
+  };
+
   const [madrasah, setMadrasah] = useState<Institution | null>(initialMadrasah);
   const [saving, setSaving] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -811,7 +826,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                         {lang === 'bn' ? 'বর্তমান প্যাকেজ' : 'Current Package'}
                       </p>
                       <h4 className={`text-base sm:text-lg font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                        {(madrasah?.config_json as any)?.package_name || 'None'}
+                        {lang === 'bn' ? ((madrasah?.config_json as any)?.package_name || 'None') : getEnglishPkgName((madrasah?.config_json as any)?.package_name || 'None')}
                       </h4>
                     </div>
                   </div>
@@ -879,7 +894,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                       )}
                       
                       <h4 className={`text-[11px] sm:text-[13px] font-black font-noto leading-tight ${isSelected ? 'text-blue-500' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>
-                        {pkg.name}
+                        {lang === 'bn' ? pkg.name : getEnglishPkgName(pkg.name)}
                       </h4>
                       <button 
                         onClick={(e) => {
@@ -1038,7 +1053,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                   {calculatedFee.toLocaleString()} ৳
                 </h4>
                 <p className="text-[9px] font-bold text-slate-400 mt-1 leading-none">
-                  ({selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name} • {effectiveRate}৳ * {durationMonths} {lang === 'bn' ? 'মাস' : 'months'})
+                  ({lang === 'bn' ? (selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name) : getEnglishPkgName(selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name)} • {effectiveRate}৳ * {durationMonths} {lang === 'bn' ? 'মাস' : 'months'})
                 </p>
                 {selectedMonths.length > 0 && (
                   <div className="mt-2 flex flex-wrap justify-center gap-1">
@@ -1927,7 +1942,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                         <div>
                           <p className="text-[9px] sm:text-[10px] font-black text-blue-600/60 uppercase tracking-widest">Current Package</p>
                           <h4 className={`text-lg sm:text-xl font-black font-noto ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                            {(madrasah?.config_json as any)?.package_name || 'None'}
+                            {lang === 'bn' ? ((madrasah?.config_json as any)?.package_name || 'None') : getEnglishPkgName((madrasah?.config_json as any)?.package_name || 'None')}
                           </h4>
                         </div>
                       </div>
@@ -1986,7 +2001,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                             </div>
                           )}
                           <div className="mb-3">
-                            <h4 className={`text-xs sm:text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{pkg.name}</h4>
+                            <h4 className={`text-xs sm:text-sm font-black font-noto ${isCurrent ? 'text-blue-600' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]')}`}>{lang === 'bn' ? pkg.name : getEnglishPkgName(pkg.name)}</h4>
                             <p className={`text-[9px] sm:text-[10px] font-bold mt-1 ${isCurrent ? 'text-blue-500/80' : 'text-slate-400'}`}>{pkg.rate.toFixed(2)} ৳ {stats.students <= 200 ? '(Flat)' : '/ Student'}</p>
                           </div>
                           <div className="space-y-1.5 mt-auto pt-2 border-t border-slate-100/10">

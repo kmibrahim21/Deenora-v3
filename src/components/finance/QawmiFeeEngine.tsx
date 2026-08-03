@@ -787,10 +787,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                       onChange={(e) => setStatusFilter(e.target.value as any)}
                       className={`w-full h-11 px-4 border rounded-xl text-[11px] font-black outline-none appearance-none transition-all ${madrasah.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100 focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`}
                   >
-                      <option value="all">সব স্ট্যাটাস</option>
-                      <option value="paid">পরিশোধিত (Paid)</option>
-                      <option value="partial">আংশিক (Partial)</option>
-                      <option value="unpaid">বকেয়া (Unpaid)</option>
+                      <option value="all">{lang === 'bn' ? 'সব স্ট্যাটাস' : 'All Status'}</option>
+                      <option value="paid">{lang === 'bn' ? 'পরিশোধিত (Paid)' : 'Paid'}</option>
+                      <option value="partial">{lang === 'bn' ? 'আংশিক (Partial)' : 'Partial'}</option>
+                      <option value="unpaid">{lang === 'bn' ? 'বকেয়া (Unpaid)' : 'Unpaid'}</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-3.5 text-slate-400 pointer-events-none" size={16}/>
                </div>
@@ -920,10 +920,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     <Info size={32} />
                  </div>
                  <h3 className={`text-lg font-black font-noto leading-tight ${madrasah.theme === 'dark' ? 'text-slate-300' : 'text-[#1E293B]'}`}>
-                   জামাত নির্বাচন করুন
+                   {lang === 'bn' ? 'জামাত নির্বাচন করুন' : 'Select Class'}
                  </h3>
                  <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wide leading-relaxed">
-                   শিক্ষার্থীদের ফি দেখতে একটি নির্দিষ্ট জামাত নির্বাচন করুন।
+                   {lang === 'bn' ? 'শিক্ষার্থীদের ফি দেখতে একটি নির্দিষ্ট জামাত নির্বাচন করুন।' : 'Select a specific class to view student fees.'}
                  </p>
               </div>
             ) : !fetchError && (

@@ -701,7 +701,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     onClick={() => setViewMode('daily')}
                     className={`px-3 md:px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'daily' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-sm text-blue-400' : 'bg-white shadow-sm text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    দৈনিক
+                    {lang === 'bn' ? 'দৈনিক' : 'Daily'}
                 </button>
                 <button 
                     onClick={() => setViewMode('monthly')}
@@ -719,7 +719,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                     onClick={() => setViewMode('custom')}
                     className={`px-3 md:px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'custom' ? (madrasah?.theme === 'dark' ? 'bg-slate-800 shadow-sm text-blue-400' : 'bg-white shadow-sm text-blue-600') : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                    কাস্টম
+                    {lang === 'bn' ? 'কাস্টম' : 'Custom'}
                 </button>
             </div>
         </div>

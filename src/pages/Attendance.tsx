@@ -1479,7 +1479,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         {activeTab === 'daily' ? (
           <div className="relative mt-0 animate-in fade-in">
             <div className="relative">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">বেলা/সেশন</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">{lang === 'bn' ? 'বেলা/সেশন' : 'Session'}</label>
               <div className={`flex flex-wrap p-1.5 rounded-2xl border-2 shadow-inner gap-1 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                 {sessions.length > 0 ? sessions.map(s => (
                   <button 
@@ -1487,14 +1487,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                     onClick={() => setSelectedSession(s.id)} 
                     className={`flex-1 min-w-[80px] py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${selectedSession === s.id ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
                   >
-                    {s.name}
+                    {lang === 'bn' ? (s.name === 'Morning' ? 'সকাল' : s.name === 'Afternoon' ? 'বিকাল' : s.name) : (s.name === 'সকাল' ? 'Morning' : s.name === 'বিকাল' ? 'Afternoon' : s.name)}
                   </button>
                 )) : (
                   <button 
                     onClick={() => setSelectedSession('daily')} 
                     className={`flex-1 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${selectedSession === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm border border-slate-700/50' : 'bg-white text-[#2563EB] shadow-sm border border-slate-200/50') : 'text-slate-400 hover:text-slate-600'}`}
                   >
-                    দৈনিক
+                    {lang === 'bn' ? 'দৈনিক' : 'Daily'}
                   </button>
                 )}
               </div>
@@ -1503,21 +1503,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         ) : (
             <div className="space-y-4 animate-in fade-in">
                 <div className={`flex p-1 rounded-xl border transition-all ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                    <button onClick={() => setReportType('daily')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>দৈনিক</button>
-                    <button onClick={() => setReportType('monthly')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'monthly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>মাসিক</button>
-                    <button onClick={() => setReportType('yearly')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'yearly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>বাৎসরিক</button>
+                    <button onClick={() => setReportType('daily')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'দৈনিক' : 'Daily'}</button>
+                    <button onClick={() => setReportType('monthly')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'monthly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'মাসিক' : 'Monthly'}</button>
+                    <button onClick={() => setReportType('yearly')} className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${reportType === 'yearly' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'বাৎসরিক' : 'Yearly'}</button>
                 </div>
                 
                 <div className="relative">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-1.5 block">
-                        সেশন নির্বাচন করুন
+                        {lang === 'bn' ? 'সেশন নির্বাচন করুন' : 'Select Session'}
                     </label>
                     <div className={`flex flex-wrap p-1 rounded-xl border transition-all gap-1 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                        <button onClick={() => setSelectedSession('all')} className={`flex-1 min-w-[60px] py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === 'all' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>সব</button>
+                        <button onClick={() => setSelectedSession('all')} className={`flex-1 min-w-[60px] py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === 'all' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'সব' : 'All'}</button>
                         {sessions.length > 0 ? sessions.map(s => (
-                          <button key={s.id} onClick={() => setSelectedSession(s.id)} className={`flex-1 min-w-[60px] py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === s.id ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{s.name}</button>
+                          <button key={s.id} onClick={() => setSelectedSession(s.id)} className={`flex-1 min-w-[60px] py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === s.id ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? (s.name === 'Morning' ? 'সকাল' : s.name === 'Afternoon' ? 'বিকাল' : s.name) : (s.name === 'সকাল' ? 'Morning' : s.name === 'বিকাল' ? 'Afternoon' : s.name)}</button>
                         )) : (
-                          <button onClick={() => setSelectedSession('daily')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>দৈনিক</button>
+                          <button onClick={() => setSelectedSession('daily')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedSession === 'daily' ? (isDark ? 'bg-slate-800 text-[#2563EB] shadow-sm' : 'bg-white text-[#2563EB] shadow-sm') : 'text-slate-400'}`}>{lang === 'bn' ? 'দৈনিক' : 'Daily'}</button>
                         )}
                     </div>
                 </div>
