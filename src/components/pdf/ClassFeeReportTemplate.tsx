@@ -6,6 +6,7 @@ interface ClassFeeReportProps {
   students: any[];
   madrasah: any;
   lang: 'en' | 'bn';
+  startIndex?: number;
   allTotals?: {
     totalPayable: number;
     totalPaid: number;
@@ -13,7 +14,7 @@ interface ClassFeeReportProps {
   };
 }
 
-export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ className, month, students, madrasah, lang, allTotals }) => {
+export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ className, month, students, madrasah, lang, allTotals, startIndex = 0 }) => {
   const isBangla = lang === 'bn';
   const t = {
     title: isBangla ? 'মাসিক ফি কালেকশন রিপোর্ট' : 'Monthly Fee Collection Report',
@@ -47,8 +48,8 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
       <div className="absolute inset-4 border-2 border-slate-100 pointer-events-none rounded-sm" />
       
       {/* Header */}
-      <div className="text-center mb-10 relative">
-        <div className="inline-block px-6 py-2 bg-blue-50 rounded-2xl mb-4">
+      <div className="text-center mb-6 relative">
+        <div className="inline-block px-6 py-2 bg-blue-50 rounded-2xl mb-2">
           <h1 className="text-3xl font-black text-blue-900 tracking-tight">{madrasah.name}</h1>
         </div>
         <h2 className="text-xl font-bold text-slate-600 uppercase tracking-[0.2em] mb-1">{t.title}</h2>
@@ -56,7 +57,7 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
       </div>
       
       {/* Meta Info */}
-      <div className="grid grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-2 gap-8 mb-6">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.class}:</span>
@@ -80,13 +81,13 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
         <table className="w-full border-collapse rounded-xl overflow-hidden shadow-sm border border-slate-200">
           <thead>
             <tr className="bg-slate-900 text-white">
-              <th className="border-r border-slate-700 p-3 text-[10px] font-black uppercase text-center w-12">{t.sl}</th>
-              <th className="border-r border-slate-700 p-3 text-[10px] font-black uppercase text-center w-16">{t.roll}</th>
-              <th className="border-r border-slate-700 p-3 text-[10px] font-black uppercase text-left">{t.studentName}</th>
-              <th className="border-r border-slate-700 p-3 text-[10px] font-black uppercase text-right">{t.totalPayable}</th>
-              <th className="border-r border-slate-700 p-3 text-[10px] font-black uppercase text-right">{t.totalPaid}</th>
-              <th className="border-r border-slate-700 p-3 text-[10px] font-black uppercase text-right">{t.balanceDue}</th>
-              <th className="p-3 text-[10px] font-black uppercase text-center">{t.status}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-center w-12">{t.sl}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-center w-16">{t.roll}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-left">{t.studentName}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-right">{t.totalPayable}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-right">{t.totalPaid}</th>
+              <th className="border-r border-slate-700 p-2 text-[10px] font-black uppercase text-right">{t.balanceDue}</th>
+              <th className="p-2 text-[10px] font-black uppercase text-center">{t.status}</th>
             </tr>
           </thead>
           <tbody>
@@ -97,14 +98,14 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
 
               return (
                 <tr key={student.id || index} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                  <td className="border-r border-slate-100 p-3 text-xs font-bold text-center text-slate-400">{index + 1}</td>
-                  <td className="border-r border-slate-100 p-3 text-xs font-black text-center text-blue-600">{student.roll}</td>
-                  <td className="border-r border-slate-100 p-3 text-xs font-black text-slate-700">{student.student_name}</td>
-                  <td className="border-r border-slate-100 p-3 text-xs font-bold text-right">৳{Number(student.total_payable || 0).toLocaleString()}</td>
-                  <td className="border-r border-slate-100 p-3 text-xs font-bold text-right">৳{Number(student.total_paid || 0).toLocaleString()}</td>
-                  <td className="border-r border-slate-100 p-3 text-xs font-bold text-right text-red-600">৳{Number(student.balance_due || 0).toLocaleString()}</td>
-                  <td className="p-3 text-center">
-                    <span className={`text-[9px] font-black px-2 py-1 rounded-md uppercase ${statusColor}`}>
+                  <td className="border-r border-slate-100 p-2 text-xs font-bold text-center text-slate-400">{startIndex + index + 1}</td>
+                  <td className="border-r border-slate-100 p-2 text-xs font-black text-center text-blue-600">{student.roll}</td>
+                  <td className="border-r border-slate-100 p-2 text-xs font-black text-slate-700">{student.student_name}</td>
+                  <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">৳{Number(student.total_payable || 0).toLocaleString()}</td>
+                  <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">৳{Number(student.total_paid || 0).toLocaleString()}</td>
+                  <td className="border-r border-slate-100 p-2 text-xs font-bold text-right text-red-600">৳{Number(student.balance_due || 0).toLocaleString()}</td>
+                  <td className="p-2 text-center">
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase ${statusColor}`}>
                       {statusText}
                     </span>
                   </td>
@@ -125,7 +126,7 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
       </div>
 
       {/* Footer */}
-      <div className="mt-16 flex justify-between items-end">
+      <div className="mt-8 flex justify-between items-end">
         <div className="text-[10px] text-slate-300 font-bold italic">
           Generated by Smart Madrasah Result Engine
         </div>

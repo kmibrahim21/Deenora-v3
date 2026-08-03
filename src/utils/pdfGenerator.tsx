@@ -894,7 +894,7 @@ export const generateClassFeeReportPDF = async (
     const root = createRoot(container);
     
     // Chunk students for multi-page support
-    const STUDENTS_PER_PAGE = 18; // Portrait has more space vertically
+    const STUDENTS_PER_PAGE = 19; 
     const chunks = [];
     for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
         chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
@@ -920,6 +920,7 @@ export const generateClassFeeReportPDF = async (
                           madrasah={madrasah} 
                           lang={lang} 
                           allTotals={grandTotals}
+                          startIndex={idx * STUDENTS_PER_PAGE}
                         />
                     </div>
                 ))}
