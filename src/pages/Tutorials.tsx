@@ -6,6 +6,12 @@ import {
   Loader2,
   ExternalLink,
   ArrowLeft,
+  Users,
+  CalendarCheck,
+  CreditCard,
+  BookOpen,
+  MoreHorizontal,
+  PhoneCall
 } from "lucide-react";
 import { supabase } from "supabase";
 import { Language, Tutorial, Institution } from "types";
@@ -19,6 +25,16 @@ interface TutorialsProps {
 const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const categories = [
+    { id: 'attendance', bn: 'হাজিরা', en: 'Attendance', icon: <CalendarCheck className="text-emerald-500" /> },
+    { id: 'student', bn: 'শিক্ষার্থী', en: 'Students', icon: <Users className="text-blue-500" /> },
+    { id: 'accounting', bn: 'হিসাব', en: 'Accounting', icon: <CreditCard className="text-amber-500" /> },
+    { id: 'exam', bn: 'পরীক্ষা', en: 'Exams', icon: <BookOpen className="text-indigo-500" /> },
+    { id: 'sms_voice', bn: 'এসএমএস ও ভয়েস কল', en: 'SMS & Voice Call', icon: <PhoneCall className="text-rose-500" /> },
+    { id: 'other', bn: 'অন্যান্য', en: 'Others', icon: <MoreHorizontal className="text-slate-500" /> }
+  ];
 
   useEffect(() => {
     fetchTutorials();
@@ -40,6 +56,15 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
     }
   };
 
+  const filteredTutorials = selectedCategory 
+    ? tutorials.filter(t => {
+        if (selectedCategory === 'other') {
+          return t.category === 'other' || !t.category;
+        }
+        return t.category === selectedCategory;
+      })
+    : [];
+
   return (
     <div
       className={`min-h-screen pb-24 ${madrasah?.theme === "dark" ? "bg-slate-900" : ""}`}
@@ -48,7 +73,7 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
         className={`${madrasah?.theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-transparent border-blue-100"} px-4 py-4 flex items-center gap-4 border-b`}
       >
         <button
-          onClick={onBack}
+          onClick={selectedCategory ? () => setSelectedCategory(null) : onBack}
           className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all ${madrasah?.theme === "dark" ? "bg-slate-800 text-blue-400 border-slate-700" : "bg-blue-50 text-[#2563EB] border-blue-100"}`}
         >
           <ArrowLeft size={20} />
@@ -57,15 +82,19 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
           <h1
             className={`text-lg font-black font-noto ${madrasah?.theme === "dark" ? "text-white" : "text-[#1E3A8A]"}`}
           >
-            {lang === "bn" ? "টিউটোরিয়াল" : "Tutorials"}
+            {selectedCategory 
+              ? (lang === 'bn' ? categories.find(c => c.id === selectedCategory)?.bn : categories.find(c => c.id === selectedCategory)?.en)
+              : (lang === "bn" ? "টিউটোরিয়াল" : "Tutorials")}
           </h1>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            {lang === "bn" ? "এপ চালনোর ভিডিও গাইড" : "App Usage Video Guides"}
+            {selectedCategory
+              ? (lang === 'bn' ? 'ভিডিও টিউটোরিয়াল লিস্ট' : 'Video Tutorial List')
+              : (lang === "bn" ? "এপ চালনোর ভিডিও গাইড" : "App Usage Video Guides")}
           </p>
         </div>
       </div>
 
-      <div className="p-4 max-w-2xl mx-auto space-y-4">
+      <div className="p-4 max-w-4xl mx-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <Loader2 className="animate-spin mb-4" size={32} />
@@ -73,7 +102,29 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
               {lang === "bn" ? "লোড হচ্ছে..." : "Loading..."}
             </p>
           </div>
-        ) : tutorials.length === 0 ? (
+        ) : !selectedCategory ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border shadow-bubble flex flex-col items-center justify-center gap-2 md:gap-4 active:scale-95 transition-all group hover:border-blue-300`}
+              >
+                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[1.5rem] flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                  {React.cloneElement(cat.icon as React.ReactElement<any>, { size: 24 })}
+                </div>
+                <div className="text-center">
+                  <h3 className={`text-xs md:text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                    {lang === 'bn' ? cat.bn : cat.en}
+                  </h3>
+                  <p className="hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                    {tutorials.filter(t => t.category === cat.id).length} {lang === 'bn' ? 'টি ভিডিও' : 'Videos'}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : filteredTutorials.length === 0 ? (
           <div
             className={`${madrasah?.theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"} rounded-[2.5rem] p-10 text-center border shadow-bubble`}
           >
@@ -84,13 +135,19 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
             </div>
             <p className="text-slate-400 font-bold">
               {lang === "bn"
-                ? "কোন টিউটোরিয়াল পাওয়া যায়নি"
-                : "No tutorials found"}
+                ? "এই ক্যাটাগরিতে কোন ভিডিও পাওয়া যায়নি"
+                : "No tutorials found in this category"}
             </p>
+            <button 
+              onClick={() => setSelectedCategory(null)}
+              className="mt-6 text-sm font-black text-blue-500 uppercase tracking-widest hover:underline"
+            >
+              {lang === 'bn' ? 'পেছনে যান' : 'Go Back'}
+            </button>
           </div>
         ) : (
           <div className="grid gap-4">
-            {tutorials.map((tutorial) => (
+            {filteredTutorials.map((tutorial) => (
               <a
                 key={tutorial.id}
                 href={tutorial.url || (tutorial as any).youtube_url}

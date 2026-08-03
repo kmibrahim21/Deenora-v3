@@ -487,6 +487,7 @@ export interface Tutorial {
   title: string;
   url: string;
   youtube_url: string;
+  category?: string;
   sort_order: number;
   created_at: string;
 }
