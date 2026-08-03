@@ -192,7 +192,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
   // New states for SMS and Voice Templates
   const [smsTemplates, setSmsTemplates] = useState<any[]>([]);
-  const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState<string>('default');
+  const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState<string>('');
   const [voiceTemplates, setVoiceTemplates] = useState<any[]>([]);
   const [selectedVoiceTemplateId, setSelectedVoiceTemplateId] = useState<string>('');
   const [showSmsTemplateDropdown, setShowSmsTemplateDropdown] = useState(false);
@@ -1009,10 +1009,10 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           const smsPromises = [];
           
           const templates = (madrasah?.config_json as any)?.features?.sms_templates || {};
-          let presentMsgEn = templates.attendance_present || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় উপস্থিত হয়েছে।` : `As-salamu Alaikum, {student_name} is present at madrasah today.`);
-          let absentMsgEn = templates.attendance_absent || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় অনুপস্থিত। অনুগ্রহ করে কারণ জানান।` : `As-salamu Alaikum, {student_name} is absent today. Please inform us.`);
-          let lateMsgEn = templates.attendance_late || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় দেরিতে উপস্থিত হয়েছে।` : `As-salamu Alaikum, {student_name} arrived late today.`);
-          let leaveMsgEn = templates.attendance_leave || (lang === 'bn' ? `আস-সালামু আলাইকুম, {student_name} আজ ছুটিতে আছে।` : `As-salamu Alaikum, {student_name} is on leave today.`);
+          let presentMsgEn = templates.attendance_present || '';
+          let absentMsgEn = templates.attendance_absent || '';
+          let lateMsgEn = templates.attendance_late || '';
+          let leaveMsgEn = templates.attendance_leave || '';
 
           const msgMap: Record<string, string> = {
             'present': presentMsgEn,
@@ -1035,7 +1035,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           }, {} as Record<string, any[]>);
 
           for (const st of Object.keys(grouped)) {
-            if (grouped[st].length > 0) {
+            if (grouped[st].length > 0 && msgMap[st]) {
               smsPromises.push(smsApi.sendBulk(madrasah.id, grouped[st], msgMap[st]));
             }
           }
@@ -1090,17 +1090,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         setShowConfirmModal(false);
         try {
           let message = '';
-          if (selectedSmsTemplateId === 'default') {
-            message = lang === 'bn' 
-              ? `আস-সালামু আলাইকুম, {student_name} আজ মাদরাসায় অনুপস্থিত। অনুগ্রহ করে অনুপস্থিতির কারণ জানান।`
-              : `As-Salamu Alaikum, {student_name} is absent today. Please inform us of the reason.`;
-          } else {
-            const template = smsTemplates.find(t => t.id === selectedSmsTemplateId);
-            message = template?.body || '';
-          }
+          const template = smsTemplates.find(t => t.id === selectedSmsTemplateId);
+          message = template?.body || '';
 
           if (!message.trim()) {
-            throw new Error(lang === 'bn' ? 'এসএমএস টেমপ্লেট নির্বাচন করুন অথবা একটি মেসেজ লিখুন' : 'Please select an SMS template or write a message');
+            throw new Error(lang === 'bn' ? 'এসএমএস টেমপ্লেট নির্বাচন করুন' : 'Please select an SMS template');
           }
 
           await smsApi.sendBulk(madrasah.id, absents, message);
@@ -1699,28 +1693,26 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                             className={`w-full h-14 px-3 rounded-2xl border flex items-center justify-between active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-100 text-[#2563EB]'}`}
                                         >
                                             <span className="text-[10px] font-black uppercase tracking-widest truncate">
-                                                {selectedSmsTemplateId === 'default' ? (lang === 'bn' ? 'ডিফল্ট' : 'Default') : (smsTemplates.find(t => t.id === selectedSmsTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন' : 'Select'))}
+                                                {smsTemplates.find(t => t.id === selectedSmsTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন করুন' : 'Select Template')}
                                             </span>
                                             <ChevronDown size={14} className={`shrink-0 transition-transform duration-300 ${showSmsTemplateDropdown ? 'rotate-180' : ''}`} />
                                         </button>
 
                                         {showSmsTemplateDropdown && (
                                             <div className={`absolute bottom-full right-0 mb-3 w-64 p-2 rounded-[1.5rem] shadow-xl border z-[110] max-h-48 overflow-y-auto animate-in slide-in-from-bottom-2 duration-300 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                                <button 
-                                                    onClick={() => { setSelectedSmsTemplateId('default'); setShowSmsTemplateDropdown(false); }}
-                                                    className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === 'default' ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}
-                                                >
-                                                    {lang === 'bn' ? 'ডিফল্ট টেমপ্লেট' : 'Default Template'}
-                                                </button>
-                                                {smsTemplates.map(t => (
-                                                    <button 
-                                                        key={t.id}
-                                                        onClick={() => { setSelectedSmsTemplateId(t.id); setShowSmsTemplateDropdown(false); }}
-                                                        className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === t.id ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}
-                                                    >
-                                                        {t.title}
-                                                    </button>
-                                                ))}
+                                                {smsTemplates.length === 0 ? (
+                                                    <p className="p-4 text-xs text-slate-500 font-bold text-center italic">{lang === 'bn' ? 'কোনো টেমপ্লেট নেই' : 'No templates found.'}</p>
+                                                ) : (
+                                                    smsTemplates.map(t => (
+                                                        <button 
+                                                            key={t.id}
+                                                            onClick={() => { setSelectedSmsTemplateId(t.id); setShowSmsTemplateDropdown(false); }}
+                                                            className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === t.id ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}
+                                                        >
+                                                            {t.title}
+                                                        </button>
+                                                    ))
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -1898,15 +1890,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                               </button>
                               <div className="flex-1 relative">
                                   <button onClick={() => setShowSmsTemplateDropdown(!showSmsTemplateDropdown)} className={`w-full h-14 px-3 rounded-2xl border flex items-center justify-between active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-100 text-[#2563EB]'}`}>
-                                      <span className="text-[10px] font-black uppercase tracking-widest truncate">{selectedSmsTemplateId === 'default' ? (lang === 'bn' ? 'ডিফল্ট' : 'Default') : (smsTemplates.find(t => t.id === selectedSmsTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন' : 'Select'))}</span>
+                                      <span className="text-[10px] font-black uppercase tracking-widest truncate">{smsTemplates.find(t => t.id === selectedSmsTemplateId)?.title || (lang === 'bn' ? 'নির্বাচন করুন' : 'Select Template')}</span>
                                       <ChevronDown size={14} className={`shrink-0 transition-transform duration-300 ${showSmsTemplateDropdown ? 'rotate-180' : ''}`} />
                                   </button>
                                   {showSmsTemplateDropdown && (
                                       <div className={`absolute bottom-full right-0 mb-3 w-64 p-2 rounded-[1.5rem] shadow-xl border z-[110] max-h-48 overflow-y-auto animate-in slide-in-from-bottom-2 duration-300 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                          <button onClick={() => { setSelectedSmsTemplateId('default'); setShowSmsTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === 'default' ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}>{lang === 'bn' ? 'ডিফল্ট টেমপ্লেট' : 'Default Template'}</button>
-                                          {smsTemplates.map(t => (
-                                              <button key={t.id} onClick={() => { setSelectedSmsTemplateId(t.id); setShowSmsTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === t.id ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}>{t.title}</button>
-                                          ))}
+                                          {smsTemplates.length === 0 ? (
+                                              <p className="p-4 text-xs text-slate-500 font-bold text-center italic">{lang === 'bn' ? 'কোনো টেমপ্লেট নেই' : 'No templates found.'}</p>
+                                          ) : (
+                                              smsTemplates.map(t => (
+                                                  <button key={t.id} onClick={() => { setSelectedSmsTemplateId(t.id); setShowSmsTemplateDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-[11px] font-bold mb-1 transition-all ${selectedSmsTemplateId === t.id ? (isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-600 text-white') : (isDark ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')}`}>{t.title}</button>
+                                              ))
+                                          )}
                                       </div>
                                   )}
                               </div>

@@ -68,6 +68,16 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     return str.replace(/[0-9]/g, d => englishDigits[d]);
   };
 
+  const formatTime = (timeStr: string) => {
+    if (!timeStr) return '';
+    // Remove AM, PM, am, pm and any extra spaces
+    const cleanTime = timeStr.replace(/\s*(am|pm|AM|PM)\s*/g, '').trim();
+    if (isBn) {
+      return getBanglaNumber(cleanTime);
+    }
+    return cleanTime;
+  };
+
   const isBn = lang === 'bn';
 
   // Determine classes to display
@@ -264,14 +274,14 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                         <th className="border-r p-1 text-[11px] font-black font-noto tracking-tighter w-[50px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
                           {isBn ? 'সকাল' : 'Morning'}
                           <span className="block text-[9px] font-bold text-[#475569] mt-0.5 leading-none">
-                            {isBn ? getBanglaNumber(routineMorningTime) : routineMorningTime}
+                            {formatTime(routineMorningTime)}
                           </span>
                         </th>
                         {showRoutineAfternoon && (
                           <th className="border-r p-1 text-[11px] font-black font-noto tracking-tighter w-[50px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
                             {isBn ? 'বিকাল' : 'Afternoon'}
                             <span className="block text-[9px] font-bold text-[#475569] mt-0.5 leading-none">
-                              {isBn ? getBanglaNumber(routineAfternoonTime) : routineAfternoonTime}
+                              {formatTime(routineAfternoonTime)}
                             </span>
                           </th>
                         )}
@@ -325,11 +335,11 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                       {isBn ? 'বার / তারিখ' : 'Day / Date'}
                     </th>
                     <th className="border-r p-1 text-[12px] font-black" style={{ borderColor: `${primary}b3` }}>
-                      {isBn ? `সকাল (${getBanglaNumber(routineMorningTime.split(' - ')[0])})` : `Morning (${routineMorningTime.split(' - ')[0]})`}
+                      {isBn ? `সকাল (${formatTime(routineMorningTime)})` : `Morning (${formatTime(routineMorningTime)})`}
                     </th>
                     {showRoutineAfternoon && (
                       <th className="p-1 text-[12px] font-black w-36">
-                        {isBn ? `বিকাল (${getBanglaNumber(routineAfternoonTime.split(' - ')[0])})` : `Afternoon (${routineAfternoonTime.split(' - ')[0]})`}
+                        {isBn ? `বিকাল (${formatTime(routineAfternoonTime)})` : `Afternoon (${formatTime(routineAfternoonTime)})`}
                       </th>
                     )}
                   </tr>
