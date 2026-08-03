@@ -2700,6 +2700,28 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                       >
                                         <X size={10} strokeWidth={4} />
                                       </button>
+                                      
+                                      {/* Hidden Date Picker overlay */}
+                                      <input 
+                                        type="date"
+                                        value={col.isoDate || ''}
+                                        onChange={(e) => {
+                                          const selectedDate = e.target.value;
+                                          if (!selectedDate) return;
+                                          
+                                          const d = new Date(selectedDate);
+                                          const formattedDate = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                          const formattedDay = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'long' });
+                                          
+                                          const updated = [...routineData];
+                                          updated[idx].isoDate = selectedDate;
+                                          updated[idx].date = formattedDate;
+                                          updated[idx].day = formattedDay;
+                                          setRoutineData(updated);
+                                        }}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
+                                      />
+
                                       <input 
                                         type="text"
                                         value={col.day}
@@ -2710,17 +2732,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         }}
                                         className={`bg-transparent text-[11px] font-black leading-tight text-white w-full text-center border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none`}
                                       />
-                                      <input 
-                                        type="text"
-                                        value={col.date}
-                                        onChange={(e) => {
-                                          const updated = [...routineData];
-                                          updated[idx].date = e.target.value;
-                                          setRoutineData(updated);
-                                        }}
-                                        className={`bg-transparent text-[9px] font-bold mt-0.5 w-full text-center border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none`}
-                                        style={{ color: rtTheme.accent }}
-                                      />
+                                      <div className="flex items-center justify-center gap-1 mt-0.5 opacity-90">
+                                        <Calendar size={8} style={{ color: rtTheme.accent }} />
+                                        <span className="text-[9px] font-bold" style={{ color: rtTheme.accent }}>{col.date}</span>
+                                      </div>
                                     </th>
                                   ))}
                                 </tr>
@@ -2871,9 +2886,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   <th className="border-r p-2 text-xs font-black" style={{ borderColor: `${rtTheme.primary}b3` }}>
                                     {lang === 'bn' ? `সকাল (${routineMorningTime.split(' - ')[0]})` : `Morning (${routineMorningTime.split(' - ')[0]})`}
                                   </th>
-                                  <th className="p-2 text-xs font-black w-48">
-                                    {lang === 'bn' ? `বিকাল (${routineAfternoonTime.split(' - ')[0]})` : `Afternoon (${routineAfternoonTime.split(' - ')[0]})`}
-                                  </th>
+                                  {showRoutineAfternoon && (
+                                    <th className="p-2 text-xs font-black w-48">
+                                      {lang === 'bn' ? `বিকাল (${routineAfternoonTime.split(' - ')[0]})` : `Afternoon (${routineAfternoonTime.split(' - ')[0]})`}
+                                    </th>
+                                  )}
                                 </tr>
                               </thead>
                               <tbody>
