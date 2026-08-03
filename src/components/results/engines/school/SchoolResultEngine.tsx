@@ -2575,24 +2575,25 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 {/* Scalable, responsive container for Live Preview page to prevent overflow/side-scrolling */}
                 <div 
                   ref={previewContainerRef}
-                  className="w-full py-8 px-2 sm:px-8 bg-slate-100/50 rounded-[2.8rem] border border-slate-200/50 overflow-auto custom-scrollbar text-center"
+                  className="w-full py-8 px-2 sm:px-8 bg-slate-100/50 rounded-[2.8rem] border border-slate-200/50 overflow-auto custom-scrollbar"
                   style={{ minHeight: `${794 * previewScale * userZoom + 40}px`, maxHeight: '75vh' }}
                 >
-                  <div 
-                    className="relative shrink-0 inline-flex items-start text-left mx-auto"
-                    style={{ 
-                      width: `${1123 * previewScale * userZoom}px`,
-                      height: `${794 * previewScale * userZoom}px`
-                    }}
-                  >
+                  <div className="min-w-full w-max flex justify-center">
                     <div 
-                      className="shadow-3xl origin-top-left transition-transform duration-200 bg-white font-noto rounded-lg absolute top-0 left-0"
+                      className="relative shrink-0 text-left"
                       style={{ 
-                        transform: `scale(${previewScale * userZoom})`,
-                        width: '1123px',
-                        height: '794px'
+                        width: `${1123 * previewScale * userZoom}px`,
+                        height: `${794 * previewScale * userZoom}px`
                       }}
                     >
+                      <div 
+                        className="shadow-3xl origin-top-left transition-transform duration-200 bg-white font-noto rounded-lg absolute top-0 left-0"
+                        style={{ 
+                          transform: `scale(${previewScale * userZoom})`,
+                          width: '1123px',
+                          height: '794px'
+                        }}
+                      >
                     
                     {/* Render live mockup copy matching true output */}
                     {(() => {
@@ -3064,13 +3065,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     </div>
                   )})()}
 
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {activeTab === 'exams' && view === 'list' && !selectedClassId && (

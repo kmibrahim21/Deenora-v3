@@ -3,7 +3,7 @@ import { Download, X, Printer, Settings2 } from "lucide-react";
 import { Teacher, Institution, Language } from "types";
 import QRCode from "react-qr-code";
 import { jsPDF } from "jspdf";
-import { toPng } from "html-to-image";
+import { toPng, toJpeg } from "html-to-image";
 import { solaimanLipiBase64 } from "../utils/fonts";
 
 interface TeacherIdCardGeneratorProps {
@@ -50,8 +50,9 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
     if (!cardRef.current || !backCardRef.current) return null;
     try {
       const options = {
-        pixelRatio: 3,
-        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: false,
         fontEmbedCSS: `
           @font-face {
             font-family: 'SolaimanLipi';
@@ -67,8 +68,14 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
           transform: "scale(1)",
         },
       };
-      const frontDataUrl = await toPng(cardRef.current, options);
-      const backDataUrl = await toPng(backCardRef.current, options);
+      const frontDataUrl = await Promise.race([
+        toJpeg(cardRef.current, options),
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+      ]);
+      const backDataUrl = await Promise.race([
+        toJpeg(backCardRef.current, options),
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+      ]);
       return {
         front: frontDataUrl,
         back: backDataUrl,
@@ -93,8 +100,8 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
         const gapX = 10;
         const xMargin = (210 - (cardWidth * 2) - gapX) / 2;
         const yMargin = 30; 
-        pdf.addImage(cardData.front, "PNG", xMargin, yMargin, cardWidth, cardHeight);
-        pdf.addImage(cardData.back, "PNG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight);
+        pdf.addImage(cardData.front, "JPEG", xMargin, yMargin, cardWidth, cardHeight);
+        pdf.addImage(cardData.back, "JPEG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight);
         pdf.save(`${(teacher?.name || "Teacher").replace(/\s+/g, "_")}_ID_Card_Single.pdf`);
       }
     } catch (error) {
@@ -122,7 +129,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
       const gapY = 8; 
       const marginY = (pageH - (cardHeight * rows) - (gapY * (rows - 1))) / 2; 
 
-      const teachersToRender = allTeachers && allTeachers.length > 0 ? allTeachers : [teacher];
+      const teachersToRender = (allTeachers && allTeachers.length > 0) ? allTeachers : [teacher];
       
       let currentIdxOnPage = 0;
 
@@ -142,7 +149,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
 
         const imageData = activeSide === 'front' ? cardData.front : cardData.back;
 
-        pdf.addImage(imageData, "PNG", posX, posY, cardWidth, cardHeight);
+        pdf.addImage(imageData, "JPEG", posX, posY, cardWidth, cardHeight);
 
         currentIdxOnPage++;
 
@@ -154,9 +161,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
 
       setBulkProgress(100);
       const sideText = activeSide === 'front' ? 'Fronts' : 'Backs';
-      const filename = isBulk 
-        ? `Teachers_Bulk_${sideText}.pdf`
-        : `${(teacher?.name || "Teacher").replace(/\s+/g, "_")}_A4_${sideText}.pdf`;
+      const filename = (allTeachers && allTeachers.length > 1) ? `Teachers_Grid_${sideText}.pdf` : `${(teacher?.name || "Teacher").replace(/\s+/g, "_")}_A4_${sideText}.pdf`;
       pdf.save(filename);
       
     } catch (error) {
@@ -335,7 +340,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                   <div className="flex items-center gap-3 pt-5 px-5">
                        <div className="w-[50px] h-[50px] bg-white rounded-full p-[2px] shadow-sm flex items-center justify-center shrink-0">
                           {madrasah?.logo_url ? (
-                            <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain rounded-full" crossOrigin="anonymous" />
+                            <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain rounded-full" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                           ) : (
                             <div className="w-full h-full rounded-full flex items-center justify-center text-[20px] font-black" style={{ color: themeColor }}>
                               {instName.charAt(0) || "M"}
@@ -355,7 +360,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                   <div className="flex flex-col items-center mt-2 w-full relative z-10 px-5">
                       <div className="w-[75px] h-[85px] bg-white border-[2.5px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0">
                          {currentRenderTeacher.photo_url ? (
-                             <img src={currentRenderTeacher.photo_url} alt="Photo" className="w-full h-full object-cover" crossOrigin="anonymous"/>
+                             <img src={currentRenderTeacher.photo_url} alt="Photo" className="w-full h-full object-cover" crossOrigin="anonymous"onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                          ) : (
                              <svg className="text-slate-200 w-[36px] h-[36px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                          )}
@@ -410,7 +415,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                         <div className="flex flex-col items-center w-[70px] ml-auto">
                            <div className="flex items-end justify-center mb-[2px]" style={{ height: `${madrasah?.config_json?.signature_height ? madrasah.config_json.signature_height / 1.5 : 22}px` }}>
                            {madrasah?.config_json?.signature_url ? (
-                              <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height ? madrasah.config_json.signature_height / 1.5 : 22}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                              <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height ? madrasah.config_json.signature_height / 1.5 : 22}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                            ) : (
                               <img
                                  src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgNDAiPjxwYXRoIGQ9Ik0xMCAzMGM1LTUgMTAtMTAgMTEtMTVzLTIgMTAtNSAxNWMyLTUgNS0xMCAxMC0xNCA1LTMgOC01IDEwLTJzLTEgNS0zIDEwYzIgMCA0LTIgNi0zIDItejIgNCAwLTUgOC01IDQgMyAyIDEwLTMgMTRjLTIgMi01IDUtOCAxLTItMy0xLTYgMi04cyA1LTIgNyAwbDEgM2MyLTIgMy01IDUtNyAyLTIgNCAwIDUtMnMyIDEwLTMgMTQtMSA0IDMgNSA2IDVjLTItNSA1LTIgNyAwczIgNiAwIDEwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0NzU1NjkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+"
@@ -441,7 +446,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                   alt="Logo Watermark"
                   className="w-[180px] h-[180px] object-contain grayscale"
                   crossOrigin="anonymous"
-                />
+                 onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               </div>
             )}
 
@@ -465,7 +470,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                       className="w-[24px] h-[24px] object-contain rounded-full"
                       alt="logo"
                       crossOrigin="anonymous"
-                    />
+                     onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   )}
                   <h3 className="font-bold text-[13px] leading-tight font-solaiman" style={{ color: themeColor }}>
                     {madrasah?.name}

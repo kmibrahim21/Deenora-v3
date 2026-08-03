@@ -837,12 +837,20 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                 </div>
                                 <div className="flex-1">
                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'নির্ধারিত ফি (৳)' : 'Assigned Fee (৳)'}</p>
-                                  <input
-                                    type="number"
-                                    className={`w-full bg-transparent outline-none font-black text-sm placeholder:text-slate-300 ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}
-                                    placeholder="Amount"
-                                    defaultValue={customAmount}
-                                    onBlur={(e) => updateCustomAmount(fee.id, e.target.value)}
+                                  <input 
+                                    type="text" 
+                                    inputMode="decimal"
+                                    className={`w-full bg-transparent outline-none font-black text-sm placeholder:text-slate-300 ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`} 
+                                    placeholder="Amount" 
+                                    defaultValue={customAmount} 
+                                    onBlur={(e) => {
+                                      let val = e.target.value;
+                                      const numbers: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+                                      val = val.replace(/[০-৯]/g, match => numbers[match]);
+                                      val = val.replace(/[^0-9.]/g, '');
+                                      e.target.value = val;
+                                      updateCustomAmount(fee.id, val);
+                                    }} 
                                   />
                                 </div>
                               </div>
@@ -1005,9 +1013,16 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                               <div className={`relative flex items-center group transition-all ${isDark ? 'bg-slate-800/50' : 'bg-slate-50'} rounded-xl border-2 ${isDark ? 'border-slate-700 focus-within:border-blue-500' : 'border-slate-100 focus-within:border-blue-400'}`}>
                                   <DollarSign size={16} className="ml-3 text-blue-500" />
                                   <input 
-                                      type="number"
+                                      type="text"
+                                      inputMode="decimal"
                                       value={multiPaidAmount}
-                                      onChange={(e) => setMultiPaidAmount(e.target.value)}
+                                      onChange={(e) => {
+                                        let val = e.target.value;
+                                        const numbers: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+                                        val = val.replace(/[০-৯]/g, match => numbers[match]);
+                                        val = val.replace(/[^0-9.]/g, '');
+                                        setMultiPaidAmount(val);
+                                      }}
                                       placeholder="0"
                                       className={`w-full bg-transparent p-3 outline-none font-black text-base ${isDark ? 'text-white' : 'text-slate-800'}`}
                                   />
@@ -1018,9 +1033,16 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                               <div className={`relative flex items-center group transition-all ${isDark ? 'bg-slate-800/50' : 'bg-slate-50'} rounded-xl border-2 ${isDark ? 'border-slate-700 focus-within:border-amber-500' : 'border-slate-100 focus-within:border-amber-400'}`}>
                                   <TrendingDown size={16} className="ml-3 text-amber-500" />
                                   <input 
-                                      type="number"
+                                      type="text"
+                                      inputMode="decimal"
                                       value={multiDiscount}
-                                      onChange={(e) => setMultiDiscount(e.target.value)}
+                                      onChange={(e) => {
+                                        let val = e.target.value;
+                                        const numbers: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+                                        val = val.replace(/[০-৯]/g, match => numbers[match]);
+                                        val = val.replace(/[^0-9.]/g, '');
+                                        setMultiDiscount(val);
+                                      }}
                                       placeholder="0"
                                       className={`w-full bg-transparent p-3 outline-none font-black text-base ${isDark ? 'text-white' : 'text-slate-800'}`}
                                   />

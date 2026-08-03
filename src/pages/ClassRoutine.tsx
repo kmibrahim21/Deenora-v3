@@ -774,24 +774,25 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
 
               <div 
                 ref={previewContainerRef}
-                className="w-full py-8 px-2 sm:px-8 bg-slate-100/50 rounded-[2.8rem] border border-slate-200/50 overflow-auto custom-scrollbar text-center"
+                className="w-full py-8 px-2 sm:px-8 bg-slate-100/50 rounded-[2.8rem] border border-slate-200/50 overflow-auto custom-scrollbar"
                 style={{ minHeight: `${794 * previewScale * userZoom + 40}px`, maxHeight: '75vh' }}
               >
-                 <div 
-                   className="relative shrink-0 inline-flex items-start text-left mx-auto"
-                   style={{ 
-                     width: `${1123 * previewScale * userZoom}px`,
-                     height: `${794 * previewScale * userZoom}px`
-                   }}
-                 >
+                 <div className="min-w-full w-max flex justify-center">
                    <div 
-                     className="shadow-3xl origin-top-left transition-transform duration-200 bg-white font-noto rounded-lg absolute top-0 left-0"
+                     className="relative shrink-0 text-left"
                      style={{ 
-                       transform: `scale(${previewScale * userZoom})`,
-                       width: '1123px',
-                       height: '794px'
+                       width: `${1123 * previewScale * userZoom}px`,
+                       height: `${794 * previewScale * userZoom}px`
                      }}
                    >
+                     <div 
+                       className="shadow-3xl origin-top-left transition-transform duration-200 bg-white font-noto rounded-lg absolute top-0 left-0"
+                       style={{ 
+                         transform: `scale(${previewScale * userZoom})`,
+                         width: '1123px',
+                         height: '794px'
+                       }}
+                     >
                      {/* The Container to capture for PDF */}
                      <div ref={pdfContentRef} className="text-slate-800 w-[1123px] min-h-[794px] p-10 bg-white relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
                         
@@ -1072,9 +1073,10 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                      </div>
                    </div>
                  </div>
-              </div>
+               </div>
+            </div>
 
-              {/* Add column controls outside the PDF visual layout */}
+            {/* Add column controls outside the PDF visual layout */}
               <div className="flex gap-2 justify-center mt-4">
                  <button onClick={() => addPeriod(false)} className="px-4 py-2 bg-blue-50 text-blue-600 font-bold text-[10px] rounded-xl flex items-center gap-1 uppercase tracking-widest"><Plus size={14}/> {lang === 'bn' ? 'নতুন ক্লাস যোগ করুন' : 'Add Class Column'}</button>
                  <button onClick={() => addPeriod(true)} className="px-4 py-2 bg-amber-50 text-amber-600 font-bold text-[10px] rounded-xl flex items-center gap-1 uppercase tracking-widest"><Plus size={14}/> {lang === 'bn' ? 'নতুন বিরতি যোগ করুন' : 'Add Break Column'}</button>
