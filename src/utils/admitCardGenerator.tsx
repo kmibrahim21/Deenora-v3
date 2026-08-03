@@ -26,37 +26,37 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
   const getNameStyles = (name: string) => {
     const len = name ? name.length : 0;
-    // We want the name to stay bold and beautiful, wrapping onto 2 lines if needed, without pushing details off-screen
+    // Keep the name bold and beautiful on a single line with larger sizes, without truncation unless absolutely extreme
     if (len > 45) {
       return {
-        h1Class: 'text-[21px] font-black text-[#0c4a7e] tracking-tight leading-[1.25] pt-[3px] mb-0.5 break-words max-w-[98%] mx-auto',
+        h1Class: 'text-[24px] sm:text-[25px] font-black text-[#0c4a7e] tracking-tight leading-normal pt-[3px] mb-0.5 whitespace-nowrap max-w-full mx-auto',
         addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
         infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal pt-[1px]'
       };
     }
     if (len > 35) {
       return {
-        h1Class: 'text-[23px] font-black text-[#0c4a7e] tracking-tight leading-[1.25] pt-[3px] mb-0.5 break-words max-w-[98%] mx-auto',
+        h1Class: 'text-[27px] sm:text-[28px] font-black text-[#0c4a7e] tracking-tight leading-normal pt-[3px] mb-0.5 whitespace-nowrap max-w-full mx-auto',
         addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
         infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal pt-[1px]'
       };
     }
     if (len > 26) {
       return {
-        h1Class: 'text-[26px] font-black text-[#0c4a7e] tracking-tight leading-[1.25] pt-[3px] mb-0.5 break-words max-w-[98%] mx-auto',
+        h1Class: 'text-[30px] sm:text-[31px] font-black text-[#0c4a7e] tracking-tight leading-normal pt-[3px] mb-0.5 whitespace-nowrap max-w-full mx-auto',
         addrClass: 'text-[12.5px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
         infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal pt-[1px]'
       };
     }
     if (len > 18) {
       return {
-        h1Class: 'text-[28px] font-black text-[#0c4a7e] tracking-tight leading-normal pt-[4px] mb-1 break-words max-w-[98%] mx-auto',
+        h1Class: 'text-[33px] sm:text-[34px] font-black text-[#0c4a7e] tracking-tight leading-normal pt-[4px] mb-1 whitespace-nowrap max-w-full mx-auto',
         addrClass: 'text-[13px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-1 leading-normal pt-[1px] break-words line-clamp-1',
         infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal py-0.5 pt-[2px]'
       };
     }
     return {
-      h1Class: 'text-[32px] font-black text-[#0c4a7e] tracking-tight leading-normal pt-[4px] mb-1 break-words max-w-[98%] mx-auto',
+      h1Class: 'text-[36px] sm:text-[38px] font-black text-[#0c4a7e] tracking-tight leading-normal pt-[4px] mb-1 whitespace-nowrap max-w-full mx-auto',
       addrClass: 'text-[14px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-1 leading-normal pt-[1px] break-words line-clamp-1',
       infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[13px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal py-0.5 pt-[2px]'
     };
@@ -97,7 +97,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
         {/* Top Header Section */}
         <div className="flex items-center justify-between w-full h-[28mm] z-10 relative">
           {/* Left: Beautiful Shield Crest Logo on white background */}
-          <div className="w-[26mm] flex items-center justify-start flex-shrink-0 pl-[2mm]">
+          <div className="w-[24mm] flex items-center justify-start flex-shrink-0 pl-[2mm]">
             {madrasah.logo_url ? (
               <div className="w-[22mm] h-[22mm] flex items-center justify-center p-0.5 border border-slate-200/50 rounded-md bg-white shadow-3xs">
                 <img src={madrasah.logo_url} className="w-full h-full object-contain" crossOrigin="anonymous" />
@@ -120,7 +120,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
           </div>
 
           {/* Center: Madrasah Name & Subtitles */}
-          <div className="flex-1 text-center pr-[50mm] pl-[4mm] flex flex-col justify-center h-full">
+          <div className="flex-1 text-center pr-[42mm] pl-[2mm] flex flex-col justify-center h-full">
             <h1 className={headerStyles.h1Class} style={{ fontFamily: isBangla ? "'Tiro Bangla', 'Noto Serif Bengali', serif" : "'Times New Roman', serif" }}>
               {madrasah.name}
             </h1>
@@ -136,8 +136,8 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
           {/* Right: Beautiful Dark Blue Slanted Polygon Title Panel */}
           <div 
-            className="w-[50mm] h-[26mm] bg-[#0c4a7e] text-white flex flex-col items-center justify-center px-4 pl-7 absolute top-0 right-0 z-20 shadow-sm"
-            style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 18% 100%)' }}
+            className="w-[42mm] h-[26mm] bg-[#0c4a7e] text-white flex flex-col items-center justify-center px-4 pl-5 absolute top-0 right-0 z-20 shadow-sm"
+            style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 15% 100%)' }}
           >
              <div className="text-center w-full pt-[3px]">
                 <h2 className="text-[19px] font-black tracking-wide leading-normal pt-1.5 mb-[1px]">{isBangla ? 'এডমিট কার্ড' : 'ADMIT CARD'}</h2>
