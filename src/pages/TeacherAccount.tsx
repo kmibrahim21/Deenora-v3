@@ -864,6 +864,18 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                     />
                   )}
 
+                  {/* Message Card (Conditional) */}
+                  {modules.messages && teacherInfo?.permissions?.can_send_messages && (
+                    <ActionCard
+                      icon={MessageCircle}
+                      title={lang === 'bn' ? 'বার্তা পাঠান' : 'Send Message'}
+                      subtitle={lang === 'bn' ? 'বার্তা' : 'Messages'}
+                      colorClass="bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
+                      onClick={() => setView('messages')}
+                      dark={isDark}
+                    />
+                  )}
+
                   {/* Tutorials Card */}
                   <ActionCard
                     icon={Play}

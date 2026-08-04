@@ -294,6 +294,14 @@ export const useAuth = () => {
               if (teacherData && teacherData.id) {
                 const { data: latestTeacher } = await supabase.from('teachers').select('*').eq('id', teacherData.id).maybeSingle();
                 if (latestTeacher && latestTeacher.is_active) {
+                  let parsedPermissions = latestTeacher.permissions || {};
+                  if (typeof latestTeacher.permissions === 'string') {
+                    try {
+                      parsedPermissions = JSON.parse(latestTeacher.permissions);
+                    } catch (e) {
+                      parsedPermissions = {};
+                    }
+                  }
                   const profileObj = {
                     id: latestTeacher.id,
                     institution_id: latestTeacher.institution_id,
@@ -301,7 +309,7 @@ export const useAuth = () => {
                     role: 'teacher' as const,
                     is_active: latestTeacher.is_active,
                     created_at: latestTeacher.created_at,
-                    permissions: latestTeacher.permissions
+                    permissions: parsedPermissions
                   };
                   setProfile(profileObj);
                   OfflineService.setCache('user_profile', profileObj);
