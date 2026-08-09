@@ -80,10 +80,11 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
     try {
       // 1. Prepare fields
-      const baseFields = 'id, institution_id, student_name, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, section, is_active, photo_url, notes, classes(class_name)';
+      const baseFields = 'id, institution_id, student_name, name_en, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, section, is_active, photo_url, notes, classes(class_name)';
       let selectFields = (window as any)._hasMotherName === false ? baseFields.replace('mother_name, ', '') : baseFields;
       if ((window as any)._hasSection === false) selectFields = selectFields.replace('section, ', '');
       if ((window as any)._hasIsActive === false) selectFields = selectFields.replace('is_active, ', '');
+      if ((window as any)._hasNameEn === false) selectFields = selectFields.replace('name_en, ', '');
 
       // 2. Fetch via RequestManager (Cache key includes page and class)
       const cacheKey = `v6_students:${selectedClass.id}:p${currentPage}:${searchQuery || 'all'}:${showInactive}`;
@@ -126,6 +127,11 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           (window as any)._hasSection = false;
           return fetchStudents(reset);
         }
+        // Handle missing name_en column
+        if ((window as any)._hasNameEn === undefined && (error.code === 'PGRST204' || error.message?.includes('name_en'))) {
+          (window as any)._hasNameEn = false;
+          return fetchStudents(reset);
+        }
         // Handle missing is_active column
         if ((window as any)._hasIsActive === undefined && (error.code === 'PGRST204' || error.message?.includes('is_active'))) {
           (window as any)._hasIsActive = false;
@@ -139,6 +145,9 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       }
       if ((window as any)._hasSection === undefined) {
         (window as any)._hasSection = true;
+      }
+      if ((window as any)._hasNameEn === undefined) {
+        (window as any)._hasNameEn = true;
       }
       if ((window as any)._hasIsActive === undefined) {
         (window as any)._hasIsActive = true;

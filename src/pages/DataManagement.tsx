@@ -90,7 +90,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         'Admission ID': '12345',
         'Section': 'Section A / Science',
         'Address': 'Dhaka, Bangladesh',
-        'Date of birth': '2010-01-01'
+        'Date of birth': '2010-01-01',
+        'English Name': 'Abdur Rahman'
       }
     ];
     
@@ -135,7 +136,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         'Section': s.section || '',
         'Admission ID': s.admission_number || '',
         'Address': s.address || '',
-        'Date of birth': s.date_of_birth || ''
+        'Date of birth': s.date_of_birth || '',
+        'English Name': s.name_en || ''
       }));
       
       const ws = XLSX.utils.json_to_sheet(excelData);
@@ -286,6 +288,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             const admissionNumber = String(row.H || '').trim();
             const address = String(row.I || '').trim();
             const dob = excelDateToISO(row.J);
+            const nameEn = String(row.K || '').trim();
 
             if (!studentName || !phone || !className) {
               skippedCount++;
@@ -344,6 +347,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 admission_number: admissionNumber || null,
                 roll: roll,
                 date_of_birth: dob || null,
+                name_en: nameEn || null,
                 address: address || null,
                 guardian_name: guardianName || null,
                 guardian_phone: phone,
@@ -568,8 +572,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             <FileSpreadsheet size={16} /> {lang === 'bn' ? 'স্যাম্পল ফাইল' : 'Sample File'}
           </button>
         </div>
-        <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-400'} leading-relaxed px-1`}>{lang === 'bn' ? 'আপনার এক্সেল ফাইলটি নিচের ১০টি কলামের ফরম্যাটে হতে হবে (অথবা স্যাম্পল ফাইলটি ডাউনলোড করুন):' : 'Your Excel file must match the following 10 column format (or download the sample file):'}</p>
-        <div className="grid grid-cols-5 lg:grid-cols-10 gap-3">
+        <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-400'} leading-relaxed px-1`}>{lang === 'bn' ? 'আপনার এক্সেল ফাইলটি নিচের ১১টি কলামের ফরম্যাটে হতে হবে (অথবা স্যাম্পল ফাইলটি ডাউনলোড করুন):' : 'Your Excel file must match the following 11 column format (or download the sample file):'}</p>
+        <div className="grid grid-cols-5 lg:grid-cols-11 gap-3">
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col A</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Class</p></div>
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col B</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Roll</p></div>
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col C</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Student Name</p></div>
@@ -580,6 +584,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col H</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Admission ID</p></div>
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col I</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Address</p></div>
            <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col J</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>Date of birth</p></div>
+           <div className={`${isDark ? 'bg-slate-700' : 'bg-slate-50'} p-4 rounded-2xl text-center`}><p className="text-[10px] font-black text-slate-400 uppercase mb-1">Col K</p><p className={`font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'}`}>English Name</p></div>
         </div>
       </div>
     </div>
