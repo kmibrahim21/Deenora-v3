@@ -79,6 +79,60 @@ const availableShortcodes = [
   { code: '{class_name}', label: 'Class Name' },
 ];
 
+const bnMonthMap: Record<string, string> = {
+  'জানু': '01', 'জানুয়ারি': '01', 'jan': '01', 'january': '01',
+  'ফেব': '02', 'ফেব্রুয়ারি': '02', 'feb': '02', 'february': '02',
+  'মার্চ': '03', 'mar': '03', 'march': '03',
+  'এপ্রিল': '04', 'apr': '04', 'april': '04',
+  'মে': '05', 'may': '05',
+  'জুন': '06', 'jun': '06', 'june': '06',
+  'জুলাই': '07', 'jul': '07', 'july': '07',
+  'আগস্ট': '08', 'aug': '08', 'august': '08',
+  'সেপ্টে': '09', 'সেপ্টেম্বর': '09', 'sep': '09', 'sept': '09', 'september': '09',
+  'অক্টো': '10', 'অক্টোবর': '10', 'oct': '10', 'october': '10',
+  'নভে': '11', 'নভেম্বর': '11', 'nov': '11', 'november': '11',
+  'ডিসে': '12', 'ডিসেম্বর': '12', 'dec': '12', 'december': '12'
+};
+
+const parseMonthsFromDesc = (desc: string, transactionDate: string, defaultYear: string): string[] => {
+  if (!desc) {
+    return transactionDate ? [transactionDate.slice(0, 7)] : [];
+  }
+
+  const monthMatch = desc.match(/(?:Month|Months|মাস|মাসসমূহ)\s*:\s*([^|)\n]+)/i);
+  if (!monthMatch) {
+    return transactionDate ? [transactionDate.slice(0, 7)] : [];
+  }
+
+  const rawMonthStr = monthMatch[1].trim();
+  const tokens = rawMonthStr.split(',').map(t => t.trim()).filter(Boolean);
+  const yearForToken = transactionDate ? transactionDate.slice(0, 4) : defaultYear;
+
+  const parsedMonths: string[] = [];
+
+  tokens.forEach(tok => {
+    if (/^\d{4}-\d{2}$/.test(tok)) {
+      parsedMonths.push(tok);
+      return;
+    }
+    if (/^\d{2}$/.test(tok)) {
+      parsedMonths.push(`${yearForToken}-${tok}`);
+      return;
+    }
+    const cleanTok = tok.toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, '');
+    const mappedMM = bnMonthMap[cleanTok];
+    if (mappedMM) {
+      parsedMonths.push(`${yearForToken}-${mappedMM}`);
+    }
+  });
+
+  if (parsedMonths.length > 0) {
+    return parsedMonths;
+  }
+
+  return transactionDate ? [transactionDate.slice(0, 7)] : [];
+};
+
 const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, lang, month: initialMonth, refreshKey, classes = [], madrasah, role, profile, activeYear }) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
@@ -189,23 +243,23 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
             let query = q.select('id, transaction_date, amount, type, category, description')
                          .eq('institution_id', institutionId);
             
-            // Apply date filters at database level to avoid 1000 record limit issues
+            // For analytics, we should see entries that might be related to the selected period
+            // We fetch a wider range to catch payments made for a month but on a different date
+            const startOfFetch = activeYear?.start_date || `${selectedYear}-01-01`;
+            const endOfFetch = activeYear?.end_date || `${selectedYear}-12-31`;
+
             if (viewMode === 'custom') {
                 if (dateRange.start) query = query.gte('transaction_date', dateRange.start);
                 if (dateRange.end) query = query.lte('transaction_date', dateRange.end);
             } else if (viewMode === 'daily') {
                 query = query.eq('transaction_date', selectedDate);
-            } else if (viewMode === 'monthly') {
-                // Ensure we get all records for the month
-                query = query.gte('transaction_date', `${selectedMonth}-01`)
-                             .lte('transaction_date', `${selectedMonth}-31`);
-            } else if (viewMode === 'yearly') {
-                query = query.gte('transaction_date', `${selectedYear}-01-01`)
-                             .lte('transaction_date', `${selectedYear}-12-31`);
+            } else {
+                // Fetch full year for monthly/yearly to catch cross-month payments
+                query = query.gte('transaction_date', startOfFetch).lte('transaction_date', endOfFetch);
             }
             
             return query.order('transaction_date', { ascending: false }).limit(5000);
-        }, `ledger:${institutionId}:${viewMode}:${dateFilter}`)
+        }, `ledger_analytics:${institutionId}:${activeYear?.id || selectedYear}:${viewMode === 'custom' ? dateRange.start + dateRange.end : (viewMode === 'daily' ? selectedDate : 'year')}`)
       ]);
 
       const structures = structuresRes.data;
@@ -311,11 +365,46 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         totalExpected += total;
       });
 
-      // ... existing collection calculation logic ...
+      // Process Collections
       ledger?.forEach(l => {
-        if (l.type !== 'income' || l.category !== 'Student Fee') return;
-        const isCorrectPeriod = l.transaction_date.startsWith(dateFilter) || l.description.includes(dateFilter);
-        if (!isCorrectPeriod) return;
+        if (l.type !== 'income') return;
+        
+        const isStudentFee = l.category === 'Student Fee' || 
+                             l.category === 'শিক্ষার্থী ফি' || 
+                             l.category?.includes('Fee') || 
+                             l.category?.includes('ফি') || 
+                             l.description?.includes('FEE_ID:') || 
+                             (l.description?.includes('(') && l.description?.includes('|'));
+        if (!isStudentFee) return;
+
+        const monthsInDesc = parseMonthsFromDesc(l.description || '', l.transaction_date, selectedYear);
+        
+        let includeInAnalytics = false;
+        let amountToUse = l.amount;
+
+        if (viewMode === 'monthly') {
+            if (monthsInDesc.includes(selectedMonth)) {
+                includeInAnalytics = true;
+                amountToUse = l.amount / Math.max(1, monthsInDesc.length);
+            }
+        } else if (viewMode === 'yearly') {
+            const yearMonths = monthsInDesc.filter(m => m.startsWith(selectedYear));
+            if (yearMonths.length > 0) {
+                includeInAnalytics = true;
+                amountToUse = (l.amount / Math.max(1, monthsInDesc.length)) * yearMonths.length;
+            }
+        } else if (viewMode === 'daily') {
+            if (l.transaction_date === selectedDate) {
+                includeInAnalytics = true;
+            }
+        } else if (viewMode === 'custom') {
+            if (isDateInRange(l.transaction_date)) {
+                includeInAnalytics = true;
+            }
+        }
+
+        if (!includeInAnalytics) return;
+
         const parts = l.description.split(' - ');
         if (parts.length < 2) return;
         const feePart = parts[0];
@@ -333,56 +422,70 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         const matchedStructures: any[] = [];
         fees.forEach(f => {
             const normalizedF = (f || '').toLowerCase().trim();
-            const structure = structures.find(s => 
-                (s.fee_name || '').toLowerCase().trim() === normalizedF && 
-                (s.class_id === null || (classId && s.class_id === classId))
-            );
+            const structure = structures.find(s => {
+                const sName = (s.fee_name || '').toLowerCase().trim();
+                return (sName === normalizedF || sName.includes(normalizedF) || normalizedF.includes(sName)) && 
+                       (s.class_id === null || (classId && s.class_id === classId));
+            }) || structures.find(s => {
+                const sName = (s.fee_name || '').toLowerCase().trim();
+                return sName === normalizedF || sName.includes(normalizedF) || normalizedF.includes(sName);
+            });
+
             if (structure) {
                 totalStructureAmount += structure.amount;
                 matchedStructures.push(structure);
-            } else {
-                const nameOnlyMatch = structures.find(s => (s.fee_name || '').toLowerCase().trim() === normalizedF);
-                if (nameOnlyMatch) {
-                    totalStructureAmount += nameOnlyMatch.amount;
-                    matchedStructures.push(nameOnlyMatch);
-                }
             }
         });
+
         if (matchedStructures.length > 0) {
             matchedStructures.forEach(structure => {
                 const feeName = structure.fee_name.trim();
                 if (breakdownMap[feeName]) {
                     breakdownMap[feeName].transactions += 1;
                     const ratio = totalStructureAmount > 0 ? (structure.amount / totalStructureAmount) : (1 / matchedStructures.length);
-                    const allocatedAmount = l.amount * ratio;
+                    const allocatedAmount = amountToUse * ratio;
                     breakdownMap[feeName].collected += allocatedAmount;
                 }
             });
-            totalCollected += l.amount;
+            totalCollected += amountToUse;
         } else {
-            fees.forEach(f => {
-                const normalizedF = (f || '').toLowerCase().trim();
-                const breakdownKey = Object.keys(breakdownMap).find(k => (k || '').toLowerCase().trim() === normalizedF);
-                if (breakdownKey) {
-                    breakdownMap[breakdownKey].transactions += 1;
-                    breakdownMap[breakdownKey].collected += l.amount / fees.length;
-                }
-            });
-            totalCollected += l.amount;
+            const breakdownKeys = Object.keys(breakdownMap);
+            if (breakdownKeys.length === 1) {
+                const k = breakdownKeys[0];
+                breakdownMap[k].transactions += 1;
+                breakdownMap[k].collected += amountToUse;
+            } else if (breakdownKeys.length > 1) {
+                let matchedKey = breakdownKeys.find(k => {
+                    const normK = k.toLowerCase().trim();
+                    return fees.some(f => {
+                        const normF = f.toLowerCase().trim();
+                        return normK.includes(normF) || normF.includes(normK);
+                    });
+                });
+                if (!matchedKey) matchedKey = breakdownKeys[0];
+                breakdownMap[matchedKey].transactions += 1;
+                breakdownMap[matchedKey].collected += amountToUse;
+            }
+            totalCollected += amountToUse;
         }
       });
-      // ... end processing ...
 
-      const breakdownList = Object.entries(breakdownMap).map(([name, data]) => ({ name, ...data }));
+      const breakdownList = Object.entries(breakdownMap).map(([name, data]) => ({
+        name,
+        expected: Math.round(data.expected),
+        collected: Math.round(data.collected),
+        students: data.students,
+        transactions: data.transactions
+      }));
       setBreakdown(breakdownList);
 
       setStats({
-        expected_income: totalExpected,
-        prediction: totalCollected,
-        total_expense: totalExpense,
-        total_income: totalIncome,
-        net_income: totalIncome - totalExpense,
-        collection_rate: totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : 0
+        expected_income: Math.round(totalExpected),
+        prediction: Math.round(totalCollected),
+        total_expense: Math.round(totalExpense),
+        total_income: Math.round(totalIncome),
+        net_income: Math.round(totalIncome - totalExpense),
+        collection_rate: totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : '0'
       });
 
       if (viewMode === 'monthly') {
