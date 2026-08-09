@@ -131,7 +131,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     const calendarBoxClass = isClassMode ? 'w-[125px] h-[82px] p-1.5' : 'w-[155px] h-[95px] p-2.5';
     const calendarIconClass = isClassMode ? 'w-4 h-4 text-[10px]' : 'w-6 h-6 text-[12px]';
     
-    const processedExamName = examName ? examName.replace(/পরীক্ষা|Exam/g, '').trim() : (isBn ? 'সাময়িক' : 'Term');
+    const processedExamName = examName ? examName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|Schedule/g, '').trim() : (isBn ? 'সাময়িক' : 'Term');
     const getDynamicExamNameFontSize = () => {
       const len = processedExamName.length;
       if (isClassMode) {
@@ -221,8 +221,8 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
               <div className="mt-1.5 inline-block">
                 <div className={`text-white ${pillBadgeClass} rounded-full shadow-sm font-black tracking-wide border`} style={{ backgroundColor: secondary, borderColor: `${primary}80` }}>
                   {isBn 
-                    ? `${examName} সময়সূচি - ${isBn ? getBanglaNumber(examYear) : examYear}` 
-                    : `${examName} Schedule - ${examYear}`}
+                    ? (examName.includes('সময়সূচি') || examName.includes('Schedule') ? examName : `${examName} সময়সূচি - ${isBn ? getBanglaNumber(examYear) : examYear}`)
+                    : (examName.includes('সময়সূচি') || examName.includes('Schedule') ? examName : `${examName} Schedule - ${examYear}`)}
                 </div>
               </div>
             </div>
@@ -234,7 +234,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                   {processedExamName}
                 </p>
                 <p className={`${calendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${accent}cc` }}>
-                  পরীক্ষার সময়সূচি
+                  পরীক্ষা সময়সূচি
                 </p>
                 <p className={`${calendarTextClass3} font-semibold text-white/70 block`}>
                   {isBn ? getBanglaNumber(examYear) : examYear}ইং

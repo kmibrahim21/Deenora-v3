@@ -558,7 +558,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
       const isExamPostfixBn = activeExamName.endsWith('পরীক্ষা');
       const isExamPostfixEn = activeExamName.toLowerCase().endsWith('exam');
       const examTitle = lang === 'bn' 
-        ? (isExamPostfixBn ? `${activeExamName} সময়সূচি` : `${activeExamName} পরীক্ষার সময়সূচি`)
+        ? (isExamPostfixBn ? `${activeExamName} সময়সূচি` : `${activeExamName} পরীক্ষা সময়সূচি`)
         : (isExamPostfixEn ? `${activeExamName} Schedule` : `${activeExamName} Exam Schedule`);
 
       await generateExamRoutinePDF(
@@ -1803,8 +1803,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                 <div className="mt-2 inline-block">
                                   <div className={`text-white ${previewPillBadgeClass} rounded-full shadow-sm font-black tracking-wide border`} style={{ backgroundColor: rtTheme.secondary, borderColor: `${rtTheme.primary}80` }}>
                                     {lang === 'bn' 
-                                      ? `${activeExamName} সময়সূচি - ${currentYearBn}` 
-                                      : `${activeExamName} Schedule - ${currentYear}`}
+                                      ? (activeExamName.includes('সময়সূচি') ? activeExamName : `${activeExamName} সময়সূচি - ${currentYearBn}`)
+                                      : (activeExamName.includes('Schedule') ? activeExamName : `${activeExamName} Schedule - ${currentYear}`)}
                                   </div>
                                 </div>
                               </div>
@@ -1818,10 +1818,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                 </div>
                                 <div className="text-center mt-1 leading-normal">
                                   <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
-                                    {activeExamName ? activeExamName.replace(/পরীক্ষা|Exam/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
+                                    {activeExamName ? activeExamName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|Schedule/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
                                   </p>
                                   <p className={`${previewCalendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${rtTheme.accent}cc` }}>
-                                    পরীক্ষার সময়সূচি
+                                    পরীক্ষা সময়সূচি
                                   </p>
                                   <p className={`${previewCalendarTextClass3} font-semibold text-white/70 block`}>
                                     {currentYearBn}ইং
