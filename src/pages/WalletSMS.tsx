@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { CreditCard, Loader2, Send, ChevronDown, BookOpen, Users, CheckCircle2, MessageSquare, Plus, Edit3, Trash2, Smartphone, X, Check, History, Zap, AlertTriangle, Clock, Save, AlertCircle, Mic, Info, XCircle, Building2 } from 'lucide-react';
+import { CreditCard, Loader2, Send, ChevronDown, BookOpen, Users, CheckCircle2, MessageSquare, Plus, Edit3, Trash2, Smartphone, X, Check, History, Zap, AlertTriangle, Clock, Save, AlertCircle, Mic, Info, XCircle, Building2, Copy, ExternalLink, Wallet, AppWindow, ArrowRight } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { SMSTemplate, Language, Institution, Class, Student, Transaction, Profile, UserRole } from 'types';
 import { t } from 'translations';
@@ -9,6 +9,7 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { getSmsLengthInfo } from 'utils/smsUtils';
 import { useOfflineStatus } from 'hooks/useOffline';
 import VoiceBroadcast from './VoiceBroadcast';
+import PaymentCheckout from '../components/PaymentCheckout';
 
 import { requestManager } from 'services/RequestManager';
 
@@ -112,12 +113,15 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
   // Recharge Form States
   const [rechargeAmount, setRechargeAmount] = useState('');
-  const [rechargeTrx, setRechargeTrx] = useState('');
-  const [rechargePhone, setRechargePhone] = useState('');
+  const [rechargeStep, setRechargeStep] = useState<1 | 2>(1);
   const [rechargeType, setRechargeType] = useState<'sms' | 'voice'>('sms');
   const [requesting, setRequesting] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [adminBkash, setAdminBkash] = useState('০১৭৬৬-XXXXXX');
+  const [adminNagad, setAdminNagad] = useState('০১৭৬৬-XXXXXX');
+  const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad'>('bkash');
+  const [isWaitingPayment, setIsWaitingPayment] = useState(false);
+  const [pendingTrxId, setPendingTrxId] = useState<string | null>(null);
   const [smsRate, setSmsRate] = useState<number>(madrasah?.sms_rate || 0.50);
 
   const [voiceRate, setVoiceRate] = useState<number>(madrasah?.voice_rate || 0.50);
@@ -178,6 +182,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const fetchSystemSettings = async () => {
     const settings = await smsApi.getGlobalSettings();
     if (settings.bkash_number) setAdminBkash(settings.bkash_number);
+    if ((settings as any).nagad_number) setAdminNagad((settings as any).nagad_number);
     if (settings.sms_rate) setSmsRate(settings.sms_rate);
     if (settings.voice_rate) setVoiceRate(settings.voice_rate);
   };
@@ -350,27 +355,84 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     if (data) setUserTransactions(data);
   };
 
+  useEffect(() => {
+    let interval: any;
+    if (isWaitingPayment && pendingTrxId) {
+      interval = setInterval(async () => {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('status')
+          .eq('id', pendingTrxId)
+          .single();
+        
+        if (data?.status === 'approved') {
+          setIsWaitingPayment(false);
+          setPendingTrxId(null);
+          setStatusModal({
+            show: true,
+            type: 'success',
+            title: lang === 'bn' ? 'রিচার্জ সফল' : 'Recharge Successful',
+            message: lang === 'bn' ? 'আপনার পেমেন্ট সফলভাবে যাচাই করা হয়েছে।' : 'Your payment has been successfully verified.'
+          });
+          fetchWalletBalance();
+          fetchUserTransactions();
+          if (triggerRefresh) triggerRefresh();
+        } else if (data?.status === 'rejected') {
+          setIsWaitingPayment(false);
+          setPendingTrxId(null);
+          setStatusModal({
+            show: true,
+            type: 'error',
+            title: lang === 'bn' ? 'পেমেন্ট প্রত্যাখ্যান করা হয়েছে' : 'Payment Rejected',
+            message: lang === 'bn' ? 'আপনার পেমেন্ট বাতিল করা হয়েছে।' : 'Your payment has been rejected.'
+          });
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isWaitingPayment, pendingTrxId]);
+
+  const handleCopyNumber = (num: string) => {
+    const cleanNum = num.replace(/[^0-9]/g, '');
+    navigator.clipboard.writeText(cleanNum);
+    // Simple feedback could be added here
+  };
+
+  const handleOpenApp = (method: 'bkash' | 'nagad') => {
+    if (method === 'bkash') {
+      // Standard deep link for bKash
+      window.location.href = 'bkash://';
+      // Fallback for Android intent if standard fails
+      setTimeout(() => {
+        window.location.href = 'intent://#Intent;scheme=bkash;package=com.bKash.customerapp;end';
+      }, 500);
+    } else {
+      window.location.href = 'intent://#Intent;scheme=nagad;package=com.konasl.nagad;end';
+    }
+  };
+
   const handleRechargeRequest = async () => {
-    if (!rechargeAmount || !rechargeTrx || !madrasah) return;
+    if (!rechargeAmount || !madrasah) return;
     setRequesting(true);
     try {
-      const { error } = await supabase.from('transactions').insert({
+      const { data, error } = await supabase.from('transactions').insert({
         institution_id: madrasah.id,
         amount: parseInt(rechargeAmount),
-        transaction_id: rechargeTrx.trim().toUpperCase(),
-        sender_phone: rechargePhone.trim(),
-        description: rechargeType === 'sms' ? 'SMS Recharge Request' : 'Voice Recharge Request',
+        transaction_id: `PENDING_${Date.now()}`,
+        description: `${paymentMethod.toUpperCase()} Recharge Request`,
         type: 'credit',
         status: 'pending',
-        module: rechargeType === 'sms' ? 'sms' : 'voice'
-      });
+        module: rechargeType === 'sms' ? 'sms' : 'voice',
+        metadata: { payment_method: paymentMethod }
+      }).select().single();
+
       if (error) throw error;
-      setRequestSuccess(true);
+      
+      setPendingTrxId(data.id);
+      setIsWaitingPayment(true);
       setRechargeAmount('');
-      setRechargeTrx('');
-      setRechargePhone('');
+      setRechargeStep(1);
       fetchUserTransactions();
-      setTimeout(() => setRequestSuccess(false), 5000);
     } catch (err: any) {
       setStatusModal({
         show: true,
@@ -871,84 +933,53 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         )}
 
         {activeTab === 'recharge' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in slide-in-from-bottom-5 duration-500">
-             <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'} p-8 rounded-[3rem] shadow-bubble border space-y-6`}>
-                <div className="text-center">
-                  <div className={`inline-flex p-3 rounded-2xl mb-3 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-[#2563EB]'}`}><CreditCard size={32} /></div>
-                  <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{t('recharge_request', lang)}</h3>
-                  <p className="text-xs font-bold text-slate-400 font-noto">{t('recharge_desc', lang)}</p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                  <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-blue-50 border-blue-100'} p-4 rounded-[2rem] text-center border relative overflow-hidden`}>
-                    <p className={`text-[8px] font-black uppercase tracking-[0.2em] mb-1 relative z-10 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>SMS Rate</p>
-                    <h3 className={`text-xl font-black relative z-10 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{smsRate} ৳</h3>
-                  </div>
-                </div>
-
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-blue-50 border-blue-100'} p-6 rounded-[2.2rem] text-center border relative overflow-hidden`}>
-                  <div className="absolute top-0 right-0 p-2 opacity-10">
-                    <Smartphone size={60} />
-                  </div>
-                  <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 relative z-10 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>{t('bkash_personal', lang)}</p>
-                  <h3 className={`text-3xl font-black relative z-10 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{adminBkash}</h3>
-                </div>
-
-                <div className="space-y-4">
-                  {requestSuccess && (
-                    <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center gap-3 text-emerald-600 text-sm font-black animate-in slide-in-from-top-2">
-                       <CheckCircle2 size={20} /> {t('recharge_success_msg', lang)}
-                    </div>
-                  )}
-                  
-                  <div className="space-y-1.5 px-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('amount', lang)}</label>
-                    <input type="number" className={`w-full h-14 px-6 rounded-full font-black text-lg outline-none border-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-blue-500/50'}`} value={rechargeAmount} onChange={(e) => setRechargeAmount(e.target.value)} placeholder="0.00" />
-                  </div>
-                  <div className="space-y-1.5 px-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('bkash_number', lang)}</label>
-                    <input type="tel" className={`w-full h-14 px-6 rounded-full font-black text-lg outline-none border-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-blue-500/50'}`} value={rechargePhone} onChange={(e) => setRechargePhone(e.target.value)} placeholder="017XXXXXXXX" />
-                  </div>
-                  <div className="space-y-1.5 px-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">TrxID</label>
-                    <input type="text" className={`w-full h-14 px-6 rounded-full font-black text-lg uppercase outline-none border-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/50' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-blue-500/50'}`} value={rechargeTrx} onChange={(e) => setRechargeTrx(e.target.value)} placeholder="8X23M1..." />
-                  </div>
-                  <button onClick={handleRechargeRequest} disabled={requesting || !rechargeAmount || !rechargeTrx} className="w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg mt-4 disabled:opacity-40 active:scale-95 transition-all">
-                    {requesting ? <Loader2 className="animate-spin" size={24} /> : t('send_request', lang)}
-                  </button>
-                </div>
-             </div>
-
-             <div className="space-y-4">
-                <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-3 flex items-center gap-2">
-                   <History size={12} /> {t('recharge_history', lang)}
-                </h2>
-                <div className="space-y-2.5">
-                  {userTransactions.length > 0 ? userTransactions.map(tr => (
-                    <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[1.8rem] border flex items-center justify-between shadow-bubble`}>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className={`text-[15px] font-black leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{tr.amount} ৳</p>
-                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : tr.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
-                            {tr.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1.5">
-                           <Clock size={10} className="text-slate-400" />
-                           <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-[9px] font-black text-[#2563EB] uppercase tracking-tighter opacity-60">TrxID: {tr.transaction_id}</p>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className={`text-center py-10 rounded-[2.5rem] border border-dashed ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                       <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest">No history records</p>
-                    </div>
-                  )}
-                </div>
-             </div>
+          <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
+            <PaymentCheckout 
+              lang={lang}
+              madrasah={madrasah!}
+              module="sms"
+              onSuccess={(trx) => {
+                triggerRefresh();
+                fetchUserTransactions();
+                fetchWalletBalance();
+                setActiveTab('history');
+              }}
+              onCancel={() => setActiveTab('bulk-sms')}
+              metadata={{ source: 'wallet_sms_page' }}
+            />
+            
+            <div className="mt-12 space-y-4">
+               <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-3 flex items-center gap-2">
+                  <History size={12} /> {t('recharge_history', lang)}
+               </h2>
+               <div className="grid grid-cols-1 gap-2.5">
+                 {userTransactions.length > 0 ? userTransactions.map(tr => (
+                   <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[1.8rem] border flex items-center justify-between shadow-bubble`}>
+                     <div className="min-w-0 flex-1">
+                       <div className="flex items-center gap-2">
+                         <p className={`text-[15px] font-black leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{tr.amount} ৳</p>
+                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : tr.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
+                           {tr.status === 'approved' ? (lang === 'bn' ? 'অনুমোদিত' : 'Approved') :
+                            tr.status === 'pending' ? (lang === 'bn' ? 'অপেক্ষমান' : 'Pending') :
+                            (lang === 'bn' ? 'প্রত্যাখ্যাত' : 'Rejected')}
+                         </span>
+                       </div>
+                       <div className="flex items-center gap-2 mt-1.5">
+                          <Clock size={10} className="text-slate-400" />
+                          <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
+                       </div>
+                     </div>
+                     <div className="text-right">
+                        <p className="text-[9px] font-black text-[#2563EB] uppercase tracking-tighter opacity-60">TrxID: {tr.transaction_id}</p>
+                     </div>
+                   </div>
+                 )) : (
+                   <div className={`text-center py-10 rounded-[2.5rem] border border-dashed ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest">No history records</p>
+                   </div>
+                 )}
+               </div>
+            </div>
           </div>
         )}
       </div>

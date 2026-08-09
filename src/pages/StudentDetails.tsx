@@ -538,6 +538,11 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
           )}
 
           <h2 className={`text-xl font-black font-noto tracking-tight leading-tight mb-0.5 drop-shadow-sm ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{student.student_name}</h2>
+          {student.name_en && (
+            <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+              {student.name_en}
+            </p>
+          )}
           
           <div className="flex flex-wrap justify-center gap-1.5">
             <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[0.7rem] border-2 shadow-inner ${isDark ? 'bg-blue-900/20 border-[#2563EB]/20' : 'bg-blue-50 border-[#2563EB]/10'}`}>

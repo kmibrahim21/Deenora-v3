@@ -55,10 +55,10 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
     subjectMarks: isBangla ? 'বিষয়ভিত্তিক নম্বর (পূর্ণমান: ১০০)' : 'SUBJECT MARKS (FULL MARK: 100)',
     total: isBangla ? 'মোট' : 'Total',
     average: isBangla ? 'গড়' : 'Average',
-    gpa: isBangla ? 'জিপিএ' : 'GPA',
+    gpa: 'GPA',
     percentage: isBangla ? 'শতকরা (%)' : 'Percentage (%)',
     grade: isBangla ? 'গ্রেড' : 'Grade',
-    rank: isBangla ? 'মেধাস্থান' : 'Merit Position',
+    rank: 'Merit Position',
     result: isBangla ? 'ফলাফল' : 'Result',
     pass: isBangla ? 'পাস' : 'Pass',
     fail: isBangla ? 'ফেল' : 'Fail',
@@ -491,7 +491,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               return (
                                 <td
                                   key={sub.id}
-                                  className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[9.5px]' : 'py-1.5 px-0.5 text-[11px]'} font-mono border-r border-slate-200 text-center truncate ${
+                                  className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono border-r border-slate-200 text-center truncate ${
                                     !hasMark ? 'text-slate-400 font-normal' : isPass ? 'text-slate-900 font-extrabold' : 'text-red-600 font-black bg-red-50/50'
                                   }`}
                                 >
@@ -500,22 +500,22 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               );
                             })}
 
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
                               {std.total}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {std.percentage !== '' && std.percentage !== undefined ? `${std.percentage}%` : ''}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {std.gpa}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-black border-r border-slate-200 text-center truncate ${
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-black border-r border-slate-200 text-center truncate ${
                               std.grade === 'A+' ? 'text-blue-700' :
                               std.grade === 'F' ? 'text-red-600' : 'text-slate-800'
                             }`}>
                               {std.grade}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-black text-blue-900 bg-blue-50/20 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-black text-blue-900 bg-blue-50/20 text-center truncate`}>
                               {std.rank}
                             </td>
                           </tr>

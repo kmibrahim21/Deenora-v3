@@ -56,11 +56,11 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     summary: isBangla ? "ফলাফল সংক্ষেপ" : "Result Summary",
     totalMarks: isBangla ? "মোট প্রাপ্ত নম্বর" : "Total Marks",
     avg: isBangla ? "গড় নম্বর" : "Average",
-    gpa: isBangla ? "জিপিএ" : "GPA",
+    gpa: "GPA",
     status: isBangla ? "অবস্থা" : "Status",
     passed: isBangla ? "উত্তীর্ণ" : "PASSED",
     failed: isBangla ? "অনুত্তীর্ণ" : "FAILED",
-    rank: isBangla ? "মেধাস্থান" : "Merit Position",
+    rank: "Merit Position",
     attendance: isBangla ? "উপস্থিতি" : "Attendance",
     issueDate: isBangla ? "ইস্যু তারিখ" : "Date of Publication",
     principalSign: isBangla ? "অধ্যক্ষের স্বাক্ষর" : "Head of Institution",
@@ -333,23 +333,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
                   return rows.map((row, i) => (
                     <tr key={i} className={`${row.isParentRow ? "bg-blue-50/60 font-black" : (i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}`}>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[11px] font-black text-slate-950">{String(row.sl).padStart(2, '0')}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[14px] font-black text-slate-950">{String(row.sl).padStart(2, '0')}</td>
                       <td className={`border border-slate-300 py-1 px-3 font-bold font-tiro text-slate-950 leading-tight ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
-                        {row.name} {row.is_optional ? <span className="text-[8px] font-black text-blue-500 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
+                        {row.name} {row.is_optional ? <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
                       </td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.full}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.pass}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.highest}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.full}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.pass}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.highest}</td>
                       {isHighSchool && (
                         <>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.cq ?? '-'}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.mcq ?? '-'}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[12px] font-bold text-slate-950">{row.pr ?? '-'}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.cq ?? '-'}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.mcq ?? '-'}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.pr ?? '-'}</td>
                         </>
                       )}
-                      <td className="border border-slate-300 py-1 px-1 text-center font-black font-mono text-slate-950 bg-blue-50/40 text-[13px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? String(row.obtained).padStart(2, '0') : ''}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[13px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold font-mono text-[12px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.gp}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-black font-mono text-slate-950 bg-blue-50/40 text-[18px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? String(row.obtained).padStart(2, '0') : ''}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[18px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold font-mono text-[16px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.gp}</td>
                     </tr>
                   ));
                 })()}

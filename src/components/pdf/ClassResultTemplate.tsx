@@ -27,12 +27,12 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
 
   const t = {
     title: isBangla ? 'শ্রেণি ভিত্তিক ফলাফল বিবরণী' : 'Class Result Summary',
-    rank: isBangla ? 'মেধাস্থান' : 'Rank',
+    rank: 'Merit Position',
     roll: isBangla ? 'রোল' : 'Roll',
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     total: isBangla ? 'মোট' : 'Total',
     avg: isBangla ? 'গড়' : 'Avg',
-    gpa: isBangla ? 'জিপিএ' : 'GPA',
+    gpa: 'GPA',
     grade: isBangla ? 'গ্রেড' : 'Grade',
     exam: isBangla ? 'পরীক্ষা' : 'Exam',
     date: isBangla ? 'তারিখ' : 'Date',

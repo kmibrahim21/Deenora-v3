@@ -1,13 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
 import MultiCalendar from 'components/MultiCalendar';
+import PaymentCheckout from '../components/PaymentCheckout';
 
 const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -134,6 +135,10 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [showSuccessModal, setShowSuccessModal] = useState({ show: false, title: '', message: '' });
   
   const [adminBkash, setAdminBkash] = useState('০১৭৬৬-XXXXXX');
+  const [adminNagad, setAdminNagad] = useState('০১৭৬৬-XXXXXX');
+  const [paymentStep, setPaymentStep] = useState<1 | 2>(1);
+  const [isWaitingPayment, setIsWaitingPayment] = useState(false);
+  const [pendingTrxId, setPendingTrxId] = useState<string | null>(null);
   const [supportNumber, setSupportNumber] = useState('');
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [copiedSupport, setCopiedSupport] = useState(false);
@@ -181,6 +186,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         if (data) {
           if (data.bkash_number) setAdminBkash(data.bkash_number);
           // @ts-ignore
+          if (data.nagad_number) setAdminNagad(data.nagad_number);
+          // @ts-ignore
           if (data.support_number) setSupportNumber(data.support_number);
           else setSupportNumber('01766326edcba');
         } else {
@@ -223,8 +230,57 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     };
   }, [madrasah]);
 
+  useEffect(() => {
+    let interval: any;
+    if (isWaitingPayment && pendingTrxId) {
+      interval = setInterval(async () => {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('status')
+          .eq('id', pendingTrxId)
+          .single();
+        
+        if (data?.status === 'approved') {
+          setIsWaitingPayment(false);
+          setPendingTrxId(null);
+          setShowSuccessModal({ 
+            show: true, 
+            title: lang === 'bn' ? 'পেমেন্ট সফল' : 'Payment Successful', 
+            message: lang === 'bn' ? 'আপনার পেমেন্ট সফলভাবে যাচাই করা হয়েছে এবং আপনার সাবস্ক্রিপশন আপডেট করা হয়েছে।' : 'Your payment has been successfully verified and your subscription has been updated.' 
+          });
+          if (madrasah?.id) requestManager.invalidatePattern(`institution:${madrasah.id}`);
+          if (onProfileUpdate) onProfileUpdate();
+          fetchPaymentHistory();
+        } else if (data?.status === 'rejected') {
+          setIsWaitingPayment(false);
+          setPendingTrxId(null);
+          alert(lang === 'bn' ? 'পেমেন্ট বাতিল করা হয়েছে।' : 'Your payment has been rejected.');
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isWaitingPayment, pendingTrxId]);
+
+  const handleCopyNumber = (num: string) => {
+    const cleanNum = num.replace(/[^0-9]/g, '');
+    navigator.clipboard.writeText(cleanNum);
+  };
+
+  const handleOpenApp = (method: 'bkash' | 'nagad') => {
+    if (method === 'bkash') {
+      // Standard deep link for bKash
+      window.location.href = 'bkash://';
+      // Fallback for Android intent if standard fails
+      setTimeout(() => {
+        window.location.href = 'intent://#Intent;scheme=bkash;package=com.bKash.customerapp;end';
+      }, 500);
+    } else {
+      window.location.href = 'intent://#Intent;scheme=nagad;package=com.konasl.nagad;end';
+    }
+  };
+
   const handleUpgradeRequest = async () => {
-    if (!selectedPackage || !madrasah || !rechargeTrx || !rechargePhone) return;
+    if (!selectedPackage || !madrasah) return;
     setRequestingUpgrade(true);
     try {
       const selectedMonthsForPayment = selectedMonths.length > 0 ? selectedMonths : [];
@@ -242,12 +298,11 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       const effectiveRate = madrasah.custom_subscription_fee || (stats.students > 0 && stats.students <= 200 ? selectedPackage.rate : stats.students * 1);
       const amount = effectiveRate * duration;
 
-      const { error } = await supabase.from('transactions').insert({
+      const { data, error } = await supabase.from('transactions').insert({
         institution_id: madrasah.id,
         amount: amount,
-        transaction_id: rechargeTrx.trim().toUpperCase(),
-        sender_phone: rechargePhone.trim(),
-        description: `Subscription Upgrade: ${selectedPackage.name} (${subscriptionType})`,
+        transaction_id: `PENDING_${Date.now()}`,
+        description: `Subscription Upgrade: ${selectedPackage.name} (${subscriptionType}) via ${paymentMethod.toUpperCase()}`,
         type: 'credit',
         status: 'pending',
         module: 'subscription',
@@ -259,19 +314,13 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           base_amount: amount,
           payment_method: paymentMethod
         }
-      });
+      }).select().single();
 
       if (error) throw error;
 
-      setShowSuccessModal({ 
-        show: true, 
-        title: lang === 'bn' ? 'অনুরোধ সফল' : 'Request Successful', 
-        message: lang === 'bn' ? 'আপনার সাবস্ক্রিপশন চার্জ এবং অনুরোধটি সফলভাবে পাঠানো হয়েছে। অ্যাডমিন এটি যাচাই করে এপ্রুভ করবেন।' : 'Your subscription payment and upgrade request has been submitted. Admin will verify and approve it.' 
-      });
-      setIsEditingSubscription(false);
-      setRechargeTrx('');
-      setRechargePhone('');
-      setSelectedMonths([]);
+      setPendingTrxId(data.id);
+      setIsWaitingPayment(true);
+      setPaymentStep(1);
       fetchPaymentHistory();
     } catch (err: any) {
       alert(err.message);
@@ -959,168 +1008,31 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
             }`}>
               <div className="absolute -top-12 -left-12 w-28 h-28 bg-[#2563EB]/5 rounded-full"></div>
               
-              {/* Payment Methods Info Header */}
-              <div className="flex flex-wrap justify-center gap-2 mb-3.5 z-10">
-                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-500/15 text-rose-500 flex items-center justify-center`}>
-                  bKash
-                </span>
-                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-500/15 text-amber-500 flex items-center justify-center`}>
-                  Nagad
-                </span>
-              </div>
-              
-              <p className={`text-[10px] font-black uppercase tracking-[0.15em] mb-1 z-10 ${
-                madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'
-              }`}>
-                {lang === 'bn' ? 'বিকাশ / নগদ নম্বর (পার্সোনাল)' : 'bKash / Nagad Personal Number'}
-              </p>
-              
-              <div className="flex items-center gap-2.5 z-10 mb-1">
-                <h3 className={`text-2xl sm:text-3xl font-black tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
-                  {adminBkash}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => handleCopyBkash(adminBkash)}
-                  className={`p-1.5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
-                    copiedBkash 
-                      ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' 
-                      : (madrasah?.theme === 'dark' ? 'bg-slate-700 border-slate-600 text-slate-300 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50')
-                  }`}
-                  title="Copy Number"
-                >
-                  {copiedBkash ? <Check size={14} strokeWidth={2.5} /> : <Copy size={14} />}
-                </button>
-              </div>
-
-              {copiedBkash && (
-                <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest z-10 animate-pulse">
-                  {lang === 'bn' ? 'নম্বরটি কপি করা হয়েছে!' : 'Number Copied!'}
-                </span>
-              )}
-
-              <p className="text-[10px] sm:text-[11px] font-semibold text-slate-400 leading-relaxed mt-2.5 max-w-[280px] z-10">
-                {lang === 'bn' 
-                  ? 'উপরের তথ্য অনুযায়ী পেমেন্ট করার পর নিচে সঠিক তথ্য দিয়ে চার্জ পরিশোধ রিকোয়েস্ট করুন।' 
-                  : 'Pay according to the above details and submit payment request below.'}
-              </p>
-            </div>
-
-            {/* Payment Details Submission Form */}
-            <div className={`p-5 sm:p-6 rounded-[2.2rem] border space-y-4 ${
-              madrasah?.theme === 'dark' ? 'bg-slate-800/30 border-slate-700/80' : 'bg-white border-slate-100 shadow-bubble'
-            }`}>
-              
-              {/* Payment Method Selector Buttons */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                  {lang === 'bn' ? '৩. পেমেন্ট মাধ্যম' : '3. Payment Method'}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('bkash')}
-                    className={`h-11 rounded-xl text-[10px] sm:text-xs font-black uppercase transition-all flex items-center justify-center gap-2 border cursor-pointer ${
-                      paymentMethod === 'bkash'
-                        ? 'bg-rose-500 border-rose-500 text-white shadow-sm'
-                        : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700')
-                    }`}
-                  >
-                    bKash
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('nagad')}
-                    className={`h-11 rounded-xl text-[10px] sm:text-xs font-black uppercase transition-all flex items-center justify-center gap-2 border cursor-pointer ${
-                      paymentMethod === 'nagad'
-                        ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
-                        : (madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700')
-                    }`}
-                  >
-                    Nagad
-                  </button>
-                </div>
-              </div>
-
-              {/* Dynamic Fee Calculation Badge / Display */}
-              <div className={`p-4 rounded-2xl text-center border relative overflow-hidden ${
-                madrasah?.theme === 'dark' ? 'bg-indigo-900/10 border-indigo-500/20' : 'bg-indigo-50/40 border-indigo-100'
-              }`}>
-                <p className="text-[8px] sm:text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest leading-none mb-1">
-                  {lang === 'bn' ? 'পরিশোধযোগ্য মোট ফি' : 'Total Payable Fee'}
-                </p>
-                <h4 className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-blue-400 font-mono">
-                  {calculatedFee.toLocaleString()} ৳
-                </h4>
-                <p className="text-[9px] font-bold text-slate-400 mt-1 leading-none">
-                  ({lang === 'bn' ? (selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name) : getEnglishPkgName(selectedPackage ? selectedPackage.name : (madrasah?.config_json as any)?.package_name)} • {effectiveRate}৳ * {durationMonths} {lang === 'bn' ? 'মাস' : 'months'})
-                </p>
-                {selectedMonths.length > 0 && (
-                  <div className="mt-2 flex flex-wrap justify-center gap-1">
-                    {selectedMonths.map(m => (
-                      <span key={m} className="px-2 py-0.5 bg-indigo-500/10 text-indigo-500 text-[8px] font-black rounded-md">{m}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Sender Phone Input */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-                  {lang === 'bn' ? '৪. প্রেরক নম্বর' : '4. Sender Number'}
-                </label>
-                <input 
-                  type="tel"
-                  placeholder="017XXXXXXXX"
-                  value={rechargePhone}
-                  onChange={(e) => setRechargePhone(e.target.value)}
-                  className={`w-full h-11 rounded-xl px-4 font-black text-xs sm:text-sm outline-none border transition-all ${
-                    madrasah?.theme === 'dark' 
-                      ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500/50' 
-                      : 'bg-slate-50 border-slate-200 text-[#1E3A8A] focus:border-indigo-500/40'
-                  }`}
+              <div className="z-10 w-full animate-in fade-in slide-in-from-bottom-6 duration-700">
+                <PaymentCheckout 
+                  lang={lang}
+                  madrasah={madrasah!}
+                  module="subscription"
+                  onSuccess={(trx) => {
+                    setShowSuccessModal({ 
+                      show: true, 
+                      title: lang === 'bn' ? 'পেমেন্ট সফল' : 'Payment Successful', 
+                      message: lang === 'bn' ? 'আপনার পেমেন্ট সফলভাবে যাচাই করা হয়েছে এবং আপনার সাবস্ক্রিপশন আপডেট করা হয়েছে।' : 'Your payment has been successfully verified and your subscription has been updated.' 
+                    });
+                    if (madrasah?.id) requestManager.invalidatePattern(`institution:${madrasah.id}`);
+                    if (onProfileUpdate) onProfileUpdate();
+                    fetchPaymentHistory();
+                  }}
+                  onCancel={() => setPaymentStep(1)}
+                  metadata={{
+                    months: selectedMonths.length > 0 ? selectedMonths : [],
+                    package_name: selectedPackage?.name,
+                    subscription_type: subscriptionType,
+                    source: 'account_subscription_page'
+                  }}
+                  fixedAmount={calculatedFee > 0 ? calculatedFee : undefined}
                 />
               </div>
-
-              {/* Transaction ID Input */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex justify-between items-center">
-                  <span>{lang === 'bn' ? '৫. ট্রানজেকশন আইডি' : '5. Transaction ID'}</span>
-                  <span className="text-[7.5px] text-indigo-500 font-black lowercase tracking-widest bg-indigo-500/10 px-1.5 py-0.5 rounded-md">8x23m...</span>
-                </label>
-                <input 
-                  type="text"
-                  placeholder="e.g. 8X23M19B8"
-                  value={rechargeTrx}
-                  onChange={(e) => setRechargeTrx(e.target.value.toUpperCase())}
-                  className={`w-full h-11 rounded-xl px-4 font-black uppercase text-xs sm:text-sm outline-none border transition-all ${
-                    madrasah?.theme === 'dark' 
-                      ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500/50' 
-                      : 'bg-slate-50 border-slate-200 text-[#1E3A8A] focus:border-indigo-500/40'
-                  }`}
-                />
-              </div>
-
-              {/* Submit Payment Request Button */}
-              <button 
-                type="button"
-                onClick={handleUpgradeRequest}
-                disabled={requestingUpgrade || !rechargePhone || !rechargeTrx || !selectedPackage}
-                className="w-full h-13 mt-1.5 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-40 text-white font-black rounded-xl shadow-premium flex items-center justify-center gap-2.5 text-xs sm:text-sm tracking-wider uppercase active:scale-[0.98] transition-all cursor-pointer"
-              >
-                {requestingUpgrade ? (
-                  <>
-                    <Loader2 className="animate-spin" size={16} />
-                    <span>{lang === 'bn' ? 'অনুরোধ পাঠানো হচ্ছে...' : 'Submitting Request...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 size={16} />
-                    <span>{lang === 'bn' ? 'চার্জ পরিশোধ নিশ্চিৎ করুন' : 'Confirm Subscription Payment'}</span>
-                  </>
-                )}
-              </button>
-
             </div>
 
             {/* Payment History List */}
@@ -1165,7 +1077,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                           }`}>
                             {tr.status === 'approved' ? (lang === 'bn' ? 'সফল' : 'Success') : 
                              tr.status === 'pending' ? (lang === 'bn' ? 'অপেক্ষা' : 'Pending') : 
-                             (lang === 'bn' ? 'ব্যর্থ' : 'Failed')}
+                             (lang === 'bn' ? 'প্রত্যাখ্যাত' : 'Rejected')}
                           </span>
                           {tr.metadata?.months && (
                             <p className="text-[8px] font-bold text-slate-400 mt-1 truncate max-w-[80px]">

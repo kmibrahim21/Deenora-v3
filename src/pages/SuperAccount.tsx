@@ -43,6 +43,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     reve_caller_id: '',
     reve_client_id: '',
     bkash_number: '',
+    nagad_number: '',
     support_number: '',
     sms_rate: 0.50,
     voice_rate: 1.00,
@@ -183,6 +184,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       reve_caller_id: settings.reve_caller_id || '',
       reve_client_id: settings.reve_client_id || '',
       bkash_number: settings.bkash_number || '',
+      nagad_number: settings.nagad_number || '',
       support_number: settings.support_number || '',
       sms_rate: settings.sms_rate || 0.50,
       voice_rate: settings.voice_rate || 1.00,
@@ -203,6 +205,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
         reve_client_id: (globalSettings.reve_client_id || '').trim(),
         bkash_number: (globalSettings.bkash_number || '').trim(),
+        nagad_number: (globalSettings.nagad_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
         voice_rate: Number(globalSettings.voice_rate),
         manager_permissions: globalSettings.manager_permissions
@@ -257,6 +260,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
         reve_client_id: (globalSettings.reve_client_id || '').trim(),
         bkash_number: (globalSettings.bkash_number || '').trim(),
+        nagad_number: (globalSettings.nagad_number || '').trim(),
         sms_rate: Number(globalSettings.sms_rate),
         voice_rate: Number(globalSettings.voice_rate)
       };
@@ -330,6 +334,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
         reve_client_id: (globalSettings.reve_client_id || '').trim(),
         bkash_number: (globalSettings.bkash_number || '').trim(),
+        nagad_number: (globalSettings.nagad_number || '').trim(),
         support_number: (globalSettings.support_number || '').trim(),
         sms_rate: globalSettings.sms_rate,
         voice_rate: globalSettings.voice_rate,
@@ -1231,9 +1236,13 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Global Identities</h4>
                     <div className={`p-4 rounded-[2rem] border space-y-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Master Payment Number</label>
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">bKash Number</label>
                           <input type="text" className={`w-full h-11 rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/50'}`} value={globalSettings.bkash_number} onChange={(e) => setGlobalSettings({...globalSettings, bkash_number: e.target.value})} placeholder="bKash Number" />
                        </div>
+                        <div className="space-y-1">
+                           <label className="text-[9px] font-black text-slate-400 uppercase px-1">Nagad Number</label>
+                           <input type="text" className={`w-full h-11 rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/50'}`} value={globalSettings.nagad_number} onChange={(e) => setGlobalSettings({...globalSettings, nagad_number: e.target.value})} placeholder="Nagad Number" />
+                        </div>
                        <div className="space-y-1">
                           <label className="text-[9px] font-black text-slate-400 uppercase px-1">Support Number</label>
                           <input type="text" className={`w-full h-11 rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/50'}`} value={globalSettings.support_number} onChange={(e) => setGlobalSettings({...globalSettings, support_number: e.target.value})} placeholder="Support Number" />

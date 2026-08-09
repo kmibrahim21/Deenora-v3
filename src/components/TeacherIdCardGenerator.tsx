@@ -39,8 +39,8 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
   const nameLen = instName.length;
   const addressLen = instAddress.length;
   
-  const nameSizeClass = nameLen > 45 ? "text-[11px] leading-[1.1]" : nameLen > 30 ? "text-[13px] leading-tight" : "text-[15px] leading-tight";
-  const addressSizeClass = addressLen > 65 ? "text-[7.5px] leading-[1.1]" : addressLen > 40 ? "text-[8px] leading-tight" : "text-[8.5px] leading-tight";
+  const nameSizeClass = nameLen > 45 ? "text-[11px] leading-normal" : nameLen > 30 ? "text-[13px] leading-normal" : "text-[15px] leading-normal";
+  const addressSizeClass = addressLen > 65 ? "text-[7.5px] leading-normal" : addressLen > 40 ? "text-[8px] leading-normal" : "text-[8.5px] leading-normal";
 
   React.useEffect(() => {
     setCurrentRenderTeacher(teacher);
@@ -381,32 +381,32 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.designation}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.id}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.id.substring(0, 8).toUpperCase()}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderTeacher.id.substring(0, 8).toUpperCase()}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.phone}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.phone || "-"}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderTeacher.phone || "-"}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.joinDate}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman shrink-0 mt-[1px]">{t.address}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.1] line-clamp-3 max-w-[155px] font-solaiman">{currentRenderTeacher.address || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-normal line-clamp-3 max-w-[155px] font-solaiman">{currentRenderTeacher.address || "-"}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.issueDate}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{new Date().toLocaleDateString('en-GB')}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{new Date().toLocaleDateString('en-GB')}</span>
                        </div>
                   </div>
 
@@ -472,7 +472,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                       crossOrigin="anonymous"
                      onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   )}
-                  <h3 className="font-bold text-[13px] leading-tight font-solaiman" style={{ color: themeColor }}>
+                  <h3 className="font-bold text-[13px] leading-normal font-solaiman" style={{ color: themeColor }}>
                     {madrasah?.name}
                   </h3>
                </div>
@@ -489,7 +489,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                 </div>
                 <ul className="text-[9px] text-slate-700 font-medium font-solaiman list-disc pl-4 space-y-1 pr-1">
                   {t.rules.map((rule, idx) => (
-                    <li key={idx} className="leading-tight">
+                    <li key={idx} className="leading-normal">
                       {rule}
                     </li>
                   ))}

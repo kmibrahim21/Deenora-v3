@@ -47,44 +47,35 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     fetchInstitutions();
   }, []);
 
-  const getSystemInstitutionId = async () => {
-    // 1. Try to fetch existing
-    let { data } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
-    if (data && data.length > 0) {
-      return data[0].id;
-    }
-    // 2. Create if not exists
-    const { data: newInst, error } = await supabase.from('institutions').insert({
-      name: 'SYSTEM_GLOBAL_INTERNAL',
-      address: 'System',
-      phone: '00000000000'
-    }).select('id').single();
-    if (error) {
-      throw new Error("Failed to initialize system container: " + error.message);
-    }
-    return newInst.id;
+  const getAuthToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token;
   };
 
   const handleAssignVoice = async () => {
     if (!assigningVoice || !assignInstitutionId) return;
     setIsAssigning(true);
     try {
-      let insertInstId = assignInstitutionId;
-      if (assignInstitutionId === 'system') {
-          insertInstId = await getSystemInstitutionId();
-      }
-
-      const { error } = await supabase.from('voice_templates').insert({
-        institution_id: insertInstId,
-        title: assigningVoice.name,
-        file_url: assigningVoice.previewUrl || '', 
-        admin_status: 'approved',
-        provider_status: 'approved',
-        provider_voice_id: assigningVoice.id.toString(),
-        provider_voice_name: assigningVoice.name
+      const token = await getAuthToken();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'assign_voice',
+          institution_id: assignInstitutionId,
+          voice_id: assigningVoice.id,
+          voice_name: assigningVoice.name,
+          preview_url: assigningVoice.previewUrl
+        })
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to assign voice via API');
+      }
 
       setStatusModal({
         show: true,
@@ -107,8 +98,23 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   const handleUnassignVoice = async (id: string) => {
     if (!window.confirm('Are you sure you want to unassign this voice from the user?')) return;
     try {
-      const { error } = await supabase.from('voice_templates').delete().eq('id', id);
-      if (error) throw error;
+      const token = await getAuthToken();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'unassign_voice',
+          id: id
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to unassign voice via API');
+      }
       
       setStatusModal({
         show: true,
@@ -133,7 +139,23 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       }
       
       // Also delete from local assignments
-      await supabase.from('voice_templates').delete().eq('provider_voice_id', voiceId.toString());
+      const token = await getAuthToken();
+      const dbResponse = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'delete_voice_assignments',
+          voice_id: voiceId
+        })
+      });
+
+      if (!dbResponse.ok) {
+        const errData = await dbResponse.json();
+        console.warn('Failed to delete assignments via API:', errData.error);
+      }
       
       setStatusModal({
         show: true,

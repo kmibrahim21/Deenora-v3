@@ -405,6 +405,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     reve_caller_id TEXT,
     reve_client_id TEXT,
     bkash_number TEXT,
+    nagad_number TEXT,
     sms_rate DECIMAL(5, 2) DEFAULT 0.50,
     voice_rate DECIMAL(5, 2) DEFAULT 1.00,
     manager_permissions JSONB DEFAULT '{}'::jsonb,

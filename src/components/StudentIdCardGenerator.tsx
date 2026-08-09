@@ -39,8 +39,8 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   const nameLen = instName.length;
   const addressLen = instAddress.length;
   
-  const nameSizeClass = nameLen > 45 ? "text-[11px] leading-[1.1]" : nameLen > 30 ? "text-[13px] leading-tight" : "text-[15px] leading-tight";
-  const addressSizeClass = addressLen > 65 ? "text-[7.5px] leading-[1.1]" : addressLen > 40 ? "text-[8px] leading-tight" : "text-[8.5px] leading-tight";
+  const nameSizeClass = nameLen > 45 ? "text-[11px] leading-normal" : nameLen > 30 ? "text-[13px] leading-normal" : "text-[15px] leading-normal";
+  const addressSizeClass = addressLen > 65 ? "text-[7.5px] leading-normal" : addressLen > 40 ? "text-[8px] leading-normal" : "text-[8.5px] leading-normal";
 
   React.useEffect(() => {
     setCurrentRenderStudent(student);
@@ -412,54 +412,54 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.class}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman">{currentRenderStudent.classes?.class_name || "-"}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman">{currentRenderStudent.classes?.class_name || "-"}</span>
                        </div>
                        {currentRenderStudent.section && (
                          <div className="flex items-center">
                             <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.section}</span>
                             <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                            <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman">{currentRenderStudent.section}</span>
+                            <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman">{currentRenderStudent.section}</span>
                          </div>
                        )}
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.id}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderStudent.registration_number || currentRenderStudent.roll || '-'}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderStudent.registration_number || currentRenderStudent.roll || '-'}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.dob}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderStudent.date_of_birth ? new Date(currentRenderStudent.date_of_birth).toLocaleDateString('en-GB') : "-"}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderStudent.date_of_birth ? new Date(currentRenderStudent.date_of_birth).toLocaleDateString('en-GB') : "-"}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.blood}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-black text-red-600 leading-none font-solaiman">{currentRenderStudent.blood_group || "-"}</span>
+                          <span className="text-[11.5px] font-black text-red-600 leading-normal font-solaiman">{currentRenderStudent.blood_group || "-"}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman shrink-0 mt-[1px]">{t.father}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.2] line-clamp-2 max-w-[155px] font-solaiman">{currentRenderStudent.guardian_name || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-normal line-clamp-2 max-w-[155px] font-solaiman">{currentRenderStudent.guardian_name || "-"}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman shrink-0 mt-[1px]">{t.mother}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.2] line-clamp-2 max-w-[155px] font-solaiman">{currentRenderStudent.mother_name || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-normal line-clamp-2 max-w-[155px] font-solaiman">{currentRenderStudent.mother_name || "-"}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman shrink-0 mt-[1px]">{t.phone}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.2] font-solaiman tracking-wide">{currentRenderStudent.guardian_phone || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderStudent.guardian_phone || "-"}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman shrink-0 mt-[1px]">{t.address}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-[1.1] line-clamp-3 max-w-[155px] font-solaiman">{currentRenderStudent.address || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-normal line-clamp-3 max-w-[155px] font-solaiman">{currentRenderStudent.address || "-"}</span>
                        </div>
                        <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.issueDate}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{new Date().toLocaleDateString('en-GB')}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{new Date().toLocaleDateString('en-GB')}</span>
                        </div>
                   </div>
 
@@ -531,7 +531,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                       crossOrigin="anonymous"
                      onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   )}
-                  <h3 className="font-bold text-[13px] leading-tight font-solaiman" style={{ color: themeColor }}>
+                  <h3 className="font-bold text-[13px] leading-normal font-solaiman" style={{ color: themeColor }}>
                     {madrasah?.name}
                   </h3>
                </div>
@@ -549,7 +549,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                 </div>
                 <ul className="text-[9px] text-slate-700 font-medium font-solaiman list-disc pl-4 space-y-1 pr-1">
                   {t.rules.map((rule, idx) => (
-                    <li key={idx} className="leading-tight">
+                    <li key={idx} className="leading-normal">
                       {rule}
                     </li>
                   ))}

@@ -17,9 +17,24 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function runMigration() {
   try {
-    console.log("Process Env Keys:", Object.keys(process.env).filter(key => 
-      key.includes('DB') || key.includes('POSTGRES') || key.includes('DATABASE') || key.includes('SUPABASE') || key.includes('URL') || key.includes('KEY')
-    ));
+    const sql = process.argv[2];
+    if (!sql) {
+      console.error("No SQL statement provided");
+      process.exit(1);
+    }
+    
+    console.log("Running SQL:", sql);
+    const { data, error } = await supabase.rpc('run_sql', {
+      sql: sql
+    });
+
+    if (error) {
+      console.error("Error running SQL via RPC:", error);
+      // Fallback if RPC doesn't exist - this is just a placeholder, 
+      // usually we'd need a different way to run raw SQL if RPC is missing.
+    } else {
+      console.log("Success:", data);
+    }
   } catch (e) {
     console.error(e);
   }

@@ -294,6 +294,57 @@ export default async function handler(req, res) {
       return await setupInstitution(supabase, userId, body, res);
     }
 
+    if (action === 'assign_voice') {
+      const { institution_id, voice_id, voice_name, preview_url } = body;
+      
+      let insertInstId = institution_id;
+      if (institution_id === 'system') {
+        const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+        let sysId = sysInst && sysInst[0]?.id;
+        if (!sysId) {
+          const { data: newSys, error: sysError } = await supabase.from('institutions').insert({
+            name: 'SYSTEM_GLOBAL_INTERNAL',
+            address: 'System',
+            phone: '00000000000',
+            institution_type: 'system',
+            is_active: true,
+            is_super_admin: false,
+            theme: 'default'
+          }).select('id').single();
+          if (sysError) throw sysError;
+          sysId = newSys?.id;
+        }
+        insertInstId = sysId;
+      }
+
+      const { data, error } = await supabase.from('voice_templates').insert({
+        institution_id: insertInstId,
+        title: voice_name,
+        file_url: preview_url || '',
+        admin_status: 'approved',
+        provider_status: 'approved',
+        provider_voice_id: voice_id.toString(),
+        provider_voice_name: voice_name
+      }).select().single();
+
+      if (error) throw error;
+      return res.status(200).json({ success: true, data });
+    }
+
+    if (action === 'unassign_voice') {
+      const { id } = body;
+      const { error } = await supabase.from('voice_templates').delete().eq('id', id);
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'delete_voice_assignments') {
+      const { voice_id } = body;
+      const { error } = await supabase.from('voice_templates').delete().eq('provider_voice_id', voice_id.toString());
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    }
+
     if (action === 'create_staff') {
       const { name, email, password, role } = body;
 

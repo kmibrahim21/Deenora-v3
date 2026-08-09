@@ -8,6 +8,7 @@ import { CacheService } from '../../services/cacheService';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 import { clearGlobalSchoolFeeCache } from './SchoolFeeEngine';
 import { clearGlobalQawmiFeeCache } from './QawmiFeeEngine';
+import { generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 
 interface StudentAccountingDetailProps {
   student: any;
@@ -234,6 +235,33 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         clearGlobalSchoolFeeCache();
         clearGlobalQawmiFeeCache();
         
+        // Auto Send SMS
+        if (madrasah?.config_json?.features?.fee_collection_sms) {
+            try {
+                const smsApiModule = await import('supabase').then(res => res.smsApi);
+                const templates = (madrasah?.config_json as any)?.features?.sms_templates || {};
+                let template = templates.fee_collection || (lang === 'bn' 
+                    ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
+                    : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
+                
+                const currentDue = Math.max(0, Number(student.balance_due || 0) - totalPaid - totalDisc);
+                
+                let collectMsg = template
+                    .replace(/\{student_name\}/g, student.student_name || '')
+                    .replace(/\{father_name\}/g, student.father_name || '')
+                    .replace(/\{class\}/g, classNameToSave)
+                    .replace(/\{roll\}/g, roll)
+                    .replace(/\{month\}/g, monthsNames)
+                    .replace(/\{paid_amount\}/g, totalPaid.toString())
+                    .replace(/\{amount\}/g, totalPaid.toString())
+                    .replace(/\{due_amount\}/g, currentDue.toString());
+                
+                await smsApiModule.sendBulk(madrasah.id, [student], collectMsg);
+            } catch (smsError: any) {
+                console.error("Multi-Fee SMS error: ", smsError);
+            }
+        }
+
         fetchStudentAccountingData();
     } catch (err: any) {
         setErrorMulti(err.message);
@@ -260,6 +288,50 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   const confirmDeleteLedger = (ledgerId: string) => {
     setLedgerToDelete(ledgerId);
     setShowDeleteConfirm(true);
+  };
+
+  const [isDownloading, setIsDownloading] = useState(false);
+  const handleDownloadReceipt = async (entry: LedgerEntry) => {
+    setIsDownloading(true);
+    try {
+      const description = entry.description || '';
+      
+      // Parse months from description
+      let monthText = 'Multiple Months';
+      const monthsMatch = description.match(/Months:\s*([^\)]+)/);
+      if (monthsMatch && monthsMatch[1]) monthText = monthsMatch[1];
+      
+      // Parse discount from description
+      let discount = 0;
+      const discountMatch = description.match(/ছাড়:\s*৳([0-9.]+)/);
+      if (discountMatch && discountMatch[1]) discount = parseFloat(discountMatch[1]);
+      
+      // Parse fee items categories
+      const categoriesMatch = description.split(' - ')[0];
+      const categories = categoriesMatch ? categoriesMatch : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
+
+      const receiptStudent = {
+        ...student,
+        total_payable: entry.amount + discount,
+        total_paid: entry.amount,
+        balance_due: 0,
+        discount: discount,
+        fee_items: [
+           { name: categories, amount: entry.amount + discount }
+        ]
+      };
+      
+      await generateFeeReceiptPDF(
+         receiptStudent,
+         monthText,
+         madrasah,
+         lang
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleDeleteLedger = async () => {
@@ -895,16 +967,28 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                                </span>
                             </div>
                           </div>
-                          <button
+                        </div>
+                        <div className={`p-4 rounded-2xl border text-[11px] font-bold leading-relaxed whitespace-pre-wrap font-noto ${isDark ? 'bg-slate-800/50 border-slate-700/50 text-slate-400' : 'bg-slate-50/50 border-slate-100 text-slate-600'}`}>
+                          {(entry.description || '').split(' || FEE_ID: ')[0]}
+                        </div>
+                        <div className="flex justify-between items-center pt-2">
+                           <button
+                             onClick={() => handleDownloadReceipt(entry)}
+                             disabled={isDownloading}
+                             className={`px-3 py-1.5 rounded-lg transition-all active:scale-95 flex items-center gap-1.5 ${isDark ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} disabled:opacity-50 text-[10px] font-bold shadow-sm`}
+                             title="Download Receipt"
+                           >
+                             {isDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                             {lang === 'bn' ? 'রসিদ ডাউনলোড' : 'Download Receipt'}
+                           </button>
+
+                           <button
                              onClick={() => confirmDeleteLedger(entry.id)}
-                             className={`p-2 rounded-xl transition-all active:scale-95 ${isDark ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`}
+                             className={`p-2 rounded-xl transition-all active:scale-95 border ${isDark ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20' : 'bg-white border-rose-100 text-rose-500 hover:bg-rose-50 hover:border-rose-200'} shadow-sm`}
                              title="Delete"
                            >
                               <Trash2 size={14} />
                            </button>
-                        </div>
-                        <div className={`p-4 rounded-2xl border text-[11px] font-bold leading-relaxed whitespace-pre-wrap font-noto ${isDark ? 'bg-slate-800/50 border-slate-700/50 text-slate-400' : 'bg-slate-50/50 border-slate-100 text-slate-600'}`}>
-                          {(entry.description || '').split(' || FEE_ID: ')[0]}
                         </div>
                       </div>
                     </div>

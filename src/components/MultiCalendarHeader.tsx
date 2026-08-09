@@ -1,8 +1,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { Calendar, Globe, Moon, Sun } from 'lucide-react';
-import { getBengaliDate, toBnDigit } from '../utils/calendarUtils';
-import { useHijriCalendar } from '../hooks/useHijriCalendar';
+import { getBengaliDate, toBnDigit, getHijriDate } from '../utils/calendarUtils';
 import { Institution } from 'types';
 
 interface MultiCalendarHeaderProps {
@@ -12,7 +11,7 @@ interface MultiCalendarHeaderProps {
 const MultiCalendarHeader: React.FC<MultiCalendarHeaderProps> = ({ madrasah }) => {
   const today = new Date();
   const bnDate = getBengaliDate(today);
-  const { hijriData, loading } = useHijriCalendar();
+  const hijriData = getHijriDate(today);
 
   const isDark = madrasah?.theme === 'dark';
 
@@ -52,10 +51,8 @@ const MultiCalendarHeader: React.FC<MultiCalendarHeaderProps> = ({ madrasah }) =
           <div className="flex flex-col min-w-0 flex-1">
             <span className={`text-[9px] lg:text-[11px] font-black uppercase tracking-widest leading-none mb-1 lg:mb-1.5 font-noto ${isDark ? 'text-amber-400/60' : 'text-amber-500/60'}`}>হিজরি</span>
             <span className={`text-[11px] lg:text-[14px] font-black truncate leading-none font-noto ${isDark ? 'text-white' : 'text-slate-800'}`}>
-              {loading ? (
-                <span className="opacity-55 text-[10px]">লোডিং...</span>
-              ) : hijriData ? (
-                `${toBnDigit(hijriData.hijriDay)} ${hijriData.hijriMonthAr}`
+              {hijriData && hijriData.dayBn ? (
+                `${hijriData.dayBn} ${hijriData.monthBn}`
               ) : (
                 'তারিখ পাওয়া যায়নি'
               )}

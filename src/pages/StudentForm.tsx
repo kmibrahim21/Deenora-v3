@@ -23,6 +23,7 @@ interface StudentFormProps {
 
 const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultClassId, isEditing, onSuccess, onCancel, lang, title }) => {
   const [name, setName] = useState(student?.student_name || '');
+  const [nameEn, setNameEn] = useState(student?.name_en || '');
   const [registrationNumber, setRegistrationNumber] = useState(student?.registration_number || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
   const [motherName, setMotherName] = useState(student?.mother_name || '');
@@ -126,6 +127,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
 
       const payload: any = {
         student_name: name.trim(),
+        name_en: nameEn.trim() || null,
         registration_number: registrationNumber.trim() || null,
         guardian_name: guardianName.trim(),
         mother_name: motherName.trim() || null,
@@ -283,6 +285,20 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
                   value={name} 
                   onChange={(e) => setName(e.target.value)} 
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                  <UserIcon size={11} className="text-[#2563EB]" /> 
+                  {lang === 'bn' ? 'নাম (ইংরেজি - ঐচ্ছিক)' : 'Name (English - Optional)'}
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="English Name (Optional)"
+                  className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
+                  value={nameEn} 
+                  onChange={(e) => setNameEn(e.target.value)} 
                 />
               </div>
 

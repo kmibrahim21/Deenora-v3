@@ -75,7 +75,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const canWrite = (moduleKey: string) => {
     if (isSuperAdmin) return true;
     if (isManager) {
-      return !!managerPermissions[moduleKey];
+      return !!managerPermissions[moduleKey] || !!profile?.permissions?.[moduleKey];
     }
     return false;
   };
@@ -778,7 +778,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       const data = await response.json();
       
       // Also fetch pending approvals via client-side head query (usually allowed for admin/manager)
-      const { count: pendingCount } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      const { count: pendingCount } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending').not('transaction_id', 'like', 'PENDING_%');
       
       return {
         ...data,
@@ -793,7 +793,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         supabase.from('teachers').select('*', { count: 'exact', head: true }),
         supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(10000),
         supabase.from('institutions').select('sms_balance, balance, is_active, institution_type').eq('is_super_admin', false),
-        supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending').not('transaction_id', 'like', 'PENDING_%'),
         supabase.from('institutions').select('*', { count: 'exact', head: true }).eq('is_super_admin', false),
         supabase.from('admin_sms_stock').select('remaining_sms').single()
       ]);
@@ -1071,10 +1071,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           setPendingTrans(pTrans);
           setTransactionHistory(tHist);
           const newSmsMap = { ...smsEnabledMap };
+          const newSmsToCredit = { ...smsToCredit };
           pTrans.forEach(tr => {
             if (newSmsMap[tr.id] === undefined) newSmsMap[tr.id] = true;
+            if (!newSmsToCredit[tr.id] && tr.module === 'sms') {
+              const rate = Number(tr.institutions?.sms_rate || 0.50);
+              newSmsToCredit[tr.id] = String(Math.ceil(tr.amount / rate));
+            }
           });
           setSmsEnabledMap(newSmsMap);
+          setSmsToCredit(newSmsToCredit);
         }
       }
     } catch (err) { 
@@ -1622,7 +1628,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const approveTransaction = async (tr: Transaction) => {
     const isVoice = (tr.description || '').toLowerCase().includes('voice') || tr.module === 'voice';
     const isSubscription = tr.module === 'subscription';
-    const sms = Math.floor(Number(smsToCredit[tr.id]) || 0);
+    const sms = Math.ceil(Number(smsToCredit[tr.id]) || 0);
     
     if (!isVoice && !isSubscription && (!sms || sms <= 0)) {
       setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'সঠিক SMS সংখ্যা লিখুন' });
@@ -1769,6 +1775,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           // Fire and forget SMS to avoid blocking UI
           smsApi.sendDirect(userPhone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
         }
+      }
+
+      // ৪. একই মাদ্রাসার এবং একই মডিউলের অন্য সব অপেক্ষমান রিকোয়েস্ট ক্যানসেল করা
+      if (tr.institution_id && tr.module) {
+        console.log("Cancelling other pending transactions of module:", tr.module, "for inst:", tr.institution_id);
+        await supabase
+          .from('transactions')
+          .update({ 
+            status: 'cancelled', 
+            description: 'Cancelled automatically because another transaction was approved.' 
+          })
+          .eq('institution_id', tr.institution_id)
+          .eq('module', tr.module)
+          .eq('status', 'pending')
+          .neq('id', tr.id);
       }
 
       // ৩. লোকাল স্টেট আপডেট করা (সফল হলে সাথে সাথে লিস্ট থেকে সরিয়ে দেয়া)
@@ -2939,6 +2960,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 </button>
               </div>
 
+              <div className={`p-5 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-blue-900/20 border-blue-800/50 text-blue-200' : 'bg-blue-50 border-blue-100 text-blue-800'}`}>
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={24} className="text-blue-500 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-black mb-1">অটোমেটিক পেমেন্ট সিস্টেম</h4>
+                    <p className="text-xs font-bold opacity-80 leading-relaxed font-noto">
+                      ইউজাররা যখন পেমেন্ট পেজে গিয়ে পরিমাণ লেখে, তখন একটি "অটো-পেমেন্টের অপেক্ষায়" রিকোয়েস্ট তৈরি হয়। তারা পেমেন্ট সম্পন্ন করলে Android Gateway অ্যাপের মাধ্যমে সেটি স্বয়ংক্রিয়ভাবে Approve হয়ে যাবে। 
+                      <strong> আপনার ম্যানুয়ালি Approve করার দরকার নেই।</strong> শুধুমাত্র যদি কোনো কারণে Gateway কাজ না করে এবং ইউজার আপনাকে জানায়, তবেই TrxID মিলিয়ে ম্যানুয়ালি Approve করুন।
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className={`flex ${madrasah?.theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'} p-1.5 rounded-2xl`}>
                 <button 
                   onClick={() => setPaymentTab('sms')}
@@ -3057,10 +3091,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <button 
                           onClick={() => approveTransaction(tr)} 
                           disabled={approvingIds.has(tr.id) || (paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && !smsToCredit[tr.id])}
-                          className="w-full h-14 bg-blue-600 text-white font-black rounded-2xl text-sm active:scale-95 transition-all shadow-lg shadow-blue-600/20 disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center gap-2"
+                          className={`w-full h-14 font-black rounded-2xl text-sm active:scale-95 transition-all flex items-center justify-center gap-2 ${tr.transaction_id?.startsWith('PENDING_') ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 shadow-sm border border-amber-200' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 disabled:bg-slate-300 disabled:shadow-none'}`}
                         >
-                          {approvingIds.has(tr.id) ? <Loader2 className="animate-spin" size={20} /> : <><CheckCircle size={18} /> অনুমোদন দিন</>}
+                          {approvingIds.has(tr.id) ? <Loader2 className="animate-spin" size={20} /> : <><CheckCircle size={18} /> {tr.transaction_id?.startsWith('PENDING_') ? 'ম্যানুয়ালি অনুমোদন দিন' : 'অনুমোদন দিন'}</>}
                         </button>
+                        {tr.transaction_id?.startsWith('PENDING_') && (
+                          <p className="text-[9px] font-bold text-amber-600/80 text-center uppercase tracking-wider">অটো-পেমেন্টের অপেক্ষায়</p>
+                        )}
                         <button 
                           onClick={() => setRejectConfirm(tr)} 
                           disabled={approvingIds.has(tr.id)}

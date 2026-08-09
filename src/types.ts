@@ -199,6 +199,7 @@ export interface Student {
   institution_id: string;
   class_id: string;
   student_name: string;
+  name_en?: string;
   admission_number?: string;
   roll: number | null;
   date_of_birth?: string;
@@ -513,6 +514,7 @@ export interface Transaction {
   module?: 'sms' | 'voice' | 'subscription';
   metadata?: any;
   institutions?: Institution;
+  approved_at?: string;
 }
 
 export interface AdminSMSStock {
@@ -558,6 +560,7 @@ export interface SystemSettings {
   reve_caller_id?: string;
   reve_client_id?: string;
   bkash_number?: string;
+  nagad_number?: string;
   sms_rate: number;
   voice_rate: number;
   manager_permissions?: Profile['permissions'];
