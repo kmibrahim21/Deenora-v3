@@ -151,7 +151,12 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
     setIsSavingMulti(true);
     setErrorMulti('');
     try {
-        const activeYearId = madrasah.config_json?.active_academic_year_id;
+        // Ensure config_json is an object
+        let config = madrasah?.config_json as any;
+        if (typeof config === 'string') {
+          try { config = JSON.parse(config); } catch (e) { config = {}; }
+        }
+        const activeYearId = config?.active_academic_year_id;
 
         const sortedMonths = [...selectedMonthsToPay].sort();
 
@@ -236,10 +241,10 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         clearGlobalQawmiFeeCache();
         
         // Auto Send SMS
-        if (madrasah?.config_json?.features?.fee_collection_sms) {
+        if (config?.features?.fee_collection_sms) {
             try {
-                const smsApiModule = await import('supabase').then(res => res.smsApi);
-                const templates = (madrasah?.config_json as any)?.features?.sms_templates || {};
+                const { smsApi: smsApiModule } = await import('../../supabase');
+                const templates = config?.features?.sms_templates || {};
                 let template = templates.fee_collection || (lang === 'bn' 
                     ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
                     : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);

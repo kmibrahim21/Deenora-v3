@@ -488,6 +488,9 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
   const handleCollectFee = async () => {
     if (!selectedStudent || collectAmount === '') return;
     
+    // Capture student for SMS before clearing state
+    const currentStudent = { ...selectedStudent };
+
     const totalAmt = parseFloat(collectAmount) || 0;
     const totalDueStr = calculateTotal(selectedFeeCategories, discount, availableFeeItems);
     const maxAllowed = parseFloat(totalDueStr) || 0;
@@ -500,17 +503,22 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
     setCollectError(null);
     setIsSaving(true);
     try {
-      const activeYearId = madrasah.config_json?.active_academic_year_id;
+      // Ensure config_json is an object
+      let config = madrasah?.config_json as any;
+      if (typeof config === 'string') {
+        try { config = JSON.parse(config); } catch (e) { config = {}; }
+      }
+      const activeYearId = config?.active_academic_year_id;
       const totalDiscount = parseFloat(discount) || 0;
       
       const feeData = {
         institution_id: madrasah.id,
-        student_id: selectedStudent.student_id,
-        class_id: selectedStudent.class_id,
+        student_id: currentStudent.student_id,
+        class_id: currentStudent.class_id,
         amount_paid: totalAmt,
         month: selectedMonth,
         academic_year_id: activeYearId,
-        status: (Number(selectedStudent.total_paid) + totalAmt + totalDiscount) >= Number(selectedStudent.total_payable) ? 'paid' : 'partial'
+        status: (Number(currentStudent.total_paid) + totalAmt + totalDiscount) >= Number(currentStudent.total_payable) ? 'paid' : 'partial'
       };
 
       // Try inserting with discount first
@@ -537,10 +545,10 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
 
       // Add to Ledger
       const feeDescription = selectedFeeCategories.length > 0 ? selectedFeeCategories.join(', ') : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
-      const className = classes.find(c => c.id === selectedStudent.class_id)?.class_name || '';
-      const roll = selectedStudent.roll || '-';
+      const className = classes.find(c => c.id === currentStudent.class_id)?.class_name || '';
+      const roll = currentStudent.roll || '-';
       
-      let finalDescription = `${feeDescription} - ${selectedStudent.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})${totalDiscount > 0 ? " (ছাড়: ৳" + totalDiscount + ")" : ""}`;
+      let finalDescription = `${feeDescription} - ${currentStudent.student_name} (${className} | Roll: ${roll} | Month: ${selectedMonth})${totalDiscount > 0 ? " (ছাড়: ৳" + totalDiscount + ")" : ""}`;
       if (feeIdToSave) {
           finalDescription += ` || FEE_ID: ${feeIdToSave}`;
       }
@@ -563,16 +571,16 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       requestManager.invalidatePattern(`fees:${madrasah.id}`);
       requestManager.invalidatePattern(`stats:${madrasah.id}`);
       requestManager.invalidatePattern(`dashboard_`);
-      requestManager.invalidatePattern(`accounting-fees-${selectedStudent.student_id}`);
-      requestManager.invalidatePattern(`accounting-history-${selectedStudent.student_id}`);
+      requestManager.invalidatePattern(`accounting-fees-${currentStudent.student_id}`);
+      requestManager.invalidatePattern(`accounting-history-${currentStudent.student_id}`);
       requestManager.invalidatePattern(`fetch:ledger:`);
 
       // Auto Send SMS
-      if (madrasah?.config_json?.features?.fee_collection_sms) {
+      if (config?.features?.fee_collection_sms) {
         try {
-          const smsApiModule = await import('supabase').then(res => res.smsApi);
+          const { smsApi: smsApiModule } = await import('../../supabase');
           
-          const templates = (madrasah?.config_json as any)?.features?.sms_templates || {};
+          const templates = config?.features?.sms_templates || {};
           let template = templates.fee_collection || (lang === 'bn' 
             ? `আস-সালামু আলাইকুম, {student_name} এর বেতন বাবদ {amount} টাকা জমা হয়েছে। ধন্যবাদ।`
             : `As-salamu Alaikum, {amount} BDT has been received as fee for {student_name}. Thank you.`);
@@ -580,11 +588,11 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
           const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
           const date = new Date(selectedMonth + '-01');
           const formattedMonth = lang === 'bn' ? bnMonths[date.getMonth()] : date.toLocaleString('en-US', { month: 'long' });
-          const stName = selectedStudent.student_name || '';
-          const fatherName = selectedStudent.father_name || '';
-          const stRoll = selectedStudent.roll || '';
-          const stClass = classes.find(c => c.id === selectedStudent.class_id)?.class_name || '';
-          const currentDue = Math.max(0, Number(selectedStudent.balance_due || 0) - totalAmt - totalDiscount);
+          const stName = currentStudent.student_name || '';
+          const fatherName = currentStudent.father_name || '';
+          const stRoll = currentStudent.roll || '';
+          const stClass = classes.find(c => c.id === currentStudent.class_id)?.class_name || '';
+          const currentDue = Math.max(0, Number(currentStudent.balance_due || 0) - totalAmt - totalDiscount);
 
           let collectMsg = template
              .replace(/\{student_name\}/g, stName)
@@ -596,7 +604,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
              .replace(/\{amount\}/g, totalAmt.toString())
              .replace(/\{due_amount\}/g, currentDue.toString());
             
-          await smsApiModule.sendBulk(madrasah.id, [selectedStudent], collectMsg);
+          await smsApiModule.sendBulk(madrasah.id, [currentStudent], collectMsg);
         } catch (smsError: any) {
           console.error("Fee SMS error: ", smsError);
           alert(lang === 'bn' ? `অটো এসএমএস পাঠানো সম্ভব হয়নি: ${smsError.message}` : `Auto SMS failed: ${smsError.message}`);
