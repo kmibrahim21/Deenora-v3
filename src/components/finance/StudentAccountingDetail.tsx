@@ -264,6 +264,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                 await smsApiModule.sendBulk(madrasah.id, [student], collectMsg);
             } catch (smsError: any) {
                 console.error("Multi-Fee SMS error: ", smsError);
+                alert(lang === 'bn' ? `অটো এসএমএস পাঠানো সম্ভব হয়নি: ${smsError.message}` : `Auto SMS failed: ${smsError.message}`);
             }
         }
 
@@ -419,7 +420,8 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
           .eq('category', 'Student Fee')
           .ilike('description', `%${student.student_name} (${className} | Roll: ${roll} | Month%`)
           .order('transaction_date', { ascending: false })
-          .order('id', { ascending: false }),
+          .order('id', { ascending: false })
+          .limit(1000),
         `accounting-history-${student.student_id}`,
         CACHE_TTLS.SHORT
       );

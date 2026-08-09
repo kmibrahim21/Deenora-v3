@@ -81,7 +81,7 @@ const MadrasahFeeAnalytics: React.FC<MadrasahFeeAnalyticsProps> = ({ madrasah, l
         ledgerQuery = ledgerQuery.gte('transaction_date', `${selectedMonth.slice(0, 4)}-01-01`).lte('transaction_date', `${selectedMonth.slice(0, 4)}-12-31`);
       }
 
-      const { data: ledger } = await ledgerQuery;
+      const { data: ledger } = await ledgerQuery.limit(5000);
 
       // 2. Fetch Students for status
       const { data: students } = await supabase.from('students').select('id, student_type, sponsor_id').eq('institution_id', madrasah.id);

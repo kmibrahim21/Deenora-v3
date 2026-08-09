@@ -199,7 +199,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
               const yearStart = config?.academic_year_start;
               if (yearStart) query = query.gte('transaction_date', yearStart);
             }
-            return query.order('transaction_date', { ascending: false }).order('id', { ascending: false }).limit(2000);
+            return query.order('transaction_date', { ascending: false }).order('id', { ascending: false }).limit(5000);
           },
           cacheKey,
           CACHE_TTLS.MEDIUM

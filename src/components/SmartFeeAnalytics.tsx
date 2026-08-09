@@ -185,7 +185,27 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         requestManager.cachedFetch('fee_structures', (q) => q.select('id, fee_name, amount, class_id, start_date, due_date').eq('institution_id', institutionId), `fee_structs:${institutionId}`),
         requestManager.cachedFetch('students', (q) => q.select('id, student_name, class_id, academic_year_id, guardian_phone, roll, notes').eq('institution_id', institutionId), `students:${institutionId}`),
         requestManager.cachedFetch('student_fee_settings', (q) => q.select('student_id, fee_structure_id, is_enabled, custom_amount').eq('institution_id', institutionId), `fee_settings:${institutionId}`),
-        requestManager.cachedFetch('ledger', (q) => q.select('id, transaction_date, amount, type, category, description').eq('institution_id', institutionId), `ledger:${institutionId}`)
+        requestManager.cachedFetch('ledger', (q) => {
+            let query = q.select('id, transaction_date, amount, type, category, description')
+                         .eq('institution_id', institutionId);
+            
+            // Apply date filters at database level to avoid 1000 record limit issues
+            if (viewMode === 'custom') {
+                if (dateRange.start) query = query.gte('transaction_date', dateRange.start);
+                if (dateRange.end) query = query.lte('transaction_date', dateRange.end);
+            } else if (viewMode === 'daily') {
+                query = query.eq('transaction_date', selectedDate);
+            } else if (viewMode === 'monthly') {
+                // Ensure we get all records for the month
+                query = query.gte('transaction_date', `${selectedMonth}-01`)
+                             .lte('transaction_date', `${selectedMonth}-31`);
+            } else if (viewMode === 'yearly') {
+                query = query.gte('transaction_date', `${selectedYear}-01-01`)
+                             .lte('transaction_date', `${selectedYear}-12-31`);
+            }
+            
+            return query.order('transaction_date', { ascending: false }).limit(5000);
+        }, `ledger:${institutionId}:${viewMode}:${dateFilter}`)
       ]);
 
       const structures = structuresRes.data;
