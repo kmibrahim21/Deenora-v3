@@ -121,32 +121,24 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                     {/* Institution Names */}
                                     <div style={{ 
                                         display: 'flex', 
+                                        flexDirection: 'column',
                                         alignItems: 'center', 
                                         justifyContent: 'center', 
-                                        gap: madrasah?.institution_type === 'madrasah' ? '10px' : '15px',
+                                        gap: madrasah?.institution_type === 'madrasah' ? '2px' : '4px',
                                         width: '100%',
                                         marginTop: madrasah?.institution_type === 'madrasah' ? '0px' : '5px'
                                     }}>
                                         {/* Primary Name (Bengali) */}
                                         <span style={{ 
-                                            fontSize: madrasah?.institution_type === 'madrasah' ? '26px' : '38px', 
+                                            fontSize: madrasah?.institution_type === 'madrasah' ? '26px' : '34px', 
                                             fontWeight: '900', 
                                             color: '#0c4a7e',
                                             fontFamily: "'Tiro Bangla', 'Noto Serif Bengali', serif",
-                                            lineHeight: '1',
-                                            whiteSpace: 'nowrap'
+                                            lineHeight: '1.2',
+                                            textAlign: 'center'
                                         }}>
                                             {madrasah?.name || 'Institution Name'}
                                         </span>
-
-                                        {/* Elegant Divider (Optional for School if English name exists) */}
-                                        {(madrasah?.name && (madrasah?.config_json as any)?.name_english) && (
-                                            <div style={{ 
-                                                width: madrasah?.institution_type === 'madrasah' ? '1px' : '1.5px', 
-                                                height: madrasah?.institution_type === 'madrasah' ? '16px' : '22px', 
-                                                backgroundColor: '#cbd5e1' 
-                                            }}></div>
-                                        )}
 
                                         {/* English Name */}
                                         {(madrasah?.config_json as any)?.name_english && (
@@ -157,7 +149,8 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                                 fontFamily: "'Times New Roman', Times, serif",
                                                 letterSpacing: '0.04em',
                                                 textTransform: 'uppercase',
-                                                whiteSpace: 'nowrap'
+                                                textAlign: 'center',
+                                                lineHeight: '1.2'
                                             }}>
                                                 {(madrasah.config_json as any).name_english}
                                             </span>
