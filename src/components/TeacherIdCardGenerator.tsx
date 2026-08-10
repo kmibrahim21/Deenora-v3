@@ -384,11 +384,6 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                           <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
                        </div>
                        <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.id}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderTeacher.id.substring(0, 8).toUpperCase()}</span>
-                       </div>
-                       <div className="flex items-center">
                           <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.phone}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
                           <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderTeacher.phone || "-"}</span>

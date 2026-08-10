@@ -53,6 +53,29 @@ const clearAdminPanelCache = () => {
   adminPanelCache.lastFetched = 0;
 };
 
+const filterTransactionByTab = (tr: Transaction, tab: 'sms' | 'voice' | 'subscription') => {
+  const desc = (tr.description || '').toLowerCase();
+  const mod = (tr.module || '').toLowerCase();
+  const isRefund = desc.includes('refund');
+  if (isRefund) return false;
+
+  const isSubscription = mod === 'subscription' || desc.includes('subscription') || desc.includes('sub') || desc.includes('মাসিক') || desc.includes('ফি');
+  const isVoice = (mod === 'voice' || desc.includes('voice')) && !isSubscription;
+  const isSms = (mod === 'sms' || (!isVoice && !isSubscription)) && !desc.includes('refund');
+
+  if (tab === 'subscription') return isSubscription;
+  if (tab === 'voice') return isVoice;
+  if (tab === 'sms') return isSms;
+  return false;
+};
+
+const isWithinLast30Days = (dateStr?: string) => {
+  if (!dateStr) return true;
+  const trDate = new Date(dateStr).getTime();
+  const thirtyDaysAgoTime = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  return trDate >= thirtyDaysAgoTime;
+};
+
 const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dataVersion = 0, onProfileUpdate, triggerRefresh, madrasah, profile, setStatusModal, onNavigateToVoiceBroadcast, onNavigateToSMSBroadcast }) => {
   const [madrasahs, setMadrasahs] = useState<InstitutionWithStats[]>([]);
   const [pendingTrans, setPendingTrans] = useState<Transaction[]>([]);
@@ -871,11 +894,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   };
 
   const fetchTransactionHistory = async (modules?: string[]) => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
     let query = supabase.from('transactions')
       .select('*, institutions(*)')
       .neq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(50);
+      .gte('created_at', thirtyDaysAgo.toISOString())
+      .order('created_at', { ascending: false });
       
     if (modules && modules.length > 0) {
       query = query.in('module', modules);
@@ -1060,7 +1087,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (view === 'approvals') {
         const [pTrans, tHist] = await Promise.all([
           fetchPendingTransactions(),
-          fetchTransactionHistory(['sms', 'voice', 'subscription']) // Approvals shows all requests
+          fetchTransactionHistory() // Fetch all requests from last 30 days
         ]);
         if (isMounted) {
           // Update Cache
@@ -2996,23 +3023,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               
               <div className="space-y-6">
                 <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                   <AlertCircle size={14} className="text-amber-400" /> Pending Requests
+                   <AlertCircle size={14} className="text-amber-400" /> Pending Requests ({paymentTab === 'sms' ? 'SMS' : paymentTab === 'voice' ? 'Voice' : 'Subscription'})
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {pendingTrans.filter(tr => {
-                    const desc = (tr.description || '').toLowerCase();
-                    const mod = (tr.module || '').toLowerCase();
-                    if (paymentTab === 'subscription') return mod === 'subscription' || desc.includes('subscription');
-                    if (paymentTab === 'voice') return (mod === 'voice' || desc.includes('voice')) && mod !== 'subscription';
-                    // SMS tab shows everything else that is not voice or subscription
-                    return mod !== 'voice' && mod !== 'subscription' && !desc.includes('voice') && !desc.includes('subscription') && !desc.includes('refund');
-                  }).length > 0 ? pendingTrans.filter(tr => {
-                    const desc = (tr.description || '').toLowerCase();
-                    const mod = (tr.module || '').toLowerCase();
-                    if (paymentTab === 'subscription') return mod === 'subscription' || desc.includes('subscription');
-                    if (paymentTab === 'voice') return (mod === 'voice' || desc.includes('voice')) && mod !== 'subscription';
-                    return mod !== 'voice' && mod !== 'subscription' && !desc.includes('voice') && !desc.includes('subscription') && !desc.includes('refund');
-                  }).map(tr => (
+                  {pendingTrans.filter(tr => filterTransactionByTab(tr, paymentTab)).length > 0 ? pendingTrans.filter(tr => filterTransactionByTab(tr, paymentTab)).map(tr => (
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border space-y-5 animate-in slide-in-from-left-4`}>
                         <div className="flex items-center justify-between">
                           <div className="flex flex-col">
@@ -3041,7 +3055,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <div className="flex flex-col gap-1">
                            {tr.description && (
                              <p className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'} uppercase tracking-tight mb-1`}>
-                               {tr.description}
+                                {tr.description}
                              </p>
                            )}
                            {tr.module === 'subscription' && tr.metadata?.months && (
@@ -3119,21 +3133,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               </div>
 
               <div className="space-y-6 pt-8 border-t border-slate-100">
-                <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                   <History size={14} className="text-blue-400" /> Recent Transactions
-                </h2>
+                <div className="flex items-center justify-between px-2">
+                   <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
+                      <History size={14} className="text-blue-400" /> বিগত ৩০ দিনের ইতিহাস ({paymentTab === 'sms' ? 'SMS' : paymentTab === 'voice' ? 'Voice' : 'Subscription'})
+                   </h2>
+                   <span className="text-[10px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border dark:border-slate-700 font-noto">
+                      গত ৩০ দিন
+                   </span>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {transactionHistory.filter(tr => {
-                    const desc = (tr.description || '').toLowerCase();
-                    const isRefund = desc.includes('refund');
-                    if (isRefund) return false;
-                    return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
-                  }).length > 0 ? transactionHistory.filter(tr => {
-                    const desc = (tr.description || '').toLowerCase();
-                    const isRefund = desc.includes('refund');
-                    if (isRefund) return false;
-                    return paymentTab === 'sms' ? (desc.includes('sms') || !desc.includes('voice')) : desc.includes('voice');
-                  }).map(tr => (
+                  {transactionHistory.filter(tr => filterTransactionByTab(tr, paymentTab) && isWithinLast30Days(tr.created_at)).length > 0 ? transactionHistory.filter(tr => filterTransactionByTab(tr, paymentTab) && isWithinLast30Days(tr.created_at)).map(tr => (
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-5 rounded-[2rem] border flex items-center justify-between group hover:border-blue-500/30 transition-all`}>
                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 mb-1">
@@ -3159,7 +3168,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     </div>
                   )) : (
                     <div className={`col-span-full text-center py-20 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'} rounded-[2.5rem] border-2 border-dashed`}>
-                       <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">No History Found</p>
+                       <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest font-noto">বিগত ৩০ দিনে কোনো ইতিহাস পাওয়া যায়নি</p>
                     </div>
                   )}
                 </div>
