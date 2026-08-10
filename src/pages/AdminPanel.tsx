@@ -3050,8 +3050,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                             <div className="bg-emerald-500/10 text-emerald-600 px-4 py-2 rounded-2xl text-lg font-black">
                                 {correctionAmounts[tr.id] ? correctionAmounts[tr.id] : tr.amount} ৳
                             </div>
-                            {tr.metadata?.requested_amount && (
-                              <div className="text-[9px] font-black text-slate-400 mt-1 px-1">
+                            {tr.metadata?.expected_amount && Number(tr.metadata.expected_amount) !== (correctionAmounts[tr.id] ? Number(correctionAmounts[tr.id]) : Number(tr.amount)) && (
+                              <div className="text-[9px] font-black text-rose-500 mt-1 px-1">
+                                Expected Fee: {tr.metadata.expected_amount} ৳
+                              </div>
+                            )}
+                            {tr.metadata?.requested_amount && Number(tr.metadata.requested_amount) !== (correctionAmounts[tr.id] ? Number(correctionAmounts[tr.id]) : Number(tr.amount)) && (
+                              <div className="text-[9px] font-black text-slate-400 mt-0.5 px-1">
                                 Requested: {tr.metadata.requested_amount} ৳
                               </div>
                             )}

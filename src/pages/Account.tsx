@@ -1043,7 +1043,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                     })(),
                     package_name: selectedPackage?.name,
                     subscription_type: subscriptionType,
-                    source: 'account_subscription_page'
+                    source: 'account_subscription_page',
+                    expected_amount: calculatedFee
                   }}
                   fixedAmount={calculatedFee > 0 ? calculatedFee : undefined}
                 />

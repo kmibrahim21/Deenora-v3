@@ -56,11 +56,14 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
 
   const storageKey = `pending_payment_${madrasah?.id}_${module}`;
 
+  // Remove the useEffect that re-sets amount on step change to allow manual editing
+  /* 
   useEffect(() => {
     if (fixedAmount && fixedAmount > 0 && step !== 'pay' && step !== 'verify' && !pendingTrx) {
       setAmount(fixedAmount.toString());
     }
   }, [fixedAmount, step, pendingTrx]);
+  */
 
   // Restore pending payment on mount
   useEffect(() => {
@@ -268,7 +271,8 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
           payment_method: paymentMethod,
           sender_number: normalizedSender,
           checkout_session: true,
-          requested_amount: fixedAmount || parseInt(amount)
+          requested_amount: parseInt(amount),
+          expected_amount: fixedAmount || metadata?.expected_amount
         }
       }).select().single();
 
