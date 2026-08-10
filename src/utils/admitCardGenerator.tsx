@@ -31,34 +31,34 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
       return {
         h1Class: 'text-[22px] sm:text-[23px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[3px] mb-0.5 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
         addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal pt-[1px]'
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal pt-[1px]'
       };
     }
     if (len > 35) {
       return {
         h1Class: 'text-[24px] sm:text-[25px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[3px] mb-0.5 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
         addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[11px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal pt-[1px]'
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal pt-[1px]'
       };
     }
     if (len > 26) {
       return {
         h1Class: 'text-[28px] sm:text-[29px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[3px] mb-0.5 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
         addrClass: 'text-[12.5px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal pt-[1px]'
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal pt-[1px]'
       };
     }
     if (len > 18) {
       return {
         h1Class: 'text-[33px] sm:text-[34px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[4px] mb-1 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
         addrClass: 'text-[13px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-1 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal py-0.5 pt-[2px]'
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[12px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal py-0.5 pt-[2px]'
       };
     }
     return {
       h1Class: 'text-[36px] sm:text-[38px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[4px] mb-1 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
       addrClass: 'text-[14px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-1 leading-normal pt-[1px] break-words line-clamp-1',
-      infoClass: 'flex items-center justify-center flex-wrap gap-x-2 gap-y-0.5 text-[13px] font-bold text-[#0c4a7e]/80 max-w-[95%] mx-auto leading-normal py-0.5 pt-[2px]'
+      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[13px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal py-0.5 pt-[2px]'
     };
   };
   
