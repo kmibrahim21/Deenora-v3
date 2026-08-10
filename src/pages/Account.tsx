@@ -283,11 +283,13 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
     if (!selectedPackage || !madrasah) return;
     setRequestingUpgrade(true);
     try {
-      const selectedMonthsForPayment = selectedMonths.length > 0 ? selectedMonths : [];
+      const selectedMonthsForPayment = selectedMonths.length > 0 ? [...selectedMonths] : [];
       if (selectedMonthsForPayment.length === 0) {
         const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
-        const currentYear = new Date().getFullYear();
-        const currentMonth = new Date().getMonth();
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth(); // 0-indexed
+        
         for (let i = 0; i < duration; i++) {
           const d = new Date(currentYear, currentMonth + i, 1);
           selectedMonthsForPayment.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
@@ -1025,7 +1027,20 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                   }}
                   onCancel={() => setPaymentStep(1)}
                   metadata={{
-                    months: selectedMonths.length > 0 ? selectedMonths : [],
+                    months: (() => {
+                      const monthsForPayment = selectedMonths.length > 0 ? [...selectedMonths] : [];
+                      if (monthsForPayment.length === 0) {
+                        const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
+                        const today = new Date();
+                        const currentYear = today.getFullYear();
+                        const currentMonth = today.getMonth();
+                        for (let i = 0; i < duration; i++) {
+                          const d = new Date(currentYear, currentMonth + i, 1);
+                          monthsForPayment.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
+                        }
+                      }
+                      return monthsForPayment;
+                    })(),
                     package_name: selectedPackage?.name,
                     subscription_type: subscriptionType,
                     source: 'account_subscription_page'

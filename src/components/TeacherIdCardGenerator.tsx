@@ -498,9 +498,6 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                     size={60}
                   />
                 </div>
-                <p className="text-[9px] font-bold tracking-widest text-slate-500 font-solaiman">
-                  {currentRenderTeacher.id.substring(0, 8).toUpperCase()}
-                </p>
               </div>
 
               <div className="mt-1 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">

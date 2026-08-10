@@ -59,13 +59,19 @@ const filterTransactionByTab = (tr: Transaction, tab: 'sms' | 'voice' | 'subscri
   const isRefund = desc.includes('refund');
   if (isRefund) return false;
 
-  const isSubscription = mod === 'subscription' || desc.includes('subscription') || desc.includes('sub') || desc.includes('মাসিক') || desc.includes('ফি');
-  const isVoice = (mod === 'voice' || desc.includes('voice')) && !isSubscription;
-  const isSms = (mod === 'sms' || (!isVoice && !isSubscription)) && !desc.includes('refund');
+  // Strict check based on module first
+  if (mod === 'subscription') return tab === 'subscription';
+  if (mod === 'voice') return tab === 'voice';
+  if (mod === 'sms') return tab === 'sms';
 
+  // Fallback to description if module is missing
+  const isSubscription = desc.includes('subscription') || desc.includes('মাসিক ফি') || desc.includes('সাবস্ক্রিপশন');
+  const isVoice = desc.includes('voice') || desc.includes('ভয়েস');
+  
   if (tab === 'subscription') return isSubscription;
-  if (tab === 'voice') return isVoice;
-  if (tab === 'sms') return isSms;
+  if (tab === 'voice') return isVoice && !isSubscription;
+  if (tab === 'sms') return !isSubscription && !isVoice;
+  
   return false;
 };
 
@@ -157,6 +163,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   }, []);
 
   const [smsToCredit, setSmsToCredit] = useState<{ [key: string]: string }>({});
+  const [correctionAmounts, setCorrectionAmounts] = useState<{ [key: string]: string }>({});
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
   
   const [smsEnabledMap, setSmsEnabledMap] = useState<{ [key: string]: boolean }>({});
@@ -1657,6 +1664,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     const isSubscription = tr.module === 'subscription';
     const sms = Math.ceil(Number(smsToCredit[tr.id]) || 0);
     
+    // Check for corrected amount
+    const finalAmount = correctionAmounts[tr.id] ? Number(correctionAmounts[tr.id]) : Number(tr.amount);
+
     if (!isVoice && !isSubscription && (!sms || sms <= 0)) {
       setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: 'সঠিক SMS সংখ্যা লিখুন' });
       return;
@@ -1666,21 +1676,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     try {
       if (isVoice) {
         // ১. ডাটাবেসে পেমেন্ট অনুমোদন করা (Manual update for Voice)
-        const { error: updateError } = await supabase.from('transactions').update({ status: 'approved' }).eq('id', tr.id);
+        const { error: updateError } = await supabase.from('transactions').update({ 
+          status: 'approved',
+          amount: finalAmount // Use corrected amount if provided
+        }).eq('id', tr.id);
         if (updateError) throw updateError;
         
         const { data: instData, error: instError } = await supabase.from('institutions').select('balance').eq('id', tr.institution_id).single();
         if (instError) throw instError;
         
         const currentBalance = Number(instData.balance || 0);
-        const addAmount = Number(tr.amount || 0);
+        const addAmount = finalAmount;
         const newBalance = currentBalance + addAmount;
         
         const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', tr.institution_id);
         if (balanceError) throw balanceError;
       } else if (isSubscription) {
         // ২. সাবস্ক্রিপশন অনুমোদন ও প্রোফাইল আপডেট
-        const { error: updateError } = await supabase.from('transactions').update({ status: 'approved' }).eq('id', tr.id);
+        const { error: updateError } = await supabase.from('transactions').update({ 
+          status: 'approved',
+          amount: finalAmount // Use corrected amount if provided
+        }).eq('id', tr.id);
         if (updateError) throw updateError;
 
         // অটো প্রোফাইল আপডেট
@@ -1731,7 +1747,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         // 1. Update Transaction
         const { error: trUpdateError } = await supabase.from('transactions').update({ 
           status: 'approved', 
-          sms_count: sms 
+          sms_count: sms,
+          amount: finalAmount // Use corrected amount if provided
         }).eq('id', tr.id);
         if (trUpdateError) {
           console.error('ApproveTransaction: Transaction update error:', trUpdateError);
@@ -3030,10 +3047,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border space-y-5 animate-in slide-in-from-left-4`}>
                         <div className="flex items-center justify-between">
                           <div className="flex flex-col">
-                            <div className="bg-emerald-500/10 text-emerald-600 px-4 py-2 rounded-2xl text-lg font-black">{tr.amount} ৳</div>
+                            <div className="bg-emerald-500/10 text-emerald-600 px-4 py-2 rounded-2xl text-lg font-black">
+                                {correctionAmounts[tr.id] ? correctionAmounts[tr.id] : tr.amount} ৳
+                            </div>
+                            {tr.metadata?.requested_amount && (
+                              <div className="text-[9px] font-black text-slate-400 mt-1 px-1">
+                                Requested: {tr.metadata.requested_amount} ৳
+                              </div>
+                            )}
                             {tr.module === 'subscription' && tr.institutions?.custom_subscription_fee && (
-                              <div className="text-[9px] font-black text-blue-500 mt-1 px-1">
-                                Expected: {tr.institutions.custom_subscription_fee} ৳ / month
+                              <div className="text-[9px] font-black text-blue-500 mt-0.5 px-1">
+                                Fee: {tr.institutions.custom_subscription_fee} ৳ / month
                               </div>
                             )}
                           </div>
@@ -3092,16 +3116,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       </div>
 
                       <div className="space-y-3">
-                        {paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && (
-                          <input 
-                            type="number" 
-                            disabled={approvingIds.has(tr.id)}
-                            className={`w-full h-14 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl font-black text-base text-center outline-none focus:border-blue-500/30 disabled:opacity-50 transition-all`} 
-                            value={smsToCredit[tr.id] || ''} 
-                            onChange={(e) => setSmsToCredit({...smsToCredit, [tr.id]: e.target.value})} 
-                            placeholder="SMS Quantity" 
-                          />
-                        )}
+                        <div className="grid grid-cols-1 gap-2">
+                           <div className="space-y-1">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-1">টাকার পরিমাণ সংশোধন (প্রয়োজন হলে)</p>
+                              <input 
+                                type="number" 
+                                disabled={approvingIds.has(tr.id)}
+                                className={`w-full h-12 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl font-black text-sm text-center outline-none focus:border-blue-500/30 disabled:opacity-50 transition-all`} 
+                                value={correctionAmounts[tr.id] || ''} 
+                                onChange={(e) => setCorrectionAmounts({...correctionAmounts, [tr.id]: e.target.value})} 
+                                placeholder={`Amount Correction (Original: ${tr.amount})`} 
+                              />
+                           </div>
+                           {paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && (
+                             <div className="space-y-1">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-1">SMS সংখ্যা</p>
+                                <input 
+                                  type="number" 
+                                  disabled={approvingIds.has(tr.id)}
+                                  className={`w-full h-12 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl font-black text-sm text-center outline-none focus:border-blue-500/30 disabled:opacity-50 transition-all`} 
+                                  value={smsToCredit[tr.id] || ''} 
+                                  onChange={(e) => setSmsToCredit({...smsToCredit, [tr.id]: e.target.value})} 
+                                  placeholder="SMS Quantity" 
+                                />
+                             </div>
+                           )}
+                        </div>
                         <button 
                           onClick={() => approveTransaction(tr)} 
                           disabled={approvingIds.has(tr.id) || (paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && !smsToCredit[tr.id])}
@@ -3151,7 +3191,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                 {tr.status}
                              </span>
                           </div>
-                          <p className={`text-xs font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'} font-noto truncate`}>{tr.institutions?.name}</p>
+                          <p className={`text-xs font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'} font-noto truncate`}>
+                             {tr.institutions?.config_json?.institute_code ? `[${tr.institutions.config_json.institute_code}] ` : ''}{tr.institutions?.name}
+                          </p>
                           <p className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-2">
                              <Smartphone size={10} /> {tr.sender_phone || 'N/A'}
                              {tr.sms_count && <span className="text-blue-500 font-black">({tr.sms_count} SMS)</span>}

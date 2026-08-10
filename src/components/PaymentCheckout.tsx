@@ -267,7 +267,8 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
           ...metadata,
           payment_method: paymentMethod,
           sender_number: normalizedSender,
-          checkout_session: true
+          checkout_session: true,
+          requested_amount: fixedAmount || parseInt(amount)
         }
       }).select().single();
 
