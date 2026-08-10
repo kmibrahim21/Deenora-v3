@@ -27,7 +27,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
 
   const t = {
     title: isBangla ? 'শ্রেণি ভিত্তিক ফলাফল বিবরণী' : 'Class Result Summary',
-    rank: 'Merit Position',
+    rank: isBangla ? 'মেধা স্থান' : 'Merit Position',
     roll: isBangla ? 'রোল' : 'Roll',
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     total: isBangla ? 'মোট' : 'Total',
@@ -40,6 +40,8 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
     principal: isBangla ? 'অধ্যক্ষ' : 'Principal',
     signature: isBangla ? 'স্বাক্ষর' : 'Signature'
   };
+
+  const toBnNum = (n: number | string) => isBangla ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]) : String(n);
 
   const ROWS_PER_PAGE = 20;
   const totalPages = Math.ceil(students.length / ROWS_PER_PAGE) || 1;
@@ -84,20 +86,20 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
             
             {/* Table */}
             <div className="overflow-hidden rounded-sm border border-slate-200 shadow-sm relative z-10 bg-white min-h-[450px]">
-              <table className="w-full border-collapse text-[10px] table-fixed">
+              <table className="w-full border-collapse text-[9px] table-fixed">
                 <thead>
                   <tr className="bg-[#1E3A8A] text-white">
-                    <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-12">{t.roll}</th>
+                    <th className="px-1 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-10">{t.roll}</th>
                     <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
                     {subjects.filter(s => {
                       return !isHighSchool || !s.pair_with_id;
                     }).map(s => {
                       return (
-                        <th key={s.id} className="px-1 py-1 text-center border-r border-white/10">
-                          <div className="mx-auto font-black uppercase tracking-widest text-[8px] max-w-[75px] leading-tight break-words whitespace-normal text-center">
+                        <th key={s.id} className="px-0.5 py-1 text-center border-r border-white/10">
+                          <div className="mx-auto font-black uppercase tracking-widest text-[7px] max-w-[70px] leading-tight break-words whitespace-normal text-center">
                             {s.subject_name}
                             {isHighSchool && (
-                              <div className="flex justify-center gap-1 mt-0.5 opacity-60 text-[6px]">
+                              <div className="flex justify-center gap-0.5 mt-0.5 opacity-60 text-[5px]">
                                 <span>C</span>
                                 <span>M</span>
                                 <span>P</span>
@@ -107,11 +109,11 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         </th>
                       );
                     })}
-                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.total}</th>
-                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.avg}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.grade}</th>
-                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
-                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest bg-blue-900 w-10">{t.rank}</th>
+                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-11">{t.total}</th>
+                    <th className="px-0.5 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.avg}</th>
+                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.grade}</th>
+                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-11">{t.gpa}</th>
+                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest bg-blue-900 w-11">{t.rank}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -123,15 +125,15 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                     }) || (student._total !== undefined && student._total !== null && student._total !== '' && Number(student._total) > 0) || student._hasAnyMark === true;
 
                     const total = hasAnyMark ? (student._total !== undefined && student._total !== '' ? student._total : 0) : '';
-                    const avg = hasAnyMark ? `${student._avg || '0.00'}%` : '';
-                    const gpa = hasAnyMark ? (student._gpa || '0.00') : '';
+                    const avg = hasAnyMark ? `${student._avg || '0.0'}%` : '';
+                    const gpa = hasAnyMark ? (student._gpa || '0.0') : '';
                     const grade = hasAnyMark ? (student._grade || 'F') : '';
                     const rank = hasAnyMark ? (student._rank && student._rank !== '-' ? student._rank : '') : '';
 
                     return (
                       <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                        <td className="px-2 py-1 font-mono font-black text-slate-900 border-r border-slate-100 text-[14px]">{student.roll}</td>
-                        <td className="px-2 py-1 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[13px] leading-tight">{student.student_name}</td>
+                        <td className="px-1 py-1 font-black text-slate-900 border-r border-slate-100 text-[11px]">{toBnNum(student.roll)}</td>
+                        <td className="px-2 py-1 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[10px] leading-tight">{student.student_name}</td>
                         {subjects.filter(sub => {
                           return !isHighSchool || !sub.pair_with_id;
                         }).map(s => {
@@ -153,31 +155,31 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                           }
 
                           return (
-                            <td key={s.id} className="px-1 py-1 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[12px]">
+                            <td key={s.id} className="px-0.5 py-1 text-center font-bold text-slate-900 border-r border-slate-100 text-[10px]">
                               {isHighSchool ? (
                                 <div className="flex flex-col leading-none">
-                                  <span>{totalVal}</span>
-                                  <div className="flex justify-center gap-0.5 text-[6px] opacity-40 font-normal">
-                                    <span>{cqVal !== undefined && cqVal !== '' ? cqVal : ''}</span>
-                                    <span>{mcqVal !== undefined && mcqVal !== '' ? mcqVal : ''}</span>
-                                    <span>{prVal !== undefined && prVal !== '' ? prVal : ''}</span>
+                                  <span>{toBnNum(totalVal)}</span>
+                                  <div className="flex justify-center gap-0.5 text-[5px] opacity-40 font-normal">
+                                    <span>{cqVal !== undefined && cqVal !== '' ? toBnNum(cqVal) : ''}</span>
+                                    <span>{mcqVal !== undefined && mcqVal !== '' ? toBnNum(mcqVal) : ''}</span>
+                                    <span>{prVal !== undefined && prVal !== '' ? toBnNum(prVal) : ''}</span>
                                   </div>
                                 </div>
-                              ) : totalVal}
+                              ) : toBnNum(totalVal)}
                             </td>
                           );
                         })}
-                        <td className="px-2 py-1 text-center font-mono font-black text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[14px]">{total}</td>
-                        <td className="px-1 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{avg}</td>
-                        <td className={`px-2 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 text-[14px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
+                        <td className="px-1 py-1 text-center font-black text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[11px]">{toBnNum(total)}</td>
+                        <td className="px-0.5 py-1 text-center font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[11px]">{toBnNum(avg)}</td>
+                        <td className={`px-1 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 text-[11px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
                           {grade ? (
-                            <span className="inline-flex items-center justify-center w-8 h-6 rounded-lg bg-white border border-slate-100 shadow-sm">
+                            <span className="inline-flex items-center justify-center w-7 h-5 rounded bg-white border border-slate-100 shadow-sm">
                               {grade}
                             </span>
                           ) : ''}
                         </td>
-                        <td className="px-2 py-1 text-center font-mono font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[14px]">{gpa}</td>
-                        <td className="px-1 py-1 text-center font-mono font-black text-[#2563EB] bg-blue-50/20 text-[14px]">{rank}</td>
+                        <td className="px-1 py-1 text-center font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[11px]">{toBnNum(gpa)}</td>
+                        <td className="px-1 py-1 text-center font-black text-[#2563EB] bg-blue-50/20 text-[11px]">{toBnNum(rank)}</td>
                       </tr>
                     );
                   })}
@@ -189,7 +191,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
             <div className="absolute bottom-6 left-10 right-10 flex justify-between items-end px-8 z-10">
               <div className="flex flex-col items-center gap-2">
                   <div className="text-[10px] font-black text-slate-400">
-                     {isBangla ? 'পৃষ্ঠা' : 'Page'} {pageIndex + 1} / {totalPages}
+                     {isBangla ? 'পৃষ্ঠা' : 'Page'} {toBnNum(pageIndex + 1)} / {toBnNum(totalPages)}
                   </div>
               </div>
 

@@ -694,7 +694,7 @@ export const generateClassResultPDF = async (
                 if (resultSystem === 'grading' || resultSystem === 'grading_optional' || resultSystem === 'high_school') {
                     let avgGp = pointsSum / numMainSubjects;
                     if (avgGp > 5.0) avgGp = 5.0;
-                    gpa = avgGp.toFixed(2);
+                    gpa = avgGp.toFixed(1);
                     if (avgGp >= 5.0) grade = 'A+';
                     else if (avgGp >= 4.0) grade = 'A';
                     else if (avgGp >= 3.5) grade = 'A-';
@@ -704,12 +704,12 @@ export const generateClassResultPDF = async (
                     else grade = 'F';
                 } else {
                     const overallPct = totalPossible > 0 ? (total / totalPossible) * 100 : 0;
-                    if (overallPct >= 80) { gpa = '5.00'; grade = 'A+'; }
-                    else if (overallPct >= 70) { gpa = '4.00'; grade = 'A'; }
-                    else if (overallPct >= 60) { gpa = '3.50'; grade = 'A-'; }
-                    else if (overallPct >= 50) { gpa = '3.00'; grade = 'B'; }
-                    else if (overallPct >= 40) { gpa = '2.00'; grade = 'C'; }
-                    else if (overallPct >= 33) { gpa = '1.00'; grade = 'D'; }
+                    if (overallPct >= 80) { gpa = '5.0'; grade = 'A+'; }
+                    else if (overallPct >= 70) { gpa = '4.0'; grade = 'A'; }
+                    else if (overallPct >= 60) { gpa = '3.5'; grade = 'A-'; }
+                    else if (overallPct >= 50) { gpa = '3.0'; grade = 'B'; }
+                    else if (overallPct >= 40) { gpa = '2.0'; grade = 'C'; }
+                    else if (overallPct >= 33) { gpa = '1.0'; grade = 'D'; }
                 }
             }
         }
@@ -719,7 +719,7 @@ export const generateClassResultPDF = async (
         return {
             ...student,
             _total: hasAnyMark ? total : '',
-            _avg: hasAnyMark ? avgPercentage.toFixed(2) : '',
+            _avg: hasAnyMark ? avgPercentage.toFixed(1) : '',
             _gpa: hasAnyMark ? gpa : '',
             _grade: hasAnyMark ? grade : '',
             _hasFailed: hasAnyMark ? hasFailed : true,

@@ -114,7 +114,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
         marks: markMap,
         total: hasAnyMark ? totalObtained : '',
         fullTotal: totalPossible,
-        percentage: hasAnyMark ? pct.toFixed(2) : '',
+        percentage: hasAnyMark ? pct.toFixed(1) : '',
         grade: hasAnyMark ? grade : '',
         isPassed,
         hasAnyMark,
@@ -170,7 +170,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
           marks: markMap,
           total: hasAnyMark ? (std._total !== undefined && std._total !== '' ? std._total : total) : '',
           fullTotal,
-          percentage: hasAnyMark ? ((std._avg || pct).toFixed ? (std._avg || pct).toFixed(2) : String(std._avg || pct)) : '',
+          percentage: hasAnyMark ? ((std._avg || pct).toFixed ? (std._avg || pct).toFixed(1) : String(std._avg || pct)) : '',
           grade: hasAnyMark ? grade : '',
           isPassed,
           hasAnyMark,
@@ -203,14 +203,14 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
       }
 
       // Calculate GPA
-      let calculatedGpa = '0.00';
+      let calculatedGpa = '0.0';
       if (std.rawGpa !== undefined && std.rawGpa !== null && std.rawGpa !== '') {
-        calculatedGpa = Number(std.rawGpa).toFixed(2);
+        calculatedGpa = Number(std.rawGpa).toFixed(1);
       } else if (!std.isPassed || std.grade === 'F') {
-        calculatedGpa = '0.00';
+        calculatedGpa = '0.0';
       } else {
         const gMap: Record<string, number> = { 'A+': 5.0, 'A': 4.0, 'A-': 3.5, 'B+': 3.5, 'B': 3.0, 'C': 2.0, 'D': 1.0 };
-        calculatedGpa = (gMap[std.grade] || 0.0).toFixed(2);
+        calculatedGpa = (gMap[std.grade] || 0.0).toFixed(1);
       }
 
       // Calculate Rank
@@ -236,7 +236,9 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
   const absentCount = totalStudents - presentCount;
   const passedCount = studentList.filter(s => s.hasAnyMark && s.isPassed).length;
   const failedCount = studentsWithMarks.length - passedCount;
-  const passPercentage = studentsWithMarks.length > 0 ? ((passedCount / studentsWithMarks.length) * 100).toFixed(2) : '0.00';
+  const passPercentage = studentsWithMarks.length > 0 ? ((passedCount / studentsWithMarks.length) * 100).toFixed(1) : '0.0';
+
+  const toBnNum = (n: number | string) => isBangla ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]) : String(n);
 
   // Grade Distribution
   const gradeCounts = React.useMemo(() => {
@@ -475,8 +477,8 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
                         return (
                           <tr key={std.id} className={isEven ? 'bg-white' : 'bg-slate-50/60'}>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-mono font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
-                              {globalIndex}
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                              {toBnNum(globalIndex)}
                             </td>
                             <td className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} text-left font-bold text-slate-900 border-r border-slate-200 truncate whitespace-nowrap`} title={std.student_name}>
                               {std.student_name}
@@ -491,22 +493,22 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               return (
                                 <td
                                   key={sub.id}
-                                  className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono border-r border-slate-200 text-center truncate ${
+                                  className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} border-r border-slate-200 text-center truncate ${
                                     !hasMark ? 'text-slate-400 font-normal' : isPass ? 'text-slate-900 font-extrabold' : 'text-red-600 font-black bg-red-50/50'
                                   }`}
                                 >
-                                  {hasMark ? markNum : ''}
+                                  {hasMark ? toBnNum(markNum!) : ''}
                                 </td>
                               );
                             })}
 
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
-                              {std.total}
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
+                              {toBnNum(std.total)}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
-                              {std.percentage !== '' && std.percentage !== undefined ? `${std.percentage}%` : ''}
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                              {std.percentage !== '' && std.percentage !== undefined ? `${toBnNum(std.percentage)}%` : ''}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {std.gpa}
                             </td>
                             <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-black border-r border-slate-200 text-center truncate ${
@@ -546,28 +548,28 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                       } font-semibold text-slate-700`}>
                         <div className="flex justify-between border-b border-slate-200 pb-0.5">
                           <span>{t.totalStudents}</span>
-                          <span className="font-bold text-slate-900">: {totalStudents}</span>
+                          <span className="font-bold text-slate-900">: {toBnNum(totalStudents)}</span>
                         </div>
                         <div className="flex justify-between border-b border-slate-200 pb-0.5">
                           <span>{t.studentsPresent}</span>
-                          <span className="font-bold text-slate-900">: {presentCount}</span>
+                          <span className="font-bold text-slate-900">: {toBnNum(presentCount)}</span>
                         </div>
                         <div className="flex justify-between border-b border-slate-200 pb-0.5">
                           <span>{t.absent}</span>
-                          <span className="font-bold text-slate-900">: {absentCount}</span>
+                          <span className="font-bold text-slate-900">: {toBnNum(absentCount)}</span>
                         </div>
                         <div className="flex justify-between border-b border-slate-200 pb-0.5">
                           <span>{t.passed}</span>
-                          <span className="font-bold text-emerald-700">: {passedCount}</span>
+                          <span className="font-bold text-emerald-700">: {toBnNum(passedCount)}</span>
                         </div>
                         <div className="flex justify-between border-b border-slate-200 pb-0.5">
                           <span>{t.failed}</span>
-                          <span className="font-bold text-red-600">: {failedCount}</span>
+                          <span className="font-bold text-red-600">: {toBnNum(failedCount)}</span>
                         </div>
                       </div>
                       <div className="mt-1 text-center pt-0.5 border-t border-blue-200">
                         <span className={`${numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[8.5px]'} font-extrabold uppercase text-slate-500 block`}>{t.passPercentage}</span>
-                        <span className={`${numStudentsOnPage > 22 ? 'text-base' : 'text-lg'} font-black text-[#1E3A8A] leading-tight`}>{passPercentage}%</span>
+                        <span className={`${numStudentsOnPage > 22 ? 'text-base' : 'text-lg'} font-black text-[#1E3A8A] leading-tight`}>{toBnNum(passPercentage)}%</span>
                       </div>
                     </div>
 

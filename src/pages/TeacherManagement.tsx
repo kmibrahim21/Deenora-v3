@@ -498,7 +498,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           
           let smsText = template
              .replace(/\{month\}/g, formatSalaryMonth(salaryMonth))
-             .replace(/\{amount\}/g, amountToPay.toString());
+             .replace(/\{amount\}/g, amountToPay.toString())
+             .replace(/\{paid_amount\}/g, amountToPay.toString())
+             .replace(/\{institution_name\}/g, madrasah.name || '')
+             .replace(/\{institute_name\}/g, madrasah.name || '')
+             .replace(/\{teacher_name\}/g, teacher.name || '');
              
           await smsApiModule.sendBulk(madrasah.id, [{ id: teacher.id, guardian_phone: teacher.phone, student_name: teacher.name } as any], smsText);
         } catch (smsError) {
@@ -1495,7 +1499,11 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                                   
                                   let smsText = template
                                      .replace(/\{month\}/g, formatSalaryMonth(salaryMonth))
-                                     .replace(/\{amount\}/g, due.toString());
+                                     .replace(/\{amount\}/g, due.toString())
+                                     .replace(/\{paid_amount\}/g, due.toString())
+                                     .replace(/\{institution_name\}/g, madrasah.name || '')
+                                     .replace(/\{institute_name\}/g, madrasah.name || '')
+                                     .replace(/\{teacher_name\}/g, teacher.name || '');
                                      
                                   await smsApiModule.sendBulk(madrasah.id, [{ id: teacher.id, guardian_phone: teacher.phone, student_name: teacher.name } as any], smsText);
                                 } catch (smsError) {

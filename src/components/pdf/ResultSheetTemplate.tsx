@@ -30,6 +30,8 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
   const isHighSchool = config?.result_system === "high_school";
 
+  const toBnNum = (n: number | string) => isBangla ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]) : String(n);
+
   const t = {
     marksheet: isBangla ? "একাডেমিক ট্রান্সক্রিপ্ট" : "ACADEMIC TRANSCRIPT",
     name: isBangla ? "শিক্ষার্থীর নাম" : "Student's Name",
@@ -79,14 +81,14 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     student.gpa && student.gpa !== "0.00" 
       ? student.gpa 
       : marks.length > 0 
-        ? marks.some(m => m.grade === 'F') ? '0.00' : (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(2)
-        : '0.00'
+        ? marks.some(m => m.grade === 'F') ? '0.0' : (marks.reduce((sum, m) => sum + Number(m.grade_point || 0), 0) / marks.length).toFixed(1)
+        : '0.0'
   ) : '';
 
   const finalGrade = hasAnyMark ? (
     student.grade && student.grade !== 'F' 
       ? student.grade 
-      : averageGpa === '5.00' ? 'A+' : averageGpa >= '4.00' ? 'A' : averageGpa >= '3.50' ? 'A-' : averageGpa >= '3.00' ? 'B' : averageGpa >= '2.00' ? 'C' : averageGpa >= '1.00' ? 'D' : 'F'
+      : averageGpa === '5.0' ? 'A+' : Number(averageGpa) >= 4.0 ? 'A' : Number(averageGpa) >= 3.5 ? 'A-' : Number(averageGpa) >= 3.0 ? 'B' : Number(averageGpa) >= 2.0 ? 'C' : Number(averageGpa) >= 1.0 ? 'D' : 'F'
   ) : '';
 
   const isPassed = hasAnyMark && finalGrade !== 'F';
@@ -195,7 +197,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                   )}
                  </div>
               </div>
-              <p className="mt-1 text-[8px] font-black uppercase text-slate-500 tracking-wider leading-none">{isBangla ? 'রোল' : 'ROLL'}: {student.roll}</p>
+              <p className="mt-1 text-[8px] font-black uppercase text-slate-500 tracking-wider leading-none">{isBangla ? 'রোল' : 'ROLL'}: {toBnNum(student.roll)}</p>
             </div>
           </div>
 
@@ -210,13 +212,13 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             {/* Middle Column: Academic Info */}
             <div className="space-y-1 border-r border-slate-200 pr-3 col-span-4">
               <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {student.roll}</span></div>
-              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {student.date_of_birth || '-'}</span></div>
+              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {toBnNum(student.roll)}</span></div>
+              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {isBangla ? toBnNum(student.date_of_birth || '-') : (student.date_of_birth || '-')}</span></div>
             </div>
             {/* Last Column: Other Info */}
             <div className="space-y-1 pl-1 col-span-3">
-              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-800">: {student.academic_year || new Date().getFullYear()}</span></div>
-              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {student.registration_number || '-'}</span></div>
+              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-800">: {toBnNum(student.academic_year || new Date().getFullYear())}</span></div>
+              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {toBnNum(student.registration_number || '-')}</span></div>
             </div>
           </div>
 
@@ -333,23 +335,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
                   return rows.map((row, i) => (
                     <tr key={i} className={`${row.isParentRow ? "bg-blue-50/60 font-black" : (i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}`}>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[14px] font-black text-slate-950">{String(row.sl).padStart(2, '0')}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[13px]">{toBnNum(row.sl)}</td>
                       <td className={`border border-slate-300 py-1 px-3 font-bold font-tiro text-slate-950 leading-tight ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
                         {row.name} {row.is_optional ? <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
                       </td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.full}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.pass}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.highest}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.full)}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pass)}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.highest)}</td>
                       {isHighSchool && (
                         <>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.cq ?? '-'}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.mcq ?? '-'}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-mono text-[16px] font-bold text-slate-950">{row.pr ?? '-'}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.cq ?? '-')}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.mcq ?? '-')}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pr ?? '-')}</td>
                         </>
                       )}
-                      <td className="border border-slate-300 py-1 px-1 text-center font-black font-mono text-slate-950 bg-blue-50/40 text-[18px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? String(row.obtained).padStart(2, '0') : ''}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[18px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold font-mono text-[16px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.gp}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-black text-slate-950 bg-blue-50/40 text-[16px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? toBnNum(row.obtained) : ''}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[16px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold text-[14px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{toBnNum(row.gp)}</td>
                     </tr>
                   ));
                 })()}
@@ -357,15 +359,15 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               <tfoot>
                 <tr className="bg-slate-100 text-[12px] font-black border-t-2 border-slate-800">
                   <td colSpan={2} className="border border-slate-300 py-1.5 px-3 text-right uppercase tracking-wider text-[10px] text-slate-600">{t.totalMarks}:</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-mono text-[13px]">{totalFull}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-mono text-[13px]">-</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-mono text-[13px]">-</td>
+                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]">{toBnNum(totalFull)}</td>
+                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]">-</td>
+                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]">-</td>
                   {isHighSchool && (
-                    <td className="border border-slate-300 py-1.5 px-1 text-center font-mono text-[13px]" colSpan={3}>-</td>
+                    <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]" colSpan={3}>-</td>
                   )}
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-mono text-[#1E3A8A] text-[15px] bg-blue-100/60">{totalObtained}</td>
+                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[#1E3A8A] text-[15px] bg-blue-100/60">{toBnNum(totalObtained)}</td>
                   <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15px] bg-blue-100/60 text-[#1E3A8A]">{finalGrade}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-mono text-[15px] bg-blue-100/60 text-[#1E3A8A]">{averageGpa}</td>
+                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15px] bg-blue-100/60 text-[#1E3A8A]">{toBnNum(averageGpa)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -381,7 +383,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                 <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
                   <span className="text-base">🏆</span>
                   <span className="text-[13px] font-black text-[#1E3A8A] uppercase whitespace-nowrap">
-                    {t.rank}: <span className="text-[#1E3A8A] font-mono text-[15px] font-black ml-1">{hasAnyMark && student.merit_position && student.merit_position !== "null" && student.merit_position !== "-" ? student.merit_position : '-'}</span>
+                    {t.rank}: <span className="text-[#1E3A8A] font-bold text-[15px] ml-1">{hasAnyMark && student.merit_position && student.merit_position !== "null" && student.merit_position !== "-" ? toBnNum(student.merit_position) : '-'}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
@@ -390,7 +392,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                 </div>
               </div>
               <div className="flex justify-between items-center text-[11px] font-bold text-slate-600 px-0.5 gap-2">
-                <span className="whitespace-nowrap shrink-0">{isBangla ? 'উপস্থিতি' : 'Attendance'}: <strong className="text-slate-900 font-mono text-[12px] ml-1">{formattedAttendance}</strong></span>
+                <span className="whitespace-nowrap shrink-0">{isBangla ? 'উপস্থিতি' : 'Attendance'}: <strong className="text-slate-900 font-bold text-[12px] ml-1">{toBnNum(formattedAttendance)}</strong></span>
                 <span className="whitespace-nowrap shrink-0">{isBangla ? 'মূল্যায়ন' : 'Assessment'}: <strong className="text-[#1E3A8A] font-black ml-1">{assessmentText}</strong></span>
               </div>
             </div>
@@ -399,7 +401,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               <p className="text-[9px] font-black uppercase tracking-wider text-blue-100 mb-1 whitespace-nowrap">{isBangla ? 'সর্বমোট ফলাফল' : 'Final Grade & GPA'}</p>
               <div className="flex items-baseline gap-2 whitespace-nowrap">
                 <h2 className="text-[28px] font-black text-white leading-none">{hasAnyMark ? finalGrade : '-'}</h2>
-                {hasAnyMark && averageGpa ? <span className="text-[15px] font-black font-mono text-blue-200">({averageGpa})</span> : null}
+                {hasAnyMark && averageGpa ? <span className="text-[15px] font-black text-blue-200">({toBnNum(averageGpa)})</span> : null}
               </div>
             </div>
           </div>
@@ -408,7 +410,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             {/* Issue Date - Left Side */}
             <div className="w-32 shrink-0 border-l-4 border-[#1E3A8A]/30 pl-3 py-0.5">
                 <p className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">{t.issueDate}</p>
-                <p className="text-[11px] font-black text-[#1E3A8A] font-mono">{new Date().toLocaleDateString('en-GB')}</p>
+                <p className="text-[11px] font-black text-[#1E3A8A]">{isBangla ? toBnNum(new Date().toLocaleDateString('en-GB')) : new Date().toLocaleDateString('en-GB')}</p>
             </div>
 
             {/* Signatures - Right Side */}
