@@ -38,7 +38,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
           <div key={pageIndex} className="page-container" style={{ width: '1123px', height: '794px', padding: '40px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden', border: '8px solid #f1f5f9' }}>
             {/* Header */}
             <div className="text-center mb-6 border-b-2 border-slate-900 pb-4">
-              <h1 className="text-4xl font-black text-slate-900 mb-1 uppercase tracking-tight">{madrasah.name}</h1>
+              <h1 className="text-4xl font-black text-slate-900 mb-1 uppercase tracking-tight leading-normal">{madrasah.name}</h1>
               <div className="text-xl font-bold text-[#2563EB] mb-2">{title}</div>
               <div className="flex justify-center gap-6 text-xs font-bold uppercase tracking-widest text-slate-900">
                 <span>{t.class}: {className}</span>
@@ -69,8 +69,8 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                 <tbody className="divide-y divide-slate-100">
                   {pageData.map((std, idx) => (
                     <tr key={std.id || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                      <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[14px]">{std.roll || '-'}</td>
-                      <td className="px-2 py-1.5 font-bold text-slate-900 border-r border-slate-100 truncate max-w-[120px] text-[13px]">{std.student_name}</td>
+                      <td className="px-2 py-2 text-center font-mono font-bold text-slate-900 border-r border-slate-100 text-[14px]">{std.roll || '-'}</td>
+                      <td className="px-2 py-2 font-bold text-slate-900 border-r border-slate-100 max-w-[120px] text-[13px] leading-normal">{std.student_name}</td>
                       {subjects.map(sub => (
                         <td key={sub} className="px-1 py-1.5 text-center font-mono text-slate-900 border-r border-slate-100 text-[14px]">
                           {std.marks[sub] || '-'}

@@ -3,8 +3,9 @@ import { supabase } from 'supabase';
 import { Institution, Class, Exam, FinalResult, FinalResultExam, Language, UserRole, Student, Profile } from 'types';
 import { ArrowLeft, Plus, Save, Trash2, Download, Loader2, Calculator, Check, X, AlertCircle } from 'lucide-react';
 import { t } from 'translations';
-import { generateFinalResultPDF } from '../../../../utils/pdfGenerator';
+import { generateFinalResultPDF, generateFinalIndividualResultPDF } from '../../../../utils/pdfGenerator';
 import { sortMadrasahClasses } from 'pages/Classes';
+import { FileText } from 'lucide-react';
 
 interface FinalResultsProps {
   lang: Language;
@@ -457,6 +458,56 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     }
   };
 
+  const handleDownloadIndividualPDF = async (student: any, downloadLang: 'en' | 'bn' = lang) => {
+    if (!viewResult || !madrasah) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    try {
+      await generateFinalIndividualResultPDF(
+          student,
+          viewResult.title,
+          subjects,
+          madrasah,
+          downloadLang,
+          (p) => setDownloadProgress(p)
+      );
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Error downloading Mark Sheet');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
+  const handleMassDownloadMarksheets = async (downloadLang: 'en' | 'bn' = lang) => {
+    if (!viewResult || !madrasah || calculatedData.length === 0) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    try {
+      for (let i = 0; i < calculatedData.length; i++) {
+        const student = calculatedData[i];
+        setDownloadProgress(Math.floor((i / calculatedData.length) * 100));
+        await generateFinalIndividualResultPDF(
+          student,
+          viewResult.title,
+          subjects,
+          madrasah,
+          downloadLang,
+          () => {} // Don't update individual progress for mass download
+        );
+      }
+    } catch (error) {
+      console.error('Mass Download error:', error);
+      alert('Error during mass download');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       {/* Loading Overlay */}
@@ -517,12 +568,25 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           </button>
         )}
         {viewResult && (
-          <button onClick={() => {
-              setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadPDF(l));
-              setShowDownloadLangModal(true);
-          }} className="w-10 h-10 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all">
-            <Download size={20}/>
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => {
+                setDownloadAction(() => (l: 'en' | 'bn') => handleMassDownloadMarksheets(l));
+                setShowDownloadLangModal(true);
+              }} 
+              className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-xs transition-all ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm'}`}
+              title="Download All Marksheets"
+            >
+              <FileText size={18} />
+              <span className="hidden sm:inline">{lang === 'bn' ? 'সকল মার্কশীট' : 'All Marksheets'}</span>
+            </button>
+            <button onClick={() => {
+                setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadPDF(l));
+                setShowDownloadLangModal(true);
+            }} className="w-10 h-10 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all" title="Download Result List">
+              <Download size={20}/>
+            </button>
+          </div>
         )}
       </div>
 
@@ -572,6 +636,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                     <th className="py-4 text-[10px] font-black text-blue-400 uppercase text-center">Total</th>
                     <th className="py-4 text-[10px] font-black text-purple-400 uppercase text-center">GPA</th>
                     <th className="py-4 text-[10px] font-black text-emerald-400 uppercase text-center">Grade</th>
+                    <th className="py-4 text-[10px] font-black text-slate-400 uppercase text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -592,6 +657,18 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                       <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} text-xs`}>{student.total}</td>
                       <td className="py-4 px-2 text-center font-black text-purple-600 text-xs">{student.gpa}</td>
                       <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">{student.grade}</td>
+                      <td className="py-4 px-2 text-center">
+                        <button 
+                          onClick={() => {
+                            setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadIndividualPDF(student, l));
+                            setShowDownloadLangModal(true);
+                          }}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all mx-auto ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}
+                          title="Download Mark Sheet"
+                        >
+                          <FileText size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

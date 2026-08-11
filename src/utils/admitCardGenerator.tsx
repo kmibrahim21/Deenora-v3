@@ -128,9 +128,15 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
               {isBangla ? 'ঠিকানা : ' : 'Address: '}{madrasah.address || (isBangla ? 'কয়রাবাজার, উপজেলা : কয়রা, জেলা : খুলনা ।' : 'Koyrabazar, Koyra, Khulna')}
             </p>
             <div className={headerStyles.infoClass}>
-              <span>{isBangla ? 'ইমেইল : ' : 'Email: '}{madrasah.email || 'info@madrasah.com'}</span>
+              <span className="flex items-center gap-1">
+                <span>{isBangla ? 'ইমেইল : ' : 'Email: '}</span>
+                <span>{madrasah.email || 'info@madrasah.com'}</span>
+              </span>
               <span className="opacity-40">|</span>
-              <span>{isBangla ? 'মোবাইল : ' : 'Mobile: '}{isBangla ? toBanglaNum(madrasah.phone || '01700000000') : (madrasah.phone || '01700000000')}</span>
+              <span className="flex items-center gap-1">
+                <span>{isBangla ? 'মোবাইল : ' : 'Mobile: '}</span>
+                <span>{isBangla ? toBanglaNum(madrasah.phone || '01700000000') : (madrasah.phone || '01700000000')}</span>
+              </span>
             </div>
           </div>
 
@@ -439,10 +445,12 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
             <h1 className="text-[44px] font-black drop-shadow-md tracking-wide leading-none" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
               {madrasah.name}
             </h1>
-            <p className="text-[14px] mt-2.5 text-blue-50 drop-shadow flex items-center gap-2 font-medium">
+            <p className="text-[14px] mt-2.5 text-blue-50 drop-shadow flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-medium">
               <span>{madrasah.address || ''}</span>
-              {(madrasah.address && madrasah.phone) && <span className="w-1.5 h-1.5 rounded-full bg-blue-300"></span>}
-              {madrasah.phone && <span>Mobile: {madrasah.phone}</span>}
+              <div className="flex items-center gap-4">
+                {madrasah.email && <span>Email: {madrasah.email}</span>}
+                {madrasah.phone && <span>Mobile: {madrasah.phone}</span>}
+              </div>
             </p>
           </div>
         </div>

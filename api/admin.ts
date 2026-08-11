@@ -294,6 +294,271 @@ export default async function handler(req, res) {
       return await setupInstitution(supabase, userId, body, res);
     }
 
+    if (action === 'update_institution') {
+      const { id, ...updateFields } = body;
+      if (!id) return res.status(400).json({ error: 'Institution ID is required' });
+
+      // If updating config_json, ensure it's handled as an object
+      if (updateFields.config_json && typeof updateFields.config_json === 'string') {
+        try {
+          updateFields.config_json = JSON.parse(updateFields.config_json);
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('institutions')
+        .update(updateFields)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return res.status(200).json({ success: true, data });
+    }
+
+    if (action === 'delete_institution') {
+      const { id } = body;
+      if (!id) return res.status(400).json({ error: 'Institution ID is required' });
+
+      // Delete the institution (cascades should handle profiles/students etc in DB)
+      const { error } = await supabase.from('institutions').delete().eq('id', id);
+      if (error) throw error;
+      
+      // Also delete from auth if possible
+      try {
+        await supabase.auth.admin.deleteUser(id);
+      } catch (e) {
+        console.warn('Failed to delete auth user during institution deletion:', e);
+      }
+
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'update_staff') {
+      const { id, name, email, password, role, permissions, is_active } = body;
+      if (!id) return res.status(400).json({ error: 'Staff ID is required' });
+
+      const updates: any = {};
+      if (name !== undefined) updates.full_name = name;
+      if (role !== undefined) updates.role = role;
+      if (permissions !== undefined) updates.permissions = permissions;
+      if (is_active !== undefined) updates.is_active = is_active;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', id);
+
+      if (profileError) throw profileError;
+
+      // Update auth user if name/email/password changed
+      const authUpdates: any = {};
+      if (name) authUpdates.user_metadata = { name: name };
+      if (email) authUpdates.email = email;
+      if (password) authUpdates.password = password;
+
+      if (Object.keys(authUpdates).length > 0) {
+        const { error: authError } = await supabase.auth.admin.updateUserById(id, authUpdates);
+        if (authError) throw authError;
+      }
+
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'update_system_settings') {
+      const { id, ...updates } = body;
+      const { data, error } = await supabase
+        .from('system_settings')
+        .upsert({ id: id || '00000000-0000-0000-0000-000000000001', ...updates })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return res.status(200).json({ success: true, data });
+    }
+
+    if (action === 'update_package') {
+      const { id, name, rate, features, sort_order } = body;
+      let result;
+      if (id && id.length > 5) {
+        result = await supabase
+          .from('subscription_packages')
+          .update({ name, rate, features, sort_order })
+          .eq('id', id)
+          .select()
+          .single();
+      } else {
+        result = await supabase
+          .from('subscription_packages')
+          .insert([{ name, rate, features, sort_order }])
+          .select()
+          .single();
+      }
+      
+      if (result.error) throw result.error;
+      return res.status(200).json({ success: true, data: result.data });
+    }
+
+    if (action === 'delete_staff') {
+      const { id } = body;
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'quick_recharge') {
+      const { id, type, amount } = body;
+      
+      // Fetch current balance
+      const { data: inst, error: fetchError } = await supabase
+        .from('institutions')
+        .select('balance, sms_balance')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+
+      const currentBalance = type === 'voice' ? (inst.balance || 0) : (inst.sms_balance || 0);
+      const newBalance = currentBalance + Number(amount);
+      
+      const updateData = type === 'voice' ? { balance: newBalance } : { sms_balance: newBalance };
+      
+      const { error: updateError } = await supabase
+        .from('institutions')
+        .update(updateData)
+        .eq('id', id);
+      
+      if (updateError) throw updateError;
+
+      // Log transaction
+      await supabase.from('transactions').insert({
+        institution_id: id,
+        amount: type === 'voice' ? Number(amount) : 0,
+        description: `Admin Quick ${type.toUpperCase()} Credit`,
+        module: type,
+        status: 'approved',
+        payment_method: 'Admin Transfer'
+      });
+
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'approve_transaction') {
+      const { id, status, amount, institution_id, module, metadata } = body;
+      
+      // Update transaction status
+      const updatePayload: any = { status };
+      if (amount !== undefined) updatePayload.amount = amount;
+      
+      const { error: trError } = await supabase
+        .from('transactions')
+        .update(updatePayload)
+        .eq('id', id);
+      
+      if (trError) throw trError;
+
+      if (status === 'approved') {
+        if (module === 'voice' || module === 'payment') {
+          const { data: instData, error: instError } = await supabase.from('institutions').select('balance').eq('id', institution_id).single();
+          if (instError) throw instError;
+          const newBalance = Number(instData.balance || 0) + Number(amount);
+          const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', institution_id);
+          if (balanceError) throw balanceError;
+        } else if (module === 'sms') {
+          const { data: instData, error: instError } = await supabase.from('institutions').select('sms_balance').eq('id', institution_id).single();
+          if (instError) throw instError;
+          const newBalance = Number(instData.sms_balance || 0) + Number(amount);
+          const { error: balanceError } = await supabase.from('institutions').update({ sms_balance: newBalance }).eq('id', institution_id);
+          if (balanceError) throw balanceError;
+
+          // Update Admin SMS Stock
+          const { data: stockData, error: stockFetchError } = await supabase
+            .from('admin_sms_stock')
+            .select('*')
+            .limit(1)
+            .single();
+          if (!stockFetchError && stockData) {
+            await supabase
+              .from('admin_sms_stock')
+              .update({ 
+                remaining_sms: (stockData.remaining_sms || 0) - Number(amount),
+                last_updated: new Date().toISOString()
+              })
+              .eq('id', stockData.id);
+          }
+        } else if (module === 'subscription') {
+          const { data: instData, error: instFetchError } = await supabase
+            .from('institutions')
+            .select('config_json, subscription_end')
+            .eq('id', institution_id)
+            .single();
+          
+          if (!instFetchError && instData) {
+            const config = (instData.config_json as any) || {};
+            const currentPaidMonths = config.paid_months || [];
+            const newMonths = metadata?.months || [];
+            const updatedPaidMonths = Array.from(new Set([...currentPaidMonths, ...newMonths])).sort();
+            
+            const updatedConfig = {
+              ...config,
+              paid_months: updatedPaidMonths,
+              package_name: metadata?.package_name || config.package_name,
+              package_rate: metadata?.package_rate || config.package_rate,
+              subscription_type: metadata?.subscription_type || config.subscription_type
+            };
+
+            let newSubEnd = instData.subscription_end;
+            if (updatedPaidMonths.length > 0) {
+              const lastMonthStr = updatedPaidMonths[updatedPaidMonths.length - 1];
+              const [year, month] = lastMonthStr.split('-').map(Number);
+              const lastDay = new Date(year, month, 0);
+              newSubEnd = lastDay.toISOString();
+            }
+
+            const { error: instUpdateError } = await supabase
+              .from('institutions')
+              .update({ 
+                config_json: updatedConfig,
+                subscription_end: newSubEnd,
+                status: 'active'
+              })
+              .eq('id', institution_id);
+            if (instUpdateError) throw instUpdateError;
+          }
+        }
+      }
+
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'payment_update') {
+      const { id, amount, description, payment_method, metadata, updated_config } = body;
+      
+      // 1. Insert Transaction
+      const { error: trError } = await supabase.from('transactions').insert({
+        institution_id: id,
+        amount: Number(amount),
+        description: description || 'Payment received',
+        status: 'approved',
+        payment_method: payment_method || 'Admin Direct',
+        module: 'subscription',
+        metadata: metadata
+      });
+      if (trError) throw trError;
+
+      // 2. Update Institution
+      const { error: updateError } = await supabase
+        .from('institutions')
+        .update({ config_json: updated_config })
+        .eq('id', id);
+      
+      if (updateError) throw updateError;
+
+      return res.status(200).json({ success: true });
+    }
+
     if (action === 'assign_voice') {
       const { institution_id, voice_id, voice_name, preview_url } = body;
       

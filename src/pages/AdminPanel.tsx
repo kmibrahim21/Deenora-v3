@@ -656,32 +656,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       const amount = type === 'voice' ? (Number(rechargeAmount) || 0) : (Number(rechargeSmsCount) || 0);
       if (amount <= 0) throw new Error('পরিমাণ সঠিক নয়');
 
-      const currentBalance = type === 'voice' 
-        ? (showRechargeModal.institution.balance || 0) 
-        : (showRechargeModal.institution.sms_balance || 0);
-      
-      const newBalance = currentBalance + amount;
-      
-      const updateData = type === 'voice' 
-        ? { balance: newBalance } 
-        : { sms_balance: newBalance };
-
-      const { error } = await supabase
-        .from('institutions')
-        .update(updateData)
-        .eq('id', showRechargeModal.institution.id);
-
-      if (error) throw error;
-
-      // Log transaction
-      await supabase.from('transactions').insert({
-        institution_id: showRechargeModal.institution.id,
-        amount: type === 'voice' ? amount : 0,
-        description: `Super Admin Quick ${type.toUpperCase()} Credit`,
-        module: type,
-        status: 'approved',
-        payment_method: 'Admin Transfer'
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'quick_recharge',
+          id: showRechargeModal.institution.id,
+          type,
+          amount
+        })
       });
+
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
 
       setStatusModal({
         show: true,
@@ -1531,48 +1522,62 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         fee_engine: editFeeEngine,
         accounting_mode: editAccountingMode
       });
-      const { data, error } = await supabase.from('institutions').update({
-        name: editName.trim(),
-        phone: editPhone.trim(),
-        email: editEmail.trim() || null,
-        address: editAddress.trim() || null,
-        is_active: editActive,
-        sms_balance: Math.floor(Number(editSmsBalance) || 0),
-        balance: Number(editBalance) || 0,
-        voice_sender_id: editVoiceSenderId.trim() || null,
-        institution_type: editInstitutionType,
-        subscription_end: editSubscriptionEnd || null,
-        status: editStatus,
-        reve_api_key: editReveApiKey.trim() || null,
-        reve_secret_key: editReveSecretKey.trim() || null,
-        reve_client_id: editReveClientId.trim() || null,
-        sms_rate: Number(editSmsRate) || 0.50,
-        voice_rate: Number(editVoiceRate) || 0.50,
-        custom_subscription_fee: editCustomSubscriptionFee === '' ? null : Number(editCustomSubscriptionFee),
-        institute_code: editInstituteCode.trim(),
-        config_json: {
-          ...latestConfig,
-          modules: syncedModules,
-          result_engine: editResultEngine,
-          result_system: editResultSystem,
-          fee_structure: editFeeStructure,
-          subscription_type: editSubscriptionType,
-          fee_engine: editFeeEngine,
-          accounting_mode: editAccountingMode,
-          paid_months: editPaidMonths,
-          package_rate: editPackageRate,
-          package_name: editPackageName,
-          subscription_note: editSubscriptionNote,
-          due_amount: editDueAmount,
-          student_limit: editStudentLimit,
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_institution',
+          id: selectedUser.id,
+          name: editName.trim(),
+          phone: editPhone.trim(),
+          email: editEmail.trim() || null,
+          address: editAddress.trim() || null,
+          is_active: editActive,
+          sms_balance: Math.floor(Number(editSmsBalance) || 0),
+          balance: Number(editBalance) || 0,
+          voice_sender_id: editVoiceSenderId.trim() || null,
+          institution_type: editInstitutionType,
+          subscription_end: editSubscriptionEnd || null,
+          status: editStatus,
+          reve_api_key: editReveApiKey.trim() || null,
+          reve_secret_key: editReveSecretKey.trim() || null,
+          reve_client_id: editReveClientId.trim() || null,
+          sms_rate: Number(editSmsRate) || 0.50,
+          voice_rate: Number(editVoiceRate) || 0.50,
+          custom_subscription_fee: editCustomSubscriptionFee === '' ? null : Number(editCustomSubscriptionFee),
           institute_code: editInstituteCode.trim(),
-          user_pin: editPassword.trim()
-        }
-      }).eq('id', selectedUser.id).select();
+          config_json: {
+            ...latestConfig,
+            modules: syncedModules,
+            result_engine: editResultEngine,
+            result_system: editResultSystem,
+            fee_structure: editFeeStructure,
+            subscription_type: editSubscriptionType,
+            fee_engine: editFeeEngine,
+            accounting_mode: editAccountingMode,
+            paid_months: editPaidMonths,
+            package_rate: editPackageRate,
+            package_name: editPackageName,
+            subscription_note: editSubscriptionNote,
+            due_amount: editDueAmount,
+            student_limit: editStudentLimit,
+            institute_code: editInstituteCode.trim(),
+            user_pin: editPassword.trim()
+          }
+        })
+      });
+
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
       
-      console.log('Update result data:', data, 'error:', error);
+      const data = result.data ? [result.data] : [];
       
-      if (error) throw error;
+      console.log('Update result data:', data);
+      
       if (!data || data.length === 0) throw new Error('Update failed: No rows updated. Check permissions or if the institution exists.');
       
       // Update password if provided
@@ -1674,185 +1679,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     
     setApprovingIds(prev => new Set(prev).add(tr.id));
     try {
-      if (isVoice) {
-        // ১. ডাটাবেসে পেমেন্ট অনুমোদন করা (Manual update for Voice)
-        const { error: updateError } = await supabase.from('transactions').update({ 
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'approve_transaction',
+          id: tr.id,
           status: 'approved',
-          amount: finalAmount // Use corrected amount if provided
-        }).eq('id', tr.id);
-        if (updateError) throw updateError;
-        
-        const { data: instData, error: instError } = await supabase.from('institutions').select('balance').eq('id', tr.institution_id).single();
-        if (instError) throw instError;
-        
-        const currentBalance = Number(instData.balance || 0);
-        const addAmount = finalAmount;
-        const newBalance = currentBalance + addAmount;
-        
-        const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', tr.institution_id);
-        if (balanceError) throw balanceError;
-      } else if (isSubscription) {
-        // ২. সাবস্ক্রিপশন অনুমোদন ও প্রোফাইল আপডেট
-        const { error: updateError } = await supabase.from('transactions').update({ 
-          status: 'approved',
-          amount: finalAmount // Use corrected amount if provided
-        }).eq('id', tr.id);
-        if (updateError) throw updateError;
+          amount: isSubscription || isVoice ? finalAmount : sms,
+          institution_id: tr.institution_id,
+          module: isSubscription ? 'subscription' : (isVoice ? 'voice' : 'sms'),
+          metadata: tr.metadata
+        })
+      });
 
-        // অটো প্রোফাইল আপডেট
-        const { data: instData, error: instFetchError } = await supabase
-          .from('institutions')
-          .select('config_json, subscription_end')
-          .eq('id', tr.institution_id)
-          .single();
-        
-        if (!instFetchError && instData) {
-          const config = (instData.config_json as any) || {};
-          const currentPaidMonths = config.paid_months || [];
-          const newMonths = tr.metadata?.months || [];
-          const updatedPaidMonths = Array.from(new Set([...currentPaidMonths, ...newMonths])).sort();
-          
-          const updatedConfig = {
-            ...config,
-            paid_months: updatedPaidMonths,
-            package_name: tr.metadata?.package_name || config.package_name,
-            package_rate: tr.metadata?.package_rate || config.package_rate,
-            subscription_type: tr.metadata?.subscription_type || config.subscription_type
-          };
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
 
-          // Calculate new subscription end date based on last paid month
-          let newSubEnd = instData.subscription_end;
-          if (updatedPaidMonths.length > 0) {
-            const lastMonthStr = updatedPaidMonths[updatedPaidMonths.length - 1]; // "YYYY-MM"
-            const [year, month] = lastMonthStr.split('-').map(Number);
-            const lastDay = new Date(year, month, 0); // Last day of that month
-            newSubEnd = lastDay.toISOString();
-          }
-
-          const { error: instUpdateError } = await supabase
-            .from('institutions')
-            .update({ 
-              config_json: updatedConfig,
-              subscription_end: newSubEnd,
-              status: 'active'
-            })
-            .eq('id', tr.institution_id);
-          
-          if (instUpdateError) console.error("Auto profile update failed:", instUpdateError);
-        }
-      } else {
-        // ৩. SMS রিচার্জ অনুমোদন (Manual implementation to fix Issue 2 - Avoid unintended voice balance increase)
-        console.log('ApproveTransaction: Approving SMS recharge for tr:', tr.id, 'sms count:', sms);
-        
-        // 1. Update Transaction
-        const { error: trUpdateError } = await supabase.from('transactions').update({ 
-          status: 'approved', 
-          sms_count: sms,
-          amount: finalAmount // Use corrected amount if provided
-        }).eq('id', tr.id);
-        if (trUpdateError) {
-          console.error('ApproveTransaction: Transaction update error:', trUpdateError);
-          throw trUpdateError;
-        }
-
-        // 2. Update Institution SMS Balance ONLY
-        console.log('ApproveTransaction: Fetching current balance for institution:', tr.institution_id);
-        const { data: instData, error: instFetchError } = await supabase
-          .from('institutions')
-          .select('sms_balance')
-          .eq('id', tr.institution_id)
-          .single();
-        if (instFetchError) {
-          console.error('ApproveTransaction: Institution fetch error:', instFetchError);
-          throw instFetchError;
-        }
-        
-        const currentSmsBalance = Number(instData.sms_balance || 0);
-        const newSmsBalance = currentSmsBalance + Number(sms);
-        console.log('ApproveTransaction: Current SMS balance:', currentSmsBalance, 'New balance will be:', newSmsBalance);
-        
-        const { error: instUpdateError } = await supabase
-          .from('institutions')
-          .update({ 
-            sms_balance: newSmsBalance 
-          })
-          .eq('id', tr.institution_id);
-        if (instUpdateError) {
-          console.error('ApproveTransaction: Institution update error:', instUpdateError);
-          throw instUpdateError;
-        }
-        console.log('ApproveTransaction: Institution SMS balance updated successfully');
-
-        // 3. Update Admin SMS Stock
-        const { data: stockData, error: stockFetchError } = await supabase
-          .from('admin_sms_stock')
-          .select('*')
-          .limit(1)
-          .single();
-        if (!stockFetchError && stockData) {
-          const { error: stockUpdateError } = await supabase
-            .from('admin_sms_stock')
-            .update({ 
-              remaining_sms: (stockData.remaining_sms || 0) - sms,
-              last_updated: new Date().toISOString()
-            })
-            .eq('id', stockData.id);
-          if (stockUpdateError) console.error("Admin stock update failed:", stockUpdateError);
-        }
-      }
-      
-      // ২. ইউজারকে কনফার্মেশন SMS পাঠানো (যদি টগল চালু থাকে)
-      const isSmsEnabled = smsEnabledMap[tr.id] !== false;
-      if (isSmsEnabled) {
-        const userPhone = tr.institutions?.phone || tr.sender_phone;
-        if (userPhone) {
-          let msg = '';
-          if (isVoice) {
-            msg = `Assalamu Alaikum, Your payment has been approved. ${tr.amount}tk Voice Balance has been added to your account. Thank you.`;
-          } else if (isSubscription) {
-            const pkgName = getEnglishPkgName(tr.metadata?.package_name || '');
-            const monthRange = formatMonthsRange(tr.metadata?.months || []);
-            msg = `Assalamu Alaikum, Your payment for ${pkgName ? `'${pkgName}' ` : ''}subscription ${monthRange ? '(' + monthRange + ') ' : ''}(${tr.amount}tk) has been approved. Thank you.`;
-          } else {
-            msg = `Assalamu Alaikum, Your payment has been approved. ${sms} SMS credits have been added to your account. Thank you.`;
-          }
-          // Fire and forget SMS to avoid blocking UI
-          smsApi.sendDirect(userPhone, msg, madrasah?.id).catch(err => console.error("SMS Send Error:", err));
-        }
-      }
-
-      // ৪. একই মাদ্রাসার এবং একই মডিউলের অন্য সব অপেক্ষমান রিকোয়েস্ট ক্যানসেল করা
-      if (tr.institution_id && tr.module) {
-        console.log("Cancelling other pending transactions of module:", tr.module, "for inst:", tr.institution_id);
-        await supabase
-          .from('transactions')
-          .update({ 
-            status: 'cancelled', 
-            description: 'Cancelled automatically because another transaction was approved.' 
-          })
-          .eq('institution_id', tr.institution_id)
-          .eq('module', tr.module)
-          .eq('status', 'pending')
-          .neq('id', tr.id);
-      }
-
+      // SMS Notification
       // ৩. লোকাল স্টেট আপডেট করা (সফল হলে সাথে সাথে লিস্ট থেকে সরিয়ে দেয়া)
       setPendingTrans(prev => prev.filter(p => p.id !== tr.id));
-      
-      setStatusModal({ 
-        show: true, 
-        type: 'success', 
-        title: 'সফল', 
-        message: isSmsEnabled ? 'রিচার্জ সফল হয়েছে এবং ইউজারকে SMS পাঠানো হয়েছে।' : 'রিচার্জ সফল হয়েছে (SMS পাঠানো হয়নি)।' 
-      });
-      
-      // ব্যাকগ্রাউন্ডে ডাটা রিফ্রেশ করা
+      setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'পেমেন্ট রিকোয়েস্ট অনুমোদন করা হয়েছে' });
       initData(true, true);
     } catch (err: any) {
-      console.error("Approve Error:", err);
-      // Detailed error reporting for debugging
-      const errorMessage = err.message || "অজানা ত্রুটি দেখা দিয়েছে।";
-      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: errorMessage });
+      console.error('Error approving transaction:', err);
+      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
     } finally {
       setApprovingIds(prev => {
         const next = new Set(prev);
@@ -1866,8 +1721,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     if (!rejectConfirm) return;
     setIsRejecting(true);
     try {
-      const { error } = await supabase.from('transactions').update({ status: 'rejected' }).eq('id', rejectConfirm.id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'approve_transaction',
+          id: rejectConfirm.id,
+          status: 'rejected'
+        })
+      });
+
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
       
       const userPhone = rejectConfirm.institutions?.phone || rejectConfirm.sender_phone;
       if (userPhone) {
@@ -3849,61 +3718,43 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   
                                   setIsUpdatingUser(true);
                                   try {
-                                    // 1. Record Transaction
-                                    const { error: trError } = await supabase.from('transactions').insert({
-                                      institution_id: selectedUser.id,
-                                      amount,
-                                      description: `Subscription Payment - ${editPackageName} Package (${selectedMonthsForPayment.length} Months)${editDiscount > 0 ? ` (Discount: ${editDiscount} ৳)` : ''}`,
-                                      status: 'approved',
-                                      transaction_id: `SUB-${Date.now()}`,
-                                      sender_phone: 'ADMIN',
-                                      type: 'credit',
-                                      module: 'subscription',
-                                      metadata: {
-                                        months: selectedMonthsForPayment,
-                                        package_name: editPackageName,
-                                        subscription_type: editSubscriptionType,
-                                        discount: editDiscount,
-                                        base_amount: baseAmount,
-                                        due_amount: editDueAmount
-                                      }
-                                    });
-                                    if (trError) throw trError;
+                                     const { data: { session } } = await supabase.auth.getSession();
+                                     const res = await fetch('/api/admin', {
+                                       method: 'POST',
+                                       headers: {
+                                         'Content-Type': 'application/json',
+                                         'Authorization': `Bearer ${session?.access_token}`
+                                       },
+                                       body: JSON.stringify({
+                                         action: 'payment_update',
+                                         id: selectedUser.id,
+                                         amount: Number(amount),
+                                         description: `Subscription Payment (${editPackageName})`,
+                                         payment_method: 'Admin Direct',
+                                         metadata: {
+                                           months: selectedMonthsForPayment,
+                                           package_name: editPackageName,
+                                           subscription_type: editSubscriptionType,
+                                           discount: editDiscount,
+                                           base_amount: baseAmount,
+                                           due_amount: editDueAmount
+                                         },
+                                         updated_config: {
+                                           ...latestConfig,
+                                           paid_months: Array.from(new Set([...editPaidMonths, ...selectedMonthsForPayment])),
+                                           package_rate: editPackageRate,
+                                           package_name: editPackageName,
+                                           subscription_note: editSubscriptionNote,
+                                           due_amount: editDueAmount,
+                                           subscription_type: editSubscriptionType
+                                         }
+                                       })
+                                     });
 
-                                    // 2. Update Institution Profile (Save paid months and package info)
-                                    // Fetch latest config_json to avoid overwriting academic year setup
-                                    const { data: latestInst, error: fetchError } = await supabase
-                                      .from('institutions')
-                                      .select('config_json')
-                                      .eq('id', selectedUser.id)
-                                      .single();
-                                      
-                                    if (fetchError) throw fetchError;
-                                    
-                                    let latestConfig: any = latestInst?.config_json;
-                                    if (typeof latestConfig === 'string') {
-                                      try { latestConfig = JSON.parse(latestConfig); } catch (e) { latestConfig = {}; }
-                                    }
-                                    latestConfig = typeof latestConfig === 'object' && latestConfig !== null ? latestConfig : {};
+                                     const result = await res.json();
+                                     if (result.error) throw new Error(result.error);
 
-                                    // Merge new paid months with history
-                                    const updatedPaidMonths = Array.from(new Set([...editPaidMonths, ...selectedMonthsForPayment]));
-
-                                    const { error: updateError } = await supabase.from('institutions').update({
-                                      config_json: {
-                                        ...latestConfig,
-                                        paid_months: updatedPaidMonths,
-                                        package_rate: editPackageRate,
-                                        package_name: editPackageName,
-                                        subscription_note: editSubscriptionNote,
-                                        due_amount: editDueAmount,
-                                        subscription_type: editSubscriptionType
-                                      }
-                                    }).eq('id', selectedUser.id);
-
-                                    if (updateError) throw updateError;
-
-                                    setEditPaidMonths(updatedPaidMonths);
+                                     setEditPaidMonths(Array.from(new Set([...editPaidMonths, ...selectedMonthsForPayment])));
                                      // Send Notification SMS
                                      if (selectedUser.phone) {
                                        const pkgName = getEnglishPkgName(editPackageName);

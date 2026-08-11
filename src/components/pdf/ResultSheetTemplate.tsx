@@ -163,7 +163,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
             {/* School Name & Transcript Title */}
             <div className="flex-1 text-center px-3 min-w-0">
-              <h1 className="text-[21px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1 uppercase drop-shadow-sm">
+              <h1 className="text-[21px] font-black text-[#1E3A8A] font-noto-serif leading-normal mb-1 uppercase drop-shadow-sm">
                 {madrasah.name}
               </h1>
               <p className="text-[10px] font-bold text-slate-600 mb-1.5 leading-tight max-w-[450px] mx-auto">
@@ -204,10 +204,10 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
           {/* Student Information */}
           <div className="bg-slate-50/80 px-4 py-2.5 rounded-xl border border-slate-200 mb-2.5 grid grid-cols-12 gap-x-4 text-[12px] shadow-sm">
             {/* First Column: Personal Info */}
-            <div className="space-y-1 border-r border-slate-200 pr-3 col-span-5">
-              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight line-clamp-1 leading-tight">: {student.student_name}</span></div>
-              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-tight">: {student.guardian_name || '-'}</span></div>
-              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-tight">: {student.mother_name || '-'}</span></div>
+            <div className="space-y-1.5 border-r border-slate-200 pr-3 col-span-5">
+              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-normal shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight line-clamp-1 leading-normal">: {student.student_name}</span></div>
+              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-normal shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-normal">: {student.guardian_name || '-'}</span></div>
+              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-normal shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-normal">: {student.mother_name || '-'}</span></div>
             </div>
             {/* Middle Column: Academic Info */}
             <div className="space-y-1 border-r border-slate-200 pr-3 col-span-4">
@@ -234,21 +234,21 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             <table className="w-full border-collapse border-2 border-slate-800">
               <thead>
                 <tr className="bg-[#1E3A8A] text-white text-[10px] font-black uppercase text-center">
-                  <th className="border border-slate-700 py-1.5 px-1 w-8">{t.sno}</th>
-                  <th className="border border-slate-700 py-1.5 px-3 text-left">{t.subject}</th>
-                  <th className="border border-slate-700 py-1.5 px-1 w-[55px]">{t.fullMarks}</th>
-                  <th className="border border-slate-700 py-1.5 px-1 w-[55px]">{t.passMarks}</th>
-                  <th className="border border-slate-700 py-1.5 px-1 w-[60px]">{t.classHighest}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-8">{t.sno}</th>
+                  <th className="border border-slate-700 py-2.5 px-3 text-left">{t.subject}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[55px]">{t.fullMarks}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[55px]">{t.passMarks}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[60px]">{t.classHighest}</th>
                   {isHighSchool && (
                     <>
-                      <th className="border border-slate-700 py-1.5 px-1 w-[45px]">CQ</th>
-                      <th className="border border-slate-700 py-1.5 px-1 w-[45px]">MCQ</th>
-                      <th className="border border-slate-700 py-1.5 px-1 w-[45px]">Prac.</th>
+                      <th className="border border-slate-700 py-2.5 px-1 w-[45px]">CQ</th>
+                      <th className="border border-slate-700 py-2.5 px-1 w-[45px]">MCQ</th>
+                      <th className="border border-slate-700 py-2.5 px-1 w-[45px]">Prac.</th>
                     </>
                   )}
-                  <th className="border border-slate-700 py-1.5 px-1 w-[60px] bg-blue-900">{t.obtainedMarks}</th>
-                  <th className="border border-slate-700 py-1.5 px-1 w-[50px]">{t.grade}</th>
-                  <th className="border border-slate-700 py-1.5 px-1 w-[50px]">{t.gp}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[60px] bg-blue-900">{t.obtainedMarks}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[50px]">{t.grade}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[50px]">{t.gp}</th>
                 </tr>
               </thead>
               <tbody className="text-[12px]">
@@ -335,23 +335,23 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
                   return rows.map((row, i) => (
                     <tr key={i} className={`${row.isParentRow ? "bg-blue-50/60 font-black" : (i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}`}>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[13px]">{toBnNum(row.sl)}</td>
-                      <td className={`border border-slate-300 py-1 px-3 font-bold font-tiro text-slate-950 leading-tight ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[13px]">{toBnNum(row.sl)}</td>
+                      <td className={`border border-slate-300 py-2 px-3 font-bold font-tiro text-slate-950 leading-normal ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
                         {row.name} {row.is_optional ? <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
                       </td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.full)}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pass)}</td>
-                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.highest)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.full)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pass)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.highest)}</td>
                       {isHighSchool && (
                         <>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.cq ?? '-')}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.mcq ?? '-')}</td>
-                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pr ?? '-')}</td>
+                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.cq ?? '-')}</td>
+                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.mcq ?? '-')}</td>
+                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pr ?? '-')}</td>
                         </>
                       )}
-                      <td className="border border-slate-300 py-1 px-1 text-center font-black text-slate-950 bg-blue-50/40 text-[16px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? toBnNum(row.obtained) : ''}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[16px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
-                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold text-[14px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{toBnNum(row.gp)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-black text-slate-950 bg-blue-50/40 text-[16px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? toBnNum(row.obtained) : ''}</td>
+                      <td className={`border border-slate-300 py-2 px-1 text-center font-black text-[16px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
+                      <td className={`border border-slate-300 py-2 px-1 text-center font-bold text-[14px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{toBnNum(row.gp)}</td>
                     </tr>
                   ));
                 })()}

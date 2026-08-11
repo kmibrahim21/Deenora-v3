@@ -1087,6 +1087,96 @@ export const generateFinalResultPDF = async (
     onProgress?.(100);
 };
 
+// --- FINAL INDIVIDUAL MARKSHEET GENERATOR ---
+export const generateFinalIndividualResultPDF = async (
+    student: any,
+    title: string,
+    subjects: string[],
+    madrasah: any,
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
+) => {
+    onProgress?.(10);
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '794px';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    // Prepare data for ResultSheetTemplate
+    // ResultSheetTemplate expects exam object and marks array
+    const exam = { exam_name: title };
+    
+    // marks array: { subject_name, full_marks, pass_marks, marks_obtained, grade, grade_point }
+    const marks = subjects.map(sub => {
+        const obtained = student.marks[sub];
+        const val = parseFloat(obtained) || 0;
+        
+        // Calculate grade and gp for the weighted mark
+        // Usually final result weighted marks are out of their weight, but here we treat them as out of 100 or relative
+        // Actually, in FinalResults.tsx, percentage is calculated as (weightedSum / subjectMaxMarks) * 100
+        // We'll assume full marks is 100 for display purpose and calculate grade accordingly
+        
+        let gp = '0.00';
+        let grade = 'F';
+        if (val >= 80) { gp = '5.00'; grade = 'A+'; }
+        else if (val >= 70) { gp = '4.00'; grade = 'A'; }
+        else if (val >= 60) { gp = '3.50'; grade = 'A-'; }
+        else if (val >= 50) { gp = '3.00'; grade = 'B'; }
+        else if (val >= 40) { gp = '2.00'; grade = 'C'; }
+        else if (val >= 33) { gp = '1.00'; grade = 'D'; }
+
+        return {
+            subject_name: sub,
+            full_marks: 100,
+            pass_marks: 33,
+            marks_obtained: obtained,
+            grade: grade,
+            grade_point: gp
+        };
+    });
+
+    // We pass the calculated GPA and Grade into student object so template uses them
+    const studentWithFinalData = {
+        ...student,
+        gpa: student.gpa,
+        grade: student.grade,
+        merit_position: student.rank
+    };
+
+    await new Promise<void>((resolve) => {
+        root.render(<ResultSheetTemplate student={studentWithFinalData} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
+        setTimeout(resolve, 1500);
+    });
+    onProgress?.(50);
+
+    const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
+
+    const imgData = await toJpeg(targetEl, {
+        pixelRatio: 2,
+        quality: 0.95,
+        backgroundColor: '#ffffff',
+        width: 794,
+        height: 1123,
+    });
+    onProgress?.(85);
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    
+    onProgress?.(98);
+    root.unmount();
+    document.body.removeChild(container);
+    
+    doc.save(`MarkSheet_${student.student_name || 'Student'}.pdf`);
+    onProgress?.(100);
+};
+
 // --- ACCOUNTING REPORT GENERATOR ---
 export const generateAccountingReportPDF = async (
     madrasah: any,

@@ -124,28 +124,26 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     if (!editingPackage?.name || !editingPackage?.rate) return;
     setSaving(true);
     try {
-      if (editingPackage.id && editingPackage.id.length > 5) {
-        const { error } = await supabase
-          .from('subscription_packages')
-          .update({
-            name: editingPackage.name,
-            rate: editingPackage.rate,
-            features: editingPackage.features,
-            sort_order: editingPackage.sort_order
-          })
-          .eq('id', editingPackage.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('subscription_packages')
-          .insert([{
-            name: editingPackage.name,
-            rate: editingPackage.rate,
-            features: editingPackage.features || [],
-            sort_order: editingPackage.sort_order || packages.length + 1
-          }]);
-        if (error) throw error;
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_package',
+          id: editingPackage.id,
+          name: editingPackage.name,
+          rate: editingPackage.rate,
+          features: editingPackage.features,
+          sort_order: editingPackage.sort_order
+        })
+      });
+
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+
       setShowPackageForm(false);
       fetchPackages();
       if (onProfileUpdate) onProfileUpdate();
@@ -153,7 +151,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       setShowSuccessModal({ show: true, title: 'প্যাকেজ আপডেট', message: 'প্যাকেজ সফলভাবে সংরক্ষণ করা হয়েছে।' });
     } catch (err: any) { 
       console.error('Error saving package:', err);
-      const errorMessage = err.message || err.details || 'Unknown error';
+      const errorMessage = err.message || 'Unknown error';
       setStatusModal({ 
         show: true, 
         type: 'error', 
@@ -166,8 +164,21 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleDeletePackage = async (id: string) => {
     if (!confirm('আপনি কি এই প্যাকেজটি ডিলিট করতে চান?')) return;
     try {
-      const { error } = await supabase.from('subscription_packages').delete().eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'delete_package',
+          id
+        })
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+
       fetchPackages();
       if (onProfileUpdate) onProfileUpdate();
       if (triggerRefresh) triggerRefresh();
@@ -198,36 +209,31 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSaveBulkSMS = async () => {
     setSaving(true);
     try {
-      const updateData: any = {
-        id: '00000000-0000-0000-0000-000000000001',
-        reve_api_key: (globalSettings.reve_api_key || '').trim(),
-        reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
-        reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
-        reve_client_id: (globalSettings.reve_client_id || '').trim(),
-        bkash_number: (globalSettings.bkash_number || '').trim(),
-        nagad_number: (globalSettings.nagad_number || '').trim(),
-        sms_rate: Number(globalSettings.sms_rate),
-        voice_rate: Number(globalSettings.voice_rate),
-        manager_permissions: globalSettings.manager_permissions
-      };
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_system_settings',
+          reve_api_key: (globalSettings.reve_api_key || '').trim(),
+          reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
+          reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
+          reve_client_id: (globalSettings.reve_client_id || '').trim(),
+          bkash_number: (globalSettings.bkash_number || '').trim(),
+          nagad_number: (globalSettings.nagad_number || '').trim(),
+          support_number: (globalSettings.support_number || '').trim(),
+          sms_rate: Number(globalSettings.sms_rate),
+          voice_rate: Number(globalSettings.voice_rate),
+          manager_permissions: globalSettings.manager_permissions
+        })
+      });
 
-      // Only add support_number if it's likely to exist or as a trial
-      if (globalSettings.support_number) {
-        updateData.support_number = globalSettings.support_number.trim();
-      }
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
 
-      const { error } = await supabase.from('system_settings').upsert(updateData);
-      if (error) {
-        if (error.message.includes('support_number')) {
-           // Fallback update without support_number
-           delete updateData.support_number;
-           const { error: error2 } = await supabase.from('system_settings').upsert(updateData);
-           if (error2) throw error2;
-           alert("Database Error: 'support_number' column is missing. Please run this in Supabase SQL Editor: ALTER TABLE system_settings ADD COLUMN support_number TEXT;");
-        } else {
-           throw error;
-        }
-      }
       setIsEditingBulkSMS(false);
       setShowSuccessModal({ show: true, title: 'Bulk SMS আপডেট', message: 'Bulk SMS ও রেট সেটিংস আপডেট হয়েছে।' });
       fetchGlobalSettings();
@@ -237,13 +243,24 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSaveGlobalUpdate = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from('system_settings').update({
-        global_update_active: globalSettings.global_update_active,
-        global_update_message: globalSettings.global_update_message,
-        global_update_version: globalSettings.global_update_version
-      }).eq('id', '00000000-0000-0000-0000-000000000001');
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_system_settings',
+          global_update_active: globalSettings.global_update_active,
+          global_update_message: globalSettings.global_update_message,
+          global_update_version: globalSettings.global_update_version
+        })
+      });
 
-      if (error) throw error;
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+
       setIsEditingGlobalUpdate(false);
       setShowSuccessModal({ show: true, title: 'আপডেট সেটিংস', message: 'গ্লোবাল আপডেট সফলভাবে সেভ হয়েছে।' });
       fetchGlobalSettings();
@@ -253,33 +270,24 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSavePayment = async () => {
     setSaving(true);
     try {
-      const updateData: any = {
-        id: '00000000-0000-0000-0000-000000000001',
-        reve_api_key: (globalSettings.reve_api_key || '').trim(),
-        reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
-        reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
-        reve_client_id: (globalSettings.reve_client_id || '').trim(),
-        bkash_number: (globalSettings.bkash_number || '').trim(),
-        nagad_number: (globalSettings.nagad_number || '').trim(),
-        sms_rate: Number(globalSettings.sms_rate),
-        voice_rate: Number(globalSettings.voice_rate)
-      };
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_system_settings',
+          bkash_number: (globalSettings.bkash_number || '').trim(),
+          nagad_number: (globalSettings.nagad_number || '').trim(),
+          support_number: (globalSettings.support_number || '').trim()
+        })
+      });
 
-      if (globalSettings.support_number) {
-        updateData.support_number = globalSettings.support_number.trim();
-      }
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
 
-      const { error } = await supabase.from('system_settings').upsert(updateData);
-      if (error) {
-        if (error.message.includes('support_number')) {
-           delete updateData.support_number;
-           const { error: error2 } = await supabase.from('system_settings').upsert(updateData);
-           if (error2) throw error2;
-           alert("Database Error: 'support_number' column is missing. Please run this in Supabase SQL Editor: ALTER TABLE system_settings ADD COLUMN support_number TEXT;");
-        } else {
-          throw error;
-        }
-      }
       setIsEditingPayment(false);
       setShowSuccessModal({ show: true, title: 'পেমেন্ট আপডেট', message: 'পেমেন্ট সেটিংস আপডেট হয়েছে।' });
       fetchGlobalSettings();
@@ -290,14 +298,25 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     if (!madrasah?.id) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from('institutions').update({
-        reve_api_key: personalApiSettings.reve_api_key.trim(),
-        reve_secret_key: personalApiSettings.reve_secret_key.trim(),
-        reve_client_id: personalApiSettings.reve_client_id.trim(),
-        voice_sender_id: personalApiSettings.reve_caller_id.trim()
-      }).eq('id', madrasah.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_institution',
+          id: madrasah.id,
+          reve_api_key: personalApiSettings.reve_api_key.trim(),
+          reve_secret_key: personalApiSettings.reve_secret_key.trim(),
+          reve_client_id: personalApiSettings.reve_client_id.trim(),
+          voice_sender_id: personalApiSettings.reve_caller_id.trim()
+        })
+      });
 
-      if (error) throw error;
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
       
       setIsEditingPersonalApi(false);
       setShowSuccessModal({ 
@@ -327,23 +346,22 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const handleSaveManagerPermissions = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from('system_settings').upsert({
-        id: '00000000-0000-0000-0000-000000000001',
-        reve_api_key: (globalSettings.reve_api_key || '').trim(),
-        reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
-        reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
-        reve_client_id: (globalSettings.reve_client_id || '').trim(),
-        bkash_number: (globalSettings.bkash_number || '').trim(),
-        nagad_number: (globalSettings.nagad_number || '').trim(),
-        support_number: (globalSettings.support_number || '').trim(),
-        sms_rate: globalSettings.sms_rate,
-        voice_rate: globalSettings.voice_rate,
-        manager_permissions: globalSettings.manager_permissions,
-        global_update_active: globalSettings.global_update_active,
-        global_update_message: globalSettings.global_update_message,
-        global_update_version: globalSettings.global_update_version
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_system_settings',
+          manager_permissions: globalSettings.manager_permissions
+        })
       });
-      if (error) throw error;
+
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+
       setIsEditingManagerPermissions(false);
       setShowSuccessModal({ show: true, title: 'ম্যানেজার পারমিশন', message: 'ম্যানেজারের গ্লোবাল পারমিশন সফলভাবে আপডেট হয়েছে।' });
       fetchGlobalSettings();
@@ -353,6 +371,8 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const [staff, setStaff] = useState<any[]>([]);
   const [showStaffForm, setShowStaffForm] = useState(false);
   const [newStaff, setNewStaff] = useState({ name: '', email: '', password: '', role: 'manager' as any });
+  const [editingStaff, setEditingStaff] = useState<Profile | null>(null);
+  const [isUpdatingStaff, setIsUpdatingStaff] = useState(false);
 
   const fetchStaff = async () => {
     try {
@@ -408,11 +428,70 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     }
   };
 
+  const handleUpdateStaff = async () => {
+    if (!editingStaff) return;
+    
+    setIsUpdatingStaff(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'update_staff',
+          id: editingStaff.id,
+          name: editingStaff.full_name,
+          role: editingStaff.role,
+          permissions: editingStaff.permissions,
+          is_active: editingStaff.is_active
+        })
+      });
+
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: 'ম্যানেজার তথ্য আপডেট করা হয়েছে।'
+      });
+      setEditingStaff(null);
+      fetchStaff();
+    } catch (err: any) {
+      console.error('Error updating staff:', err);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ব্যর্থ',
+        message: err.message || 'আপডেট করা সম্ভব হয়নি।'
+      });
+    } finally {
+      setIsUpdatingStaff(false);
+    }
+  };
   const handleDeleteStaff = async (id: string) => {
     if (!confirm('আপনি কি এই স্টাফ মেম্বারকে ডিলিট করতে চান?')) return;
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'delete_staff',
+          id
+        })
+      });
+
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+
       fetchStaff();
     } catch (err: any) {
       alert(err.message);
@@ -770,12 +849,20 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                         </div>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteStaff(s.id)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
-                    >
-                      <Trash size={18} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setEditingStaff(s)}
+                        className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all active:scale-95"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteStaff(s.id)}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+                      >
+                        <Trash size={18} />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {staff.length === 0 && (
@@ -787,7 +874,130 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
             </div>
           </div>
 
-          {showStaffForm && (
+          {/* Edit Staff Modal */}
+      {editingStaff && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-300"
+            onClick={() => !isUpdatingStaff && setEditingStaff(null)}
+          />
+          <div className={`relative w-full max-w-2xl max-h-[90vh] overflow-y-auto ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in-95 slide-in-from-bottom-10 duration-300`}>
+            <div className="flex items-center justify-between mb-8">
+              <div className="space-y-1">
+                <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Edit Staff Member</h3>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Update permissions and details</p>
+              </div>
+              <button 
+                onClick={() => setEditingStaff(null)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-8">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Full Name</label>
+                  <input 
+                    type="text" 
+                    className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                    value={editingStaff.full_name}
+                    onChange={e => setEditingStaff({...editingStaff, full_name: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Role</label>
+                  <select 
+                    className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all`}
+                    value={editingStaff.role}
+                    onChange={e => setEditingStaff({...editingStaff, role: e.target.value as any})}
+                  >
+                    <option value="manager">Manager</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Individual Permissions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 px-1">
+                  <ShieldCheck size={16} className="text-blue-500" />
+                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Module Permissions</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { key: 'institutions', label: 'Manage Institutions' },
+                    { key: 'approvals', label: 'Manage Approvals' },
+                    { key: 'sms', label: 'Manage SMS' },
+                    { key: 'accounting', label: 'Accounting' },
+                    { key: 'fees', label: 'Manage Fees' },
+                    { key: 'dashboard', label: 'Global Dashboard' },
+                    { key: 'tutorials', label: 'Manage Tutorials' },
+                    { key: 'can_manage_students', label: 'Manage Students' }
+                  ].map(perm => (
+                    <div 
+                      key={perm.key}
+                      onClick={() => {
+                        const currentPerms = editingStaff.permissions || {};
+                        setEditingStaff({
+                          ...editingStaff,
+                          permissions: {
+                            ...currentPerms,
+                            [perm.key]: !currentPerms[perm.key as keyof typeof currentPerms]
+                          }
+                        });
+                      }}
+                      className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all ${editingStaff.permissions?.[perm.key as keyof typeof editingStaff.permissions] ? 'border-blue-500/30 bg-blue-500/5' : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100')} hover:scale-[1.02] active:scale-95`}
+                    >
+                      <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{perm.label}</span>
+                      <div className={`w-10 h-5 rounded-full transition-all relative ${editingStaff.permissions?.[perm.key as keyof typeof editingStaff.permissions] ? 'bg-blue-500' : (madrasah?.theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200')}`}>
+                        <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all ${editingStaff.permissions?.[perm.key as keyof typeof editingStaff.permissions] ? 'left-6' : 'left-1'}`} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status Toggle */}
+              <div 
+                onClick={() => setEditingStaff({...editingStaff, is_active: !editingStaff.is_active})}
+                className={`flex items-center justify-between p-5 rounded-2xl border cursor-pointer transition-all ${editingStaff.is_active ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'} hover:scale-[1.02] active:scale-95`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full animate-pulse ${editingStaff.is_active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                  <div className="space-y-0.5">
+                    <span className={`text-xs font-black uppercase tracking-widest ${editingStaff.is_active ? 'text-emerald-500' : 'text-rose-500'}`}>Account Status</span>
+                    <p className="text-[10px] font-bold text-slate-400">Current state of the user account</p>
+                  </div>
+                </div>
+                <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${editingStaff.is_active ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                  {editingStaff.is_active ? 'Active' : 'Disabled'}
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <button 
+                onClick={handleUpdateStaff}
+                disabled={isUpdatingStaff}
+                className="w-full h-16 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-[1.25rem] font-black text-sm uppercase tracking-[0.2em] shadow-lg shadow-blue-500/25 flex items-center justify-center gap-3 transition-all active:scale-95"
+              >
+                {isUpdatingStaff ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  <>
+                    <Save size={20} />
+                    Update Manager Details
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showStaffForm && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
               <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} w-full max-w-md rounded-[2.5rem] shadow-2xl border overflow-hidden p-8`}>
                 <h4 className={`text-xl font-black font-noto mb-6 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#2E0B5E]'}`}>

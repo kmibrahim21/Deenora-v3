@@ -324,7 +324,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                   <div className="text-center flex-1 px-3">
                     <h1 className={`${
                       numStudentsOnPage > 22 ? 'text-xl' : 'text-2.5xl'
-                    } font-black text-[#1E3A8A] uppercase tracking-tight font-serif drop-shadow-sm leading-tight`}>
+                    } font-black text-[#1E3A8A] uppercase tracking-tight font-serif drop-shadow-sm leading-normal`}>
                       {madrasah?.name || 'AL HIKMAH ISLAMIC ACADEMY'}
                     </h1>
                     <p className={`${
@@ -469,7 +469,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                       </tr>
                     </thead>
                     <tbody className={`${
-                      numStudentsOnPage > 22 ? 'text-[9.5px] leading-tight' : 'text-[10.5px]'
+                      numStudentsOnPage > 22 ? 'text-[9.5px] leading-normal' : 'text-[10.5px] leading-normal'
                     } font-semibold divide-y divide-slate-200`}>
                       {pageStudents.map((std, index) => {
                         const globalIndex = pageIdx * STUDENTS_PER_PAGE + index + 1;
@@ -477,10 +477,10 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
                         return (
                           <tr key={std.id} className={isEven ? 'bg-white' : 'bg-slate-50/60'}>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5' : 'py-1.5 px-0.5'} font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1.5 px-0.5' : 'py-2 px-0.5'} font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {toBnNum(globalIndex)}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-1' : 'py-1.5 px-1.5'} text-left font-bold text-slate-900 border-r border-slate-200 truncate whitespace-nowrap`} title={std.student_name}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1.5 px-1' : 'py-2 px-1.5'} text-left font-bold text-slate-900 border-r border-slate-200 truncate whitespace-nowrap`} title={std.student_name}>
                               {std.student_name}
                             </td>
 
@@ -493,7 +493,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               return (
                                 <td
                                   key={sub.id}
-                                  className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} border-r border-slate-200 text-center truncate ${
+                                  className={`${numStudentsOnPage > 22 ? 'py-1.5 px-0.5 text-[11px]' : 'py-2 px-0.5 text-[13px]'} border-r border-slate-200 text-center truncate ${
                                     !hasMark ? 'text-slate-400 font-normal' : isPass ? 'text-slate-900 font-extrabold' : 'text-red-600 font-black bg-red-50/50'
                                   }`}
                                 >
@@ -502,22 +502,22 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                               );
                             })}
 
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1.5 px-0.5 text-[11px]' : 'py-2 px-0.5 text-[13px]'} font-black text-[#1E3A8A] bg-blue-50/30 border-r border-slate-200 text-center truncate`}>
                               {toBnNum(std.total)}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1.5 px-0.5 text-[11px]' : 'py-2 px-0.5 text-[13px]'} font-bold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {std.percentage !== '' && std.percentage !== undefined ? `${toBnNum(std.percentage)}%` : ''}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1.5 px-0.5 text-[11px]' : 'py-2 px-0.5 text-[13px]'} font-extrabold text-slate-900 border-r border-slate-200 text-center truncate`}>
                               {std.gpa}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-black border-r border-slate-200 text-center truncate ${
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1.5 px-0.5 text-[11px]' : 'py-2 px-0.5 text-[13px]'} font-black border-r border-slate-200 text-center truncate ${
                               std.grade === 'A+' ? 'text-blue-700' :
                               std.grade === 'F' ? 'text-red-600' : 'text-slate-800'
                             }`}>
                               {std.grade}
                             </td>
-                            <td className={`${numStudentsOnPage > 22 ? 'py-1 px-0.5 text-[11px]' : 'py-1.5 px-0.5 text-[13px]'} font-mono font-black text-blue-900 bg-blue-50/20 text-center truncate`}>
+                            <td className={`${numStudentsOnPage > 22 ? 'py-1.5 px-0.5 text-[11px]' : 'py-2 px-0.5 text-[13px]'} font-mono font-black text-blue-900 bg-blue-50/20 text-center truncate`}>
                               {std.rank}
                             </td>
                           </tr>

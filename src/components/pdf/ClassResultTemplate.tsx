@@ -60,7 +60,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
 
             {/* Header */}
             <div className="text-center mb-6 relative z-10 px-20">
-              <h1 className="text-3xl font-black text-slate-900 mb-2 uppercase tracking-tight leading-tight">{madrasah.name}</h1>
+              <h1 className="text-3xl font-black text-slate-900 mb-2 uppercase tracking-tight leading-normal">{madrasah.name}</h1>
               <div className="inline-flex items-center gap-4 mb-2">
                   <div className="h-[1px] w-12 bg-slate-200"></div>
                   <div className="px-8 py-2 bg-blue-600 rounded-full text-sm font-black uppercase tracking-[0.3em] text-white shadow-lg shadow-blue-100">
@@ -132,8 +132,8 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
 
                     return (
                       <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                        <td className="px-1 py-1 font-black text-slate-900 border-r border-slate-100 text-[11px]">{toBnNum(student.roll)}</td>
-                        <td className="px-2 py-1 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[10px] leading-tight">{student.student_name}</td>
+                        <td className="px-1 py-2 font-black text-slate-900 border-r border-slate-100 text-[11px]">{toBnNum(student.roll)}</td>
+                        <td className="px-2 py-2 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[10px] leading-normal">{student.student_name}</td>
                         {subjects.filter(sub => {
                           return !isHighSchool || !sub.pair_with_id;
                         }).map(s => {
@@ -155,9 +155,9 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                           }
 
                           return (
-                            <td key={s.id} className="px-0.5 py-1 text-center font-bold text-slate-900 border-r border-slate-100 text-[10px]">
+                            <td key={s.id} className="px-0.5 py-2 text-center font-bold text-slate-900 border-r border-slate-100 text-[10px]">
                               {isHighSchool ? (
-                                <div className="flex flex-col leading-none">
+                                <div className="flex flex-col leading-normal">
                                   <span>{toBnNum(totalVal)}</span>
                                   <div className="flex justify-center gap-0.5 text-[5px] opacity-40 font-normal">
                                     <span>{cqVal !== undefined && cqVal !== '' ? toBnNum(cqVal) : ''}</span>
