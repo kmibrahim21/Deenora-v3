@@ -302,7 +302,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'update_institution') {
-      const { id, ...updateFields } = body;
+      const { id, action: _action, ...updateFields } = body;
       if (!id) return res.status(400).json({ error: 'Institution ID is required' });
 
       // If updating config_json, ensure it's handled as an object
