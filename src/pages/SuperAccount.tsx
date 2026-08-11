@@ -371,7 +371,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
   const [staff, setStaff] = useState<any[]>([]);
   const [showStaffForm, setShowStaffForm] = useState(false);
   const [newStaff, setNewStaff] = useState({ name: '', email: '', password: '', role: 'manager' as any });
-  const [editingStaff, setEditingStaff] = useState<Profile | null>(null);
+  const [editingStaff, setEditingStaff] = useState<any | null>(null);
   const [isUpdatingStaff, setIsUpdatingStaff] = useState(false);
 
   const fetchStaff = async () => {

@@ -115,6 +115,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     if (detailsTab === 'api') return canWrite('api_security');
     if (detailsTab === 'permissions') return canWrite('permissions');
     if (detailsTab === 'subscription') return canWrite('subscription');
+    if (detailsTab === 'history') return canWrite('history');
     return false;
   };
 
@@ -411,14 +412,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const fetchPaymentHistory = async (institutionId: string) => {
     setIsLoadingHistory(true);
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('institution_id', institutionId)
-        .eq('module', 'subscription')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setPaymentHistory(data || []);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'get_payment_history',
+          institution_id: institutionId
+        })
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      setPaymentHistory(result.history || []);
     } catch (err) {
       console.error("Error fetching history:", err);
     } finally {
@@ -657,7 +665,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       if (amount <= 0) throw new Error('পরিমাণ সঠিক নয়');
 
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/admin', {
+      
+        const res = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1108,6 +1117,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           setSmsToCredit(newSmsToCredit);
         }
       }
+      if (view === 'details' && selectedUser) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch('/api/admin', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`
+            },
+            body: JSON.stringify({ action: 'get_user_stats', id: selectedUser.id })
+          });
+          const result = await res.json();
+          if (isMounted && result.students !== undefined) {
+            setUserStats({
+              students: result.students,
+              classes: result.classes
+            });
+          }
+        } catch (e) {
+          console.error("Error fetching user stats in initData:", e);
+        }
+      }
     } catch (err) { 
       console.error("AdminPanel Init Error:", err); 
     } finally { 
@@ -1466,16 +1497,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setView('details');
     
     // Fetch user stats
-    setUserStats({ students: 0, classes: 0 });
+    setUserStats({ 
+      students: (user as any).student_count || 0, 
+      classes: (user as any).class_count || 0 
+    });
     try {
-      const [stdRes, clsRes] = await Promise.all([
-        supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', user.id),
-        supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', user.id)
-      ]);
-      setUserStats({
-        students: stdRes.count || 0,
-        classes: clsRes.count || 0
+      const { data: { session } } = await supabase.auth.getSession();
+      
+        const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ action: 'get_user_stats', id: user.id })
       });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.students !== undefined) {
+          setUserStats({
+            students: result.students,
+            classes: result.classes
+          });
+        }
+      }
     } catch (e) {
       console.error("Error fetching user stats:", e);
     }
@@ -1523,7 +1568,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         accounting_mode: editAccountingMode
       });
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/admin', {
+      
+        const res = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1680,7 +1726,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setApprovingIds(prev => new Set(prev).add(tr.id));
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/admin', {
+      
+        const res = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1722,7 +1769,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setIsRejecting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/admin', {
+      
+        const res = await fetch('/api/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3719,7 +3767,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   setIsUpdatingUser(true);
                                   try {
                                      const { data: { session } } = await supabase.auth.getSession();
-                                     const res = await fetch('/api/admin', {
+                                     
+                                      // Get latest config from selectedUser
+                                      let currentConfig: any = {};
+                                      try {
+                                        currentConfig = typeof selectedUser.config_json === 'string' 
+                                          ? JSON.parse(selectedUser.config_json) 
+                                          : (selectedUser.config_json || {});
+                                      } catch (e) {
+                                        currentConfig = {};
+                                      }
+                                      const latestConfig = typeof currentConfig === 'object' && currentConfig !== null ? currentConfig : {};
+                                      
+                                      const res = await fetch('/api/admin', {
                                        method: 'POST',
                                        headers: {
                                          'Content-Type': 'application/json',
@@ -3730,14 +3790,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                          id: selectedUser.id,
                                          amount: Number(amount),
                                          description: `Subscription Payment (${editPackageName})`,
-                                         payment_method: 'Admin Direct',
                                          metadata: {
                                            months: selectedMonthsForPayment,
                                            package_name: editPackageName,
                                            subscription_type: editSubscriptionType,
                                            discount: editDiscount,
                                            base_amount: baseAmount,
-                                           due_amount: editDueAmount
+                                           due_amount: editDueAmount,
+                                           payment_method: 'Admin Direct'
                                          },
                                          updated_config: {
                                            ...latestConfig,

@@ -174,7 +174,14 @@ export default async function handler(req, res) {
       
       if (error) throw error;
       
-      return res.status(200).json({ institutions: data || [] });
+      // Flatten counts for frontend ease of use
+      const flattened = (data || []).map(inst => ({
+        ...inst,
+        student_count: inst.student_count?.[0]?.count || 0,
+        class_count: inst.class_count?.[0]?.count || 0
+      }));
+      
+      return res.status(200).json({ institutions: flattened });
     }
 
     if (action === 'sync_all_to_sheet') {
@@ -368,7 +375,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'update_system_settings') {
-      const { id, ...updates } = body;
+      const { id, action: _ignoreAction, ...updates } = body;
       const { data, error } = await supabase
         .from('system_settings')
         .upsert({ id: id || '00000000-0000-0000-0000-000000000001', ...updates })
@@ -434,12 +441,16 @@ export default async function handler(req, res) {
 
       // Log transaction
       await supabase.from('transactions').insert({
+        transaction_id: `ADMIN_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         institution_id: id,
         amount: type === 'voice' ? Number(amount) : 0,
+        sender_phone: 'Admin',
         description: `Admin Quick ${type.toUpperCase()} Credit`,
         module: type,
         status: 'approved',
-        payment_method: 'Admin Transfer'
+        metadata: {
+          payment_method: 'Admin Transfer'
+        }
       });
 
       return res.status(200).json({ success: true });
@@ -533,18 +544,46 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
+    if (action === 'get_payment_history') {
+      const { institution_id } = body;
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('institution_id', institution_id)
+        .eq('module', 'subscription')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return res.status(200).json({ history: data });
+    }
+
+    if (action === 'delete_payment_history') {
+      const { transaction_id } = body;
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', transaction_id);
+        
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    }
+
     if (action === 'payment_update') {
       const { id, amount, description, payment_method, metadata, updated_config } = body;
       
       // 1. Insert Transaction
       const { error: trError } = await supabase.from('transactions').insert({
+        transaction_id: `ADMIN_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         institution_id: id,
         amount: Number(amount),
+        sender_phone: 'Admin',
         description: description || 'Payment received',
         status: 'approved',
-        payment_method: payment_method || 'Admin Direct',
         module: 'subscription',
-        metadata: metadata
+        metadata: {
+          ...(typeof metadata === 'object' ? metadata : {}),
+          payment_method: payment_method || 'Admin Direct'
+        }
       });
       if (trError) throw trError;
 
@@ -557,6 +596,26 @@ export default async function handler(req, res) {
       if (updateError) throw updateError;
 
       return res.status(200).json({ success: true });
+    }
+
+    if (action === 'get_user_stats') {
+      const { id } = body;
+      if (!id) return res.status(400).json({ error: 'User ID is required' });
+
+      try {
+        const [stdRes, clsRes] = await Promise.all([
+          supabase.from('students').select('*', { count: 'exact', head: true }).eq('institution_id', id),
+          supabase.from('classes').select('*', { count: 'exact', head: true }).eq('institution_id', id)
+        ]);
+
+        return res.status(200).json({
+          students: stdRes.count || 0,
+          classes: clsRes.count || 0
+        });
+      } catch (statsErr: any) {
+        console.error('Error fetching stats for user:', id, statsErr);
+        return res.status(200).json({ students: 0, classes: 0 });
+      }
     }
 
     if (action === 'assign_voice') {
