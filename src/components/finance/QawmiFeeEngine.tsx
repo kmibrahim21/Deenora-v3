@@ -155,18 +155,22 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
         const yearStart = madrasah.config_json?.academic_year_start;
         const startMonth = yearStart ? yearStart.slice(0, 7) : `${selectedMonth.slice(0, 4)}-01`;
 
+        // Fetch ALL fees for the madrasah for the current academic cycle and previous year to catch all relevant payments
+        const fetchStartMonth = `${Number(startMonth.slice(0, 4)) - 1}-01`;
+
         const { data: allFeesData } = await requestManager.cachedFetch(
           'fees',
           (q) => {
             let query = q.select('student_id, amount_paid, discount, month')
               .eq('institution_id', madrasah.id)
-              .gte('month', startMonth);
+              .gte('month', fetchStartMonth)
+              .limit(100000);
             if (activeYearId) {
-              query = query.eq('academic_year_id', activeYearId);
+              query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
             }
             return query;
           },
-          `all_fees_qawmi:${madrasah.id}_${startMonth}_full_${activeYearId || 'current'}`,
+          `all_fees_qawmi:${madrasah.id}_${fetchStartMonth}_full_${activeYearId || 'current'}`,
           CACHE_TTLS.SHORT 
         );
 
@@ -276,9 +280,12 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             });
 
             const allStudentFees = allFeesData?.filter(f => f.student_id === student.student_id) || [];
-            const totalPaidOverall = allStudentFees.reduce((sum, f) => sum + Number(f.amount_paid) + Number(f.discount || 0), 0);
             
-            const previousDue = Math.max(0, previousPayable - totalPaidOverall);
+            const previousPaid = allStudentFees
+              .filter(f => previousMonths.includes(f.month))
+              .reduce((sum, f) => sum + Number(f.amount_paid) + Number(f.discount || 0), 0);
+            
+            const previousDue = Math.max(0, previousPayable - previousPaid);
 
             const studentFeeStructures = feeStructures?.filter(fs => {
                 const isClassMatch = fs.class_id === student.class_id || fs.class_id === null;
@@ -307,7 +314,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             const studentFees = feesData?.filter(f => f.student_id === student.student_id) || [];
             const totalPaid = studentFees.reduce((sum, f) => sum + Number(f.amount_paid) + Number(f.discount || 0), 0);
             
-            const balanceDue = Math.max(0, previousPayable + totalPayable - totalPaidOverall);
+            const balanceDue = Math.max(0, previousDue + totalPayable - totalPaid);
             
             let status = 'unpaid';
             if (totalPayable > 0) {
@@ -568,12 +575,19 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
       setDiscount('');
       setSelectedStudent(null);
       
-      requestManager.invalidatePattern(`fees:${madrasah.id}`);
-      requestManager.invalidatePattern(`stats:${madrasah.id}`);
-      requestManager.invalidatePattern(`dashboard_`);
-      requestManager.invalidatePattern(`accounting-fees-${currentStudent.student_id}`);
-      requestManager.invalidatePattern(`accounting-history-${currentStudent.student_id}`);
-      requestManager.invalidatePattern(`fetch:ledger:`);
+      await requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      await requestManager.invalidatePattern(`all_fees:${madrasah.id}`);
+      await requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`);
+      await requestManager.invalidatePattern(`stats:${madrasah.id}`);
+      await requestManager.invalidatePattern(`dashboard_`);
+      const sId = typeof feeData !== 'undefined' ? feeData.student_id : (typeof selectedStudent !== 'undefined' ? selectedStudent?.student_id : null);
+      if (sId) {
+          await requestManager.invalidatePattern(`accounting-fees-${sId}`);
+          await requestManager.invalidatePattern(`accounting-history-${sId}`);
+      }
+      await requestManager.invalidatePattern(`fetch:ledger:`);
+      
+      clearGlobalQawmiFeeCache();
 
       // Auto Send SMS
       if (config?.features?.fee_collection_sms) {
@@ -913,7 +927,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                             'bg-[#2563EB] text-white active:scale-95 shadow-blue-200'
                           }`}
                        >
-                          {(isFullyPaid || isPartial) ? 'PAID' : isNoFeeSet ? 'ফি নেই' : 'জমা নিন'}
+                          {(isFullyPaid || isPartial) ? (lang === 'bn' ? 'পরিশোধিত' : 'PAID') : isNoFeeSet ? (lang === 'bn' ? 'ফি নেই' : 'No Fee') : (lang === 'bn' ? 'ফি জমা' : 'Collect')}
                        </button>
                      </div>
                   </div>
@@ -1276,8 +1290,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                                          console.error("Delete Error:", error);
                                          setActionError((lang === 'bn' ? "ডিলিট করতে সমস্যা হয়েছে: " : "Failed to delete: ") + error.message);
                                      } else {
-                                         requestManager.invalidatePattern(`structures:${madrasah.id}`);
-                                         requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                                         await requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                                         await requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
                                          clearGlobalQawmiFeeCache();
                                          if (triggerRefresh) triggerRefresh();
                                          fetchData();
@@ -1417,8 +1431,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                            }
                            setShowAddStructure(false);
                            setCategory(''); setAmount(''); setStructureSelectedClass(''); setDueDate(''); setStartDate(''); setEditingStructureId(null);
-                           requestManager.invalidatePattern(`structures:${madrasah.id}`);
-                           requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
+                           await requestManager.invalidatePattern(`structures:${madrasah.id}`);
+                           await requestManager.invalidatePattern(`structures_full:${madrasah.id}`);
                            clearGlobalQawmiFeeCache();
                            if (triggerRefresh) triggerRefresh();
                            fetchData();

@@ -503,7 +503,10 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       
       // Clear caches
       requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      requestManager.invalidatePattern(`all_fees:${madrasah.id}`);
+      requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`);
       requestManager.invalidatePattern(`accounting-history`);
+      requestManager.invalidatePattern(`fetch:ledger:`);
       clearGlobalSchoolFeeCache();
       clearGlobalQawmiFeeCache();
       if (triggerRefresh) triggerRefresh();
@@ -939,13 +942,20 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           ) : ledger.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {ledger.filter(e => {
+                const category = e.category || '';
+                const description = e.description || '';
                 if (selectedHistoryMonth !== 'all') {
-                  if (!e.transaction_date || !e.transaction_date.startsWith(selectedHistoryMonth)) {
+                  const transactionDate = e.transaction_date || '';
+                  const isMatchByDate = transactionDate.startsWith(selectedHistoryMonth);
+                  
+                  // For student fees, also match if the month is mentioned in the description
+                  const isStudentFee = category === 'Student Fee' || description.includes('FEE_ID:');
+                  const isMatchByDesc = isStudentFee && description.includes(selectedHistoryMonth);
+                  
+                  if (!isMatchByDate && !isMatchByDesc) {
                     return false;
                   }
                 }
-                const category = e.category || '';
-                const description = e.description || '';
                 const isStudent = 
                   category === 'Student Fee' || 
                   category.includes('Fee') || 

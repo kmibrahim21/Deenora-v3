@@ -62,7 +62,7 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       // Update local student object reference if possible, or just rely on the next refresh
       student.notes = newNotes; 
       
-      requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
+      await requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
       fetchStudentAccountingData();
     } catch (err: any) {
       alert(err.message);
@@ -233,11 +233,18 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         await bgInsertLedger(madrasah.id, totalPaid, finalDescription, activeYearId);
 
         setShowMultiCollect(false);
-        requestManager.invalidatePattern(`fees:${madrasah.id}`);
-        requestManager.invalidatePattern(`stats:${madrasah.id}`);
-        requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
-        requestManager.invalidatePattern(`accounting-history-${student.student_id}`);
-        clearGlobalSchoolFeeCache();
+        await requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      await requestManager.invalidatePattern(`all_fees:${madrasah.id}`);
+      await requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`);
+      await requestManager.invalidatePattern(`stats:${madrasah.id}`);
+      await requestManager.invalidatePattern(`dashboard_`);
+      if (student?.student_id) {
+          await requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
+          await requestManager.invalidatePattern(`accounting-history-${student.student_id}`);
+      }
+      await requestManager.invalidatePattern(`fetch:ledger:`);
+      
+      clearGlobalSchoolFeeCache();
         clearGlobalQawmiFeeCache();
         
         // Auto Send SMS
@@ -374,11 +381,17 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       if (error) throw error;
 
       // Invalidate Patterns
-      requestManager.invalidatePattern(`fees:${madrasah.id}`);
-      requestManager.invalidatePattern(`stats:${madrasah.id}`);
-      requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
-      requestManager.invalidatePattern(`accounting-history-${student.student_id}`);
-      requestManager.invalidatePattern(`fetch:ledger:`);
+      await requestManager.invalidatePattern(`fees:${madrasah.id}`);
+      await requestManager.invalidatePattern(`all_fees:${madrasah.id}`);
+      await requestManager.invalidatePattern(`all_fees_qawmi:${madrasah.id}`);
+      await requestManager.invalidatePattern(`stats:${madrasah.id}`);
+      await requestManager.invalidatePattern(`dashboard_`);
+      if (student?.student_id) {
+          await requestManager.invalidatePattern(`accounting-fees-${student.student_id}`);
+          await requestManager.invalidatePattern(`accounting-history-${student.student_id}`);
+      }
+      await requestManager.invalidatePattern(`fetch:ledger:`);
+      
       clearGlobalSchoolFeeCache();
       clearGlobalQawmiFeeCache();
 
@@ -499,10 +512,10 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       });
       
       // Invalidate cache patterns
-      requestManager.invalidatePattern(`settings:${madrasah.id}`);
-      requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
-      requestManager.invalidatePattern(`student_settings:${student.student_id}`);
-      requestManager.invalidatePattern(`student_fee_settings:${madrasah.id}`);
+      await requestManager.invalidatePattern(`settings:${madrasah.id}`);
+      await requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
+      await requestManager.invalidatePattern(`student_settings:${student.student_id}`);
+      await requestManager.invalidatePattern(`student_fee_settings:${madrasah.id}`);
       clearGlobalSchoolFeeCache();
       clearGlobalQawmiFeeCache();
 
@@ -540,10 +553,10 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       }
       
       // Invalidate cache patterns
-      requestManager.invalidatePattern(`settings:${madrasah.id}`);
-      requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
-      requestManager.invalidatePattern(`student_settings:${student.student_id}`);
-      requestManager.invalidatePattern(`student_fee_settings:${madrasah.id}`);
+      await requestManager.invalidatePattern(`settings:${madrasah.id}`);
+      await requestManager.invalidatePattern(`accounting-settings-${student.student_id}`);
+      await requestManager.invalidatePattern(`student_settings:${student.student_id}`);
+      await requestManager.invalidatePattern(`student_fee_settings:${madrasah.id}`);
       clearGlobalSchoolFeeCache();
       clearGlobalQawmiFeeCache();
       

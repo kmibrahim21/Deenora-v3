@@ -160,6 +160,95 @@ class RequestManager {
     }
   }
 
+  async cachedFetchAll(table: string, queryBuilder: (q: any) => any, cacheKey: string, ttl = CACHE_TTLS.SHORT) {
+    const key = `fetch_all:${table}:${cacheKey}`;
+    
+    const cached = this.cache.get(key);
+    const now = Date.now();
+    const isStale = cached && now - cached.timestamp > ttl;
+
+    // Handle offline
+    if (!this.isOnline && cached) {
+      this.metrics.hits++;
+      return { data: cached.data, error: null, count: cached.count };
+    }
+
+    if (cached && !isStale) {
+      this.metrics.hits++;
+      return { data: cached.data, error: null, count: cached.count };
+    }
+
+    if (cached && isStale) {
+      const lastInval = this.lastInvalidation.get(key) || 0;
+      const cooldownPeriod = 30000; // 30s cooldown
+      
+      if (now - lastInval < cooldownPeriod) {
+        this.metrics.throttled++;
+        return { data: cached.data, error: null, count: cached.count };
+      }
+
+      if (!this.pending.has(key)) {
+        this.metrics.refetches++;
+        const promise = this.revalidateFetchAll(key, table, queryBuilder);
+        this.pending.set(key, promise);
+      }
+      return { data: cached.data, error: null, count: cached.count };
+    }
+
+    // Cache Miss
+    if (this.pending.has(key)) {
+      return this.pending.get(key);
+    }
+
+    this.metrics.misses++;
+    const promise = this.revalidateFetchAll(key, table, queryBuilder);
+    this.pending.set(key, promise);
+    return promise;
+  }
+
+  private async revalidateFetchAll(key: string, table: string, queryBuilder: (q: any) => any) {
+    try {
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
+      const pageSize = 1000;
+      let finalCount = 0;
+
+      while (hasMore) {
+        let query = supabase.from(table);
+        query = queryBuilder(query);
+        // Ensure we don't accidentally override range if queryBuilder sets a limit, 
+        // but typically queryBuilder just sets filters. We enforce range here.
+        query = query.range(offset, offset + pageSize - 1);
+        
+        const { data, error, count } = await query;
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += pageSize;
+          if (count) finalCount = count;
+          if (data.length < pageSize) {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      this.pending.delete(key);
+      const result = { data: allData, error: null, count: finalCount };
+      this.notify(key, result);
+      this.savePersistence(key, allData, finalCount);
+      return result;
+    } catch (error) {
+      this.pending.delete(key);
+      const cached = this.cache.get(key);
+      if (cached) return { data: cached.data, error: null, count: cached.count };
+      return { data: null, error };
+    }
+  }
+
   async cachedFetch(table: string, queryBuilder: (q: any) => any, cacheKey: string, ttl = CACHE_TTLS.SHORT) {
     const key = `fetch:${table}:${cacheKey}`;
     
