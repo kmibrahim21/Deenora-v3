@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase, smsApi } from 'supabase';
-import { Institution, Language, View, SubscriptionPackage } from 'types';
+import { Institution, Language, View, SubscriptionPackage, SmsProviderConfig } from 'types';
 import { t } from 'translations';
 
 interface SuperAccountProps {
@@ -42,6 +42,15 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
     reve_secret_key: '',
     reve_caller_id: '',
     reve_client_id: '',
+    reve_non_masking_id: '',
+    automas_api_key: '',
+    automas_masking_sender_id: '',
+    automas_non_masking_sender_id: '',
+    sms_provider_config: {
+      reve: { masking_enabled: true, non_masking_enabled: true },
+      automas: { masking_enabled: false, non_masking_enabled: false },
+      primary: { masking: 'reve', non_masking: 'reve' }
+    } as SmsProviderConfig,
     bkash_number: '',
     nagad_number: '',
     support_number: '',
@@ -194,6 +203,15 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       reve_secret_key: settings.reve_secret_key || '',
       reve_caller_id: settings.reve_caller_id || '',
       reve_client_id: settings.reve_client_id || '',
+      reve_non_masking_id: settings.reve_non_masking_id || '',
+      automas_api_key: settings.automas_api_key || '',
+      automas_masking_sender_id: settings.automas_masking_sender_id || '',
+      automas_non_masking_sender_id: settings.automas_non_masking_sender_id || '',
+      sms_provider_config: settings.sms_provider_config || {
+        reve: { masking_enabled: true, non_masking_enabled: true },
+        automas: { masking_enabled: false, non_masking_enabled: false },
+        primary: { masking: 'reve', non_masking: 'reve' }
+      },
       bkash_number: settings.bkash_number || '',
       nagad_number: settings.nagad_number || '',
       support_number: settings.support_number || '',
@@ -222,6 +240,11 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
           reve_secret_key: (globalSettings.reve_secret_key || '').trim(),
           reve_caller_id: (globalSettings.reve_caller_id || '').trim(),
           reve_client_id: (globalSettings.reve_client_id || '').trim(),
+          reve_non_masking_id: (globalSettings.reve_non_masking_id || '').trim(),
+          automas_api_key: (globalSettings.automas_api_key || '').trim(),
+          automas_masking_sender_id: (globalSettings.automas_masking_sender_id || '').trim(),
+          automas_non_masking_sender_id: (globalSettings.automas_non_masking_sender_id || '').trim(),
+          sms_provider_config: globalSettings.sms_provider_config,
           bkash_number: (globalSettings.bkash_number || '').trim(),
           nagad_number: (globalSettings.nagad_number || '').trim(),
           support_number: (globalSettings.support_number || '').trim(),
@@ -1197,33 +1220,182 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
 
       {isEditingBulkSMS && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className={`w-full max-w-sm rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[85vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
-              <div className="p-5 shrink-0 relative overflow-hidden">
+           <div className={`w-full max-w-lg rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-500 border overflow-hidden flex flex-col max-h-[90vh] relative ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+              <div className="p-5 shrink-0 relative overflow-hidden border-b border-slate-100 dark:border-slate-800">
                  <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-3">
                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400 border-blue-900/50' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}><LayoutDashboard size={20} strokeWidth={2.5} /></div>
-                       <div><h3 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>Bulk SMS</h3><p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em]">Master Gateway</p></div>
+                       <div><h3 className={`text-lg font-black font-noto tracking-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>SMS Provider Settings</h3><p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em]">Multi-Provider Gateway Router</p></div>
                     </div>
                     <button onClick={() => setIsEditingBulkSMS(false)} className={`w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all border ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-500 border-slate-700' : 'bg-slate-50 text-slate-300 border-slate-100'}`}><X size={18} /></button>
                  </div>
               </div>
-              <div className="px-6 pb-8 space-y-5 overflow-y-auto custom-scrollbar flex-1 relative z-10">
-                 <div className="space-y-2.5">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Gateway Protocols</h4>
+              <div className="px-6 py-6 space-y-6 overflow-y-auto custom-scrollbar flex-1 relative z-10">
+                 
+                 {/* REVE SMS Provider */}
+                 <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                       <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">REVE Gateway</h4>
+                       <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400 border border-blue-100 dark:border-blue-900">REVE SMS</span>
+                    </div>
                     <div className={`p-4 rounded-[2rem] border space-y-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Master API Key</label><input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_api_key} onChange={(e) => setGlobalSettings({...globalSettings, reve_api_key: e.target.value})} /></div>
-                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Encryption Token</label><input type="password" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_secret_key} onChange={(e) => setGlobalSettings({...globalSettings, reve_secret_key: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Global Voice Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_caller_id} onChange={(e) => setGlobalSettings({...globalSettings, reve_caller_id: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Global Masking / Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.reve_client_id} onChange={(e) => setGlobalSettings({...globalSettings, reve_client_id: e.target.value})} /></div>
+                       <div className="grid grid-cols-2 gap-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+                          <label className="flex items-center justify-between p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 cursor-pointer">
+                             <span className="text-[10px] font-bold dark:text-slate-200">Masking SMS</span>
+                             <input 
+                                type="checkbox" 
+                                className="w-4 h-4 accent-blue-600 rounded" 
+                                checked={globalSettings.sms_provider_config?.reve?.masking_enabled ?? true} 
+                                onChange={(e) => setGlobalSettings({
+                                   ...globalSettings,
+                                   sms_provider_config: {
+                                      ...globalSettings.sms_provider_config,
+                                      reve: { ...globalSettings.sms_provider_config?.reve, masking_enabled: e.target.checked }
+                                   }
+                                })}
+                             />
+                          </label>
+                          <label className="flex items-center justify-between p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 cursor-pointer">
+                             <span className="text-[10px] font-bold dark:text-slate-200">Non-Masking SMS</span>
+                             <input 
+                                type="checkbox" 
+                                className="w-4 h-4 accent-blue-600 rounded" 
+                                checked={globalSettings.sms_provider_config?.reve?.non_masking_enabled ?? true} 
+                                onChange={(e) => setGlobalSettings({
+                                   ...globalSettings,
+                                   sms_provider_config: {
+                                      ...globalSettings.sms_provider_config,
+                                      reve: { ...globalSettings.sms_provider_config?.reve, non_masking_enabled: e.target.checked }
+                                   }
+                                })}
+                             />
+                          </label>
+                       </div>
+                       <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">API Key</label><input type="text" className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.reve_api_key} onChange={(e) => setGlobalSettings({...globalSettings, reve_api_key: e.target.value})} placeholder="REVE API Key" /></div>
+                          <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Secret Key</label><input type="password" className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.reve_secret_key} onChange={(e) => setGlobalSettings({...globalSettings, reve_secret_key: e.target.value})} placeholder="Secret Key" /></div>
+                       </div>
+                       <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Masking Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.reve_client_id} onChange={(e) => setGlobalSettings({...globalSettings, reve_client_id: e.target.value})} placeholder="e.g. DEENORA" /></div>
+                          <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Non-Masking Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.reve_non_masking_id || globalSettings.reve_caller_id} onChange={(e) => setGlobalSettings({...globalSettings, reve_non_masking_id: e.target.value, reve_caller_id: e.target.value})} placeholder="e.g. 88096..." /></div>
+                       </div>
                     </div>
                  </div>
-                 <div className="space-y-2.5">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Service Rates (Per Unit)</h4>
+
+                 {/* Automas SMS Provider */}
+                 <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                       <h4 className="text-[10px] font-black text-purple-500 uppercase tracking-[0.2em]">Automas Gateway</h4>
+                       <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400 border border-purple-100 dark:border-purple-900">Automas SMS</span>
+                    </div>
                     <div className={`p-4 rounded-[2rem] border space-y-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Bulk SMS Rate (TK)</label><input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.sms_rate} onChange={(e) => setGlobalSettings({...globalSettings, sms_rate: parseFloat(e.target.value)})} /></div>
-                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Voice Call Rate (TK)</label><input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400 focus:border-blue-500/50' : 'bg-white border-slate-100 text-[#2563EB] focus:border-[#2563EB]/50'}`} value={globalSettings.voice_rate} onChange={(e) => setGlobalSettings({...globalSettings, voice_rate: parseFloat(e.target.value)})} /></div>
+                       <div className="grid grid-cols-2 gap-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+                          <label className="flex items-center justify-between p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 cursor-pointer">
+                             <span className="text-[10px] font-bold dark:text-slate-200">Masking SMS</span>
+                             <input 
+                                type="checkbox" 
+                                className="w-4 h-4 accent-purple-600 rounded" 
+                                checked={globalSettings.sms_provider_config?.automas?.masking_enabled ?? false} 
+                                onChange={(e) => setGlobalSettings({
+                                   ...globalSettings,
+                                   sms_provider_config: {
+                                      ...globalSettings.sms_provider_config,
+                                      automas: { ...globalSettings.sms_provider_config?.automas, masking_enabled: e.target.checked }
+                                   }
+                                })}
+                             />
+                          </label>
+                          <label className="flex items-center justify-between p-2.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 cursor-pointer">
+                             <span className="text-[10px] font-bold dark:text-slate-200">Non-Masking SMS</span>
+                             <input 
+                                type="checkbox" 
+                                className="w-4 h-4 accent-purple-600 rounded" 
+                                checked={globalSettings.sms_provider_config?.automas?.non_masking_enabled ?? false} 
+                                onChange={(e) => setGlobalSettings({
+                                   ...globalSettings,
+                                   sms_provider_config: {
+                                      ...globalSettings.sms_provider_config,
+                                      automas: { ...globalSettings.sms_provider_config?.automas, non_masking_enabled: e.target.checked }
+                                   }
+                                })}
+                             />
+                          </label>
+                       </div>
+                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Automas API Key</label><input type="text" className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-purple-400' : 'bg-white border-slate-200 text-purple-600'}`} value={globalSettings.automas_api_key} onChange={(e) => setGlobalSettings({...globalSettings, automas_api_key: e.target.value})} placeholder="Automas API Key" /></div>
+                       <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Masking Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-purple-400' : 'bg-white border-slate-200 text-purple-600'}`} value={globalSettings.automas_masking_sender_id} onChange={(e) => setGlobalSettings({...globalSettings, automas_masking_sender_id: e.target.value})} placeholder="Approved Masking ID" /></div>
+                          <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Non-Masking Sender ID</label><input type="text" className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-purple-400' : 'bg-white border-slate-200 text-purple-600'}`} value={globalSettings.automas_non_masking_sender_id} onChange={(e) => setGlobalSettings({...globalSettings, automas_non_masking_sender_id: e.target.value})} placeholder="Approved Non-Masking ID" /></div>
+                       </div>
                     </div>
                  </div>
+
+                 {/* Default SMS Type & Primary Provider Configuration */}
+                 <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">Global Routing Rules</h4>
+                    <div className={`p-4 rounded-[2rem] border grid grid-cols-1 md:grid-cols-3 gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Default SMS Type</label>
+                          <select 
+                             className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-emerald-400' : 'bg-white border-slate-200 text-emerald-600'}`}
+                             value={globalSettings.sms_provider_config?.default_type || 'non_masking'}
+                             onChange={(e) => setGlobalSettings({
+                                ...globalSettings,
+                                sms_provider_config: {
+                                   ...globalSettings.sms_provider_config,
+                                   default_type: e.target.value as any
+                                }
+                             })}
+                          >
+                             <option value="masking">Masking SMS</option>
+                             <option value="non_masking">Non-Masking SMS</option>
+                          </select>
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Masking Primary</label>
+                          <select 
+                             className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-amber-400' : 'bg-white border-slate-200 text-amber-700'}`}
+                             value={globalSettings.sms_provider_config?.primary?.masking || 'reve'}
+                             onChange={(e) => setGlobalSettings({
+                                ...globalSettings,
+                                sms_provider_config: {
+                                   ...globalSettings.sms_provider_config,
+                                   primary: { ...globalSettings.sms_provider_config?.primary, masking: e.target.value as any }
+                                }
+                             })}
+                          >
+                             <option value="reve">REVE</option>
+                             <option value="automas">Automas</option>
+                          </select>
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Non-Masking Primary</label>
+                          <select 
+                             className={`w-full h-11 rounded-xl px-3 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-amber-400' : 'bg-white border-slate-200 text-amber-700'}`}
+                             value={globalSettings.sms_provider_config?.primary?.non_masking || 'reve'}
+                             onChange={(e) => setGlobalSettings({
+                                ...globalSettings,
+                                sms_provider_config: {
+                                   ...globalSettings.sms_provider_config,
+                                   primary: { ...globalSettings.sms_provider_config?.primary, non_masking: e.target.value as any }
+                                }
+                             })}
+                          >
+                             <option value="reve">REVE</option>
+                             <option value="automas">Automas</option>
+                          </select>
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Rates */}
+                 <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Service Rates (Per Unit)</h4>
+                    <div className={`p-4 rounded-[2rem] border grid grid-cols-2 gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Bulk SMS Rate (TK)</label><input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.sms_rate} onChange={(e) => setGlobalSettings({...globalSettings, sms_rate: parseFloat(e.target.value)})} /></div>
+                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Voice Call Rate (TK)</label><input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.voice_rate} onChange={(e) => setGlobalSettings({...globalSettings, voice_rate: parseFloat(e.target.value)})} /></div>
+                    </div>
+                 </div>
+
                  <div className="pt-2">
                     <button onClick={handleSaveBulkSMS} disabled={saving} className="relative w-full h-16 bg-[#2563EB] text-white font-black rounded-full shadow-premium active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/20 text-[13px] uppercase tracking-[0.25em]">
                        {saving ? <Loader2 className="animate-spin" size={22} /> : <>Save Settings</>}

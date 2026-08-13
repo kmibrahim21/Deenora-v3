@@ -1,4 +1,3 @@
-
 import { supabase } from 'lib/supabase';
 import { Student } from 'types';
 import { getSmsLengthInfo } from 'utils/smsUtils';
@@ -32,6 +31,15 @@ export const SMSService = {
         support_number: '01766326edba',
         reve_caller_id: 'DEENORA',
         reve_client_id: '',
+        reve_non_masking_id: '',
+        automas_api_key: '',
+        automas_masking_sender_id: '',
+        automas_non_masking_sender_id: '',
+        sms_provider_config: {
+          reve: { masking_enabled: true, non_masking_enabled: true },
+          automas: { masking_enabled: false, non_masking_enabled: false },
+          primary: { masking: 'reve', non_masking: 'reve' }
+        },
         sms_rate: 0.50,
         voice_rate: 1.00,
         manager_permissions: {} as any,
@@ -45,10 +53,15 @@ export const SMSService = {
         reve_api_key: (data.reve_api_key || defaults.reve_api_key).trim(),
         reve_secret_key: (data.reve_secret_key || defaults.reve_secret_key).trim(),
         reve_caller_id: (data.reve_caller_id || defaults.reve_caller_id).trim(),
+        reve_client_id: (data.reve_client_id || defaults.reve_client_id).trim(),
+        reve_non_masking_id: (data.reve_non_masking_id || defaults.reve_non_masking_id).trim(),
+        automas_api_key: (data.automas_api_key || defaults.automas_api_key).trim(),
+        automas_masking_sender_id: (data.automas_masking_sender_id || defaults.automas_masking_sender_id).trim(),
+        automas_non_masking_sender_id: (data.automas_non_masking_sender_id || defaults.automas_non_masking_sender_id).trim(),
+        sms_provider_config: data.sms_provider_config || defaults.sms_provider_config,
         bkash_number: data.bkash_number || defaults.bkash_number,
         nagad_number: data.nagad_number || defaults.nagad_number,
         support_number: data.support_number || defaults.support_number,
-        reve_client_id: (data.reve_client_id || defaults.reve_client_id).trim(),
         sms_rate: data.sms_rate || defaults.sms_rate,
         voice_rate: data.voice_rate || defaults.voice_rate,
         manager_permissions: data.manager_permissions || {},
@@ -65,6 +78,15 @@ export const SMSService = {
         support_number: '01766326edba',
         reve_caller_id: 'DEENORA', 
         reve_client_id: '',
+        reve_non_masking_id: '',
+        automas_api_key: '',
+        automas_masking_sender_id: '',
+        automas_non_masking_sender_id: '',
+        sms_provider_config: {
+          reve: { masking_enabled: true, non_masking_enabled: true },
+          automas: { masking_enabled: false, non_masking_enabled: false },
+          primary: { masking: 'reve', non_masking: 'reve' }
+        },
         sms_rate: 0.50,
         voice_rate: 1.00,
         manager_permissions: {},
@@ -75,9 +97,14 @@ export const SMSService = {
     }
   },
 
-  sendBulk: async (institutionId: string, students: Student[], message: string) => {
+  sendBulk: async (
+    institutionId: string,
+    students: Student[],
+    message: string,
+    smsType: 'masking' | 'non_masking' | 'unknown' = 'unknown'
+  ) => {
     const [mRes, global] = await Promise.all([
-      supabase.from('institutions').select('sms_balance, reve_api_key, reve_secret_key, reve_client_id, voice_sender_id').eq('id', institutionId).single(),
+      supabase.from('institutions').select('sms_balance, reve_api_key, reve_secret_key, reve_client_id, voice_sender_id, automas_api_key, automas_masking_sender_id, automas_non_masking_sender_id').eq('id', institutionId).single(),
       SMSService.getGlobalSettings()
     ]);
 
@@ -94,7 +121,7 @@ export const SMSService = {
       
       personalizedMessages = students.map(s => {
         const fetchedData = shortcodeData.find(d => d.id === s.id) || { student_name: s.student_name, guardian_phone: s.guardian_phone };
-        const data = { ...fetchedData, ...s }; // Override fetched data with properties explicitly passed in `s`
+        const data = { ...fetchedData, ...s };
         const text = ShortcodeService.replaceShortcodes(message, data);
         const { parts } = getSmsLengthInfo(text);
         return { studentId: s.id, phone: s.guardian_phone, text, parts };
@@ -128,7 +155,7 @@ export const SMSService = {
     const { data: rpcData, error: rpcError } = await supabase.rpc('send_bulk_sms_rpc', {
       p_institution_id: institutionId,
       p_student_ids: studentIdsForRpc,
-      p_message: message // Template message
+      p_message: message
     });
 
     if (rpcError) {
@@ -137,16 +164,11 @@ export const SMSService = {
     }
     if (rpcData && rpcData.success === false) throw new Error(rpcData.error || "ট্রানজ্যাকশন সফল হয়নি।");
 
-    // Use institution-specific keys if set, otherwise global fallback
-    const apiKey = (mData.reve_api_key?.trim() || global.reve_api_key);
-    const secretKey = (mData.reve_secret_key?.trim() || global.reve_secret_key);
-    const maskingName = (mData.reve_client_id?.trim() || global.reve_client_id || global.reve_caller_id);
-
     const allLogs: any[] = [];
     let sendPromises: Promise<void>[] = [];
 
     if (hasShortcodes) {
-      // Send personalized messages in batches
+      // Send personalized messages in batches of 50
       const chunkSize = 50;
       const batches = [];
       for (let i = 0; i < personalizedMessages.length; i += chunkSize) {
@@ -166,7 +188,10 @@ export const SMSService = {
               recipient: m.phone || 'Unknown',
               message: m.text,
               parts: m.parts,
-              status: 'failed'
+              status: 'failed',
+              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+              provider: 'none',
+              provider_error: 'Invalid phone number'
             });
           } else {
             validMsgs.push(m);
@@ -175,57 +200,59 @@ export const SMSService = {
               recipient: m.phone,
               message: m.text,
               parts: m.parts,
-              status: 'sent'
+              status: 'sent',
+              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+              provider: 'pending'
             });
           }
         });
 
         if (validMsgs.length > 0) {
-          const apiUrls = validMsgs.map(m => {
-            const encodedContent = encodeURIComponent(m.text);
-            return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(m.phone)}&messageContent=${encodedContent}&type=3`;
-          });
+          const messageItems = validMsgs.map(m => ({
+            recipient: m.phone,
+            text: m.text
+          }));
 
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ apiUrls })
+              body: JSON.stringify({
+                action: 'send_routed_sms',
+                smsType,
+                institutionId,
+                messages: messageItems
+              })
             }); 
-            if (!res.ok) {
-              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-            } else {
-              const parsed = await res.json();
-              if (parsed.results) {
-                parsed.results.forEach((r: any, idx: number) => {
-                  const log = logs.find(l => l.recipient === validMsgs[idx].phone && l.status === 'sent');
-                  const resStr = String(r.response || '').trim();
-                  const resStrLower = resStr.toLowerCase();
-                  const isErrorCode = /^\d{4}$/.test(resStr);
-                  const isError = !r.success || 
-                                  resStrLower.includes('error') || 
-                                  resStrLower.includes('fail') || 
-                                  resStrLower.includes('insufficient') ||
-                                  resStr === '' ||
-                                  isErrorCode;
 
-                  if (log && isError) {
+            const parsed = await res.json();
+
+            if (!res.ok || parsed.success === false) {
+              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+              batchErrorStr = parsed.error || 'SMS send failed';
+            } else if (parsed.results) {
+              const activeProvider = parsed.provider || 'reve';
+              parsed.results.forEach((r: any, idx: number) => {
+                const log = logs.find(l => l.recipient === validMsgs[idx].phone && l.status === 'sent');
+                if (log) {
+                  log.provider = r.provider || activeProvider;
+                  log.sms_type = parsed.smsType || (smsType === 'unknown' ? 'non_masking' : smsType);
+                  log.provider_message_id = r.providerMessageId || null;
+                  log.provider_error = r.errorMessage || r.errorCode || null;
+
+                  if (!r.success) {
                     log.status = 'failed';
                   }
-                  
-                  if (resStr === '1016') {
-                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (1016)';
-                  } else if (resStr === '1011' || resStr === '1012') {
-                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
-                  } else if (isErrorCode) {
-                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (' + resStr + ')';
-                  }
-                });
-              }
+                }
+                if (!r.success && r.errorMessage) {
+                  batchErrorStr = r.errorMessage;
+                }
+              });
             }
-          } catch (err) { 
+          } catch (err: any) { 
             console.warn("Personalized SMS batch failed:", err); 
             logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+            batchErrorStr = err.message || 'SMS Batch Request Error';
           }
         }
         
@@ -240,7 +267,7 @@ export const SMSService = {
         }
       });
     } else {
-      // Original bulk logic (same message for all)
+      // Standard bulk logic (same message for all)
       const chunkSize = 50; 
       const batches: Student[][] = [];
       for (let i = 0; i < students.length; i += chunkSize) {
@@ -261,7 +288,10 @@ export const SMSService = {
               recipient: s.guardian_phone || 'Unknown',
               message: message,
               parts: parts,
-              status: 'failed'
+              status: 'failed',
+              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+              provider: 'none',
+              provider_error: 'Invalid phone number'
             });
           } else {
             validMsgs.push(s);
@@ -270,57 +300,59 @@ export const SMSService = {
               recipient: s.guardian_phone,
               message: message,
               parts: parts,
-              status: 'sent'
+              status: 'sent',
+              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+              provider: 'pending'
             });
           }
         });
 
         if (validMsgs.length > 0) {
-          const apiUrls = validMsgs.map(s => {
-            const encodedContent = encodeURIComponent(message);
-            return `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${normalizePhone(s.guardian_phone)}&messageContent=${encodedContent}&type=3`;
-          });
-          
+          const messageItems = validMsgs.map(s => ({
+            recipient: s.guardian_phone,
+            text: message
+          }));
+
           try { 
             const res = await fetch('/api/sms', { 
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ apiUrls })
+              body: JSON.stringify({
+                action: 'send_routed_sms',
+                smsType,
+                institutionId,
+                messages: messageItems
+              })
             }); 
-            if (!res.ok) {
-              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-            } else {
-              const parsed = await res.json();
-              if (parsed.results) {
-                parsed.results.forEach((r: any, idx: number) => {
-                  const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone && l.status === 'sent');
-                  const resStr = String(r.response || '').trim();
-                  const resStrLower = resStr.toLowerCase();
-                  const isErrorCode = /^\d{4}$/.test(resStr);
-                  const isError = !r.success || 
-                                  resStrLower.includes('error') || 
-                                  resStrLower.includes('fail') || 
-                                  resStrLower.includes('insufficient') ||
-                                  resStr === '' ||
-                                  isErrorCode;
 
-                  if (log && isError) {
+            const parsed = await res.json();
+
+            if (!res.ok || parsed.success === false) {
+              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+              batchErrorStr = parsed.error || 'SMS send failed';
+            } else if (parsed.results) {
+              const activeProvider = parsed.provider || 'reve';
+              parsed.results.forEach((r: any, idx: number) => {
+                const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone && l.status === 'sent');
+                if (log) {
+                  log.provider = r.provider || activeProvider;
+                  log.sms_type = parsed.smsType || (smsType === 'unknown' ? 'non_masking' : smsType);
+                  log.provider_message_id = r.providerMessageId || null;
+                  log.provider_error = r.errorMessage || r.errorCode || null;
+
+                  if (!r.success) {
                     log.status = 'failed';
                   }
-
-                  if (resStr === '1016') {
-                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (1016)';
-                  } else if (resStr === '1011' || resStr === '1012') {
-                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
-                  } else if (isErrorCode) {
-                    batchErrorStr = 'এসএমএস গেটওয়ে এরর (' + resStr + ')';
-                  }
-                });
-              }
+                }
+                if (!r.success && r.errorMessage) {
+                  batchErrorStr = r.errorMessage;
+                }
+              });
             }
-          } catch (err) { 
+          } catch (err: any) { 
             console.warn("SMS batch failed:", err); 
             logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+            batchErrorStr = err.message || 'SMS Batch Request Error';
           }
         }
         
@@ -376,66 +408,55 @@ export const SMSService = {
     return { success: true };
   },
 
-  sendDirect: async (phone: string, message: string, institutionId?: string) => {
-    const global = await SMSService.getGlobalSettings();
-    let apiKey = global.reve_api_key;
-    let secretKey = global.reve_secret_key;
-    let maskingName = global.reve_client_id || global.reve_caller_id;
-
-    if (institutionId) {
-      // Use institution-specific REVE keys if available
-      try {
-        const { data: inst } = await supabase
-          .from('institutions')
-          .select('reve_api_key, reve_secret_key, reve_client_id, voice_sender_id')
-          .eq('id', institutionId)
-          .maybeSingle();
-
-        if (inst) {
-          apiKey = (inst.reve_api_key?.trim() || global.reve_api_key);
-          secretKey = (inst.reve_secret_key?.trim() || global.reve_secret_key);
-          maskingName = (inst.reve_client_id?.trim() || global.reve_client_id || global.reve_caller_id);
-        }
-      } catch (err) {
-        console.error("Error fetching institution keys for direct SMS:", err);
-      }
-    }
-
+  sendDirect: async (
+    phone: string,
+    message: string,
+    institutionId?: string,
+    smsType: 'masking' | 'non_masking' | 'unknown' = 'unknown'
+  ) => {
     const target = normalizePhone(phone);
     let finalStatus = 'sent';
     let throwErrorMsg = '';
+    let usedProvider = 'reve';
+    let providerMsgId = '';
+    let providerErr = '';
+    let parsed: any = null;
     
     if (!target) {
       finalStatus = 'failed';
+      providerErr = 'Invalid phone number';
     } else {
-      const encodedContent = encodeURIComponent(message);
-      let apiUrl = `https://smpp.revesms.com:7790/sendtext?apikey=${apiKey}&secretkey=${secretKey}&callerID=${maskingName}&toUser=${target}&messageContent=${encodedContent}&type=3`;
       try { 
         const res = await fetch('/api/sms', { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiUrl })
-        }); 
-        if (!res.ok) {
+          body: JSON.stringify({
+            action: 'send_routed_sms',
+            smsType,
+            institutionId,
+            messages: [{ recipient: phone, text: message }]
+          })
+        });
+
+        parsed = await res.json();
+        if (!res.ok || parsed.success === false) {
           finalStatus = 'failed';
-        } else {
-          const parsed = await res.json();
-          const resStr = String(parsed.response || '').trim();
-          const isErrorCode = /^\d{4}$/.test(resStr);
-          const isError = !parsed.success || resStr.toLowerCase().includes('error') || isErrorCode;
-          if (isError) finalStatus = 'failed';
-          
-          if (resStr === '1016') {
-             throwErrorMsg = 'এসএমএস গেটওয়ে এরর (1016)';
-          } else if (resStr === '1011' || resStr === '1012') {
-             throwErrorMsg = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
-          } else if (isErrorCode) {
-             throwErrorMsg = 'এসএমএস গেটওয়ে এরর (' + resStr + '): API Key বা Secret ভুল আছে।';
+          throwErrorMsg = parsed.error || 'SMS send failed';
+        } else if (parsed.results && parsed.results.length > 0) {
+          const r = parsed.results[0];
+          usedProvider = r.provider || parsed.provider || 'reve';
+          providerMsgId = r.providerMessageId || '';
+          providerErr = r.errorMessage || r.errorCode || '';
+
+          if (!r.success) {
+            finalStatus = 'failed';
+            throwErrorMsg = providerErr || 'SMS send failed';
           }
         }
-      } catch (e) { 
+      } catch (e: any) { 
         console.warn("Direct SMS failed:", e);
         finalStatus = 'failed';
+        throwErrorMsg = e.message || 'Direct SMS send failed';
       }
     }
     
@@ -446,7 +467,11 @@ export const SMSService = {
         recipient: phone || 'Unknown',
         message: message,
         parts: parts,
-        status: finalStatus
+        status: finalStatus,
+        sms_type: parsed?.smsType || (smsType === 'unknown' ? 'non_masking' : smsType),
+        provider: usedProvider,
+        provider_message_id: providerMsgId || null,
+        provider_error: providerErr || null
       });
     }
 
@@ -464,7 +489,7 @@ export const SMSService = {
         .order('created_at', { ascending: false })
         .limit(100);
         
-      if (error && error.code !== '42P01') throw error; // Ignore table not found
+      if (error && error.code !== '42P01') throw error;
       
       const safeData = data || [];
       return safeData.map(log => ({
@@ -472,7 +497,10 @@ export const SMSService = {
         recipient: log.recipient,
         message: log.message,
         status: log.status,
-        reason: null
+        provider: log.provider || 'reve',
+        sms_type: log.sms_type || 'masking',
+        provider_message_id: log.provider_message_id || null,
+        reason: log.provider_error || null
       }));
     } catch (error) {
       console.error("Error in getHistory:", error);

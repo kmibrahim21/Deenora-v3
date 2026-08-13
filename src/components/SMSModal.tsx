@@ -81,7 +81,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
       setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err: any) {
       setStatus('error');
-      setErrorMsg(lang === 'bn' ? 'ব্যালেন্স নেই অথবা নেটওয়ার্ক সমস্যা' : 'Failed to send SMS');
+      setErrorMsg(err.message || (lang === 'bn' ? 'ব্যালেন্স নেই অথবা নেটওয়ার্ক সমস্যা' : 'Failed to send SMS'));
     } finally { 
       isSendingRef.current = false;
       setSending(false); 

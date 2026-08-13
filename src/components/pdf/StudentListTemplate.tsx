@@ -14,7 +14,8 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
     const groupedStudents: { [key: string]: any[] } = {};
     if (!className) {
         students.forEach(s => {
-            const clsName = s.classes?.class_name || (isBn ? 'অন্যান্য' : 'Others');
+            const clsObj = Array.isArray(s.classes) ? s.classes[0] : s.classes;
+            const clsName = clsObj?.class_name || (isBn ? 'অন্যান্য' : 'Others');
             if (!groupedStudents[clsName]) groupedStudents[clsName] = [];
             groupedStudents[clsName].push(s);
         });

@@ -7,6 +7,22 @@ export type Language = 'bn' | 'en';
 
 export type UserRole = 'super_admin' | 'madrasah_admin' | 'manager' | 'accountant' | 'teacher' | 'parent';
 
+export interface SmsProviderConfig {
+  reve: {
+    masking_enabled: boolean;
+    non_masking_enabled: boolean;
+  };
+  automas: {
+    masking_enabled: boolean;
+    non_masking_enabled: boolean;
+  };
+  primary: {
+    masking: 'reve' | 'automas';
+    non_masking: 'reve' | 'automas';
+  };
+  default_type?: 'masking' | 'non_masking';
+}
+
 export interface Institution {
   id: string;
   name: string;
@@ -92,6 +108,10 @@ export interface Institution {
   reve_api_key?: string;
   reve_secret_key?: string;
   reve_client_id?: string;
+  reve_non_masking_id?: string;
+  automas_api_key?: string;
+  automas_masking_sender_id?: string;
+  automas_non_masking_sender_id?: string;
   custom_subscription_fee?: number;
 }
 
@@ -559,6 +579,11 @@ export interface SystemSettings {
   reve_secret_key?: string;
   reve_caller_id?: string;
   reve_client_id?: string;
+  reve_non_masking_id?: string;
+  automas_api_key?: string;
+  automas_masking_sender_id?: string;
+  automas_non_masking_sender_id?: string;
+  sms_provider_config?: SmsProviderConfig;
   bkash_number?: string;
   nagad_number?: string;
   sms_rate: number;

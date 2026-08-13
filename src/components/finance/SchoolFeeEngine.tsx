@@ -162,14 +162,13 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           (q) => {
             let query = q.select('student_id, amount_paid, discount, month')
               .eq('institution_id', madrasah.id)
-              .gte('month', startMonth)
-              .lte('month', selectedMonth);
+              .gte('month', startMonth);
             if (activeYearId) {
               query = query.eq('academic_year_id', activeYearId);
             }
             return query;
           },
-          `all_fees:${madrasah.id}_${startMonth}_${selectedMonth}_${activeYearId || 'current'}`,
+          `all_fees:${madrasah.id}_${startMonth}_full_${activeYearId || 'current'}`,
           CACHE_TTLS.SHORT 
         );
 
@@ -265,7 +264,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     const isBeforeYearStart = yearStart && m < yearStart.slice(0, 7);
                     
                     // Respect student individual accounting start date
-                    const isBeforeAccStart = accStartDate && m < accStartDate;
+                    const isBeforeAccStart = accStartDate && m < accStartDate.slice(0, 7);
 
                     return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
                 }) || [];
@@ -296,7 +295,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                 const isBeforeYearStart = yearStart && selectedMonth < yearStart.slice(0, 7);
 
                 // Respect student individual accounting start date
-                const isBeforeAccStart = accStartDate && selectedMonth < accStartDate;
+                const isBeforeAccStart = accStartDate && selectedMonth < accStartDate.slice(0, 7);
 
                 return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
             }) || [];

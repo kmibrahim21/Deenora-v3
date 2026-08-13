@@ -160,14 +160,13 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
           (q) => {
             let query = q.select('student_id, amount_paid, discount, month')
               .eq('institution_id', madrasah.id)
-              .gte('month', startMonth)
-              .lte('month', selectedMonth);
+              .gte('month', startMonth);
             if (activeYearId) {
               query = query.eq('academic_year_id', activeYearId);
             }
             return query;
           },
-          `all_fees:${madrasah.id}_${startMonth}_${selectedMonth}_${activeYearId || 'current'}`,
+          `all_fees_qawmi:${madrasah.id}_${startMonth}_full_${activeYearId || 'current'}`,
           CACHE_TTLS.SHORT 
         );
 
@@ -230,7 +229,8 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
           roll: s.roll,
           class_id: s.class_id,
           class_name: s.classes?.class_name,
-          guardian_phone: s.guardian_phone
+          guardian_phone: s.guardian_phone,
+          notes: s.notes
         }));
 
         let filteredData = data || [];
@@ -262,7 +262,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                     const isBeforeYearStart = yearStart && m < yearStart.slice(0, 7);
                     
                     // Respect student individual accounting start date
-                    const isBeforeAccStart = accStartDate && m < accStartDate;
+                    const isBeforeAccStart = accStartDate && m < accStartDate.slice(0, 7);
 
                     return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
                 }) || [];
@@ -293,7 +293,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                 const isBeforeYearStart = yearStart && selectedMonth < yearStart.slice(0, 7);
 
                 // Respect student individual accounting start date
-                const isBeforeAccStart = accStartDate && selectedMonth < accStartDate;
+                const isBeforeAccStart = accStartDate && selectedMonth < accStartDate.slice(0, 7);
 
                 return isEnabled && !isMonthExpired && !isMonthNotStarted && !isBeforeYearStart && !isBeforeAccStart;
             }) || [];

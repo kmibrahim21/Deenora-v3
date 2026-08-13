@@ -772,6 +772,8 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                   <div className="space-y-4 flex-1 flex flex-col">
                     <div className="flex items-center justify-between px-1">
                       <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-widest">{t('step_3_message', lang)}</h4>
+                    </div>
+                    <div className="flex items-center justify-end px-1 mt-1">
                       <button 
                         onClick={() => setShowShortcodes(!showShortcodes)}
                         className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest flex items-center gap-1 hover:opacity-80 transition-all"

@@ -52,12 +52,86 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         .from('classes')
         .select('*')
         .eq('institution_id', madrasah.id)
-        .order('class_name', { ascending: true });
-      if (data) setClasses(data);
+        .order('sort_order', { ascending: true });
+      if (data) {
+        const sorted = [...data].sort((a, b) => {
+          const getOrder = (val: any) => {
+            if (val === 0) return 0;
+            if (val == null || String(val).trim() === '') return 999999;
+            const num = Number(val);
+            return isNaN(num) ? 999999 : num;
+          };
+          const orderA = getOrder(a.sort_order);
+          const orderB = getOrder(b.sort_order);
+          if (orderA !== orderB) return orderA - orderB;
+          return (a.class_name || '').localeCompare((b.class_name || ''), 'bn', { numeric: true });
+        });
+        setClasses(sorted);
+      }
     };
     fetchClasses();
   }, [madrasah]);
   const isDark = madrasah?.theme === 'dark';
+
+  const getStudentSortHelpers = (classList: any[]) => {
+    const classMap = new Map<string, any>();
+    classList.forEach(c => {
+      if (c.id) classMap.set(c.id, c);
+    });
+
+    const getClassInfo = (s: any) => {
+      const cFromMap = s.class_id ? classMap.get(s.class_id) : null;
+      const cFromJoin = Array.isArray(s.classes) ? s.classes[0] : s.classes;
+      const cls = cFromMap || cFromJoin;
+
+      const className = cls?.class_name || 'N/A';
+
+      let sortOrder = 999999;
+      if (cls && cls.sort_order !== undefined && cls.sort_order !== null && String(cls.sort_order).trim() !== '') {
+        const num = Number(cls.sort_order);
+        if (!isNaN(num)) {
+          sortOrder = num;
+        }
+      }
+      return { className, sortOrder };
+    };
+
+    const sortStudents = (studentArray: any[]) => {
+      return [...studentArray].map(s => {
+        const cFromMap = s.class_id ? classMap.get(s.class_id) : null;
+        const cFromJoin = Array.isArray(s.classes) ? s.classes[0] : s.classes;
+        const cls = cFromMap || cFromJoin;
+        return {
+          ...s,
+          classes: cls || null
+        };
+      }).sort((a, b) => {
+        const infoA = getClassInfo(a);
+        const infoB = getClassInfo(b);
+
+        if (infoA.sortOrder !== infoB.sortOrder) {
+          return infoA.sortOrder - infoB.sortOrder;
+        }
+
+        if (infoA.className !== infoB.className) {
+          return infoA.className.localeCompare(infoB.className, 'bn', { numeric: true });
+        }
+
+        const rollA = a.roll != null && String(a.roll).trim() !== '' ? Number(a.roll) : 999999;
+        const rollB = b.roll != null && String(b.roll).trim() !== '' ? Number(b.roll) : 999999;
+        const validRollA = isNaN(rollA) ? 999999 : rollA;
+        const validRollB = isNaN(rollB) ? 999999 : rollB;
+
+        if (validRollA !== validRollB) {
+          return validRollA - validRollB;
+        }
+
+        return (a.student_name || '').localeCompare(b.student_name || '', 'bn');
+      });
+    };
+
+    return { getClassInfo, sortStudents };
+  };
 
   const downloadFileNative = (blob: Blob, fileName: string, mimeType: string) => {
     const reader = new FileReader();
@@ -118,27 +192,33 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
     try {
       const { data: students, error: fetchError } = await supabase
         .from('students')
-        .select('*, classes(class_name)')
+        .select('*, classes(class_name, sort_order)')
         .eq('institution_id', madrasah.id);
         
       if (fetchError) throw fetchError;
       if (!students || students.length === 0) {
         throw new Error(lang === 'bn' ? "কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি" : "No student data found");
       }
+
+      const { sortStudents, getClassInfo } = getStudentSortHelpers(classes);
+      const sortedStudents = sortStudents(students);
       
-      const excelData = students.map(s => ({ 
-        'Class': (s as any).classes?.class_name || 'N/A', 
-        'Roll': s.roll || '', 
-        'Student Name': s.student_name, 
-        'Guardian Name': s.guardian_name || '',
-        'Phone 1': s.guardian_phone,
-        'Phone 2': s.guardian_phone_2 || '',
-        'Section': s.section || '',
-        'Admission ID': s.admission_number || '',
-        'Address': s.address || '',
-        'Date of birth': s.date_of_birth || '',
-        'English Name': s.name_en || ''
-      }));
+      const excelData = sortedStudents.map(s => {
+        const info = getClassInfo(s);
+        return { 
+          'Class': info.className, 
+          'Roll': s.roll || '', 
+          'Student Name': s.student_name || '', 
+          'Guardian Name': s.guardian_name || '',
+          'Phone 1': s.guardian_phone || '',
+          'Phone 2': s.guardian_phone_2 || '',
+          'Section': s.section || '',
+          'Admission ID': s.admission_number || '',
+          'Address': s.address || '',
+          'Date of birth': s.date_of_birth || '',
+          'English Name': s.name_en || ''
+        };
+      });
       
       const ws = XLSX.utils.json_to_sheet(excelData);
       const wb = XLSX.utils.book_new(); 
@@ -172,25 +252,28 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
     try {
       let query = supabase
         .from('students')
-        .select('*, classes(class_name)')
+        .select('*, classes(class_name, sort_order)')
         .eq('institution_id', madrasah.id);
-      
+        
       if (selectedClassId !== 'all') {
         query = query.eq('class_id', selectedClassId);
       }
 
       const { data: students, error: fetchError } = await query;
-        
+      
       if (fetchError) throw fetchError;
       if (!students || students.length === 0) {
         throw new Error(lang === 'bn' ? "কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি" : "No student data found");
       }
-      
+
+      const { sortStudents } = getStudentSortHelpers(classes);
+      const sortedStudents = sortStudents(students);
+
       const className = selectedClassId === 'all' 
         ? undefined 
         : classes.find(c => c.id === selectedClassId)?.class_name;
 
-      await generateStudentListPDF(students, madrasah, className, lang, (p) => setDownloadProgress(p));
+      await generateStudentListPDF(sortedStudents, madrasah, className, lang, (p) => setDownloadProgress(p));
 
       setStatus({
         type: 'success',
