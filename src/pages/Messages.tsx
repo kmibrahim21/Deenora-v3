@@ -110,9 +110,7 @@ export default function Messages({
   const [msgDate, setMsgDate] = useState(getTodayDateString());
   const [diaryNote, setDiaryNote] = useState('');
   const [diarySubjects, setDiarySubjects] = useState([
-    { subject: 'হিকমত/আদাব', details: '' },
-    { subject: 'কুরআন/হিফয', details: '' },
-    { subject: 'আরবি/উর্দু', details: '' }
+    { subject: 'বাংলা', details: '' }
   ]);
 
   // Form states - Notice
@@ -141,9 +139,7 @@ export default function Messages({
   const [syllabusExam, setSyllabusExam] = useState('');
   const [syllabusSession, setSyllabusSession] = useState('2025-26');
   const [syllabusSubjectList, setSyllabusSubjectList] = useState([
-    { subject: 'Quran', details: 'সূরা ইয়াসিন, সূরা রহমান' },
-    { subject: 'Arabic', details: 'নাহু - পরিচিতি' },
-    { subject: 'Tajweed', details: 'মাখারিজ, ওয়াকফ' },
+    { subject: 'বাংলা', details: '' }
   ]);
 
   useEffect(() => {
@@ -205,9 +201,7 @@ export default function Messages({
       setMsgDate(item.parsedMessage?.date || getTodayDateString());
       setDiaryNote(item.parsedMessage?.note || '');
       setDiarySubjects(item.parsedMessage?.subjects || [
-        { subject: 'হিকমত/আদাব', details: '' },
-        { subject: 'কুরআন/হিফয', details: '' },
-        { subject: 'আরবি/উর্দু', details: '' }
+        { subject: 'বাংলা', details: '' }
       ]);
       setShowMsgModal(true);
     }
@@ -292,9 +286,7 @@ export default function Messages({
       setEditingItem(null);
       setTitle(''); 
       setDiarySubjects([
-        { subject: 'হিকমত/আদাব', details: '' },
-        { subject: 'কুরআন/হিফয', details: '' },
-        { subject: 'আরবি/উর্দু', details: '' }
+        { subject: 'বাংলা', details: '' }
       ]); 
       setDiaryNote(''); 
       setSelectedClass('');
@@ -539,9 +531,7 @@ export default function Messages({
                       setEditingItem(null); 
                       setTitle(''); 
                       setDiarySubjects([
-                        { subject: 'হিকমত/আদাব', details: '' },
-                        { subject: 'কুরআন/হিফয', details: '' },
-                        { subject: 'আরবি/উর্দু', details: '' }
+                        { subject: 'বাংলা', details: '' }
                       ]); 
                       setDiaryNote(''); 
                       setSelectedClass('');
@@ -699,9 +689,7 @@ export default function Messages({
                       setSyllabusExam('');
                       setSyllabusSession('2025-26');
                       setSyllabusSubjectList([
-                        { subject: 'Quran', details: 'সূরা ইয়াসিন, সূরা রহমান' },
-                        { subject: 'Arabic', details: 'নাহু - পরিচিতি' },
-                        { subject: 'Tajweed', details: 'মাখারিজ, ওয়াকф' },
+                        { subject: 'বাংলা', details: '' }
                       ]);
                       setShowSyllabusModal(true); 
                     }} className="bg-purple-600 text-white hover:bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all">
@@ -845,7 +833,7 @@ export default function Messages({
                               <label className="block text-[10px] font-bold text-slate-400 mb-1">বিষয় (Subject)</label>
                               <input 
                                 type="text" 
-                                placeholder="যেমন: কুরআন মাজীদ" 
+                                placeholder="যেমন: বাংলা, ইংরেজি" 
                                 value={sub.subject} 
                                 onChange={e => {
                                    const newList = diarySubjects.map((s, idx2) => idx2 === idx ? { ...s, subject: e.target.value } : s);
@@ -1339,7 +1327,7 @@ export default function Messages({
                                     setSyllabusSubjectList(arr);
                                   }} 
                                   className="w-full bg-white border border-slate-100 hover:border-slate-200 focus:border-orange-500 rounded-xl h-10 px-3 outline-none transition-all font-bold text-slate-700 text-sm" 
-                                  placeholder="যেমন: কুরআন মাজীদ, আরবি"
+                                  placeholder="যেমন: বাংলা, ইংরেজি, গণিত"
                                 />
                               </div>
                             </div>
@@ -1385,7 +1373,7 @@ export default function Messages({
                     <button 
                       type="button" 
                       onClick={() => {
-                        setSyllabusSubjectList([...syllabusSubjectList, { subject: 'নতুন বিষয়', details: '' }]);
+                        setSyllabusSubjectList([...syllabusSubjectList, { subject: '', details: '' }]);
                       }} 
                       className="w-full mt-4 py-3.5 border-2 border-dashed border-slate-200 text-orange-600 hover:text-orange-700 hover:border-orange-300 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-orange-50/30 transition-all active:scale-99"
                     >
