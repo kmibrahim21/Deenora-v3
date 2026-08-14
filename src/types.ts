@@ -202,6 +202,7 @@ export interface Profile {
     can_manage_settings?: boolean;
     can_view_reports?: boolean;
     can_send_messages?: boolean;
+    voice_dashboard?: boolean;
     allowed_classes?: string[];
   };
 }

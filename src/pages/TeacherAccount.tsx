@@ -1379,18 +1379,7 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                     </div>
                   )}
 
-                  {/* Disclaimer alert */}
-                  <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border flex gap-3 text-left ${isDark ? 'bg-blue-500/5 border-blue-500/10 text-blue-300' : 'bg-blue-50/40 border-blue-100 text-blue-700'}`}>
-                    <Info size={18} className="shrink-0 mt-0.5 text-blue-500" />
-                    <div className="space-y-1">
-                      <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider leading-none">{lang === 'bn' ? 'জরুরি নির্দেশনা' : 'Guideline Notice'}</p>
-                      <p className="text-[10px] sm:text-[11px] font-bold leading-relaxed opacity-95">
-                        {lang === 'bn' 
-                          ? 'হাজিরা বা ছুটির রিপোর্টে কোনো অসঙ্গতি বা তথ্যের সংশোধন প্রয়োজন হলে দয়া করে মাদরাসার প্রধান পরিচালক অথবা অ্যাডমিন প্যানেলের সাথে সরাসরি যোগাযোগ করুন।'
-                          : 'If you notice any discrepancy or mismatch in your attendance data, please contact the institution head or admin office directly for corrections.'}
-                      </p>
-                    </div>
-                  </div>
+
                 </div>
               );
             })()}
@@ -1854,18 +1843,7 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                     </div>
                   )}
 
-                  {/* Salary and Payment Disclaimer */}
-                  <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border flex gap-3 text-left ${isDark ? 'bg-blue-500/5 border-blue-500/10 text-blue-300' : 'bg-blue-50/40 border-blue-100 text-blue-700'}`}>
-                    <Info size={18} className="shrink-0 mt-0.5 text-blue-500" />
-                    <div className="space-y-1">
-                      <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider leading-none">{lang === 'bn' ? 'জরুরি নির্দেশনা' : 'Guideline Notice'}</p>
-                      <p className="text-[10px] sm:text-[11px] font-bold leading-relaxed opacity-95">
-                        {lang === 'bn' 
-                          ? 'বেতন ও অন্যান্য ভাতার পেমেন্ট ট্রানজেকশনে কোনো অসঙ্গতি বা তথ্যের সংশোধনের প্রয়োজন হলে মাদরাসার প্রধান পরিচালক অথবা অ্যাকাউন্টিং বিভাগে যোগাযোগ করুন।'
-                          : 'For any queries regarding payroll transactions, voucher references, or monthly disbursement amounts, please contact the Accounting section or the head director.'}
-                      </p>
-                    </div>
-                  </div>
+
                 </div>
               );
             })()}
