@@ -40,6 +40,10 @@
       "destination": "/api/system.ts"
     },
     {
+      "source": "/api/proxy-image",
+      "destination": "/api/system.ts"
+    },
+    {
       "source": "/api/voice-refund",
       "destination": "/api/awaj.ts?action=voice-refund"
     },

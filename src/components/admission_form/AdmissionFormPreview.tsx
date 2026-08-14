@@ -54,17 +54,20 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [isGeneratingBlank, setIsGeneratingBlank] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [photoError, setPhotoError] = useState(false);
 
   useEffect(() => {
     let active = true;
     if (madrasah?.logo_url) {
+      setLogoError(false);
       getBase64Image(madrasah.logo_url).then(base64 => {
         if (active && base64) setLogoBase64(base64);
       });
     } else {
       setLogoBase64(null);
+      setLogoError(false);
     }
     return () => { active = false; };
   }, [madrasah?.logo_url]);
@@ -72,11 +75,13 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
   useEffect(() => {
     let active = true;
     if (formData.photoUrl) {
+      setPhotoError(false);
       getBase64Image(formData.photoUrl).then(base64 => {
         if (active && base64) setPhotoBase64(base64);
       });
     } else {
       setPhotoBase64(null);
+      setPhotoError(false);
     }
     return () => { active = false; };
   }, [formData.photoUrl]);
@@ -111,67 +116,55 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
     // Set blank form state if requested
     if (forceBlank) {
       setIsGeneratingBlank(true);
-      // Small delay to allow react to render the blank layout state
-      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    // Temporarily save original responsive scaling styles
-    const originalTransform = printRef.current.style.transform;
-    const originalPosition = printRef.current.style.position;
-    const originalTop = printRef.current.style.top;
-    
-    // Temporarily reset transform scale for a perfect, full-scale A4 capture
-    printRef.current.style.transform = 'none';
-    printRef.current.style.position = 'relative';
-    printRef.current.style.top = '0';
+    setIsCapturing(true);
 
     try {
-      // Small delay to allow the layout to settle
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Ensure all fonts are loaded
+      if (document.fonts) {
+        await document.fonts.ready;
+      }
+      
+      // Small delay to allow react to render the blank/capturing state
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const captureElement = printRef.current;
+      if (!captureElement) return;
 
       let canvas;
       let imgData;
       try {
-        canvas = await html2canvas(printRef.current, {
-          scale: 3.0, // 3.0x scale makes the PDF print quality extremely premium, sharp and crisp!
+        canvas = await html2canvas(captureElement, {
+          scale: 2.5, // Reduced from 3.0 to 2.5 for better mobile memory safety while keeping extreme crispness
           useCORS: true,
           logging: false,
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          windowWidth: 794, // Fixed A4 width in pixels at 96 DPI
+          windowHeight: 1123, // Fixed A4 height
+          onclone: (clonedDoc) => {
+            const clonedEl = clonedDoc.getElementById('print-area');
+            if (clonedEl) {
+              clonedEl.style.transform = 'none';
+              clonedEl.style.position = 'relative';
+              clonedEl.style.top = '0';
+              clonedEl.style.left = '0';
+              clonedEl.style.margin = '0';
+              clonedEl.style.padding = '12mm 15mm 12mm 15mm';
+            }
+          }
         });
         imgData = canvas.toDataURL('image/jpeg', 0.95);
       } catch (err1) {
-        console.warn("Primary 3.0x render failed, attempting safe 1.5x render...", err1);
-        try {
-          canvas = await html2canvas(printRef.current, {
-            scale: 1.5,
-            useCORS: true,
-            logging: false,
-            backgroundColor: '#ffffff'
-          });
-          imgData = canvas.toDataURL('image/jpeg', 0.9);
-        } catch (err2) {
-          console.warn("CORS/Taint issue at 1.5x, trying 1.5x scale with no-CORS non-tainting layout...", err2);
-          try {
-            canvas = await html2canvas(printRef.current, {
-              scale: 1.5,
-              useCORS: false,
-              allowTaint: true,
-              logging: false,
-              backgroundColor: '#ffffff'
-            });
-            imgData = canvas.toDataURL('image/jpeg', 0.9);
-          } catch (err3) {
-            console.error("All high-quality render attempts failed. Performing low-scale default fallback...", err3);
-            canvas = await html2canvas(printRef.current, {
-              scale: 1.0,
-              useCORS: false,
-              allowTaint: true,
-              logging: false,
-              backgroundColor: '#ffffff'
-            });
-            imgData = canvas.toDataURL('image/png');
-          }
-        }
+        console.warn("Primary render failed, attempting safe fallback...", err1);
+        canvas = await html2canvas(captureElement, {
+          scale: 1.5,
+          useCORS: false,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+        imgData = canvas.toDataURL('image/jpeg', 0.9);
       }
 
       const pdf = new jsPDF({
@@ -180,10 +173,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
         format: 'a4'
       });
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-
-      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
       
       const safeStudentName = forceBlank 
         ? 'Blank_Form'
@@ -195,12 +185,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
       console.error('PDF Generation Error:', error);
     } finally {
       setIsGeneratingBlank(false);
-      // Restore the responsive scale styles
-      if (printRef.current) {
-        printRef.current.style.transform = originalTransform;
-        printRef.current.style.position = originalPosition;
-        printRef.current.style.top = originalTop;
-      }
+      setIsCapturing(false);
     }
   };
 
@@ -292,7 +277,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
             ref={printRef}
             id="print-area"
             className="bg-white shadow-2xl font-solaiman flex flex-col relative overflow-hidden shrink-0"
-            style={isPrint ? {
+            style={isPrint || isCapturing ? {
               width: '210mm', 
               height: '297mm', 
               padding: '12mm 15mm 12mm 15mm',

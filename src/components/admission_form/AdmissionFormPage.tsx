@@ -193,8 +193,13 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
 
     const generatePDF = async () => {
       try {
-        // Wait a small delay to ensure rendering and fonts are fully loaded
-        await new Promise(resolve => setTimeout(resolve, 800));
+        // Ensure all fonts are loaded before starting capture
+        if (document.fonts) {
+          await document.fonts.ready;
+        }
+
+        // Wait a small delay to ensure rendering is fully complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const element = headlessPrintRef.current;
         if (!element) return;
@@ -206,45 +211,35 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
         let imgData;
         try {
           canvas = await html2canvas(printArea, {
-            scale: 3.0, // 3.0x scale makes the PDF print quality extremely premium, sharp and crisp!
+            scale: 2.5, // 2.5x is optimal for high quality without crashing mobile browsers
             useCORS: true,
             logging: false,
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff',
+            windowWidth: 794, // Fixed A4 width in pixels at 96 DPI
+            windowHeight: 1123,
+            onclone: (clonedDoc) => {
+              const clonedEl = clonedDoc.getElementById('print-area');
+              if (clonedEl) {
+                clonedEl.style.transform = 'none';
+                clonedEl.style.position = 'relative';
+                clonedEl.style.top = '0';
+                clonedEl.style.left = '0';
+                clonedEl.style.margin = '0';
+                clonedEl.style.padding = '12mm 15mm 12mm 15mm';
+              }
+            }
           });
           imgData = canvas.toDataURL('image/jpeg', 0.95);
         } catch (err1) {
-          console.warn("Headless 3.0x render failed, attempting safe 1.5x render...", err1);
-          try {
-            canvas = await html2canvas(printArea, {
-              scale: 1.5,
-              useCORS: true,
-              logging: false,
-              backgroundColor: '#ffffff'
-            });
-            imgData = canvas.toDataURL('image/jpeg', 0.9);
-          } catch (err2) {
-            console.warn("Headless CORS/Taint issue at 1.5x, trying 1.5x scale with no-CORS non-tainting layout...", err2);
-            try {
-              canvas = await html2canvas(printArea, {
-                scale: 1.5,
-                useCORS: false,
-                allowTaint: true,
-                logging: false,
-                backgroundColor: '#ffffff'
-              });
-              imgData = canvas.toDataURL('image/jpeg', 0.9);
-            } catch (err3) {
-              console.error("All headless image generations failed. Performing low-scale default fallback...", err3);
-              canvas = await html2canvas(printArea, {
-                scale: 1.0,
-                useCORS: false,
-                allowTaint: true,
-                logging: false,
-                backgroundColor: '#ffffff'
-              });
-              imgData = canvas.toDataURL('image/png');
-            }
-          }
+          console.warn("Headless render failed, attempting fallback...", err1);
+          canvas = await html2canvas(printArea, {
+            scale: 1.5,
+            useCORS: false,
+            allowTaint: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+          });
+          imgData = canvas.toDataURL('image/jpeg', 0.9);
         }
 
         const pdf = new jsPDF({
@@ -253,10 +248,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
           format: 'a4'
         });
 
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
         
         const safeStudentName = (headlessDownloadData.studentNameEn || headlessDownloadData.studentName || 'Form')
           .replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')

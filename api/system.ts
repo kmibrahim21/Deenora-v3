@@ -83,7 +83,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const response = await fetch(imageUrl, {
+      // Decode then re-encode spaces to ensure valid URL for fetch
+      const decodedUrl = decodeURIComponent(imageUrl);
+      const finalUrl = decodedUrl.replace(/ /g, '%20');
+
+      const response = await fetch(finalUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'image/*'
@@ -97,7 +101,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      let contentType = response.headers.get('content-type') || 'image/jpeg';
+      
+      // Fix CDN wrong content types or generic octet-stream
+      if (contentType.includes('octet-stream') || contentType.includes('text/') || contentType.includes('text/html')) {
+        const urlLower = finalUrl.toLowerCase();
+        if (urlLower.endsWith('.png')) contentType = 'image/png';
+        else if (urlLower.endsWith('.webp')) contentType = 'image/webp';
+        else if (urlLower.endsWith('.svg')) contentType = 'image/svg+xml';
+        else if (urlLower.endsWith('.gif')) contentType = 'image/gif';
+        else contentType = 'image/jpeg';
+      }
 
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Length', buffer.length.toString());
