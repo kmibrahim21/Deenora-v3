@@ -145,21 +145,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(413).json({ message: 'File size too large. Maximum allowed size is 10MB' });
       }
 
-      // Check allowed extensions
+      // Extract allowed audio extension and normalize it
       const allowedExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm', 'flac'];
-      const fileExt = (filename.split('.').pop() || '').toLowerCase();
-      if (fileExt && !allowedExts.includes(fileExt)) {
-        return res.status(415).json({ 
-          message: `Invalid file extension. Allowed extensions: ${allowedExts.join(', ')}` 
-        });
+      let rawExt = (filename.split('.').pop() || '').toLowerCase();
+      
+      // Normalize common aliases
+      if (['mpeg', 'mpga', 'mp3'].includes(rawExt)) rawExt = 'mp3';
+      else if (['mp4'].includes(rawExt)) rawExt = 'm4a';
+
+      let normalizedExt = rawExt;
+      if (!allowedExts.includes(normalizedExt)) {
+        // Fallback: inspect MIME type
+        const lowerType = (contentType || '').toLowerCase();
+        if (lowerType.includes('mpeg') || lowerType.includes('mp3')) normalizedExt = 'mp3';
+        else if (lowerType.includes('wav')) normalizedExt = 'wav';
+        else if (lowerType.includes('ogg')) normalizedExt = 'ogg';
+        else if (lowerType.includes('mp4') || lowerType.includes('m4a')) normalizedExt = 'm4a';
+        else if (lowerType.includes('aac')) normalizedExt = 'aac';
+        else if (lowerType.includes('webm')) normalizedExt = 'webm';
+        else if (lowerType.includes('flac')) normalizedExt = 'flac';
+        else normalizedExt = 'mp3'; // default to mp3 for audio
       }
+
+      // Always pass a clean ASCII filename to avoid Unicode/Header parsing issues in PHP/Laravel backend
+      const cleanFilename = `voice_${Date.now()}.${normalizedExt}`;
+
+      // Canonical MIME type map required by Awaj Digital / Laravel file validators
+      const canonicalMimeMap: Record<string, string> = {
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        ogg: 'audio/ogg',
+        m4a: 'audio/mp4',
+        aac: 'audio/aac',
+        webm: 'audio/webm',
+        flac: 'audio/flac'
+      };
+      const finalContentType = canonicalMimeMap[normalizedExt] || 'audio/mpeg';
 
       // Create multipart FormData for Awaj Digital
       const formData = new FormData();
       formData.append('name', voiceName);
       formData.append('audio', fileBuffer, {
-        filename: filename,
-        contentType: contentType
+        filename: cleanFilename,
+        contentType: finalContentType,
+        knownLength: fileBuffer.length
       });
 
       const formHeaders = formData.getHeaders();

@@ -93,11 +93,12 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     if (!file) return;
 
     setUploadError(null);
-    const allowedExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm', 'flac'];
+    const allowedExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm', 'flac', 'mpeg', 'mpga', 'mp4'];
     const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const isAudioType = file.type ? file.type.startsWith('audio/') : false;
     
-    if (!allowedExtensions.includes(ext)) {
-      setUploadError(`অননুমোদিত অডিও ফরম্যাট। অনুমোদিত ফরম্যাট: ${allowedExtensions.join(', ')}`);
+    if (!allowedExtensions.includes(ext) && !isAudioType) {
+      setUploadError(`অননুমোদিত অডিও ফরম্যাট। অনুমোদিত ফরম্যাট: mp3, wav, ogg, m4a, aac, webm, flac`);
       return;
     }
 
@@ -164,6 +165,15 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
       if (!response.ok) {
         let msg = resData.message || resData.error || 'Failed to upload voice to Awaj Digital';
+        if (resData.errors && typeof resData.errors === 'object') {
+          const firstKey = Object.keys(resData.errors)[0];
+          const firstErr = resData.errors[firstKey];
+          if (Array.isArray(firstErr) && firstErr.length > 0) {
+            msg = firstErr[0];
+          } else if (typeof firstErr === 'string') {
+            msg = firstErr;
+          }
+        }
         if (response.status === 409) {
           msg = `"${trimmedName}" নামের ভয়েস ইতিমধ্যে অ্যাকাউন্টে বিদ্যমান। অন্য একটি নাম দিন।`;
         } else if (response.status === 413) {

@@ -1420,12 +1420,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const handleVoiceUpload = async () => {
     if (!madrasah || !uploadName || !uploadFile) return;
 
-    if (!uploadFile.type.startsWith('audio/') && !uploadFile.name.toLowerCase().endsWith('.mp3') && !uploadFile.name.toLowerCase().endsWith('.wav')) {
+    const validExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm', 'flac', 'mpeg', 'mp4'];
+    const fileExtLower = (uploadFile.name.split('.').pop() || '').toLowerCase();
+    const isAudioType = uploadFile.type ? uploadFile.type.startsWith('audio/') : false;
+
+    if (!isAudioType && !validExts.includes(fileExtLower)) {
       setStatusModal({
         show: true,
         type: 'error',
         title: lang === 'bn' ? 'ভুল ফাইল' : 'Invalid File',
-        message: lang === 'bn' ? 'দয়া করে একটি সঠিক অডিও ফাইল (MP3/WAV) সিলেক্ট করুন।' : 'Please select a valid audio file (MP3/WAV).'
+        message: lang === 'bn' ? 'দয়া করে একটি সঠিক অডিও ফাইল (MP3, WAV, OGG, M4A, AAC, WebM, FLAC) সিলেক্ট করুন।' : 'Please select a valid audio file (MP3, WAV, OGG, M4A, AAC, WebM, FLAC).'
       });
       return;
     }
