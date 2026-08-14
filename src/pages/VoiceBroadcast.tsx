@@ -55,7 +55,7 @@ interface VoiceBroadcastProps {
 const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, triggerRefresh, dataVersion, isEmbedded = false, role, profile, onBack, preSelectedStudentIds = [], preSelectedInstitutionIds = [] }) => {
   const isOnline = useOfflineStatus();
   const isTeacher = role === 'teacher';
-  const canUseVoice = !isTeacher || profile?.permissions?.can_use_voice_call;
+  const canUseVoice = role !== 'teacher' || profile?.permissions?.can_use_voice_call || profile?.permissions?.voice_dashboard;
   const isPreSelected = preSelectedStudentIds.length > 0;
   const isInstPreSelected = preSelectedInstitutionIds.length > 0;
   const isSuperAdmin = role === 'super_admin';

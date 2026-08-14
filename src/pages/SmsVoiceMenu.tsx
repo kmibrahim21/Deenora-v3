@@ -16,8 +16,8 @@ interface SmsVoiceMenuProps {
 const SmsVoiceMenu: React.FC<SmsVoiceMenuProps> = ({ lang, madrasah, onBack, onNavigateToSms, onNavigateToVoice, role, profile }) => {
   const isDark = madrasah?.theme === 'dark';
   const isTeacher = role === 'teacher';
-  const canSendSms = !isTeacher || profile?.permissions?.can_send_sms;
-  const canUseVoice = !isTeacher || profile?.permissions?.can_use_voice_call;
+  const canSendSms = role !== 'teacher' || profile?.permissions?.can_send_sms;
+  const canUseVoice = role !== 'teacher' || profile?.permissions?.can_use_voice_call || profile?.permissions?.voice_dashboard;
   
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">

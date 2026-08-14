@@ -91,8 +91,8 @@ export const useAuth = () => {
               finalProfile = {
                 ...finalProfile,
                 permissions: {
-                  ...finalProfile.permissions,
-                  ...sysSettings.manager_permissions
+                  ...sysSettings.manager_permissions,
+                  ...finalProfile.permissions
                 }
               };
             }

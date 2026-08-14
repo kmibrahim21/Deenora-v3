@@ -84,6 +84,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
       if (module === 'institutions') return !!profile?.permissions?.institutions;
       if (module === 'approvals') return !!profile?.permissions?.approvals;
       if (module === 'tutorials') return !!profile?.permissions?.tutorials;
+      if (module === 'voice-service' || module === 'voice_dashboard') return true;
     }
     
     // For regular admins, check module permissions
@@ -118,7 +119,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
   useEffect(() => { if (showNotifications) fetchDynamicNotifications(); }, [showNotifications, madrasah?.id]);
 
   const hasPermission = (perm: keyof NonNullable<Profile['permissions']>) => {
-    if (isSuperAdmin || role === 'madrasah_admin') return true;
+    if (isSuperAdmin || role === 'madrasah_admin' || role === 'manager') return true;
     return !!profile?.permissions?.[perm];
   };
 
@@ -196,7 +197,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                     <MessageSquare size={22} strokeWidth={isTabActive('sms-voice-menu') ? 2.5 : 2} />
                     <span className="text-sm font-bold font-noto">{t('sms_voice', lang)}</span>
                   </button>
-                  {isSuperAdmin && (
+                  {(isSuperAdmin || canAccess('voice-service')) && (
                     <button onClick={() => setView('admin-voice-service')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('voice-service') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                       <Radio size={22} strokeWidth={isTabActive('voice-service') ? 2.5 : 2} />
                       <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'ভয়েস গেটওয়ে' : 'Voice Gateway'}</span>
@@ -373,7 +374,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                     <MessageSquare size={20} />
                     <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'এসএমএস' : 'SMS'}</span>
                   </button>
-                  {isSuperAdmin && (
+                  {(isSuperAdmin || canAccess('voice-service')) && (
                     <button onClick={() => setView('admin-voice-service')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('voice-service') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
                       <Radio size={20} />
                       <span className="text-[9px] font-black font-noto opacity-80 whitespace-nowrap">{lang === 'bn' ? 'ভয়েস' : 'Voice'}</span>

@@ -67,7 +67,7 @@ const MobileLayout: React.FC<LayoutProps> = ({ children, currentView, setView, l
   useEffect(() => { if (showNotifications) fetchDynamicNotifications(); }, [showNotifications, madrasah?.id]);
 
   const hasPermission = (perm: keyof NonNullable<Profile['permissions']>) => {
-    if (isSuperAdmin || role === 'madrasah_admin') return true;
+    if (isSuperAdmin || role === 'madrasah_admin' || role === 'manager') return true;
     return !!profile?.permissions?.[perm];
   };
 

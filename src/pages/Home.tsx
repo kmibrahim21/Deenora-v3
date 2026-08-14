@@ -35,9 +35,9 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast, onNavigateToMessages, onNavigateToCertificates }) => {
   const role = profile?.role || 'teacher';
-  const isAdmin = role === 'madrasah_admin' || role === 'super_admin';
+  const isAdmin = role === 'madrasah_admin' || role === 'super_admin' || role === 'manager';
   const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
-  const canUseVoice = isAdmin || !!profile?.permissions?.can_use_voice_call;
+  const canUseVoice = isAdmin || !!profile?.permissions?.can_use_voice_call || !!profile?.permissions?.voice_dashboard;
   const canManageStudents = isAdmin || !!profile?.permissions?.can_manage_students;
   const canManageAttendance = isAdmin || !!profile?.permissions?.can_manage_attendance;
   const canManageAccounting = isAdmin || !!profile?.permissions?.can_manage_accounting;

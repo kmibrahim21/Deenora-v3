@@ -782,7 +782,8 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                       { id: 'payment', label: lang === 'bn' ? 'পেমেন্ট' : 'Payment' },
                       { id: 'contact', label: lang === 'bn' ? 'যোগাযোগ' : 'Contact' },
                       { id: 'tutorials', label: lang === 'bn' ? 'টিউটোরিয়াল ম্যানেজ' : 'Manage Tutorials' },
-                      { id: 'voice_dashboard', label: lang === 'bn' ? 'ভয়েস ড্যাশবোর্ড' : 'Voice Dashboard' },
+                      { id: 'voice_dashboard', label: lang === 'bn' ? 'ভয়েস ড্যাশবোর্ড / গেটওয়ে' : 'Voice Dashboard / Gateway' },
+                      { id: 'can_use_voice_call', label: lang === 'bn' ? 'ভয়েস ব্রডকাস্ট / কল' : 'Voice Broadcast / Call' },
                       { id: 'packages', label: lang === 'bn' ? 'প্যাকেজসমূহ' : 'Packages' }
                     ].map((perm) => (
                       <button
@@ -941,6 +942,8 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     { key: 'institutions', label: 'Manage Institutions' },
                     { key: 'approvals', label: 'Manage Approvals' },
                     { key: 'sms', label: 'Manage SMS' },
+                    { key: 'can_use_voice_call', label: 'Voice Call / Broadcast' },
+                    { key: 'voice_dashboard', label: 'Voice Gateway / Service' },
                     { key: 'accounting', label: 'Accounting' },
                     { key: 'fees', label: 'Manage Fees' },
                     { key: 'dashboard', label: 'Global Dashboard' },
