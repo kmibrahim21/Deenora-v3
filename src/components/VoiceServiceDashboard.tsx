@@ -373,7 +373,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       const [voicesRes, sendersRes, balanceRes] = await Promise.all([
         fetchJson('/api/awaj/voices'),
         fetchJson('/api/awaj/senders'),
-        fetchJson('/api/balance').catch(err => {
+        fetchJson('/api/awaj/balance').catch(() => fetchJson('/api/balance')).catch(err => {
           console.warn('Failed to fetch balance:', err);
           return null;
         })
@@ -383,9 +383,12 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         setApiError(voicesRes.error || sendersRes.error);
       }
 
-      if (balanceRes && (typeof balanceRes.balance === 'number' || balanceRes.balance !== undefined)) {
-        const balVal = Number(balanceRes.balance || balanceRes.data?.balance || 0);
-        setVoiceBalance(isNaN(balVal) ? 0 : balVal);
+      if (balanceRes) {
+        const rawBal = balanceRes.balance !== undefined ? balanceRes.balance : balanceRes.data?.balance;
+        if (rawBal !== undefined && rawBal !== null) {
+          const balVal = Number(rawBal);
+          setVoiceBalance(isNaN(balVal) ? 0 : balVal);
+        }
       }
 
       const apiVoices = voicesRes.voices || voicesRes.data || [];

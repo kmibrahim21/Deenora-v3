@@ -24,6 +24,10 @@
       "destination": "/api/awaj.ts"
     },
     {
+      "source": "/api/balance",
+      "destination": "/api/awaj.ts?action=balance"
+    },
+    {
       "source": "/api/voices/:path*",
       "destination": "/api/awaj.ts"
     },
