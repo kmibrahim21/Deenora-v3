@@ -83,14 +83,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      // Decode then re-encode spaces to ensure valid URL for fetch
-      const decodedUrl = decodeURIComponent(imageUrl);
-      const finalUrl = decodedUrl.replace(/ /g, '%20');
+      // Robust URL decoding and validation
+      let finalUrl = '';
+      try {
+        const decodedUrl = decodeURIComponent(imageUrl);
+        // Ensure it's an absolute URL
+        if (decodedUrl.startsWith('http')) {
+          finalUrl = decodedUrl;
+        } else {
+          throw new Error('Invalid URL protocol');
+        }
+      } catch (e) {
+        finalUrl = imageUrl;
+      }
 
-      const response = await fetch(finalUrl, {
+      // Handle spaces and special chars in URL
+      const urlObj = new URL(finalUrl);
+      const targetUrl = urlObj.toString();
+
+      const response = await fetch(targetUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'image/*'
+          'Accept': 'image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
         }
       });
       
@@ -103,9 +117,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let contentType = response.headers.get('content-type') || 'image/jpeg';
       
-      // Fix CDN wrong content types or generic octet-stream
+      // Fix generic or incorrect content types
       if (contentType.includes('octet-stream') || contentType.includes('text/') || contentType.includes('text/html')) {
-        const urlLower = finalUrl.toLowerCase();
+        const urlLower = targetUrl.toLowerCase();
         if (urlLower.endsWith('.png')) contentType = 'image/png';
         else if (urlLower.endsWith('.webp')) contentType = 'image/webp';
         else if (urlLower.endsWith('.svg')) contentType = 'image/svg+xml';
@@ -116,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Length', buffer.length.toString());
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache for static assets
 
       return res.status(200).send(buffer);
     } catch (error: any) {

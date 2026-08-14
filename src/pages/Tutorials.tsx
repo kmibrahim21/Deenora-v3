@@ -27,43 +27,52 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const categories = [
-    { id: 'attendance', bn: 'হাজিরা', en: 'Attendance', icon: <CalendarCheck className="text-emerald-500" /> },
-    { id: 'student', bn: 'শিক্ষার্থী', en: 'Students', icon: <Users className="text-blue-500" /> },
-    { id: 'accounting', bn: 'হিসাব', en: 'Accounting', icon: <CreditCard className="text-amber-500" /> },
-    { id: 'exam', bn: 'পরীক্ষা', en: 'Exams', icon: <BookOpen className="text-indigo-500" /> },
-    { id: 'sms_voice', bn: 'এসএমএস ও ভয়েস কল', en: 'SMS & Voice Call', icon: <PhoneCall className="text-rose-500" /> },
-    { id: 'other', bn: 'অন্যান্য', en: 'Others', icon: <MoreHorizontal className="text-slate-500" /> }
-  ];
+  const categories = React.useMemo(() => [
+    { id: 'attendance', bn: 'হাজিরা', en: 'Attendance', icon: CalendarCheck, color: 'text-emerald-500' },
+    { id: 'student', bn: 'শিক্ষার্থী', en: 'Students', icon: Users, color: 'text-blue-500' },
+    { id: 'accounting', bn: 'হিসাব', en: 'Accounting', icon: CreditCard, color: 'text-amber-500' },
+    { id: 'exam', bn: 'পরীক্ষা', en: 'Exams', icon: BookOpen, color: 'text-indigo-500' },
+    { id: 'sms_voice', bn: 'এসএমএস ও ভয়েস কল', en: 'SMS & Voice Call', icon: PhoneCall, color: 'text-rose-500' },
+    { id: 'other', bn: 'অন্যান্য', en: 'Others', icon: MoreHorizontal, color: 'text-slate-500' }
+  ], []);
 
   useEffect(() => {
-    fetchTutorials();
+    let isMounted = true;
+    const loadTutorials = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("tutorials")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (isMounted) setTutorials(data || []);
+      } catch (err) {
+        console.error("Error fetching tutorials:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    
+    loadTutorials();
+    return () => { isMounted = false; };
   }, []);
 
-  const fetchTutorials = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("tutorials")
-        .select("*")
-        .order("created_at", { ascending: false });
+  const filteredTutorials = React.useMemo(() => {
+    if (!selectedCategory) return [];
+    return tutorials.filter(t => {
+      if (selectedCategory === 'other') {
+        return t.category === 'other' || !t.category;
+      }
+      return t.category === selectedCategory;
+    });
+  }, [tutorials, selectedCategory]);
 
-      if (error) throw error;
-      setTutorials(data || []);
-    } catch (err) {
-      console.error("Error fetching tutorials:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredTutorials = selectedCategory 
-    ? tutorials.filter(t => {
-        if (selectedCategory === 'other') {
-          return t.category === 'other' || !t.category;
-        }
-        return t.category === selectedCategory;
-      })
-    : [];
+  const selectedCategoryData = React.useMemo(() => 
+    categories.find(c => c.id === selectedCategory),
+    [selectedCategory, categories]
+  );
 
   return (
     <div
@@ -83,7 +92,7 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
             className={`text-lg font-black font-noto ${madrasah?.theme === "dark" ? "text-white" : "text-[#1E3A8A]"}`}
           >
             {selectedCategory 
-              ? (lang === 'bn' ? categories.find(c => c.id === selectedCategory)?.bn : categories.find(c => c.id === selectedCategory)?.en)
+              ? (lang === 'bn' ? (selectedCategoryData?.bn || selectedCategory) : (selectedCategoryData?.en || selectedCategory))
               : (lang === "bn" ? "টিউটোরিয়াল" : "Tutorials")}
           </h1>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -111,7 +120,7 @@ const Tutorials: React.FC<TutorialsProps> = ({ lang, onBack, madrasah }) => {
                 className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border shadow-bubble flex flex-col items-center justify-center gap-2 md:gap-4 active:scale-95 transition-all group hover:border-blue-300`}
               >
                 <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[1.5rem] flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform ${madrasah?.theme === 'dark' ? 'bg-slate-900' : 'bg-slate-50'}`}>
-                  {React.cloneElement(cat.icon as React.ReactElement<any>, { size: 24 })}
+                  <cat.icon size={24} className={cat.color} />
                 </div>
                 <div className="text-center">
                   <h3 className={`text-xs md:text-sm font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
