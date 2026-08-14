@@ -391,7 +391,17 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         }
       }
 
-      const apiVoices = voicesRes.voices || voicesRes.data || [];
+      const rawApiVoices = voicesRes.voices || voicesRes.data || [];
+      const apiVoices = Array.isArray(rawApiVoices)
+        ? [...rawApiVoices]
+            .sort((a: any, b: any) => {
+              const dateA = new Date(a.createdAt || a.created_at || 0).getTime();
+              const dateB = new Date(b.createdAt || b.created_at || 0).getTime();
+              if (dateA !== dateB) return dateB - dateA;
+              return Number(b.id || 0) - Number(a.id || 0);
+            })
+            .slice(0, 20)
+        : [];
       setVoices(apiVoices);
       setSenders(sendersRes.senders || sendersRes.data || []);
 
@@ -856,11 +866,11 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                 <div className="flex items-center gap-2.5">
                   <Info size={18} className="shrink-0 text-blue-500" />
                   <span className="font-bold">
-                    ভয়েস ফাইল সরাসরি Awaj Digital API তে আপলোড ও পরিচালিত হয় (Supabase Storage বাইপাস)।
+                    দ্রুততম স্পিডে লোড হওয়ার জন্য সর্বশেষ ২০টি ভয়েস প্রদর্শন করা হচ্ছে।
                   </span>
                 </div>
                 <span className="hidden md:inline-flex px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 dark:bg-blue-900/60 dark:text-blue-200 shrink-0">
-                  Direct API Gateway
+                  Top 20 Voices
                 </span>
               </div>
 
