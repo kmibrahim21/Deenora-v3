@@ -392,8 +392,20 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.50);
 
   useEffect(() => {
+    const initRate = async () => {
+      let r = madrasah?.voice_rate;
+      if (!r) {
+        try {
+          const { data } = await supabase.from('system_settings').select('voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
+          r = data?.voice_rate || 0.50;
+        } catch(e) {
+          r = 0.50;
+        }
+      }
+      setVoiceRate(r);
+    };
     if (madrasah) {
-      setVoiceRate(madrasah.voice_rate || 0.50);
+      initRate();
     }
   }, [madrasah]);
 
@@ -615,8 +627,15 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       
       if (response.ok) {
         const data = await response.json();
-        sendersList = Array.isArray(data) ? data : (data.senders || data.data || []);
-        console.log('Awaj Senders List:', sendersList);
+        let fetchedList = Array.isArray(data) ? data : (data.senders || data.data || []);
+        
+        // Filter out old senders and keep only +880 9610-993084 (or its variations)
+        sendersList = fetchedList.filter(s => {
+          const num = String(s.callingNumber || s.caller_id || s.id || '');
+          return num.includes('9610993084') || num.includes('9610-993084');
+        });
+
+        console.log('Awaj Senders List (Filtered):', sendersList);
       } else {
         const errData = await response.json().catch(() => ({}));
         setApiError(errData.error || `Awaj API Error: ${response.status}`);
@@ -888,7 +907,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       // Calculate cost based on normalized subscribers
-      const estimatedCost = uniqueNormalizedPhoneNumbers.length * (madrasah?.voice_rate || 0.5);
+      const estimatedCost = uniqueNormalizedPhoneNumbers.length * voiceRate;
 
       if (walletBalance < estimatedCost) {
         setStatusModal({
@@ -2356,7 +2375,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   {lang === 'bn' ? 'মোট আনুমানিক খরচ' : 'Total Estimated Cost'}
                 </span>
                 <span className="text-xl font-black text-blue-600">
-                  {Number(retryModal.phoneNumbers.length * (madrasah?.voice_rate || 0.5)).toFixed(2)} ৳
+                  {Number(retryModal.phoneNumbers.length * voiceRate).toFixed(2)} ৳
                 </span>
               </div>
             </div>

@@ -383,6 +383,14 @@ export default async function handler(req, res) {
         .single();
       
       if (error) throw error;
+
+      if (updates.voice_rate !== undefined) {
+        await supabase.from('institutions').update({ voice_rate: updates.voice_rate }).not('id', 'is', null);
+      }
+      if (updates.sms_rate !== undefined) {
+        await supabase.from('institutions').update({ sms_rate: updates.sms_rate }).not('id', 'is', null);
+      }
+
       return res.status(200).json({ success: true, data });
     }
 

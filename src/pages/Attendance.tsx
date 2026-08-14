@@ -208,14 +208,27 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   ];
 
   useEffect(() => {
+    const initVoiceRate = async () => {
+      let r = madrasah?.voice_rate;
+      if (!r) {
+        try {
+          const { data } = await supabase.from('system_settings').select('voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
+          r = data?.voice_rate || 0.50;
+        } catch(e) {
+          r = 0.50;
+        }
+      }
+      setVoiceRate(r);
+    };
+
     if (madrasah) {
       fetchClasses();
       fetchSmsTemplates();
       fetchVoiceTemplates();
       setWalletBalance(madrasah.balance || 0);
-      setVoiceRate(madrasah.voice_rate || 0.50);
+      initVoiceRate();
     }
-  }, [madrasah?.id]);
+  }, [madrasah?.id, madrasah?.voice_rate, madrasah?.balance]);
 
   const fetchSmsTemplates = async () => {
     if (!madrasah) return;

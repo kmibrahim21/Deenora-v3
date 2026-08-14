@@ -329,8 +329,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const errorText = await response.text();
         throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
       }
-      const data = await response.json();
-      return res.status(200).json(data);
+      
+      const rawData = await response.json();
+      let sendersList = Array.isArray(rawData) ? rawData : (rawData.senders || rawData.data || []);
+      
+      // Filter out old senders and keep only +880 9610-993084
+      sendersList = sendersList.filter((s: any) => {
+        const num = String(s.callingNumber || s.caller_id || s.id || '');
+        return num.includes('9610993084') || num.includes('9610-993084');
+      });
+      
+      // Ensure the correct structure is returned
+      const finalData = Array.isArray(rawData) ? sendersList : { ...rawData, data: sendersList, senders: sendersList };
+
+      return res.status(200).json(finalData);
     }
 
     // SURVEYS
@@ -532,7 +544,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        const voiceRate = institution.voice_rate || 0.50;
+        const { data: sysSettings } = await supabase
+          .from('system_settings')
+          .select('voice_rate')
+          .eq('id', '00000000-0000-0000-0000-000000000001')
+          .single();
+        
+        const voiceRate = institution.voice_rate || sysSettings?.voice_rate || 0.50;
         const refundAmount = Number((totalFailuresToRefund * voiceRate).toFixed(2));
 
         const txData: any = {

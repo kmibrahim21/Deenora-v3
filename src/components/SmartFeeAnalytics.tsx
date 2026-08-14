@@ -160,7 +160,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [isFetchingVoices, setIsFetchingVoices] = useState(false);
   const [voices, setVoices] = useState<any[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
-  const [voiceRate, setVoiceRate] = useState(0.85);
+  const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.45);
 
   const passedClassesLength = classes?.length;
   const allowedClassesJson = JSON.stringify(profile?.permissions?.allowed_classes || []);
@@ -559,8 +559,12 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const fetchVoices = async () => {
     setIsFetchingVoices(true);
     try {
-      const { data: sysSettings } = await supabase.from('system_settings').select('voice_rate').single();
-      if (sysSettings?.voice_rate) setVoiceRate(sysSettings.voice_rate);
+      let vRate = madrasah?.voice_rate;
+      if (!vRate) {
+        const { data: sysSettings } = await supabase.from('system_settings').select('voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
+        if (sysSettings?.voice_rate) vRate = sysSettings.voice_rate;
+      }
+      setVoiceRate(vRate || 0.50);
 
       const { data: localVoices } = await supabase
         .from('voice_templates')

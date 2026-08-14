@@ -150,13 +150,30 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   }, [initialMessage]);
 
   useEffect(() => {
+    const initRates = async () => {
+      let vRate = madrasah?.voice_rate;
+      let sRate = madrasah?.sms_rate;
+      
+      if (!vRate || !sRate) {
+        try {
+          const { data } = await supabase.from('system_settings').select('sms_rate, voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
+          if (!vRate) vRate = data?.voice_rate || 0.50;
+          if (!sRate) sRate = data?.sms_rate || 0.50;
+        } catch(e) {
+          if (!vRate) vRate = 0.50;
+          if (!sRate) sRate = 0.50;
+        }
+      }
+      setVoiceRate(vRate);
+      setSmsRate(sRate);
+    };
+
     if (madrasah) {
-      setSmsRate(madrasah.sms_rate || 0.50);
-      setVoiceRate(madrasah.voice_rate || 0.50);
+      initRates();
       setSmsBalance(madrasah.sms_balance || 0);
       fetchWalletBalance();
     }
-  }, [madrasah]);
+  }, [madrasah?.id, madrasah?.voice_rate, madrasah?.sms_rate, madrasah?.sms_balance]);
 
   useEffect(() => { 
     if (activeTab === 'templates') fetchTemplates(); 
