@@ -43,9 +43,10 @@ interface Props {
   lang: AdmissionFormLang;
   config: AdmissionFormConfig;
   isPrint?: boolean;
+  hideButtons?: boolean;
 }
 
-const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, config, isPrint = false }) => {
+const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, config, isPrint = false, hideButtons = false }) => {
   const t = ADMISSION_T[lang];
   const printRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -239,7 +240,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
   return (
     <div className="flex flex-col items-center w-full">
       {/* Action Buttons */}
-      {!isPrint && (
+      {!isPrint && !hideButtons && (
         <div className="flex flex-wrap gap-4 mb-8 justify-center w-full px-4">
           <button
             onClick={() => downloadPDF(false)}

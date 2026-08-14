@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import multer from 'multer';
 // fetch is global in Node 18+
 
 // Load environment variables
@@ -17,10 +18,31 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Use body-parser for JSON. However, let the Vite ssrLoadModule handle the raw req if needed.
-  // Actually, standard express json is fine as long as we mock req.body.
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Multer setup for file uploads (up to 15MB)
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 }
+  });
+
+  const uploadMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    upload.any()(req, res, (err) => {
+      if (err) {
+        console.error('Multer error:', err);
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ message: 'File size too large. Maximum allowed size is 10MB' });
+        }
+        return res.status(400).json({ message: err.message || 'File upload error' });
+      }
+      if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+        (req as any).file = req.files[0];
+      }
+      next();
+    });
+  };
+
+  // Use body-parser for JSON and URL-encoded
+  app.use(express.json({ limit: '20mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
   // Helper to run Vercel-style handlers
   const runHandler = async (filePath: string, req: express.Request, res: express.Response) => {
@@ -101,8 +123,12 @@ async function startServer() {
     return viteInstance;
   };
 
-  // Specific Routes for Awaj
-  app.use('/api/awaj', async (req, res) => {
+  // Specific Routes for Awaj & Voices API (with multipart file upload support)
+  app.use('/api/awaj', uploadMiddleware, async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
+  });
+
+  app.use('/api/voices', uploadMiddleware, async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
   });
 

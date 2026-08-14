@@ -23,12 +23,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const urlPath = url.pathname;
   const parts = urlPath.split('/').filter(Boolean);
   
-  // More robust action detection
-  let action = (parts[2] || '').toLowerCase().trim();
-  
-  // Special case for direct /api/voice-refund path
-  if (parts[1] === 'voice-refund') {
+  // Robust action detection
+  let action = '';
+  if (parts[1] === 'voices' || parts[1] === 'voice') {
+    action = parts[2] === 'upload' ? 'upload' : 'voices';
+  } else if (parts[1] === 'awaj') {
+    action = (parts[2] || 'voices').toLowerCase().trim();
+    if (parts[3] === 'upload') {
+      action = 'upload';
+    }
+  } else if (parts[1] === 'voice-refund') {
     action = 'voice-refund';
+  } else {
+    action = (parts[1] || 'voices').toLowerCase().trim();
   }
 
   // Override with query or body if explicitly provided
@@ -37,13 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     action = explicitAction;
   }
 
-  // Default for /api/awaj
-  if (parts[1] === 'awaj' && !action) {
-    action = 'voices';
-  }
-  
-  const subAction = parts[3] || (req.query.id as string);
-  console.log(`Awaj API: url=${req.url}, parts=${JSON.stringify(parts)}, action="${action}"`);
+  const subAction = parts[3] || parts[2] || (req.query.id as string);
+  console.log(`Awaj API: url=${req.url}, parts=${JSON.stringify(parts)}, action="${action}", subAction="${subAction}"`);
 
   // Ensure body is parsed if it's a string
   if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
@@ -56,8 +58,109 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const headers = getAwajHeaders();
+    const token = (process.env.AWAJ_API_TOKEN || '').trim();
 
-    // VOICES
+    // VOICE UPLOAD & MANAGEMENT
+    if (action === 'upload' || (action === 'voices' && req.method === 'POST')) {
+      const body = req.body || {};
+      const voiceName = (body.name || body.voice_name || body.title || '').trim();
+      
+      if (!voiceName) {
+        return res.status(400).json({ message: 'Voice name is required (1-255 characters)' });
+      }
+      if (voiceName.length > 255) {
+        return res.status(400).json({ message: 'Voice name exceeds 255 characters limit' });
+      }
+
+      // Extract uploaded audio file
+      let fileBuffer: Buffer | null = null;
+      let filename = 'voice.mp3';
+      let contentType = 'audio/mpeg';
+
+      // 1. From multer req.file or req.files
+      const multerReq = req as any;
+      const uploadedFile = multerReq.file || 
+        (Array.isArray(multerReq.files) ? multerReq.files[0] : null) || 
+        (multerReq.files?.['audio']?.[0] || multerReq.files?.['file']?.[0]);
+
+      if (uploadedFile && uploadedFile.buffer) {
+        fileBuffer = uploadedFile.buffer;
+        filename = uploadedFile.originalname || 'voice.mp3';
+        contentType = uploadedFile.mimetype || 'audio/mpeg';
+      } 
+      // 2. From base64 string in body
+      else if (body.audio_base64 || body.audioBase64 || (typeof body.audio === 'string' && body.audio.startsWith('data:'))) {
+        const base64Str = body.audio_base64 || body.audioBase64 || body.audio;
+        const matches = base64Str.match(/^data:([A-Za-z-+\/0-9]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          contentType = matches[1];
+          fileBuffer = Buffer.from(matches[2], 'base64');
+        } else {
+          fileBuffer = Buffer.from(base64Str.replace(/^data:audio\/[a-zA-Z0-9]+;base64,/, ''), 'base64');
+        }
+        filename = body.filename || body.audio_filename || `voice.${contentType.split('/')[1] || 'mp3'}`;
+      }
+      // 3. From downloadable file_url
+      else if (body.file_url) {
+        const fileRes = await fetch(body.file_url);
+        if (!fileRes.ok) throw new Error(`Failed to download file from url: ${fileRes.statusText}`);
+        const arrayBuf = await fileRes.arrayBuffer();
+        fileBuffer = Buffer.from(new Uint8Array(arrayBuf));
+        contentType = fileRes.headers.get('content-type') || 'audio/mpeg';
+        const ext = body.file_url.split('.').pop()?.split('?')[0] || 'mp3';
+        filename = `voice.${ext}`;
+      }
+
+      if (!fileBuffer || fileBuffer.length === 0) {
+        return res.status(400).json({ message: 'Audio file is required. Supported formats: mp3, wav, ogg, m4a, aac, webm, flac' });
+      }
+
+      // Check max size (10MB)
+      const MAX_SIZE = 10 * 1024 * 1024;
+      if (fileBuffer.length > MAX_SIZE) {
+        return res.status(413).json({ message: 'File size too large. Maximum allowed size is 10MB' });
+      }
+
+      // Check allowed extensions
+      const allowedExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm', 'flac'];
+      const fileExt = (filename.split('.').pop() || '').toLowerCase();
+      if (fileExt && !allowedExts.includes(fileExt)) {
+        return res.status(415).json({ 
+          message: `Invalid file extension. Allowed extensions: ${allowedExts.join(', ')}` 
+        });
+      }
+
+      // Create multipart FormData for Awaj Digital
+      const formData = new FormData();
+      formData.append('name', voiceName);
+      formData.append('audio', fileBuffer, {
+        filename: filename,
+        contentType: contentType
+      });
+
+      console.log(`Uploading voice to Awaj Digital: name="${voiceName}", filename="${filename}", size=${fileBuffer.length} bytes`);
+
+      const response = await fetch(`${AWAJ_BASE_URL}/voices/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          ...formData.getHeaders()
+        },
+        body: formData as any
+      });
+
+      const responseData = await response.json().catch(() => ({}));
+      console.log(`Awaj Digital Upload Response Status: ${response.status}`, responseData);
+
+      if (!response.ok) {
+        return res.status(response.status).json(responseData);
+      }
+
+      return res.status(201).json(responseData);
+    }
+
+    // VOICES LIST & DELETE
     if (action === 'voices') {
       if (req.method === 'GET') {
         const response = await fetch(`${AWAJ_BASE_URL}/voices`, { headers: headers as any });
@@ -68,40 +171,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const data = await response.json();
         return res.status(200).json(data);
       }
-      if (req.method === 'POST') {
-        const body = req.body || {};
-        const { name, file_url } = body;
-        let bodyStr: any = JSON.stringify(body);
-        let requestHeaders: any = { ...headers };
-        if (file_url) {
-          const fileRes = await fetch(file_url);
-          if (!fileRes.ok) throw new Error(`Failed to download file: ${fileRes.statusText}`);
-          const fileBuffer = await fileRes.arrayBuffer();
-          const contentType = fileRes.headers.get('content-type') || 'audio/mpeg';
-          const extension = file_url.split('.').pop()?.split('?')[0] || 'mp3';
-          const filename = `voice.${extension}`;
-          const formData = new FormData();
-          formData.append('name', name || 'Voice Upload');
-          formData.append('audio', Buffer.from(new Uint8Array(fileBuffer)), { filename, contentType });
-          formData.append('file', Buffer.from(new Uint8Array(fileBuffer)), { filename, contentType });
-          bodyStr = formData;
-          requestHeaders = { 
-            'Authorization': headers.Authorization, 
-            'Accept': 'application/json', 
-            ...formData.getHeaders() 
-          };
+      if (req.method === 'DELETE') {
+        const voiceIdToDelete = subAction || (req.query.id as string) || parts[parts.length - 1];
+        if (!voiceIdToDelete || voiceIdToDelete === 'voices') {
+          return res.status(400).json({ error: 'Voice ID is required for deletion' });
         }
-        const response = await fetch(`${AWAJ_BASE_URL}/voices/upload`, { 
-          method: 'POST', 
-          headers: requestHeaders, 
-          body: bodyStr 
-        });
-        const data = await response.json();
-        if (!response.ok) return res.status(response.status).json(data);
-        return res.status(200).json(data);
-      }
-      if (req.method === 'DELETE' && subAction) {
-        const response = await fetch(`${AWAJ_BASE_URL}/voices/${subAction}`, { 
+        const response = await fetch(`${AWAJ_BASE_URL}/voices/${voiceIdToDelete}`, { 
           method: 'DELETE', 
           headers: headers as any 
         });

@@ -24,6 +24,10 @@
       "destination": "/api/awaj.ts"
     },
     {
+      "source": "/api/voices/:path*",
+      "destination": "/api/awaj.ts"
+    },
+    {
       "source": "/api/health",
       "destination": "/api/system.ts"
     },

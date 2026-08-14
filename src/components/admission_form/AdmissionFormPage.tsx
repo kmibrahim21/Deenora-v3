@@ -3,10 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ADMISSION_T } from './constants';
 import { AdmissionFormData, AdmissionFormLang, AdmissionFormConfig } from './types';
-import AdmissionForm from './AdmissionForm';
 import AdmissionFormPreview from './AdmissionFormPreview';
 import DesignCustomizer from './DesignCustomizer';
-import { Globe, FileText, Eye, Download, ArrowLeft, Search, User, ChevronRight, Settings2, Sparkles, Filter, X, Save, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Globe, Download, ArrowLeft, Search, User, Settings2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Institution, Student } from '../../types';
 import { supabase } from 'supabase';
 import html2canvas from 'html2canvas-pro';
@@ -94,11 +93,9 @@ const loadSavedConfig = (lang: AdmissionFormLang, madrasah: Institution | null):
 
 const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang }) => {
   const [lang, setLang] = useState<AdmissionFormLang>(appLang as AdmissionFormLang || 'bn');
-  const [showPreview, setShowPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [activeTab, setActiveTab] = useState<'design' | 'download'>('download');
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -119,14 +116,6 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
       setConfig(saved);
     }
   }, [madrasah?.id]);
-
-  const [formData, setFormData] = useState<AdmissionFormData>({
-    formNumber: '',
-    admissionDate: new Date().toISOString().split('T')[0],
-    academicYear: '',
-    session: '',
-    documentsChecked: [],
-  });
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -334,10 +323,14 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
   const handleDownloadStudent = async (student: Student) => {
     if (isGenerating) return;
     setIsGenerating(student.id);
+    showToast(lang === 'bn' ? `${student.student_name}-এর ভর্তি ফরম পিডিএফ ডাউনলোড হচ্ছে...` : `Downloading form PDF for ${student.student_name}...`);
 
     // Prepare full form data representation of this student for direct PDF compilation
     const mappedData: AdmissionFormData = {
-      ...formData,
+      formNumber: student.admission_number || `ADM-${new Date().getFullYear()}-${student.roll || '001'}`,
+      admissionDate: student.created_at ? student.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+      academicYear: new Date().getFullYear().toString(),
+      session: '',
       studentName: student.student_name,
       studentNameEn: student.name_en,
       date_of_birth: student.date_of_birth,
@@ -347,12 +340,14 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
       guardian_name: student.guardian_name,
       guardian_phone: student.guardian_phone,
       presentAddress: student.address,
+      permanentAddress: student.address,
       admissionClass: (student as any).classes?.class_name || student.class_id,
       photoUrl: student.photo_url,
       admission_number: student.admission_number,
       roll: student.roll,
       nationality: 'Bangladeshi',
       religion: 'Islam',
+      documentsChecked: [],
     };
 
     setHeadlessDownloadData(mappedData);
@@ -376,30 +371,6 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSelectStudent = (student: Student) => {
-    setSelectedStudent(student);
-    setFormData({
-      ...formData,
-      studentName: student.student_name,
-      studentNameEn: student.name_en,
-      date_of_birth: student.date_of_birth,
-      gender: 'male', 
-      blood_group: student.blood_group,
-      fatherName: student.guardian_name,
-      guardian_name: student.guardian_name,
-      guardian_phone: student.guardian_phone,
-      presentAddress: student.address,
-      admissionClass: (student as any).classes?.class_name,
-      photoUrl: student.photo_url,
-      admission_number: student.admission_number,
-      roll: student.roll,
-      nationality: 'Bangladeshi',
-      religion: 'Islam',
-    });
-    setStudents([]);
-    setSearchQuery('');
   };
 
   const sampleFormData: AdmissionFormData = {
@@ -480,7 +451,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
         <div className="flex flex-col lg:flex-row gap-8">
           
           {/* Sidebar Area: Selection & Customization */}
-          <div className={`w-full lg:w-[400px] space-y-6 ${showPreview ? 'hidden lg:block' : 'block'}`}>
+          <div className="w-full lg:w-[400px] space-y-6">
             
             {/* Tabs (Download tab is first, Design tab is second) */}
             <div className="flex bg-slate-200 p-1 rounded-2xl shadow-inner">
@@ -583,7 +554,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
                     </div>
 
                     {/* Students List (from search or class) */}
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+                    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar">
                       {loading ? (
                         <div className="flex items-center justify-center py-8">
                           <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -592,35 +563,35 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
                         (selectedClassId ? studentsInClass : students).map(student => (
                           <div
                             key={student.id}
-                            className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all text-left group"
+                            className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-100 hover:border-blue-300 hover:bg-blue-50/60 transition-all text-left group"
                           >
-                            <button
-                              onClick={() => handleSelectStudent(student)}
-                              className="flex items-center gap-3 flex-1 text-left cursor-pointer"
-                            >
-                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden group-hover:bg-blue-100 group-hover:text-blue-500 flex-shrink-0">
+                            <div className="flex items-center gap-3 flex-1 text-left min-w-0 mr-2">
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 overflow-hidden shrink-0">
                                 {student.photo_url ? (
                                   <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
                                 ) : <User size={20} />}
                               </div>
                               <div className="min-w-0">
                                 <p className="text-sm font-black text-slate-800 leading-tight truncate">{student.student_name}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase truncate">
-                                  {student.admission_number} • {(student as any).classes?.class_name}
+                                <p className="text-[10px] font-bold text-slate-400 uppercase truncate mt-0.5">
+                                  {student.admission_number || 'No ID'} • {(student as any).classes?.class_name || 'Class'}
                                 </p>
                               </div>
-                            </button>
+                            </div>
                             
                             <button
                               onClick={() => handleDownloadStudent(student)}
                               disabled={isGenerating !== null}
-                              className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm disabled:opacity-50 cursor-pointer"
-                              title={lang === 'bn' ? 'এই ডিজাইনে পিডিএফ ডাউনলোড করুন' : 'Download PDF with saved design'}
+                              className="px-3.5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0"
+                              title={lang === 'bn' ? 'পিডিএফ ডাউনলোড করুন' : 'Download PDF'}
                             >
                               {isGenerating === student.id ? (
-                                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                               ) : (
-                                <Download size={16} />
+                                <>
+                                  <Download size={14} />
+                                  <span>{lang === 'bn' ? 'ডাউনলোড' : 'Download'}</span>
+                                </>
                               )}
                             </button>
                           </div>
@@ -633,26 +604,6 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
                         </p>
                       )}
                     </div>
-
-                    {selectedStudent && (
-                      <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-100 rounded-2xl mt-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600">
-                            <Sparkles size={20} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-emerald-800 uppercase tracking-tight">SELECTED</p>
-                            <p className="text-sm font-bold text-emerald-700">{selectedStudent.student_name}</p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => setSelectedStudent(null)}
-                          className="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-600 cursor-pointer"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
                   </section>
                 </motion.div>
               )}
@@ -660,99 +611,34 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
           </div>
 
           {/* Main Preview Area */}
-          <div className="flex-1 space-y-6">
-            {activeTab === 'design' ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3 bg-white px-6 py-4 rounded-3xl border border-slate-200 shadow-sm">
-                  <div className="flex items-center gap-2.5 text-blue-600">
-                    <Sparkles size={20} className="animate-pulse" />
-                    <div>
-                      <span className="text-sm font-black uppercase tracking-wider block leading-none">
-                        {lang === 'bn' ? 'ডিজাইন লাইভ প্রিভিউ' : 'Design Live Preview'}
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 mt-1 block">
-                        {lang === 'bn' ? 'বাম পাশের পরিবর্তনের সাথে সাথে এখানে প্রিভিউ পরিবর্তিত হবে' : 'Preview changes update in real time'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-xl">
-                      {lang === 'bn' ? 'A4 সাইজ ফরম্যাট' : 'A4 Size Format'}
-                    </span>
-                  </div>
+          <div className="flex-1 space-y-4">
+            <div className="flex items-center justify-between gap-3 bg-white px-6 py-4 rounded-3xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2.5 text-blue-600">
+                <Sparkles size={20} className="animate-pulse" />
+                <div>
+                  <span className="text-sm font-black uppercase tracking-wider block leading-none">
+                    {lang === 'bn' ? 'ভর্তি ফরম লাইভ প্রিভিউ' : 'Admission Form Live Preview'}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 mt-1 block">
+                    {lang === 'bn' ? 'শিক্ষার্থীর নামে বা ডাউনলোড বাটনে ক্লিক করলে এই ডিজাইনে পিডিএফ ডাউনলোড হবে' : 'Click student name or download button to export PDF in this design'}
+                  </span>
                 </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-xl">
+                  {lang === 'bn' ? 'A4 সাইজ ফরম্যাট' : 'A4 Size Format'}
+                </span>
+              </div>
+            </div>
 
-                <AdmissionFormPreview 
-                  formData={selectedStudent ? formData : sampleFormData} 
-                  madrasah={madrasah} 
-                  lang={lang} 
-                  config={config}
-                />
-              </div>
-            ) : !selectedStudent ? (
-              <div className="h-[60vh] flex flex-col items-center justify-center text-center p-8 bg-white border-2 border-dashed border-slate-200 rounded-[3rem]">
-                <div className="w-20 h-20 bg-slate-50 text-slate-300 rounded-[2rem] flex items-center justify-center mb-6">
-                  <User size={40} />
-                </div>
-                <h2 className="text-2xl font-black text-slate-800 mb-2 font-noto">
-                  {lang === 'bn' ? 'শিক্ষার্থী নির্বাচন করুন' : 'Select a Student'}
-                </h2>
-                <p className="text-slate-400 font-bold max-w-xs text-sm">
-                  {lang === 'bn' ? 'এডমিশন ফর্ম জেনারেট বা ডাউনলোড করতে প্রথমে বাম পাশ থেকে একজন শিক্ষার্থী সার্চ বা ক্লাস অনুযায়ী নির্বাচন করুন।' : 'Search and select a student from the left panel to generate or download their admission form.'}
-                </p>
-                <button
-                  onClick={() => setActiveTab('design')}
-                  className="mt-6 px-6 py-3 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-2xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer"
-                >
-                  <Settings2 size={16} />
-                  <span>{lang === 'bn' ? 'ফরমের ডিজাইন পরিবর্তন করুন' : 'Customize Form Design'}</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Mode Toggle */}
-                <div className="flex bg-slate-200 p-1.5 rounded-3xl max-w-sm mx-auto shadow-sm">
-                  <button
-                    onClick={() => setShowPreview(false)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${!showPreview ? 'bg-white text-blue-600 shadow-lg' : 'text-slate-600 hover:text-slate-800'}`}
-                  >
-                    <FileText size={16} />
-                    {lang === 'bn' ? 'তথ্য যাচাই' : 'Verify Details'}
-                  </button>
-                  <button
-                    onClick={() => setShowPreview(true)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${showPreview ? 'bg-white text-blue-600 shadow-lg' : 'text-slate-600 hover:text-slate-800'}`}
-                  >
-                    <Eye size={16} />
-                    {t.preview}
-                  </button>
-                </div>
-
-                <motion.div
-                  key={showPreview ? 'preview' : 'form'}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  {!showPreview ? (
-                    <AdmissionForm 
-                      formData={formData} 
-                      setFormData={setFormData} 
-                      lang={lang} 
-                      onPreview={() => setShowPreview(true)}
-                    />
-                  ) : (
-                    <AdmissionFormPreview 
-                      formData={formData} 
-                      madrasah={madrasah} 
-                      lang={lang} 
-                      config={config}
-                    />
-                  )}
-                </motion.div>
-              </div>
-            )}
+            <AdmissionFormPreview 
+              formData={sampleFormData} 
+              madrasah={madrasah} 
+              lang={lang} 
+              config={config}
+              hideButtons={activeTab === 'download'}
+            />
           </div>
         </div>
       </div>
