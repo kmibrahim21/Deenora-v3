@@ -25,19 +25,24 @@ async function startServer() {
   });
 
   const uploadMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    upload.any()(req, res, (err) => {
-      if (err) {
-        console.error('Multer error:', err);
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ message: 'File size too large. Maximum allowed size is 10MB' });
+    const contentType = req.headers['content-type'] || '';
+    if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && contentType.includes('multipart/form-data')) {
+      upload.any()(req, res, (err) => {
+        if (err) {
+          console.error('Multer error:', err);
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ message: 'File size too large. Maximum allowed size is 10MB' });
+          }
+          return res.status(400).json({ message: err.message || 'File upload error' });
         }
-        return res.status(400).json({ message: err.message || 'File upload error' });
-      }
-      if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-        (req as any).file = req.files[0];
-      }
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+          (req as any).file = req.files[0];
+        }
+        next();
+      });
+    } else {
       next();
-    });
+    }
   };
 
   // Use body-parser for JSON and URL-encoded
@@ -129,6 +134,10 @@ async function startServer() {
   });
 
   app.use('/api/voices', uploadMiddleware, async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
+  });
+
+  app.use('/api/balance', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
   });
 

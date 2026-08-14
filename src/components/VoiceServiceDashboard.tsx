@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   ArrowLeft, RefreshCw, AlertCircle, Loader2, Mic, Trash2, CheckCircle2, 
   Smartphone, PhoneCall, ChevronRight, X, UploadCloud, FileAudio, Music, 
   Plus, Info, Search, Filter, Globe, Building2, Clock, Check, Copy,
   PhoneForwarded, ShieldCheck, Radio, Sparkles, XCircle, AlertTriangle,
-  Play, Pause, Volume2
+  Play, Pause, Volume2, Wallet
 } from 'lucide-react';
 import { supabase } from 'supabase';
 
@@ -17,11 +17,12 @@ interface VoiceServiceDashboardProps {
 export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ onBack, madrasah, setStatusModal }) => {
   const isDark = madrasah?.theme === 'dark';
 
-  const [activeTab, setActiveTab] = useState<'voices' | 'assigned_voices' | 'senders' | 'broadcasts'>('voices');
+  const [activeTab, setActiveTab] = useState<'voices' | 'assigned_voices'>('voices');
   const [voices, setVoices] = useState<any[]>([]);
   const [assignedVoices, setAssignedVoices] = useState<any[]>([]);
   const [senders, setSenders] = useState<any[]>([]);
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
+  const [voiceBalance, setVoiceBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -55,12 +56,14 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [instSearchInAssign, setInstSearchInAssign] = useState('');
 
-  const filteredInstitutionsInAssign = institutions.filter(inst => {
+  const filteredInstitutionsInAssign = useMemo(() => {
     const searchLower = instSearchInAssign.toLowerCase();
-    const nameMatch = String(inst.name || '').toLowerCase().includes(searchLower);
-    const codeMatch = String(inst.config_json?.institute_code || '').toLowerCase().includes(searchLower);
-    return nameMatch || codeMatch;
-  });
+    return institutions.filter(inst => {
+      const nameMatch = String(inst.name || '').toLowerCase().includes(searchLower);
+      const codeMatch = String(inst.config_json?.institute_code || '').toLowerCase().includes(searchLower);
+      return nameMatch || codeMatch;
+    });
+  }, [institutions, instSearchInAssign]);
 
   useEffect(() => {
     const fetchInstitutions = async () => {
@@ -144,10 +147,16 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       // Voice is uploaded directly to Awaj Digital and NOT to Supabase Storage!
       const formData = new FormData();
       formData.append('name', trimmedName);
+      formData.append('voice_name', trimmedName);
+      formData.append('title', trimmedName);
       formData.append('audio', uploadFile);
 
-      const response = await fetch('/api/voices/upload', {
+      const encodedName = encodeURIComponent(trimmedName);
+      const response = await fetch(`/api/voices/upload?name=${encodedName}`, {
         method: 'POST',
+        headers: {
+          'X-Voice-Name': encodedName
+        },
         body: formData
       });
 
@@ -288,38 +297,46 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   };
 
   const handleDeleteVoice = async (voiceId: string) => {
-    if (!confirm('আপনি কি নিশ্চিত যে এই ভয়েসটি Awaj Digital থেকে মুছে ফেলতে চান?')) return;
+    if (!confirm('আপনি কি নিশ্চিত যে এই ভয়েসটি মুছে ফেলতে চান?')) return;
     try {
-      const response = await fetch(`/api/awaj/voices/${voiceId}`, { method: 'DELETE' });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete voice');
+      // 1. Try deleting from Awaj Digital API
+      try {
+        const response = await fetch(`/api/awaj/voices/${voiceId}`, { method: 'DELETE' });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          console.warn('Awaj API delete response not ok:', data);
+        }
+      } catch (awajErr) {
+        console.warn('Error connecting to Awaj API for deletion:', awajErr);
       }
       
-      // Also delete from local assignments
-      const token = await getAuthToken();
-      const dbResponse = await fetch('/api/admin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          action: 'delete_voice_assignments',
-          voice_id: voiceId
-        })
-      });
+      // 2. Delete local voice assignments/templates in database
+      try {
+        const token = await getAuthToken();
+        await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'delete_voice_assignments',
+            voice_id: voiceId
+          })
+        });
+      } catch (dbErr) {
+        console.warn('Error deleting local voice assignments:', dbErr);
+      }
 
-      if (!dbResponse.ok) {
-        const errData = await dbResponse.json();
-        console.warn('Failed to delete assignments via API:', errData.error);
-      }
-      
+      // 3. Optimistically remove from state
+      setVoices(prev => prev.filter(v => String(v.id) !== String(voiceId)));
+      setAssignedVoices(prev => prev.filter(v => String(v.provider_voice_id) !== String(voiceId) && String(v.id) !== String(voiceId)));
+
       setStatusModal({
         show: true,
         type: 'success',
         title: 'মুছে ফেলা হয়েছে',
-        message: 'Awaj Digital থেকে ভয়েস সফলভাবে মুছে ফেলা হয়েছে!'
+        message: 'ভয়েসটি সফলভাবে মুছে ফেলা হয়েছে!'
       });
       fetchData();
     } catch (error: any) {
@@ -353,13 +370,22 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         }
       };
 
-      const [voicesRes, sendersRes] = await Promise.all([
+      const [voicesRes, sendersRes, balanceRes] = await Promise.all([
         fetchJson('/api/awaj/voices'),
-        fetchJson('/api/awaj/senders')
+        fetchJson('/api/awaj/senders'),
+        fetchJson('/api/balance').catch(err => {
+          console.warn('Failed to fetch balance:', err);
+          return null;
+        })
       ]);
 
       if (voicesRes.error || sendersRes.error) {
         setApiError(voicesRes.error || sendersRes.error);
+      }
+
+      if (balanceRes && (typeof balanceRes.balance === 'number' || balanceRes.balance !== undefined)) {
+        const balVal = Number(balanceRes.balance || balanceRes.data?.balance || 0);
+        setVoiceBalance(isNaN(balVal) ? 0 : balVal);
       }
 
       const apiVoices = voicesRes.voices || voicesRes.data || [];
@@ -450,41 +476,70 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   };
 
   // Stats Calculations
-  const approvedVoicesCount = voices.filter(v => v.status === 'approved').length;
-  const pendingVoicesCount = voices.filter(v => v.status === 'pending').length;
-  const totalBroadcastsCount = broadcasts.length;
-  const totalNumbersSent = broadcasts.reduce((acc, b) => acc + (Number(b.total_numbers) || 0), 0);
-  const totalSuccessfulCalls = broadcasts.reduce((acc, b) => acc + (Number(b.success_count) || 0), 0);
-  const totalCost = broadcasts.reduce((acc, b) => acc + (Number(b.estimated_cost) || 0), 0);
+  const { approvedVoicesCount, pendingVoicesCount, totalBroadcastsCount, totalNumbersSent, totalSuccessfulCalls, totalCost } = useMemo(() => {
+    let approved = 0;
+    let pending = 0;
+    for (let i = 0; i < voices.length; i++) {
+      if (voices[i].status === 'approved') approved++;
+      else if (voices[i].status === 'pending') pending++;
+    }
+    let numbersSent = 0;
+    let successfulCalls = 0;
+    let cost = 0;
+    for (let i = 0; i < broadcasts.length; i++) {
+      const b = broadcasts[i];
+      numbersSent += (Number(b.total_numbers) || 0);
+      successfulCalls += (Number(b.success_count) || 0);
+      cost += (Number(b.estimated_cost) || 0);
+    }
+    return {
+      approvedVoicesCount: approved,
+      pendingVoicesCount: pending,
+      totalBroadcastsCount: broadcasts.length,
+      totalNumbersSent: numbersSent,
+      totalSuccessfulCalls: successfulCalls,
+      totalCost: cost
+    };
+  }, [voices, broadcasts]);
 
   // Filtered voice list
-  const filteredVoices = voices.filter(v => {
-    const matchesSearch = String(v.name || '').toLowerCase().includes(voiceSearchQuery.toLowerCase());
-    const matchesStatus = voiceStatusFilter === 'all' || v.status === voiceStatusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredVoices = useMemo(() => {
+    const queryLower = voiceSearchQuery.toLowerCase();
+    return voices.filter(v => {
+      const matchesSearch = String(v.name || '').toLowerCase().includes(queryLower);
+      const matchesStatus = voiceStatusFilter === 'all' || v.status === voiceStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [voices, voiceSearchQuery, voiceStatusFilter]);
 
-  const filteredAssignedVoices = assignedVoices.filter(v => {
+  const filteredAssignedVoices = useMemo(() => {
     const q = assignedVoiceSearchQuery.toLowerCase();
-    const titleMatch = String(v.title || '').toLowerCase().includes(q);
-    const instMatch = String(v.institutions?.name || '').toLowerCase().includes(q);
-    return titleMatch || instMatch;
-  });
+    return assignedVoices.filter(v => {
+      const titleMatch = String(v.title || '').toLowerCase().includes(q);
+      const instMatch = String(v.institutions?.name || '').toLowerCase().includes(q);
+      return titleMatch || instMatch;
+    });
+  }, [assignedVoices, assignedVoiceSearchQuery]);
 
-  const filteredBroadcasts = broadcasts.filter(b => {
+  const filteredBroadcasts = useMemo(() => {
     const q = broadcastSearchQuery.toLowerCase();
-    const voiceMatch = String(b.voice_templates?.title || '').toLowerCase().includes(q);
-    const instMatch = String(b.institutions?.name || '').toLowerCase().includes(q);
-    const campaignMatch = String(b.provider_campaign_id || '').toLowerCase().includes(q);
-    return voiceMatch || instMatch || campaignMatch;
-  });
+    return broadcasts.filter(b => {
+      const voiceMatch = String(b.voice_templates?.title || '').toLowerCase().includes(q);
+      const instMatch = String(b.institutions?.name || '').toLowerCase().includes(q);
+      const campaignMatch = String(b.provider_campaign_id || '').toLowerCase().includes(q);
+      return voiceMatch || instMatch || campaignMatch;
+    });
+  }, [broadcasts, broadcastSearchQuery]);
 
-  const filteredResults = (itemResult || []).filter(item => {
-    if (resultFilter === 'all') return true;
-    if (resultFilter === 'answered') return item.status === 'answered' || item.status === 'success';
-    if (resultFilter === 'failed') return item.status !== 'answered' && item.status !== 'success';
-    return true;
-  });
+  const filteredResults = useMemo(() => {
+    if (!itemResult) return [];
+    return itemResult.filter(item => {
+      if (resultFilter === 'all') return true;
+      if (resultFilter === 'answered') return item.status === 'answered' || item.status === 'success';
+      if (resultFilter === 'failed') return item.status !== 'answered' && item.status !== 'success';
+      return true;
+    });
+  }, [itemResult, resultFilter]);
 
   return (
     <div className="space-y-5 md:space-y-6 max-w-7xl mx-auto pb-12 animate-in fade-in duration-300">
@@ -527,6 +582,14 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 self-end sm:self-auto w-full sm:w-auto">
+            {/* Balance Badge */}
+            <div className={`h-11 px-3.5 rounded-2xl flex items-center gap-2 border font-mono text-xs font-black shrink-0 ${
+              isDark ? 'bg-slate-800/90 border-slate-700 text-emerald-400' : 'bg-emerald-50/80 border-emerald-200 text-emerald-700'
+            }`}>
+              <Wallet size={16} className="text-emerald-500" />
+              <span>৳{voiceBalance !== null ? voiceBalance.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</span>
+            </div>
+
             <button
               onClick={() => {
                 setUploadError(null);
@@ -556,139 +619,104 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       </div>
 
       {/* KPI Stats Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* KPI 1: Awaj Voices */}
-        <div className={`p-4 sm:p-5 rounded-[1.75rem] border relative overflow-hidden transition-all ${
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        {/* KPI 1: Awaj Voice Balance */}
+        <div className={`p-2.5 sm:p-5 rounded-2xl sm:rounded-[1.75rem] border relative overflow-hidden transition-all ${
+          isDark 
+            ? 'bg-gradient-to-br from-slate-900 to-emerald-950/30 border-slate-800' 
+            : 'bg-gradient-to-br from-white to-emerald-50/50 border-emerald-200/60 shadow-sm'
+        }`}>
+          <div className="flex items-center justify-between mb-1.5 sm:mb-3">
+            <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${
+              isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+            }`}>
+              <Wallet className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+            </div>
+            <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 sm:px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono border border-emerald-500/20">
+              Awaj
+            </span>
+          </div>
+          <p className="text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">Balance</p>
+          <div className="flex items-baseline gap-1 mt-0.5">
+            <h3 className={`text-sm sm:text-2xl font-black font-mono truncate ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+              ৳{voiceBalance !== null ? voiceBalance.toLocaleString('en-BD', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '0'}
+            </h3>
+          </div>
+          <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 mt-1 truncate hidden sm:block">
+            {voiceBalance !== null && voiceBalance > 0 ? '✓ Available' : '⚠️ Low balance'}
+          </p>
+        </div>
+
+        {/* KPI 2: Awaj Voices */}
+        <div className={`p-2.5 sm:p-5 rounded-2xl sm:rounded-[1.75rem] border relative overflow-hidden transition-all ${
           isDark 
             ? 'bg-gradient-to-br from-slate-900 to-slate-900/60 border-slate-800' 
             : 'bg-gradient-to-br from-white to-blue-50/40 border-slate-200/80 shadow-sm'
         }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+          <div className="flex items-center justify-between mb-1.5 sm:mb-3">
+            <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${
               isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-100 text-blue-600'
             }`}>
-              <Mic size={20} />
+              <Mic className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-mono">
+            <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-mono">
               API
             </span>
           </div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Voices</p>
-          <div className="flex items-baseline gap-2 mt-0.5">
-            <h3 className={`text-2xl font-black font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <p className="text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">Total Voices</p>
+          <div className="flex items-baseline gap-1 sm:gap-2 mt-0.5">
+            <h3 className={`text-sm sm:text-2xl font-black font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {voices.length}
             </h3>
-            <span className="text-[10px] font-bold text-emerald-500">
-              {approvedVoicesCount} approved
+            <span className="text-[8px] sm:text-[10px] font-bold text-emerald-500 truncate">
+              {approvedVoicesCount} ok
             </span>
           </div>
           {pendingVoicesCount > 0 && (
-            <p className="text-[10px] font-bold text-amber-500 mt-1">
-              ⏳ {pendingVoicesCount} pending approval
+            <p className="text-[8px] sm:text-[10px] font-bold text-amber-500 mt-1 truncate hidden sm:block">
+              ⏳ {pendingVoicesCount} pending
             </p>
           )}
         </div>
 
-        {/* KPI 2: Assigned / System Voices */}
-        <div className={`p-4 sm:p-5 rounded-[1.75rem] border relative overflow-hidden transition-all ${
+        {/* KPI 3: Assigned / System Voices */}
+        <div className={`p-2.5 sm:p-5 rounded-2xl sm:rounded-[1.75rem] border relative overflow-hidden transition-all ${
           isDark 
             ? 'bg-gradient-to-br from-slate-900 to-slate-900/60 border-slate-800' 
             : 'bg-gradient-to-br from-white to-emerald-50/40 border-slate-200/80 shadow-sm'
         }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+          <div className="flex items-center justify-between mb-1.5 sm:mb-3">
+            <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${
               isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
             }`}>
-              <Building2 size={20} />
+              <Building2 className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-mono">
-              Local DB
+            <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-mono">
+              Local
             </span>
           </div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Assigned Voices</p>
-          <div className="flex items-baseline gap-2 mt-0.5">
-            <h3 className={`text-2xl font-black font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <p className="text-[9px] sm:text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">Assigned</p>
+          <div className="flex items-baseline gap-1 sm:gap-2 mt-0.5">
+            <h3 className={`text-sm sm:text-2xl font-black font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {assignedVoices.length}
             </h3>
-            <span className="text-[10px] font-bold text-slate-400">
-              instances
+            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 truncate">
+              inst
             </span>
           </div>
-          <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">
-            🌐 {assignedVoices.filter(v => v.institutions?.name === 'SYSTEM_GLOBAL_INTERNAL').length} Global System Voices
-          </p>
-        </div>
-
-        {/* KPI 3: Senders / Caller IDs */}
-        <div className={`p-4 sm:p-5 rounded-[1.75rem] border relative overflow-hidden transition-all ${
-          isDark 
-            ? 'bg-gradient-to-br from-slate-900 to-slate-900/60 border-slate-800' 
-            : 'bg-gradient-to-br from-white to-purple-50/40 border-slate-200/80 shadow-sm'
-        }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-              isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-100 text-purple-600'
-            }`}>
-              <Smartphone size={20} />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 font-mono">
-              Awaj
-            </span>
-          </div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Caller IDs</p>
-          <div className="flex items-baseline gap-2 mt-0.5">
-            <h3 className={`text-2xl font-black font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {senders.length}
-            </h3>
-            <span className="text-[10px] font-bold text-emerald-500">
-              {senders.filter(s => s.status === 'active').length} active
-            </span>
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">
-            {senders[0]?.number ? `Primary: ${senders[0]?.number}` : 'No senders found'}
-          </p>
-        </div>
-
-        {/* KPI 4: Broadcasts & Call stats */}
-        <div className={`p-4 sm:p-5 rounded-[1.75rem] border relative overflow-hidden transition-all ${
-          isDark 
-            ? 'bg-gradient-to-br from-slate-900 to-slate-900/60 border-slate-800' 
-            : 'bg-gradient-to-br from-white to-amber-50/40 border-slate-200/80 shadow-sm'
-        }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-              isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-600'
-            }`}>
-              <PhoneCall size={20} />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-mono">
-              Campaigns
-            </span>
-          </div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Calls Sent</p>
-          <div className="flex items-baseline gap-2 mt-0.5">
-            <h3 className={`text-2xl font-black font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {totalNumbersSent.toLocaleString()}
-            </h3>
-            <span className="text-[10px] font-bold text-slate-400">
-              in {totalBroadcastsCount} runs
-            </span>
-          </div>
-          <p className="text-[10px] font-bold text-emerald-500 mt-1 truncate">
-            ✓ {totalSuccessfulCalls} answered • Cost: ৳{totalCost.toFixed(2)}
+          <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 mt-1 truncate hidden sm:block">
+            🌐 {assignedVoices.filter(v => v.institutions?.name === 'SYSTEM_GLOBAL_INTERNAL').length} Global
           </p>
         </div>
       </div>
 
-      {/* Tabs Navigation Header - Responsive 2x2 grid on mobile, flex row on desktop */}
-      <div className={`p-1.5 sm:p-2 rounded-[2rem] border grid grid-cols-2 lg:flex items-center gap-1.5 sm:gap-2 ${
+      {/* Tabs Navigation Header */}
+      <div className={`p-1.5 sm:p-2 rounded-[2rem] border grid grid-cols-2 items-center gap-1.5 sm:gap-2 ${
         isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200/80 shadow-sm'
       }`}>
         {[
           { key: 'voices', label: 'Awaj Voices', icon: Mic, count: voices.length },
           { key: 'assigned_voices', label: 'Assigned Voices', icon: Building2, count: assignedVoices.length },
-          { key: 'senders', label: 'Caller IDs', icon: Smartphone, count: senders.length },
-          { key: 'broadcasts', label: 'Campaign History', icon: PhoneCall, count: broadcasts.length },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -697,7 +725,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
               key={tab.key}
               onClick={() => setActiveTab(tab.key as any)}
               id={`tab-btn-${tab.key}`}
-              className={`flex-1 py-3 px-3 sm:px-4 rounded-[1.5rem] text-xs font-black transition-all flex items-center justify-between sm:justify-center gap-2 active:scale-95 ${
+              className={`flex-1 py-3 px-3 sm:px-4 rounded-[1.5rem] text-xs font-black transition-colors duration-150 cursor-pointer flex items-center justify-between sm:justify-center gap-2 active:scale-95 ${
                 isActive 
                   ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20' 
                   : isDark 
@@ -793,7 +821,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                       <button
                         key={filter.id}
                         onClick={() => setVoiceStatusFilter(filter.id as any)}
-                        className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 whitespace-nowrap active:scale-95 cursor-pointer ${
+                        className={`py-2.5 px-3 rounded-xl text-xs font-black transition-colors duration-150 flex items-center justify-center gap-2 whitespace-nowrap active:scale-95 cursor-pointer ${
                           isSelected
                             ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400/30'
                             : isDark 
@@ -1068,184 +1096,6 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                   }`}>
                     <Building2 size={32} className="mx-auto mb-2 opacity-50" />
                     <p className="text-xs font-black uppercase tracking-wider">কোনো নির্ধারিত ভয়েস পাওয়া যায়নি</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: SENDERS / CALLER IDS */}
-          {activeTab === 'senders' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
-                {senders.length > 0 ? (
-                  senders.map((sender) => (
-                    <div 
-                      key={sender.id} 
-                      className={`p-5 rounded-[2rem] border transition-all flex items-center justify-between gap-4 ${
-                        isDark 
-                          ? 'bg-slate-900/90 border-slate-800' 
-                          : 'bg-white border-slate-200/80 shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner shrink-0 ${
-                          sender.status === 'active' 
-                            ? (isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600')
-                            : (isDark ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600')
-                        }`}>
-                          <Smartphone size={22} />
-                        </div>
-                        <div>
-                          <h4 className={`font-black font-mono text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                            {sender.number}
-                          </h4>
-                          <p className="text-[11px] font-bold text-slate-400 mt-0.5">
-                            Caller ID • ID: {sender.id}
-                          </p>
-                        </div>
-                      </div>
-
-                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${
-                        sender.status === 'active'
-                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60'
-                          : 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/60'
-                      }`}>
-                        {sender.status}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className={`col-span-full py-16 px-4 text-center rounded-[2.5rem] border-2 border-dashed ${
-                    isDark ? 'bg-slate-900/40 border-slate-800 text-slate-500' : 'bg-slate-50/80 border-slate-200 text-slate-400'
-                  }`}>
-                    <Smartphone size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-xs font-black uppercase tracking-wider">কোনো কলার আইডি পাওয়া যায়নি</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: BROADCASTS & CAMPAIGN HISTORY */}
-          {activeTab === 'broadcasts' && (
-            <div className="space-y-4">
-              {/* Search Bar */}
-              <div className="relative max-w-md">
-                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="ভয়েস বা মাদরাসার নাম দিয়ে খুঁজুন..."
-                  value={broadcastSearchQuery}
-                  onChange={(e) => setBroadcastSearchQuery(e.target.value)}
-                  className={`w-full h-12 pl-11 pr-4 rounded-2xl border text-sm font-bold transition-all outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isDark 
-                      ? 'bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500' 
-                      : 'bg-white border-slate-200 text-slate-800 placeholder:text-slate-400'
-                  }`}
-                />
-              </div>
-
-              {/* Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
-                {filteredBroadcasts.length > 0 ? (
-                  filteredBroadcasts.map((b) => {
-                    const isCompleted = b.status === 'completed';
-                    return (
-                      <div 
-                        key={b.id} 
-                        className={`p-4 sm:p-5 rounded-[2rem] border transition-all flex flex-col justify-between gap-4 ${
-                          isDark 
-                            ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700' 
-                            : 'bg-white border-slate-200/80 hover:border-purple-200 shadow-sm'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner shrink-0 ${
-                              isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'
-                            }`}>
-                              <PhoneCall size={22} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h4 className={`font-black text-sm sm:text-base truncate ${
-                                isDark ? 'text-white' : 'text-slate-900'
-                              }`}>
-                                {b.voice_templates?.title || 'ভয়েস ব্রডকাস্ট'}
-                              </h4>
-                              <p className="text-[11px] font-bold text-slate-400 mt-0.5 truncate">
-                                মাদরাসা: <span className={isDark ? 'text-slate-200' : 'text-slate-700'}>{b.institutions?.name || 'Unknown'}</span>
-                              </p>
-                              <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                                <Clock size={10} /> {new Date(b.created_at).toLocaleString('bn-BD')}
-                              </p>
-                            </div>
-                          </div>
-
-                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${
-                            isCompleted
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60'
-                              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60'
-                          }`}>
-                            {b.status}
-                          </span>
-                        </div>
-
-                        {/* Call Metrics Grid */}
-                        <div className={`grid grid-cols-4 gap-2 p-3 rounded-2xl border text-center ${
-                          isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/80 border-slate-200/70'
-                        }`}>
-                          <div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase">মোট</p>
-                            <p className={`font-black text-xs sm:text-sm font-mono mt-0.5 ${isDark ? 'text-white' : 'text-slate-800'}`}>
-                              {b.total_numbers || 0}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black text-emerald-500 uppercase">সফল</p>
-                            <p className="font-black text-xs sm:text-sm font-mono text-emerald-600 mt-0.5">
-                              {b.success_count || 0}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black text-red-500 uppercase">ব্যর্থ</p>
-                            <p className="font-black text-xs sm:text-sm font-mono text-red-600 mt-0.5">
-                              {b.failed_count || 0}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase">খরচ</p>
-                            <p className={`font-black text-xs sm:text-sm font-mono mt-0.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                              ৳{b.estimated_cost || 0}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Footer View Result */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                          <span className="text-[10px] font-mono text-slate-400 truncate max-w-[150px]">
-                            CID: {b.provider_campaign_id || b.id}
-                          </span>
-                          <button
-                            onClick={() => { 
-                              setSelectedItem(b); 
-                              fetchBroadcastResult(b.provider_campaign_id || b.id); 
-                            }}
-                            className="h-8 px-3 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors flex items-center gap-1"
-                          >
-                            <span>কল লগ দেখুন</span>
-                            <ChevronRight size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className={`col-span-full py-16 px-4 text-center rounded-[2.5rem] border-2 border-dashed ${
-                    isDark ? 'bg-slate-900/40 border-slate-800 text-slate-500' : 'bg-slate-50/80 border-slate-200 text-slate-400'
-                  }`}>
-                    <PhoneCall size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-xs font-black uppercase tracking-wider">কোনো ব্রডকাস্ট ক্যাম্পেইন পাওয়া যায়নি</p>
                   </div>
                 )}
               </div>

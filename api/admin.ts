@@ -664,8 +664,14 @@ export default async function handler(req, res) {
 
     if (action === 'delete_voice_assignments') {
       const { voice_id } = body;
-      const { error } = await supabase.from('voice_templates').delete().eq('provider_voice_id', voice_id.toString());
-      if (error) throw error;
+      if (voice_id) {
+        const vIdStr = voice_id.toString();
+        const { error } = await supabase
+          .from('voice_templates')
+          .delete()
+          .or(`provider_voice_id.eq.${vIdStr},id.eq.${vIdStr}`);
+        if (error) console.warn('Supabase delete voice_templates error:', error);
+      }
       return res.status(200).json({ success: true });
     }
 

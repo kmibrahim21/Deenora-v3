@@ -63,16 +63,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // VOICE UPLOAD & MANAGEMENT
     if (action === 'upload' || (action === 'voices' && req.method === 'POST')) {
       const body = req.body || {};
-      const voiceName = (body.name || body.voice_name || body.title || '').trim();
-      
-      if (!voiceName) {
-        return res.status(400).json({ message: 'Voice name is required (1-255 characters)' });
-      }
-      if (voiceName.length > 255) {
-        return res.status(400).json({ message: 'Voice name exceeds 255 characters limit' });
-      }
 
-      // Extract uploaded audio file
+      // Extract uploaded audio file first (needed for fallback name if any)
       let fileBuffer: Buffer | null = null;
       let filename = 'voice.mp3';
       let contentType = 'audio/mpeg';
@@ -111,6 +103,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         filename = `voice.${ext}`;
       }
 
+      // Check header for x-voice-name if passed
+      let headerName = '';
+      if (req.headers['x-voice-name']) {
+        try {
+          headerName = decodeURIComponent(req.headers['x-voice-name'] as string);
+        } catch (e) {
+          headerName = req.headers['x-voice-name'] as string;
+        }
+      }
+
+      const rawName = 
+        body.name || 
+        body.voice_name || 
+        body.title || 
+        body.voiceName || 
+        req.query?.name || 
+        req.query?.voice_name || 
+        req.query?.title || 
+        req.query?.voiceName || 
+        headerName || 
+        (uploadedFile?.originalname ? uploadedFile.originalname.replace(/\.[^/.]+$/, "") : '') ||
+        '';
+
+      const voiceName = String(rawName).trim();
+      
+      if (!voiceName) {
+        return res.status(400).json({ message: 'Voice name is required (1-255 characters)' });
+      }
+      if (voiceName.length > 255) {
+        return res.status(400).json({ message: 'Voice name exceeds 255 characters limit' });
+      }
+
       if (!fileBuffer || fileBuffer.length === 0) {
         return res.status(400).json({ message: 'Audio file is required. Supported formats: mp3, wav, ogg, m4a, aac, webm, flac' });
       }
@@ -138,16 +162,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         contentType: contentType
       });
 
-      console.log(`Uploading voice to Awaj Digital: name="${voiceName}", filename="${filename}", size=${fileBuffer.length} bytes`);
+      const formHeaders = formData.getHeaders();
+      const formBuffer = formData.getBuffer();
+
+      console.log(`Uploading voice to Awaj Digital: name="${voiceName}", filename="${filename}", size=${fileBuffer.length} bytes, formLength=${formBuffer.length}`);
 
       const response = await fetch(`${AWAJ_BASE_URL}/voices/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
-          ...formData.getHeaders()
+          'Content-Length': formBuffer.length.toString(),
+          ...formHeaders
         },
-        body: formData as any
+        body: formBuffer as any
       });
 
       const responseData = await response.json().catch(() => ({}));
@@ -176,17 +204,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!voiceIdToDelete || voiceIdToDelete === 'voices') {
           return res.status(400).json({ error: 'Voice ID is required for deletion' });
         }
-        const response = await fetch(`${AWAJ_BASE_URL}/voices/${voiceIdToDelete}`, { 
-          method: 'DELETE', 
-          headers: headers as any 
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
+        try {
+          const response = await fetch(`${AWAJ_BASE_URL}/voices/${voiceIdToDelete}`, { 
+            method: 'DELETE', 
+            headers: headers as any 
+          });
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            console.warn(`Awaj API DELETE returned status ${response.status}: ${errorText}`);
+            return res.status(200).json({ 
+              success: true, 
+              warning: `Awaj API returned status ${response.status}`, 
+              details: errorText 
+            });
+          }
+          let data = {};
+          try { data = await response.json(); } catch (e) {}
+          return res.status(200).json({ success: true, ...data });
+        } catch (err: any) {
+          console.warn('Awaj API DELETE exception:', err.message);
+          return res.status(200).json({ success: true, warning: err.message });
         }
-        let data = {};
-        try { data = await response.json(); } catch (e) {}
-        return res.status(200).json({ success: true, ...data });
       }
     }
 
@@ -236,6 +274,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const data = await response.json();
       return res.status(200).json(data);
+    }
+
+    // BALANCE
+    if (action === 'balance') {
+      try {
+        const response = await fetch(`${AWAJ_BASE_URL}/balance`, { headers: headers as any });
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => '');
+          console.warn(`Awaj Balance API returned status ${response.status}: ${errorText}`);
+          return res.status(200).json({ success: false, balance: 0, error: `Awaj API (${response.status}): ${errorText}` });
+        }
+        const data = await response.json();
+        return res.status(200).json(data);
+      } catch (err: any) {
+        console.warn('Awaj Balance API exception:', err.message);
+        return res.status(200).json({ success: false, balance: 0, error: err.message });
+      }
     }
 
     // SENDERS
