@@ -54,6 +54,8 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [isGeneratingBlank, setIsGeneratingBlank] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -322,8 +324,13 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
           <div className="flex justify-between items-start border-b-2 pb-2 mb-4" style={{ borderColor: config.themeColor }}>
             <div className="flex items-center gap-3">
               {config.showLogo && (
-                (logoBase64 || madrasah?.logo_url) ? (
-                  <img src={getProxiedUrl(logoBase64 || madrasah?.logo_url)} alt="Logo" className="w-14 h-14 object-contain" />
+                ((logoBase64 || madrasah?.logo_url) && !logoError) ? (
+                  <img 
+                    src={getProxiedUrl(logoBase64 || madrasah?.logo_url)} 
+                    alt="Logo" 
+                    className="w-14 h-14 object-contain"
+                    onError={() => setLogoError(true)}
+                  />
                 ) : (
                   <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200">
                     <span className="text-[8px] font-black text-slate-400">LOGO</span>
@@ -354,8 +361,13 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
             
             <div className="flex flex-col items-end gap-1.5">
               <div className="w-16 h-20 border flex items-center justify-center text-center overflow-hidden bg-slate-50" style={{ borderColor: config.themeColor }}>
-                {((photoBase64 || formData.photoUrl) && !isGeneratingBlank) ? (
-                  <img src={getProxiedUrl(photoBase64 || formData.photoUrl)} alt="Student" className="w-full h-full object-cover" />
+                {((photoBase64 || formData.photoUrl) && !isGeneratingBlank && !photoError) ? (
+                  <img 
+                    src={getProxiedUrl(photoBase64 || formData.photoUrl)} 
+                    alt="Student" 
+                    className="w-full h-full object-cover"
+                    onError={() => setPhotoError(true)}
+                  />
                 ) : (
                   <span className="text-[8px] font-black text-slate-400 uppercase leading-none p-1">
                     Student Photo
