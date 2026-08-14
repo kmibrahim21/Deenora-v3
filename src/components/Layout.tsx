@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, Library, LayoutDashboard } from 'lucide-react';
+import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, Library, LayoutDashboard, FileText } from 'lucide-react';
 import { View, Language, Institution, Transaction, Profile } from 'types';
 import { t } from 'translations';
 import { supabase } from 'supabase';
 import { hardReload } from 'utils/reloadUtils';
+import { hasAdmissionFormAccess } from 'utils/packageUtils';
 import { useOfflineStatus } from '../hooks/useOffline';
 import MultiCalendarHeader from './MultiCalendarHeader';
 
@@ -123,7 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
   const isTabActive = (tab: string) => {
     if (tab === 'home' && currentView === 'home') return true;
-    if (tab === 'account' && (currentView === 'account' || currentView === 'teacheraccount' || currentView === 'super-account' || currentView === 'admin-voice-service' || currentView === 'admin-tutorials')) return true;
+    if (tab === 'account' && (currentView === 'account' || currentView === 'teacheraccount' || currentView === 'super-account' || currentView === 'admin-voice-service' || currentView === 'admin-tutorials' || currentView === 'tutorials' || currentView === 'academic-documents' || currentView === 'academic-calendar')) return true;
     if (tab === 'list' && (currentView === 'admin-panel' || currentView === 'admin-institutions')) return true;
     if (tab === 'institutions' && currentView === 'admin-institutions') return true;
     if (tab === 'dashboard' && currentView === 'admin-dashboard') return true;
@@ -137,6 +138,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     if (tab === 'teachers' && currentView === 'teachers') return true;
     if (tab === 'classes' && (currentView === 'classes' || currentView === 'students' || currentView === 'student-details' || currentView === 'student-form')) return true;
     if (tab === 'certificates' && currentView === 'certificates') return true;
+    if (tab === 'admission-form' && currentView === 'admission-form') return true;
     return false;
   };
 
@@ -259,6 +261,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 <button onClick={() => setView('exams')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('exams') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <GraduationCap size={22} strokeWidth={isTabActive('exams') ? 2.5 : 2} />
                   <span className="text-sm font-bold font-noto">{t('menu_exams', lang, madrasah?.institution_type)}</span>
+                </button>
+              )}
+              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && hasAdmissionFormAccess(madrasah, isSuperAdmin) && (
+                <button onClick={() => setView('admission-form')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('admission-form') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <FileText size={22} strokeWidth={isTabActive('admission-form') ? 2.5 : 2} />
+                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'ভর্তি ফরম' : 'Admission Form'}</span>
                 </button>
               )}
               <button onClick={() => setView(role === 'teacher' ? 'teacheraccount' : 'account')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>

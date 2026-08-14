@@ -2582,7 +2582,38 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                         </tr>
                     </thead>
                     <tbody>
-                        {students.map(std => (
+                        {students.map((std, sIndex) => {
+                            const moveToRow = (subId: string, targetIdx: number) => {
+                                if (targetIdx >= 0 && targetIdx < students.length) {
+                                    const targetInput = document.getElementById(`befaq-mark-${subId}-${targetIdx}`) as HTMLInputElement | null;
+                                    if (targetInput) {
+                                        targetInput.focus();
+                                        targetInput.select();
+                                    }
+                                }
+                            };
+
+                            const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, subId: string) => {
+                                const isEnter = e.key === 'Enter' || e.keyCode === 13 || e.which === 13 || e.code === 'Enter' || e.code === 'NumpadEnter';
+                                const isDown = e.key === 'ArrowDown' || e.keyCode === 40;
+                                const isUp = e.key === 'ArrowUp' || e.keyCode === 38;
+
+                                if (isEnter || isDown) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (e.shiftKey && isEnter) {
+                                        moveToRow(subId, sIndex - 1);
+                                    } else {
+                                        moveToRow(subId, sIndex + 1);
+                                    }
+                                } else if (isUp) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    moveToRow(subId, sIndex - 1);
+                                }
+                            };
+
+                            return (
                             <tr key={std.id} className={`border-b last:border-0 ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
                                 <td className={`py-4 px-2 border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'} sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]`}>
                                     <div className="flex flex-col">
@@ -2593,11 +2624,18 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                 {subjects.map((sub, idx) => (
                                     <td key={sub.id} className={`py-4 px-2 ${idx === 0 ? 'pl-4' : ''}`}>
                                         <input 
+                                            id={`befaq-mark-${sub.id}-${sIndex}`}
                                             type="number" 
+                                            inputMode="decimal"
+                                            enterKeyHint="next"
+                                            autoComplete="off"
+                                            tabIndex={idx * students.length + sIndex + 1}
                                             min="0"
                                             max={sub.total_marks}
                                             className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-emerald-600'} rounded-lg text-center font-black text-xs outline-none transition-all`}
                                             value={marksData[std.id]?.[sub.id] || ''}
+                                            onFocus={(e) => e.target.select()}
+                                            onKeyDown={(e) => handleKeyDown(e, sub.id)}
                                             onChange={(e) => {
                                                 let val = e.target.value;
                                                 if (val !== '') {
@@ -2632,7 +2670,8 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                     })()}
                                 </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
                 </div>

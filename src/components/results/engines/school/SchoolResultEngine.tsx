@@ -3264,199 +3264,283 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                         </tr>
                     </thead>
                     <tbody>
-                        {students.map(std => (
-                            <tr key={std.id} className={`border-b last:border-0 ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
-                                <td className={`py-4 px-2 border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'} sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]`}>
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] font-black text-[#2563EB] leading-none mb-0.5">#{std.roll}</span>
-                                        <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-[10px] font-noto truncate max-w-[100px]`}>{std.student_name}</span>
-                                    </div>
-                                </td>
-                                {subjects.map((sub, idx) => (
-                                    <td key={sub.id} className={`py-4 px-2 ${idx === 0 ? 'pl-4' : ''}`}>
-                                        {resultSystem === 'high_school' ? (
-                                            <div className="flex flex-col gap-1.5 min-w-[120px]">
-                                                <div className="flex gap-1">
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="CQ"
-                                                        className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
-                                                        value={marksData[std.id]?.[`${sub.id}_cq`] || ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            const cq = parseFloat(val) || 0;
-                                                            const mcq = parseFloat(marksData[std.id]?.[`${sub.id}_mcq`] || '0') || 0;
-                                                            const pr = parseFloat(marksData[std.id]?.[`${sub.id}_practical`] || '0') || 0;
-                                                            const total = cq + mcq + pr;
-                                                            
-                                                            setMarksData(prev => ({
-                                                                ...prev,
-                                                                [std.id]: {
-                                                                    ...prev[std.id],
-                                                                    [`${sub.id}_cq`]: val,
-                                                                    [sub.id]: total.toString()
-                                                                }
-                                                            }));
-                                                        }}
-                                                    />
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="MCQ"
-                                                        className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
-                                                        value={marksData[std.id]?.[`${sub.id}_mcq`] || ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            const cq = parseFloat(marksData[std.id]?.[`${sub.id}_cq`] || '0') || 0;
-                                                            const mcq = parseFloat(val) || 0;
-                                                            const pr = parseFloat(marksData[std.id]?.[`${sub.id}_practical`] || '0') || 0;
-                                                            const total = cq + mcq + pr;
-                                                            
-                                                            setMarksData(prev => ({
-                                                                ...prev,
-                                                                [std.id]: {
-                                                                    ...prev[std.id],
-                                                                    [`${sub.id}_mcq`]: val,
-                                                                    [sub.id]: total.toString()
-                                                                }
-                                                            }));
-                                                        }}
-                                                    />
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="PR"
-                                                        className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
-                                                        value={marksData[std.id]?.[`${sub.id}_practical`] || ''}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            const cq = parseFloat(marksData[std.id]?.[`${sub.id}_cq`] || '0') || 0;
-                                                            const mcq = parseFloat(marksData[std.id]?.[`${sub.id}_mcq`] || '0') || 0;
-                                                            const pr = parseFloat(val) || 0;
-                                                            const total = cq + mcq + pr;
-                                                            
-                                                            setMarksData(prev => ({
-                                                                ...prev,
-                                                                [std.id]: {
-                                                                    ...prev[std.id],
-                                                                    [`${sub.id}_practical`]: val,
-                                                                    [sub.id]: total.toString()
-                                                                }
-                                                            }));
-                                                        }}
-                                                    />
+                        {(() => {
+                            const columnKeys: string[] = [];
+                            subjects.forEach(sub => {
+                                if (resultSystem === 'high_school') {
+                                    columnKeys.push(`${sub.id}_cq`, `${sub.id}_mcq`, `${sub.id}_practical`);
+                                } else {
+                                    columnKeys.push(sub.id);
+                                }
+                            });
+                            columnKeys.push('attendance');
+
+                            return students.map((std, sIndex) => {
+                                const moveToSchoolRow = (colKey: string, targetIdx: number) => {
+                                    if (targetIdx >= 0 && targetIdx < students.length) {
+                                        const targetInput = document.getElementById(`school-mark-${colKey}-${targetIdx}`) as HTMLInputElement | null;
+                                        if (targetInput) {
+                                            targetInput.focus();
+                                            targetInput.select();
+                                        }
+                                    }
+                                };
+
+                                const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, colKey: string) => {
+                                    const isEnter = e.key === 'Enter' || e.keyCode === 13 || e.which === 13 || e.code === 'Enter' || e.code === 'NumpadEnter';
+                                    const isDown = e.key === 'ArrowDown' || e.keyCode === 40;
+                                    const isUp = e.key === 'ArrowUp' || e.keyCode === 38;
+
+                                    if (isEnter || isDown) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (e.shiftKey && isEnter) {
+                                            moveToSchoolRow(colKey, sIndex - 1);
+                                        } else {
+                                            moveToSchoolRow(colKey, sIndex + 1);
+                                        }
+                                    } else if (isUp) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        moveToSchoolRow(colKey, sIndex - 1);
+                                    }
+                                };
+
+                                const getTabIndex = (colKey: string) => {
+                                    const cIdx = columnKeys.indexOf(colKey);
+                                    return cIdx >= 0 ? cIdx * students.length + sIndex + 1 : undefined;
+                                };
+
+                                return (
+                                <tr key={std.id} className={`border-b last:border-0 ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
+                                    <td className={`py-4 px-2 border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'} sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]`}>
+                                        <div className="flex flex-col">
+                                            <span className="text-[9px] font-black text-[#2563EB] leading-none mb-0.5">#{std.roll}</span>
+                                            <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-[10px] font-noto truncate max-w-[100px]`}>{std.student_name}</span>
+                                        </div>
+                                    </td>
+                                    {subjects.map((sub, idx) => (
+                                        <td key={sub.id} className={`py-4 px-2 ${idx === 0 ? 'pl-4' : ''}`}>
+                                            {resultSystem === 'high_school' ? (
+                                                <div className="flex flex-col gap-1.5 min-w-[120px]">
+                                                    <div className="flex gap-1">
+                                                        <input 
+                                                            id={`school-mark-${sub.id}_cq-${sIndex}`}
+                                                            type="number" 
+                                                            inputMode="decimal"
+                                                            enterKeyHint="next"
+                                                            autoComplete="off"
+                                                            tabIndex={getTabIndex(`${sub.id}_cq`)}
+                                                            placeholder="CQ"
+                                                            className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
+                                                            value={marksData[std.id]?.[`${sub.id}_cq`] || ''}
+                                                            onFocus={(e) => e.target.select()}
+                                                            onKeyDown={(e) => handleKeyDown(e, `${sub.id}_cq`)}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const cq = parseFloat(val) || 0;
+                                                                const mcq = parseFloat(marksData[std.id]?.[`${sub.id}_mcq`] || '0') || 0;
+                                                                const pr = parseFloat(marksData[std.id]?.[`${sub.id}_practical`] || '0') || 0;
+                                                                const total = cq + mcq + pr;
+                                                                
+                                                                setMarksData(prev => ({
+                                                                    ...prev,
+                                                                    [std.id]: {
+                                                                        ...prev[std.id],
+                                                                        [`${sub.id}_cq`]: val,
+                                                                        [sub.id]: total.toString()
+                                                                    }
+                                                                }));
+                                                            }}
+                                                        />
+                                                        <input 
+                                                            id={`school-mark-${sub.id}_mcq-${sIndex}`}
+                                                            type="number" 
+                                                            inputMode="decimal"
+                                                            enterKeyHint="next"
+                                                            autoComplete="off"
+                                                            tabIndex={getTabIndex(`${sub.id}_mcq`)}
+                                                            placeholder="MCQ"
+                                                            className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
+                                                            value={marksData[std.id]?.[`${sub.id}_mcq`] || ''}
+                                                            onFocus={(e) => e.target.select()}
+                                                            onKeyDown={(e) => handleKeyDown(e, `${sub.id}_mcq`)}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const cq = parseFloat(marksData[std.id]?.[`${sub.id}_cq`] || '0') || 0;
+                                                                const mcq = parseFloat(val) || 0;
+                                                                const pr = parseFloat(marksData[std.id]?.[`${sub.id}_practical`] || '0') || 0;
+                                                                const total = cq + mcq + pr;
+                                                                
+                                                                setMarksData(prev => ({
+                                                                    ...prev,
+                                                                    [std.id]: {
+                                                                        ...prev[std.id],
+                                                                        [`${sub.id}_mcq`]: val,
+                                                                        [sub.id]: total.toString()
+                                                                    }
+                                                                }));
+                                                            }}
+                                                        />
+                                                        <input 
+                                                            id={`school-mark-${sub.id}_practical-${sIndex}`}
+                                                            type="number" 
+                                                            inputMode="decimal"
+                                                            enterKeyHint="next"
+                                                            autoComplete="off"
+                                                            tabIndex={getTabIndex(`${sub.id}_practical`)}
+                                                            placeholder="PR"
+                                                            className={`w-full h-8 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} rounded-md text-center font-black text-[10px] outline-none transition-all`}
+                                                            value={marksData[std.id]?.[`${sub.id}_practical`] || ''}
+                                                            onFocus={(e) => e.target.select()}
+                                                            onKeyDown={(e) => handleKeyDown(e, `${sub.id}_practical`)}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const cq = parseFloat(marksData[std.id]?.[`${sub.id}_cq`] || '0') || 0;
+                                                                const mcq = parseFloat(marksData[std.id]?.[`${sub.id}_mcq`] || '0') || 0;
+                                                                const pr = parseFloat(val) || 0;
+                                                                const total = cq + mcq + pr;
+                                                                
+                                                                setMarksData(prev => ({
+                                                                    ...prev,
+                                                                    [std.id]: {
+                                                                        ...prev[std.id],
+                                                                        [`${sub.id}_practical`]: val,
+                                                                        [sub.id]: total.toString()
+                                                                    }
+                                                                }));
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div className={`text-[9px] text-center font-bold ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                                                        Total: {marksData[std.id]?.[sub.id] || '0'}
+                                                    </div>
                                                 </div>
-                                                <div className={`text-[9px] text-center font-bold ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                                                    Total: {marksData[std.id]?.[sub.id] || '0'}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <input 
-                                                type="number" 
-                                                min="0"
-                                                max={sub.full_marks}
-                                                className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-[#2563EB]'} rounded-lg text-center font-black text-xs outline-none transition-all`}
-                                                value={marksData[std.id]?.[sub.id] || ''}
-                                                onChange={(e) => {
-                                                    let val = e.target.value;
-                                                    if (val !== '') {
-                                                        const num = parseFloat(val);
-                                                        if (!isNaN(num)) {
-                                                            if (num > sub.full_marks) {
-                                                                val = sub.full_marks.toString();
-                                                            } else if (num < 0) {
-                                                                val = '0';
+                                            ) : (
+                                                <input 
+                                                    id={`school-mark-${sub.id}-${sIndex}`}
+                                                    type="number" 
+                                                    inputMode="decimal"
+                                                    enterKeyHint="next"
+                                                    autoComplete="off"
+                                                    tabIndex={getTabIndex(sub.id)}
+                                                    min="0"
+                                                    max={sub.full_marks}
+                                                    className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-[#2563EB]'} rounded-lg text-center font-black text-xs outline-none transition-all`}
+                                                    value={marksData[std.id]?.[sub.id] || ''}
+                                                    onFocus={(e) => e.target.select()}
+                                                    onKeyDown={(e) => handleKeyDown(e, sub.id)}
+                                                    onChange={(e) => {
+                                                        let val = e.target.value;
+                                                        if (val !== '') {
+                                                            const num = parseFloat(val);
+                                                            if (!isNaN(num)) {
+                                                                if (num > sub.full_marks) {
+                                                                    val = sub.full_marks.toString();
+                                                                } else if (num < 0) {
+                                                                    val = '0';
+                                                                }
                                                             }
                                                         }
+                                                        setMarksData(prev => ({
+                                                            ...prev,
+                                                            [std.id]: {
+                                                                ...prev[std.id],
+                                                                [sub.id]: val
+                                                            }
+                                                        }));
+                                                    }}
+                                                />
+                                            )}
+                                        </td>
+                                    ))}
+                                    <td className="py-4 px-2">
+                                        <input 
+                                            id={`school-mark-attendance-${sIndex}`}
+                                            type="number" 
+                                            inputMode="decimal"
+                                            enterKeyHint="next"
+                                            autoComplete="off"
+                                            tabIndex={getTabIndex('attendance')}
+                                            placeholder="%"
+                                            className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500' : 'bg-amber-50 border-amber-100 text-slate-900 focus:border-amber-500'} rounded-lg text-center font-black text-xs outline-none transition-all`}
+                                            value={marksData[std.id]?.['attendance'] || ''}
+                                            onFocus={(e) => e.target.select()}
+                                            onKeyDown={(e) => handleKeyDown(e, 'attendance')}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setMarksData(prev => ({
+                                                    ...prev,
+                                                    [std.id]: {
+                                                        ...prev[std.id],
+                                                        ['attendance']: val
                                                     }
-                                                    setMarksData(prev => ({
-                                                        ...prev,
-                                                        [std.id]: {
-                                                            ...prev[std.id],
-                                                            [sub.id]: val
-                                                        }
-                                                    }));
-                                                }}
-                                            />
-                                        )}
+                                                }));
+                                            }}
+                                        />
                                     </td>
-                                ))}
-                                <td className="py-4 px-2">
-                                    <input 
-                                        type="number" 
-                                        placeholder="%"
-                                        className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500' : 'bg-amber-50 border-amber-100 text-slate-900 focus:border-amber-500'} rounded-lg text-center font-black text-xs outline-none transition-all`}
-                                        value={marksData[std.id]?.['attendance'] || ''}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setMarksData(prev => ({
-                                                ...prev,
-                                                [std.id]: {
-                                                    ...prev[std.id],
-                                                    ['attendance']: val
+                                    <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
+                                        {calculateStudentResult(std.id, subjects).total}
+                                    </td>
+                                    <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
+                                        {(() => {
+                                            const total = (Object.entries(marksData[std.id] || {}).filter(([sid]) => subjects.some(s => s.id === sid)) as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0);
+                                            const avgValue = subjects.length > 0 ? (total / subjects.length) : 0;
+                                            return avgValue.toFixed(2);
+                                        })()}
+                                    </td>
+                                    <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
+                                        {(() => {
+                                            let totalMarks = 0;
+                                            let totalPossible = 0;
+                                            let pointsSum = 0;
+                                            let numMainSubjects = 0;
+                                            let passStatus = true;
+                                            
+                                            subjects.forEach(sub => {
+                                              const score = parseFloat((marksData[std.id] || {})[sub.id] || '0');
+                                              const isOptionalEffectively = !!sub.is_optional && resultSystem === 'grading_optional';
+                                              const failed = score < (sub.pass_marks || 33);
+                                              
+                                              if (!isOptionalEffectively && failed) passStatus = false;
+                                              
+                                              const pct = (score / (sub.full_marks || 100)) * 100;
+                                              const { gpa: gpStr } = getGradeInfo(pct, !failed);
+                                              const gp = parseFloat(gpStr);
+
+                                              if (resultSystem === 'grading_optional') {
+                                                if (!sub.is_optional) {
+                                                  totalMarks += score;
+                                                  totalPossible += (sub.full_marks || 100);
+                                                  pointsSum += gp;
+                                                  numMainSubjects++;
+                                                } else {
+                                                  if (gp > 2) pointsSum += (gp - 2);
                                                 }
-                                            }));
-                                        }}
-                                    />
-                                </td>
-                                <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
-                                    {calculateStudentResult(std.id, subjects).total}
-                                </td>
-                                <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
-                                    {(() => {
-                                        const total = (Object.entries(marksData[std.id] || {}).filter(([sid]) => subjects.some(s => s.id === sid)) as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0);
-                                        const avgValue = subjects.length > 0 ? (total / subjects.length) : 0;
-                                        return avgValue.toFixed(2);
-                                    })()}
-                                </td>
-                                <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
-                                    {(() => {
-                                        let totalMarks = 0;
-                                        let totalPossible = 0;
-                                        let pointsSum = 0;
-                                        let numMainSubjects = 0;
-                                        let passStatus = true;
-                                        
-                                        subjects.forEach(sub => {
-                                          const score = parseFloat((marksData[std.id] || {})[sub.id] || '0');
-                                          const isOptionalEffectively = !!sub.is_optional && resultSystem === 'grading_optional';
-                                          const failed = score < (sub.pass_marks || 33);
-                                          
-                                          if (!isOptionalEffectively && failed) passStatus = false;
-                                          
-                                          const pct = (score / (sub.full_marks || 100)) * 100;
-                                          const { gpa: gpStr } = getGradeInfo(pct, !failed);
-                                          const gp = parseFloat(gpStr);
+                                              } else {
+                                                totalMarks += score;
+                                                totalPossible += (sub.full_marks || 100);
+                                                pointsSum += gp;
+                                                numMainSubjects++;
+                                              }
+                                            });
 
-                                          if (resultSystem === 'grading_optional') {
-                                            if (!sub.is_optional) {
-                                              totalMarks += score;
-                                              totalPossible += (sub.full_marks || 100);
-                                              pointsSum += gp;
-                                              numMainSubjects++;
-                                            } else {
-                                              if (gp > 2) pointsSum += (gp - 2);
+                                            if ((resultSystem === 'grading' || resultSystem === 'grading_optional') && numMainSubjects > 0) {
+                                              if (!passStatus) return '0.00';
+                                              let avgGp = pointsSum / numMainSubjects;
+                                              if (avgGp > 5.0) avgGp = 5.0;
+                                              return avgGp.toFixed(2);
+                                            } else if (totalPossible > 0) {
+                                              const overallPct = (totalMarks / totalPossible) * 100;
+                                              return getGradeInfo(overallPct, passStatus).gpa;
                                             }
-                                          } else {
-                                            totalMarks += score;
-                                            totalPossible += (sub.full_marks || 100);
-                                            pointsSum += gp;
-                                            numMainSubjects++;
-                                          }
-                                        });
-
-                                        if ((resultSystem === 'grading' || resultSystem === 'grading_optional') && numMainSubjects > 0) {
-                                          if (!passStatus) return '0.00';
-                                          let avgGp = pointsSum / numMainSubjects;
-                                          if (avgGp > 5.0) avgGp = 5.0;
-                                          return avgGp.toFixed(2);
-                                        } else if (totalPossible > 0) {
-                                          const overallPct = (totalMarks / totalPossible) * 100;
-                                          return getGradeInfo(overallPct, passStatus).gpa;
-                                        }
-                                        return '0.00';
-                                    })()}
-                                </td>
-                            </tr>
-                        ))}
+                                            return '0.00';
+                                        })()}
+                                    </td>
+                                </tr>
+                                );
+                            });
+                        })()}
                     </tbody>
                 </table>
                 </div>

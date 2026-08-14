@@ -501,6 +501,8 @@ export type View =
   | 'id-cards'
   | 'super-account'
   | 'teacheraccount'
+  | 'admission-form'
+  | 'academic-documents'
   | 'profile-settings';
 
 export interface Tutorial {

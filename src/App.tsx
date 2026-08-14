@@ -7,6 +7,7 @@ import { useAndroidBackHandler } from "hooks/useAndroidBackHandler";
 import { OfflineIndicator } from "components/OfflineIndicator";
 import { useAuth } from "hooks/useAuth";
 import { hardReload } from "utils/reloadUtils";
+import { hasAdmissionFormAccess } from "utils/packageUtils";
 import Layout from "components/Layout";
 import { View, Class, Student, Language } from "types";
 import { t } from "translations";
@@ -48,6 +49,7 @@ const LibraryPattern = React.lazy(() => import("pages/Library"));
 const AcademicCalendarPage = React.lazy(
   () => import("pages/AcademicCalendarPage"),
 );
+const AcademicDocuments = React.lazy(() => import("pages/AcademicDocuments"));
 const Tutorials = React.lazy(() => import("pages/Tutorials"));
 const ClassRoutine = React.lazy(() => import("pages/ClassRoutine"));
 const Certificates = React.lazy(() => import("pages/Certificates"));
@@ -63,6 +65,7 @@ const TutorialsManager = React.lazy(() =>
     default: module.TutorialsManager,
   })),
 );
+const AdmissionFormPage = React.lazy(() => import("components/admission_form/AdmissionFormPage"));
 const ParentPortal = React.lazy(() => import("pages/ParentPortal"));
 
 const App: React.FC = () => {
@@ -358,6 +361,7 @@ const App: React.FC = () => {
       "admin-dashboard",
       "admin-panel",
       "tutorials",
+      "academic-documents",
       "admin-tutorials",
       "admin-voice-service",
       "messages",
@@ -737,6 +741,20 @@ const App: React.FC = () => {
             onBack={() => handleBack(role === 'teacher' ? 'teacheraccount' : 'account')}
           />
         );
+      case "academic-documents":
+        return (
+          <AcademicDocuments
+            lang={lang}
+            madrasah={madrasah}
+            role={role}
+            profile={profile}
+            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onNavigate={(newView) => setView(newView)}
+            onUpgradeClick={() => {
+              setView(role === 'teacher' ? 'teacheraccount' : 'account');
+            }}
+          />
+        );
       case "data-management":
         return (
           <DataManagement
@@ -803,7 +821,7 @@ const App: React.FC = () => {
           <ClassRoutine
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onBack={() => handleBack('academic-documents')}
             profile={profile}
           />
         );
@@ -822,7 +840,7 @@ const App: React.FC = () => {
           <Certificates
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onBack={() => handleBack('academic-documents')}
             profile={profile}
           />
         );
@@ -831,8 +849,39 @@ const App: React.FC = () => {
           <IdCards
             lang={lang}
             madrasah={madrasah}
-            onBack={() => handleBack(role === 'super_admin' ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))}
+            onBack={() => handleBack('academic-documents')}
             profile={profile}
+          />
+        );
+      case "admission-form":
+        if (!hasAdmissionFormAccess(madrasah, role === 'super_admin')) {
+          return (
+            <div className="p-8 text-center max-w-md mx-auto my-12 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl space-y-4">
+              <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center mx-auto">
+                <ShieldAlert size={32} />
+              </div>
+              <h3 className="text-lg font-black font-noto text-slate-800 dark:text-white">
+                {lang === 'bn' ? 'ভর্তি ফরম ফিচারটি আপনার প্যাকেজে অন্তর্ভুক্ত নয়' : 'Admission Form Feature Not Included'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {lang === 'bn'
+                  ? 'এই ফিচারটি ব্যবহার করতে আপনার অ্যাকাউন্ট সক্রিয় থাকতে হবে এবং স্ট্যান্ডার্ড থেকে আল্টিমেট প্যাকেজে আপগ্রেড করতে হবে।'
+                  : 'To use this feature, your account must be Active and upgraded to Standard or Ultimate Package.'}
+              </p>
+              <button
+                onClick={() => setView('academic-documents')}
+                className="w-full py-3 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 transition-all cursor-pointer text-sm"
+              >
+                {lang === 'bn' ? 'একাডেমিক ডকুমেন্টস পেজে ফিরে যান' : 'Back to Academic Documents'}
+              </button>
+            </div>
+          );
+        }
+        return (
+          <AdmissionFormPage
+            madrasah={madrasah}
+            onBack={() => handleBack("academic-documents")}
+            lang={lang}
           />
         );
       default:

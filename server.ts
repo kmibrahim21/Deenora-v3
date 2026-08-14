@@ -121,6 +121,11 @@ async function startServer() {
     await runHandler(path.join(__dirname, 'api', 'system.ts'), req, res);
   });
 
+  // Image Proxy Route
+  app.all('/api/proxy-image', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'system.ts'), req, res);
+  });
+
   // Health check
   app.get('/api/health', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'system.ts'), req, res);

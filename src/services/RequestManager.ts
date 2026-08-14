@@ -215,13 +215,16 @@ class RequestManager {
       let finalCount = 0;
 
       while (hasMore) {
-        let query = supabase.from(table);
+        let query = supabase.from(table).select('*', { count: 'exact' });
         query = queryBuilder(query);
         // Ensure we don't accidentally override range if queryBuilder sets a limit, 
         // but typically queryBuilder just sets filters. We enforce range here.
         query = query.range(offset, offset + pageSize - 1);
         
-        const { data, error, count } = await query;
+        const result = await query as any;
+        const data = result.data;
+        const error = result.error;
+        const count = result.count;
         if (error) throw error;
         
         if (data && data.length > 0) {

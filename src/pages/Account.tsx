@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink, FileText } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -9,6 +9,7 @@ import { t } from 'translations';
 import { AcademicYearManager } from 'components/AcademicYearManager';
 import MultiCalendar from 'components/MultiCalendar';
 import PaymentCheckout from '../components/PaymentCheckout';
+import { hasAdmissionFormAccess } from 'utils/packageUtils';
 
 const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -1600,16 +1601,14 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                     dark={madrasah?.theme === 'dark'}
                   />
 
-                  {modules.class_routine && (
-                    <ActionCard
-                      icon={LayoutDashboard}
-                      title={lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
-                      subtitle={lang === 'bn' ? 'সময়সূচী' : 'Schedule'}
-                      colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                      onClick={() => setView('class-routine')}
-                      dark={madrasah?.theme === 'dark'}
-                    />
-                  )}
+                  <ActionCard
+                    icon={Sparkles}
+                    title={lang === 'bn' ? 'একাডেমিক ডকুমেন্টস' : 'Academic Documents'}
+                    subtitle={lang === 'bn' ? 'ফরম, সনদ, রুটিন ও আইডি' : 'Forms, Certs, Routine & ID'}
+                    colorClass="bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400"
+                    onClick={() => setView('academic-documents')}
+                    dark={madrasah?.theme === 'dark'}
+                  />
 
                   <ActionCard
                     icon={Key}
@@ -1642,6 +1641,16 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           subtitle={lang === 'bn' ? 'ছুটি ও ইভেন্ট' : 'Holidays'}
           colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
           onClick={() => setView('academic-calendar')}
+          dark={madrasah?.theme === 'dark'}
+        />
+
+        {/* Academic Documents Card */}
+        <ActionCard
+          icon={Sparkles}
+          title={lang === 'bn' ? 'একাডেমিক ডকুমেন্টস' : 'Academic Documents'}
+          subtitle={lang === 'bn' ? 'ভর্তি ফরম, সনদ, রুটিন ও আইডি' : 'Forms, Certs, Routine & ID'}
+          colorClass="bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400"
+          onClick={() => setView('academic-documents')}
           dark={madrasah?.theme === 'dark'}
         />
 
@@ -1697,18 +1706,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
           </>
         )}
 
-        {/* Class Routine Card */}
-        {modules.class_routine && (
-          <ActionCard
-            icon={LayoutDashboard}
-            title={lang === 'bn' ? 'ক্লাস রুটিন' : 'Class Routine'}
-            subtitle={lang === 'bn' ? 'সময়সূচী' : 'Schedule'}
-            colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-            onClick={() => setView('class-routine')}
-            dark={madrasah?.theme === 'dark'}
-          />
-        )}
-
         {/* Message Card */}
         {(isAdmin || canSendMessages) && modules.messages && (
           <ActionCard
@@ -1720,28 +1717,6 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
             dark={madrasah?.theme === 'dark'}
           />
         )}
-
-        {/* ID Cards Card */}
-        {modules.id_cards && (
-          <ActionCard
-            icon={ShieldCheck}
-            title={lang === 'bn' ? 'স্টুডেন্ট আইডি কার্ড' : 'Student ID Card'}
-            subtitle={lang === 'bn' ? 'জেনারেটর' : 'Generator'}
-            colorClass="bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400"
-            onClick={() => setView('id-cards')}
-            dark={madrasah?.theme === 'dark'}
-          />
-        )}
-
-        {/* Certificate Card */}
-        <ActionCard
-          icon={Award}
-          title={lang === 'bn' ? 'সার্টিফিকেট' : 'Certificates'}
-          subtitle={lang === 'bn' ? 'জেনারেটর' : 'Generator'}
-          colorClass="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
-          onClick={() => setView('certificates')}
-          dark={madrasah?.theme === 'dark'}
-        />
 
         {/* Video Tutorial Card */}
         <ActionCard
