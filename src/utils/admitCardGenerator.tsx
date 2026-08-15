@@ -612,9 +612,8 @@ export const generateAdmitCardPDF = async (
         continue;
       }
 
-      const imgData = await toJpeg(element as HTMLElement, {
-        pixelRatio: 2.5, // High resolution but memory-efficient
-        quality: 0.95,  
+      const imgData = await toPng(element as HTMLElement, {
+        pixelRatio: 3, 
         backgroundColor: '#ffffff',
         cacheBust: true,
         style: {
@@ -632,7 +631,7 @@ export const generateAdmitCardPDF = async (
         const xPos = marginX;
         const yPos = marginY + posOnPage * (cardHeightMm + gapY);
 
-        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
+        pdf.addImage(imgData, 'PNG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'SLOW');
         
       } else {
         // 4 per page
@@ -646,7 +645,7 @@ export const generateAdmitCardPDF = async (
         const xPos = marginX + col * (cardWidthMm + gapX);
         const yPos = marginY + row * (cardHeightMm + gapY);
 
-        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'FAST');
+        pdf.addImage(imgData, 'PNG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'SLOW');
       }
 
       onProgress?.(2 + Math.floor(((i + 1) / students.length) * 96));

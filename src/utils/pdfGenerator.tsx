@@ -312,26 +312,24 @@ export const generateSeatPlanPDF = async (
         for (let i = 0; i < roomDivs.length; i++) {
             const roomElement = roomDivs[i] as HTMLElement;
             
-            const imgData = await toJpeg(roomElement, {
-                pixelRatio: 1.5,
-        quality: 0.8,
+            const imgData = await toPng(roomElement, {
+                pixelRatio: 3,
                 backgroundColor: '#ffffff',
                 width: 794, // A4 width at 96 DPI
                 height: 1123, // A4 height at 96 DPI
             });
 
             if (i > 0) doc.addPage();
-            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
             onProgress?.(25 + Math.floor(((i + 1) / roomDivs.length) * 70));
         }
     } else {
         // Fallback if structure is different
-        const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
-            pixelRatio: 1.5,
-        quality: 0.8,
+        const imgData = await toPng(container.firstElementChild as HTMLElement, {
+            pixelRatio: 3,
             backgroundColor: '#ffffff',
         });
-        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
         onProgress?.(90);
     }
     
@@ -391,13 +389,11 @@ export const generateResultPDF = async (
 
     const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
 
-    const imgData = await toJpeg(targetEl, {
-        pixelRatio: 2, // Higher quality
-        quality: 0.95,
+    const imgData = await toPng(targetEl, {
+        pixelRatio: 3, // High quality for print
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
-        fontEmbedCSS: '',
     });
     onProgress?.(85);
 
@@ -405,7 +401,7 @@ export const generateResultPDF = async (
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
     
     onProgress?.(98);
     root.unmount();
@@ -479,13 +475,11 @@ export const generateMassMarksheetPDF = async (
         for (let i = 0; i < pages.length; i++) {
             const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
             
-            const imgData = await toJpeg(pageElement, {
-                pixelRatio: 2,
-                quality: 0.95,
+            const imgData = await toPng(pageElement, {
+                pixelRatio: 3,
                 backgroundColor: '#ffffff',
                 width: 794,
                 height: 1123,
-                fontEmbedCSS: '',
             });
             
             const isLeft = (i % 2 === 0);
@@ -497,7 +491,7 @@ export const generateMassMarksheetPDF = async (
             
             // A4 landscape width is 297. Half of that is 148.5
             const hw = pageWidth / 2;
-            doc.addImage(imgData, 'JPEG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'PNG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'SLOW');
             onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
         }
     }

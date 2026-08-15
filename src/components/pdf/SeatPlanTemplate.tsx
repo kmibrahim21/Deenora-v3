@@ -64,21 +64,21 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
             {templateId === 'grid' ? (
               <div className="grid grid-cols-3 gap-5">
                 {page.students.map((a: any, idx: number) => (
-                  <div key={a.id || idx} className="relative border-2 border-gray-300 rounded-xl p-3 flex flex-col justify-between h-[150px] shadow-sm bg-slate-50/30 overflow-hidden">
+                  <div key={a.id || idx} className="relative border-2 border-gray-300 rounded-xl p-3 pt-5 flex flex-col justify-between h-[150px] shadow-sm bg-slate-50/30 overflow-hidden">
                     <div className="absolute top-0 right-0 bg-gray-800 text-white px-2.5 py-0.5 rounded-bl-xl text-[10px] font-black z-10">
                       {isBangla ? `আসন ${a.seat_number}` : `Seat ${a.seat_number}`}
                     </div>
 
-                    <div className="border-b border-dashed border-gray-200 pb-1.5 px-6 text-center shrink-0">
+                    <div className="border-b border-dashed border-gray-200 pb-1.5 px-8 text-center shrink-0">
                       <div className="text-[10px] font-black text-gray-900 leading-tight break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {madrasah.name}
                       </div>
                       {examName ? (
-                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-none mt-1">
+                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-relaxed mt-1">
                           {examName}
                         </div>
                       ) : (
-                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-none mt-1">
+                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-relaxed mt-1">
                           {isBangla ? 'আসন কার্ড' : 'Seat Card'}
                         </div>
                       )}
