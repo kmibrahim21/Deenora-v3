@@ -2,6 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;900&family=Tiro+Bangla:ital@0;1&family=Noto+Serif+Bengali:wght@400;500;600;700;800;900&display=swap');
 @plugin "@tailwindcss/typography";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: 'SolaimanLipi';
   src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');

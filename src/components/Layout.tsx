@@ -118,14 +118,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
   useEffect(() => { if (showNotifications) fetchDynamicNotifications(); }, [showNotifications, madrasah?.id]);
 
-  useEffect(() => {
-    if (madrasah?.theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [madrasah?.theme]);
-
   const hasPermission = (perm: keyof NonNullable<Profile['permissions']>) => {
     if (isSuperAdmin || role === 'madrasah_admin' || role === 'manager') return true;
     return !!profile?.permissions?.[perm];

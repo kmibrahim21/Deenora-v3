@@ -575,11 +575,6 @@ export const generateAdmitCardPDF = async (
 
   await document.fonts.ready;
 
-  // Pre-inject fonts to avoid re-loading in loop
-  const fontLink = document.createElement('style');
-  fontLink.innerHTML = "@import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');";
-  document.head.appendChild(fontLink);
-
   for (let i = 0; i < students.length; i++) {
     const student = students[i];
     console.log(`Generating admit card for: ${student.student_name} (${i + 1}/${students.length})`);
@@ -593,29 +588,28 @@ export const generateAdmitCardPDF = async (
           isResolved = true;
           resolve();
         }
-      }, 8000); // Increased timeout to 8s for reliability
+      }, 5000);
 
-      let checkCount = 0;
       const checkImages = () => {
         if (isResolved) return;
-        checkCount++;
         
         const imgs = container.querySelectorAll('img');
-        
-        // Wait at least a few cycles if no images found yet, as root.render is async
-        if (imgs.length === 0 && checkCount < 10) {
-          setTimeout(checkImages, 200);
-          return;
-        }
-
         const allLoaded = Array.from(imgs).every(img => img.complete && img.naturalHeight !== 0);
         
-        if (allLoaded) {
+        if (allLoaded && imgs.length > 0) {
           isResolved = true;
           clearTimeout(timeout);
           setTimeout(resolve, 500);
+        } else if (imgs.length === 0 && document.body.contains(container)) {
+           setTimeout(() => {
+             if (!isResolved) {
+               isResolved = true;
+               clearTimeout(timeout);
+               resolve();
+             }
+           }, 800);
         } else {
-          setTimeout(checkImages, 250);
+          setTimeout(checkImages, 200);
         }
       };
       

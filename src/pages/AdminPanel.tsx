@@ -742,7 +742,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       adminPanelCache.detailedReport[cacheKey] = fullReport;
       setDetailedReport(fullReport);
     } catch (err) {
-      console.error('Error in fetchDetailedReport API call:', err);
+      
       // Fallback to client-side (might return 0 due to RLS)
       let startDate: Date;
       let endDate: Date;
@@ -815,7 +815,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         pendingApprovals: pendingCount || 0
       };
     } catch (err) {
-      console.error('Error in fetchGlobalCounts API call:', err);
+      
       // Fallback to client-side (might return 0 due to RLS)
       const [studentsRes, classesRes, teachersRes, smsAllocRes, currentBalRes, pendingRes, instsRes, stockRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }),
@@ -877,7 +877,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         class_count: (m as any).class_count?.[0]?.count || 0
       }));
     } catch (err) {
-      console.error('Error in fetchAllMadrasahs API call:', err);
+      
       // Fallback
       const { data, error } = await supabase.from('institutions')
         .select('*, student_count:students(count), class_count:classes(count)')

@@ -214,12 +214,12 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
   );
 
   return (
-    <div className="flex flex-col items-center w-full min-h-screen bg-slate-50/50 dark:bg-slate-950 pb-20">
+    <div className="flex flex-col items-center w-full min-h-screen bg-slate-50/50 pb-20">
       {/* Top Banner Indicator */}
       {isCapturing && (
-        <div className="fixed inset-0 z-[9999] bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center">
+        <div className="fixed inset-0 z-[9999] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-xl font-black text-blue-900 dark:text-blue-400 animate-pulse">
+          <p className="text-xl font-black text-blue-900 animate-pulse">
             {lang === 'bn' ? 'পিডিএফ তৈরি হচ্ছে...' : 'Generating PDF...'}
           </p>
         </div>
@@ -227,7 +227,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
 
       {/* Action Buttons */}
       {!isPrint && !hideButtons && (
-        <div className="flex flex-wrap gap-4 mb-8 justify-center w-full px-4 pt-8 sticky top-0 z-50 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md pb-4">
+        <div className="flex flex-wrap gap-4 mb-8 justify-center w-full px-4 pt-8 sticky top-0 z-50 bg-slate-50/80 backdrop-blur-md pb-4">
           <button
             onClick={() => downloadPDF(false)}
             disabled={isCapturing}

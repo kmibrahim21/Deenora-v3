@@ -3,25 +3,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // native fetch used
 import FormData from 'form-data';
 import { Buffer } from 'node:buffer';
-import multer from 'multer';
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 }
-}).fields([
-  { name: 'audio', maxCount: 1 },
-  { name: 'file', maxCount: 1 },
-  { name: 'voice', maxCount: 1 }
-]);
-
-function parseMultipart(req: any, res: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    upload(req, res, (err) => {
-      if (err) return reject(err);
-      resolve();
-    });
-  });
-}
 
 const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
 
@@ -37,64 +18,7 @@ const getAwajHeaders = () => {
   };
 };
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Handle body parsing manually since we disabled Vercel's bodyParser
-  // This is required to allow multer to handle the multipart stream
-  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-    const contentType = req.headers['content-type'] || '';
-    
-    // Only parse if not already parsed (e.g. by server.ts middleware in Cloud Run)
-    const multerReq = req as any;
-    const isAlreadyParsed = multerReq.file || multerReq.files || (multerReq.body && Object.keys(multerReq.body).length > 0);
-    
-    if (!isAlreadyParsed) {
-      if (contentType.includes('application/json')) {
-        try {
-          const chunks = [];
-          for await (const chunk of (req as any)) {
-            chunks.push(chunk);
-          }
-          const rawBody = Buffer.concat(chunks).toString();
-          if (rawBody) {
-            (req as any).body = JSON.parse(rawBody);
-          }
-        } catch (e) {
-          console.warn('Failed to parse JSON body manually:', e);
-        }
-      } else if (contentType.includes('multipart/form-data')) {
-        try {
-          await parseMultipart(req, res);
-        } catch (err: any) {
-          console.error('Multipart parsing error in handler:', err);
-        }
-      } else if (contentType.includes('application/x-www-form-urlencoded')) {
-        try {
-          const chunks = [];
-          for await (const chunk of (req as any)) {
-            chunks.push(chunk);
-          }
-          const rawBody = Buffer.concat(chunks).toString();
-          if (rawBody) {
-            const params = new URLSearchParams(rawBody);
-            const body: any = {};
-            for (const [key, value] of params) {
-              body[key] = value;
-            }
-            (req as any).body = body;
-          }
-        } catch (e) {
-          console.warn('Failed to parse URL-encoded body manually:', e);
-        }
-      }
-    }
-  }
-
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   const urlPath = url.pathname;
   const parts = urlPath.split('/').filter(Boolean);
@@ -123,6 +47,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const subAction = parts[3] || parts[2] || (req.query.id as string);
   console.log(`Awaj API: url=${req.url}, parts=${JSON.stringify(parts)}, action="${action}", subAction="${subAction}"`);
 
+  // Ensure body is parsed if it's a string
+  if (req.body && typeof req.body === 'string' && req.body.trim().startsWith('{')) {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch (e) {
+      console.warn('Failed to parse req.body as JSON in awaj API handler:', e);
+    }
+  }
+
   try {
     const headers = getAwajHeaders();
     const token = (process.env.AWAJ_API_TOKEN || '').trim();
@@ -136,34 +69,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let filename = 'voice.mp3';
       let contentType = 'audio/mpeg';
 
-      const multerReq = req as any;
       // 1. From multer req.file or req.files
+      const multerReq = req as any;
       const uploadedFile = multerReq.file || 
         (Array.isArray(multerReq.files) ? multerReq.files[0] : null) || 
-        (multerReq.files?.['audio']?.[0] || multerReq.files?.['file']?.[0] || multerReq.files?.['voice']?.[0]);
-
-      if (uploadedFile) {
-        console.log('Awaj Upload Debug - File found:', {
-          originalname: uploadedFile.originalname,
-          mimetype: uploadedFile.mimetype,
-          size: uploadedFile.size,
-          hasBuffer: !!uploadedFile.buffer
-        });
-      } else {
-        console.log('Awaj Upload Debug - No file found in req.file/files. Body keys:', Object.keys(req.body || {}));
-      }
+        (multerReq.files?.['audio']?.[0] || multerReq.files?.['file']?.[0]);
 
       if (uploadedFile && uploadedFile.buffer) {
         fileBuffer = uploadedFile.buffer;
         filename = uploadedFile.originalname || 'voice.mp3';
         contentType = uploadedFile.mimetype || 'audio/mpeg';
-      } else if (uploadedFile && uploadedFile.path && !uploadedFile.buffer) {
-        // Handle disk storage fallback if ever changed
-        const fs = await import('fs');
-        fileBuffer = fs.readFileSync(uploadedFile.path);
-        filename = uploadedFile.originalname || 'voice.mp3';
-        contentType = uploadedFile.mimetype || 'audio/mpeg';
-      }
+      } 
       // 2. From base64 string in body
       else if (body.audio_base64 || body.audioBase64 || (typeof body.audio === 'string' && body.audio.startsWith('data:'))) {
         const base64Str = body.audio_base64 || body.audioBase64 || body.audio;

@@ -27,33 +27,16 @@ async function startServer() {
   const uploadMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const contentType = req.headers['content-type'] || '';
     if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') && contentType.includes('multipart/form-data')) {
-      // Use fields for better compatibility with different multer versions
-      const uploadFields = upload.fields([
-        { name: 'audio', maxCount: 1 },
-        { name: 'file', maxCount: 1 },
-        { name: 'voice', maxCount: 1 }
-      ]);
-
-      uploadFields(req, res, (err) => {
+      upload.any()(req, res, (err) => {
         if (err) {
           console.error('Multer error:', err);
           if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(413).json({ message: 'File size too large. Maximum allowed size is 15MB' });
+            return res.status(413).json({ message: 'File size too large. Maximum allowed size is 10MB' });
           }
           return res.status(400).json({ message: err.message || 'File upload error' });
         }
-        
-        // Handle both single file and fields
-        const multerReq = req as any;
-        if (multerReq.files) {
-          if (Array.isArray(multerReq.files)) {
-            multerReq.file = multerReq.files[0];
-          } else {
-            // Object from fields()
-            multerReq.file = multerReq.files['audio']?.[0] || 
-                            multerReq.files['file']?.[0] || 
-                            multerReq.files['voice']?.[0];
-          }
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+          (req as any).file = req.files[0];
         }
         next();
       });

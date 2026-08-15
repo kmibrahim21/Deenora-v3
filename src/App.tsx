@@ -159,6 +159,12 @@ const App: React.FC = () => {
       themeColorMeta.setAttribute("content", bgColor);
     }
     document.body.style.backgroundColor = bgColor;
+
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   }, [loading, madrasah?.theme, session, madrasah]);
 
   useEffect(() => {
