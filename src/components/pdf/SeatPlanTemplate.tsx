@@ -2,7 +2,7 @@ import React from 'react';
 
 interface SeatPlanProps {
   assignments: any[];
-  madrasah: { name: string };
+  madrasah: any;
   templateId: string;
   lang: 'en' | 'bn';
   examName?: string;

@@ -1402,6 +1402,19 @@ export const generateExamRoutinePDF = async (
     if (wrapper) {
         const pageElement = wrapper.querySelector('.pdf-page-container') as HTMLElement;
         if (pageElement) {
+            // Wait for all images inside the element to be loaded before capture
+            const images = pageElement.querySelectorAll('img');
+            const imagePromises = Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise(resolve => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                });
+            });
+            await Promise.all(imagePromises);
+            // Small extra buffer for rendering stability
+            await new Promise(r => setTimeout(r, 800));
+
             const imgData = await toJpeg(pageElement, {
                 pixelRatio: 2,
                 quality: 0.95,

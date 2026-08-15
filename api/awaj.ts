@@ -69,17 +69,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let filename = 'voice.mp3';
       let contentType = 'audio/mpeg';
 
-      // 1. From multer req.file or req.files
       const multerReq = req as any;
+      // 1. From multer req.file or req.files
       const uploadedFile = multerReq.file || 
         (Array.isArray(multerReq.files) ? multerReq.files[0] : null) || 
-        (multerReq.files?.['audio']?.[0] || multerReq.files?.['file']?.[0]);
+        (multerReq.files?.['audio']?.[0] || multerReq.files?.['file']?.[0] || multerReq.files?.['voice']?.[0]);
+
+      if (uploadedFile) {
+        console.log('Awaj Upload Debug - File found:', {
+          originalname: uploadedFile.originalname,
+          mimetype: uploadedFile.mimetype,
+          size: uploadedFile.size,
+          hasBuffer: !!uploadedFile.buffer
+        });
+      } else {
+        console.log('Awaj Upload Debug - No file found in req.file/files. Body keys:', Object.keys(req.body || {}));
+      }
 
       if (uploadedFile && uploadedFile.buffer) {
         fileBuffer = uploadedFile.buffer;
         filename = uploadedFile.originalname || 'voice.mp3';
         contentType = uploadedFile.mimetype || 'audio/mpeg';
-      } 
+      } else if (uploadedFile && uploadedFile.path && !uploadedFile.buffer) {
+        // Handle disk storage fallback if ever changed
+        const fs = await import('fs');
+        fileBuffer = fs.readFileSync(uploadedFile.path);
+        filename = uploadedFile.originalname || 'voice.mp3';
+        contentType = uploadedFile.mimetype || 'audio/mpeg';
+      }
       // 2. From base64 string in body
       else if (body.audio_base64 || body.audioBase64 || (typeof body.audio === 'string' && body.audio.startsWith('data:'))) {
         const base64Str = body.audio_base64 || body.audioBase64 || body.audio;
