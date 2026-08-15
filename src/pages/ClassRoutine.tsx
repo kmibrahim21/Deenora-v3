@@ -1,9 +1,10 @@
+import { jsPDF, toPng, toJpeg } from '../utils/serverPdfGenerator';
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, Plus, Trash2, Calendar, LayoutGrid, Users, Clock, Copy, Save, Loader2, Download, CheckCircle, AlertCircle, Edit3, Palette, X, Check, Coffee, Info, ZoomIn, ZoomOut, Maximize, Printer, Type } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Profile } from 'types';
 import html2canvas from 'html2canvas-pro';
-import { jsPDF } from 'jspdf';
+
 
 
 interface ClassRoutineProps {

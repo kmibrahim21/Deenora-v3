@@ -1,7 +1,8 @@
+import { jsPDF, toPng, toJpeg } from './serverPdfGenerator';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { toJpeg } from 'html-to-image';
-import jsPDF from 'jspdf';
+
 import { Exam, Student } from '../types';
 import QRCode from 'react-qr-code';
 import { User, FileText, Calendar, GraduationCap, Clock, Home, BookOpen, AlertTriangle, MapPin } from 'lucide-react';

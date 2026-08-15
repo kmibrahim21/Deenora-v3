@@ -1,12 +1,13 @@
+import { jsPDF, toPng, toJpeg } from '../utils/serverPdfGenerator';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@supabase/supabase-js';
-import jsPDF from 'jspdf';
+
 import autoTable from 'jspdf-autotable';
-import { toPng } from 'html-to-image';
+
 // Fix: Import icons from lucide-react instead of ../supabase
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';

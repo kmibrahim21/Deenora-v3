@@ -1,10 +1,11 @@
+import { jsPDF, toPng, toJpeg } from '../../utils/serverPdfGenerator';
 import React, { useRef, useState, useEffect } from 'react';
 import { ADMISSION_T } from './constants';
 import { AdmissionFormData, AdmissionFormLang, AdmissionFormConfig } from './types';
 import { Institution } from '../../types';
 import { Download, Printer } from 'lucide-react';
 import html2canvas from 'html2canvas-pro';
-import { jsPDF } from 'jspdf';
+
 
 const getBase64Image = async (url: string): Promise<string | null> => {
   try {
