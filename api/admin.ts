@@ -558,7 +558,7 @@ export default async function handler(req, res) {
         .from('transactions')
         .select('*')
         .eq('institution_id', institution_id)
-        .eq('module', 'subscription')
+        
         .order('created_at', { ascending: false });
       
       if (error) throw error;

@@ -3875,7 +3875,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                          <History size={32} />
                                       </div>
                                       <h4 className={`text-lg font-black mb-1 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>No Payments Found</h4>
-                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no subscription payment history.</p>
+                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no payment history.</p>
                                    </div>
                                  ) : (
                                    <div className="space-y-4">

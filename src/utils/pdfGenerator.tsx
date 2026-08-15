@@ -369,49 +369,94 @@ export const generateResultPDF = async (
             root.render(
                 <div id="pdf-wrapper">
                     <PremiumResultSheetTemplate 
-                        exam={exam} 
-                        subjects={marks.map((m: any) => ({
+                         exam={exam} 
+                         subjects={marks.map((m: any) => ({
                             id: m.subject_id || m.id,
                             subject_name: m.subject_name || m.name,
                             full_marks: m.full_marks || 100,
                             pass_marks: m.pass_marks || 33
                         }))} 
-                        students={[]} 
-                        madrasah={madrasah} 
-                        lang={lang} 
-                        singleStudent={student} 
-                        singleStudentMarks={marks} 
-                    />
+                         students={[]} 
+                         madrasah={madrasah} 
+                         lang={lang} 
+                         singleStudent={student} 
+                         singleStudentMarks={marks} 
+                     />
                 </div>
             );
         } else {
-            root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
+            root.render(
+                <div id="pdf-wrapper">
+                    <ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />
+                </div>
+            );
         }
-        setTimeout(resolve, 1500); // Increased timeout for font loading
+        setTimeout(resolve, 2000); // Give React time to render completely
     });
+
     onProgress?.(50);
 
-    const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
-
-    const imgData = await toPng(targetEl, {
-        pixelRatio: 3, // High quality for print
-        backgroundColor: '#ffffff',
-        width: 794,
-        height: 1123,
-    });
-    onProgress?.(85);
-
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
+    const targetEl = container.querySelector('#pdf-wrapper') as HTMLElement;
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
-    
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        ${styles}
+        <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
+            #pdf-wrapper {
+                width: 794px;
+                height: 1123px;
+                background: white;
+            }
+        </style>
+    </head>
+    <body class="light">
+        ${targetEl.innerHTML}
+    </body>
+    </html>
+    `;
+
+    try {
+        const response = await fetch('/api/pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                html: htmlContent,
+                format: 'A4',
+                landscape: false,
+                margin: { top: '0', right: '0', bottom: '0', left: '0' }
+            })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to generate PDF');
+        }
+
+        onProgress?.(90);
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Result_${student.student_name || student.name || 'Student'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error('Puppeteer PDF Error:', err);
+        alert('PDF generation failed. Please try again.');
+    }
+
     onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
-    
-    doc.save(`Result_${student.student_name || student.name || 'Student'}.pdf`);
     onProgress?.(100);
 };
 
@@ -434,77 +479,133 @@ export const generateMassMarksheetPDF = async (
         root.render(
             <div id="pdf-wrapper">
                 {preppedStudents.map((std, idx) => (
-                    <div key={idx} className="pdf-page-container">
+                    <div key={idx} className="pdf-page-container w-[794px] h-[1123px] bg-white">
                         {templateId === 'premium' ? (
                             <PremiumResultSheetTemplate 
-                                exam={exam} 
-                                subjects={std.marks.map((m: any) => ({
+                                 exam={exam} 
+                                 subjects={std.marks.map((m: any) => ({
                                     id: m.subject_id || m.id,
                                     subject_name: m.subject_name || m.name,
                                     full_marks: m.full_marks || 100,
                                     pass_marks: m.pass_marks || 33
                                 }))} 
-                                students={[]} 
-                                madrasah={madrasah} 
-                                lang={lang} 
-                                singleStudent={std.info} 
-                                singleStudentMarks={std.marks} 
-                            />
+                                 students={[]} 
+                                 madrasah={madrasah} 
+                                 lang={lang} 
+                                 singleStudent={std.info} 
+                                 singleStudentMarks={std.marks} 
+                             />
                         ) : (
                             <ResultSheetTemplate 
-                                student={std.info} 
-                                exam={exam} 
-                                marks={std.marks} 
-                                madrasah={madrasah} 
-                                lang={lang} 
-                            />
+                                 student={std.info} 
+                                 exam={exam} 
+                                 marks={std.marks} 
+                                 madrasah={madrasah} 
+                                 lang={lang} 
+                             />
                         )}
                     </div>
                 ))}
             </div>
         );
-        setTimeout(resolve, 1500);
+        setTimeout(resolve, 2000); // Give React time to render completely
     });
-    onProgress?.(15);
 
-    // We want 2 A4 portraits on 1 A4 landscape page.
-    const doc = new jsPDF('l', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth(); // 297
-    const pageHeight = doc.internal.pageSize.getHeight(); // 210
-    
+    onProgress?.(30);
+
     const wrapper = container.querySelector('#pdf-wrapper');
     if (wrapper && wrapper.children.length > 0) {
         const pages = Array.from(wrapper.children);
+        const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
         
-        for (let i = 0; i < pages.length; i++) {
-            const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
+        let htmlContent = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            ${styles}
+            <style>
+                @page { size: A4 landscape; margin: 0; }
+                body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
+                .pdf-landscape-page {
+                    width: 297mm;
+                    height: 210mm;
+                    display: flex;
+                    page-break-after: always;
+                    overflow: hidden;
+                    box-sizing: border-box;
+                }
+                .pdf-marksheet-half {
+                    width: 148.5mm;
+                    height: 210mm;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .pdf-page-container {
+                    width: 794px !important;
+                    height: 1123px !important;
+                    transform: scale(0.7071);
+                    transform-origin: top left;
+                    background: white;
+                }
+            </style>
+        </head>
+        <body class="light">
+        `;
+        
+        for (let i = 0; i < pages.length; i += 2) {
+            const leftPage = pages[i].outerHTML;
+            const rightPage = pages[i + 1] ? pages[i + 1].outerHTML : '';
             
-            const imgData = await toPng(pageElement, {
-                pixelRatio: 3,
-                backgroundColor: '#ffffff',
-                width: 794,
-                height: 1123,
+            htmlContent += `
+            <div class="pdf-landscape-page">
+                <div class="pdf-marksheet-half">${leftPage}</div>
+                <div class="pdf-marksheet-half">${rightPage}</div>
+            </div>
+            `;
+        }
+        
+        htmlContent += `</body></html>`;
+
+        onProgress?.(60);
+
+        try {
+            const response = await fetch('/api/pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    html: htmlContent,
+                    format: 'A4',
+                    landscape: true,
+                    margin: { top: '0', right: '0', bottom: '0', left: '0' }
+                })
             });
-            
-            const isLeft = (i % 2 === 0);
-            
-            // Add a new page for every two students (except the first one)
-            if (i > 0 && isLeft) {
-                doc.addPage();
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to generate PDF');
             }
-            
-            // A4 landscape width is 297. Half of that is 148.5
-            const hw = pageWidth / 2;
-            doc.addImage(imgData, 'PNG', isLeft ? 0 : hw, 0, hw, pageHeight, undefined, 'SLOW');
-            onProgress?.(15 + Math.floor(((i + 1) / pages.length) * 80));
+
+            onProgress?.(90);
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Mass_Marksheets_${exam.exam_name || 'All'}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Puppeteer PDF Error:', err);
+            alert('PDF generation failed. Please try again.');
         }
     }
     
     onProgress?.(98);
     root.unmount();
     document.body.removeChild(container);
-    
-    doc.save(`Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
     onProgress?.(100);
 };
 
