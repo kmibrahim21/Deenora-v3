@@ -612,8 +612,9 @@ export const generateAdmitCardPDF = async (
         continue;
       }
 
-      const imgData = await toPng(element as HTMLElement, {
-        pixelRatio: 3, 
+      const imgData = await toJpeg(element as HTMLElement, {
+        pixelRatio: 2, 
+        quality: 1.0,
         backgroundColor: '#ffffff',
         cacheBust: true,
         style: {
@@ -631,7 +632,7 @@ export const generateAdmitCardPDF = async (
         const xPos = marginX;
         const yPos = marginY + posOnPage * (cardHeightMm + gapY);
 
-        pdf.addImage(imgData, 'PNG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'SLOW');
+        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'MEDIUM');
         
       } else {
         // 4 per page
@@ -645,14 +646,14 @@ export const generateAdmitCardPDF = async (
         const xPos = marginX + col * (cardWidthMm + gapX);
         const yPos = marginY + row * (cardHeightMm + gapY);
 
-        pdf.addImage(imgData, 'PNG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'SLOW');
+        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'MEDIUM');
       }
 
       onProgress?.(2 + Math.floor(((i + 1) / students.length) * 96));
 
-      // Help GC and prevent UI freeze
-      if (i % 5 === 0) {
-        await new Promise(r => setTimeout(r, 100));
+      // Help GC and prevent UI freeze - more frequent pauses for stability
+      if (i % 3 === 0) {
+        await new Promise(r => setTimeout(r, 150));
       }
     } catch (err) {
       console.error('Error generating image for student:', student.student_name, err);
