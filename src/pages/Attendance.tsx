@@ -404,14 +404,15 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   }, [sessions, activeTab]);
 
   const fetchStudents = async (cid: string) => {
-    if (!madrasah) return;
+    if (!madrasah || !cid) return;
     setLoading(true);
     setFetchError(null);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
       const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
       
-      // Use cachedFetch for offline support
+      const studentsCacheKey = `students:${madrasah.id}:${cid}:${(activeYearId && isUuid(activeYearId)) ? activeYearId : 'all'}`;
+      
       const { data: stdData, error: stdError } = await requestManager.cachedFetch(
         'students',
         (q) => {
@@ -424,7 +425,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           }
           return query;
         },
-        `students:${madrasah.id}:${cid}:${(activeYearId && isUuid(activeYearId)) ? activeYearId : 'all'}`,
+        studentsCacheKey,
         CACHE_TTLS.LONG
       );
       
@@ -472,21 +473,36 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       const { data: attData, error: attError } = await requestManager.cachedFetch(
         'attendance',
         (q) => {
-          let query = q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).eq('date', date);
-          // We fetch all records for the date to avoid duplicate key issues on INSERT
-          // because a student might have a record in a different session
+          let query = q.select('*').eq('institution_id', madrasah.id).eq('date', date);
+          
+          // Only add class_id filter if it's not 'all'
+          if (cid && cid !== 'all') {
+            query = query.eq('class_id', cid);
+          }
+          
           return query.order('created_at', { ascending: false });
         },
-        `attendance:${madrasah.id}:${cid}:${date}:${selectedSession}`,
+        `attendance:${madrasah.id}:${cid || 'all'}:${date}:${selectedSession}`,
         CACHE_TTLS.SHORT
       );
-        
-      if (attError) {
-        console.error('Attendance fetch error (skipping academic_year_id):', attError);
-        // If it's a column missing error, we still want to proceed with empty attendance
+      
+      if (attError && isOnline) {
+        // Handle potential missing class_id column in attendance table
+        if (attError.code === 'PGRST204' || attError.message?.includes('class_id')) {
+          console.warn('Attendance table missing class_id column, falling back to global fetch');
+          const { data: fallbackAttData } = await requestManager.cachedFetch(
+            'attendance',
+            (q) => q.select('*').eq('institution_id', madrasah.id).eq('date', date).order('created_at', { ascending: false }),
+            `attendance_fallback:${madrasah.id}:${date}:${selectedSession}`,
+            CACHE_TTLS.SHORT
+          );
+          setExistingAttRecords(fallbackAttData || []);
+        } else {
+          console.error('Attendance fetch error:', attError);
+        }
+      } else {
+        setExistingAttRecords(attData || []);
       }
-
-      setExistingAttRecords(attData || []);
 
       if (finalStdData) {
         setStudents(finalStdData);
@@ -530,9 +546,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           (q: any) => {
             let query = q.select('id')
                .eq('institution_id', madrasah?.id)
-               .eq('date', reportDate)
-               .limit(1);
+               .eq('date', reportDate);
 
+            // Conditional class_id filter
             if (cid && cid !== 'all') {
                query = query.eq('class_id', cid);
             }
@@ -543,13 +559,31 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily' && isUuid(selectedSession)) {
                query = query.eq('session', selectedSession);
             }
-            return query;
+            return query.limit(1);
           },
           `attendance_check:${madrasah?.id}:${reportDate}:${cid || 'all'}:${selectedSession || 'daily'}`,
           CACHE_TTLS.SHORT
         );
         
-        if (checkError) throw checkError;
+        if (checkError) {
+          // If class_id fails, retry without it as a fallback
+          if (checkError.code === 'PGRST204' || checkError.message?.includes('class_id')) {
+             const { data: fallbackCheck } = await requestManager.cachedFetch(
+                'attendance',
+                (q: any) => q.select('id').eq('institution_id', madrasah?.id).eq('date', reportDate).limit(1),
+                `attendance_check_fallback:${madrasah?.id}:${reportDate}`,
+                CACHE_TTLS.SHORT
+             );
+             if (!fallbackCheck || fallbackCheck.length === 0) {
+                setDailyAbsentees([]);
+                setAttendanceNotTaken(true);
+                setLoading(false);
+                return;
+             }
+          } else {
+            throw checkError;
+          }
+        }
 
         if (!checkData || checkData.length === 0) {
            setDailyAbsentees([]);

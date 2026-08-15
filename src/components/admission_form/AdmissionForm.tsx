@@ -31,20 +31,20 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
 
   const Input = ({ label, name, type = "text", placeholder = "" }: { label: string, name: keyof AdmissionFormData, type?: string, placeholder?: string }) => (
     <div className="space-y-1.5">
-      <label className="text-sm font-bold text-slate-700 font-noto">{label}</label>
+      <label className="text-sm font-bold text-slate-700 dark:text-slate-300 font-noto">{label}</label>
       <input
         type={type}
         name={name}
         value={(formData[name] as string) || ''}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium"
+        className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-100"
       />
     </div>
   );
 
   return (
-    <div className="space-y-8 bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100">
+    <div className="space-y-8 bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 dark:shadow-black/20 border border-slate-100 dark:border-slate-800">
       {/* Header Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <Input label={t.formNumber} name="formNumber" placeholder="ADM-001" />
@@ -60,7 +60,7 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-            <h2 className="text-lg font-black text-slate-800 font-noto uppercase tracking-tight">{t.studentInfo}</h2>
+            <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-tight">{t.studentInfo}</h2>
           </div>
           <div className="relative group">
             <input
@@ -78,7 +78,7 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
               }}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             />
-            <div className="w-24 h-24 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center bg-slate-50 group-hover:border-blue-400 transition-colors overflow-hidden relative">
+            <div className="w-24 h-24 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800/50 group-hover:border-blue-400 transition-colors overflow-hidden relative">
               {formData.photoUrl ? (
                 <>
                   <img src={formData.photoUrl} alt="Student" className="w-full h-full object-cover" />
@@ -88,10 +88,10 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
                 </>
               ) : (
                 <>
-                  <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center mb-1 group-hover:bg-blue-100 transition-colors">
-                    <Camera size={14} className="text-slate-400 group-hover:text-blue-500" />
+                  <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center mb-1 group-hover:bg-blue-100 transition-colors">
+                    <Camera size={14} className="text-slate-400 dark:text-slate-500 group-hover:text-blue-500" />
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Photo</span>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Photo</span>
                 </>
               )}
             </div>
@@ -102,12 +102,12 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
           <Input label={t.studentNameEn} name="studentNameEn" />
           <Input label={t.dateOfBirth} name="date_of_birth" type="date" />
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700 font-noto">{t.gender}</label>
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 font-noto">{t.gender}</label>
             <select
               name="gender"
               value={formData.gender || 'male'}
               onChange={handleChange}
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium"
+              className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium dark:text-slate-100"
             >
               <option value="male">{t.male}</option>
               <option value="female">{t.female}</option>
@@ -127,7 +127,7 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
       <section className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-          <h2 className="text-lg font-black text-slate-800 font-noto uppercase tracking-tight">{t.parentInfo}</h2>
+          <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-tight">{t.parentInfo}</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <Input label={t.fatherName} name="fatherName" />
@@ -148,27 +148,27 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
       <section className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-          <h2 className="text-lg font-black text-slate-800 font-noto uppercase tracking-tight">{t.addressInfo}</h2>
+          <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-tight">{t.addressInfo}</h2>
         </div>
         <div className="space-y-6">
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700 font-noto">{t.presentAddress}</label>
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 font-noto">{t.presentAddress}</label>
             <textarea
               name="presentAddress"
               value={formData.presentAddress || ''}
               onChange={handleChange}
               rows={3}
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium resize-none"
+              className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium resize-none dark:text-slate-100"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700 font-noto">{t.permanentAddress}</label>
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 font-noto">{t.permanentAddress}</label>
             <textarea
               name="permanentAddress"
               value={formData.permanentAddress || ''}
               onChange={handleChange}
               rows={3}
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium resize-none"
+              className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-medium resize-none dark:text-slate-100"
             />
           </div>
         </div>
@@ -180,7 +180,7 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
       <section className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-          <h2 className="text-lg font-black text-slate-800 font-noto uppercase tracking-tight">{t.prevInstInfo}</h2>
+          <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-tight">{t.prevInstInfo}</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <Input label={t.previousInstitution} name="previousInstitution" />
@@ -194,7 +194,7 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
       <section className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
-          <h2 className="text-lg font-black text-slate-800 font-noto uppercase tracking-tight">{t.documents}</h2>
+          <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 font-noto uppercase tracking-tight">{t.documents}</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
@@ -203,14 +203,14 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
             { id: 'nid', label: t.docParentNID },
             { id: 'photos', label: t.docPhotos },
           ].map(doc => (
-            <label key={doc.id} className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer hover:bg-blue-50 transition-colors">
+            <label key={doc.id} className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">
               <input
                 type="checkbox"
                 checked={(formData.documentsChecked || []).includes(doc.id)}
                 onChange={() => handleCheckboxChange(doc.id)}
-                className="w-5 h-5 rounded-lg border-slate-300 text-blue-600 focus:ring-blue-500"
+                className="w-5 h-5 rounded-lg border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm font-bold text-slate-700 font-noto">{doc.label}</span>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-300 font-noto">{doc.label}</span>
             </label>
           ))}
         </div>
@@ -220,7 +220,7 @@ const AdmissionForm: React.FC<Props> = ({ formData, setFormData, lang, onPreview
       <div className="flex flex-col sm:flex-row gap-4 pt-6">
         <button
           onClick={onPreview}
-          className="flex-1 py-4 bg-slate-100 text-slate-700 font-black rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-200 transition-all active:scale-95 border border-slate-200"
+          className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-black rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95 border border-slate-200 dark:border-slate-700"
         >
           <Eye size={20} />
           {t.preview}

@@ -26,7 +26,16 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
     rooms[a.room_name].push(a);
   });
 
-  const config = (madrasah as any)?.config_json || {};
+  const config = madrasah?.config_json;
+  let configObj: any = config;
+  if (typeof config === 'string') {
+    try {
+      configObj = JSON.parse(config);
+    } catch (e) {
+      configObj = {} as any;
+    }
+  }
+  const safeConfig = (configObj || {}) as any;
 
   const ITEMS_PER_PAGE = templateId === 'grid' ? 15 : 20;
 
@@ -65,20 +74,20 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
               <div className="grid grid-cols-3 gap-5">
                 {page.students.map((a: any, idx: number) => (
                   <div key={a.id || idx} className="relative border-2 border-gray-300 rounded-xl p-3 pt-5 flex flex-col justify-between h-[150px] shadow-sm bg-slate-50/30 overflow-hidden">
-                    <div className="absolute top-0 right-0 bg-gray-800 text-white px-2.5 py-0.5 rounded-bl-xl text-[10px] font-black z-10">
+                    <div className="absolute top-1 right-1 bg-gray-800 text-white px-2.5 py-1 rounded-lg text-[10px] font-black z-10 shadow-sm">
                       {isBangla ? `আসন ${a.seat_number}` : `Seat ${a.seat_number}`}
                     </div>
 
-                    <div className="border-b border-dashed border-gray-200 pb-1.5 px-8 text-center shrink-0">
-                      <div className="text-[10px] font-black text-gray-900 leading-tight break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <div className="border-b border-dashed border-gray-200 pb-2 px-12 text-center shrink-0">
+                      <div className="text-[10px] font-black text-gray-900 leading-[1.6] break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {madrasah.name}
                       </div>
                       {examName ? (
-                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-relaxed mt-1">
+                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-[1.6] mt-1">
                           {examName}
                         </div>
                       ) : (
-                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-relaxed mt-1">
+                        <div className="text-[9px] font-extrabold text-[#2563EB] truncate leading-[1.6] mt-1">
                           {isBangla ? 'আসন কার্ড' : 'Seat Card'}
                         </div>
                       )}
@@ -86,7 +95,7 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
                     
                     <div className="mt-1 flex-1 min-h-0 relative z-0 pr-2">
                       <div className="text-[8px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">{t.name}</div>
-                      <div className="text-[13px] font-black text-gray-800 leading-snug break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.student_name}</div>
+                      <div className="text-[14px] font-black text-gray-800 leading-[1.5] break-words" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.student_name}</div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 border-t border-gray-200 pt-1 shrink-0">
@@ -132,9 +141,9 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
           <div className="pt-3 border-t border-gray-100 flex justify-between items-end text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-auto shrink-0">
             <div>
                <div className="flex flex-col items-start mb-1">
-                  <div className="flex items-center justify-center relative" style={{ height: `${config.signature_height || 30}px` }}>
-                    {config.signature_url && (
-                      <img src={config.signature_url} style={{ height: `${config.signature_height || 30}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                  <div className="flex items-center justify-center relative" style={{ height: `${safeConfig.signature_height || 30}px` }}>
+                    {safeConfig.signature_url && (
+                      <img src={safeConfig.signature_url} style={{ height: `${safeConfig.signature_height || 30}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
                     )}
                   </div>
                   <div className="w-32 border-b border-gray-200 mt-1"></div>

@@ -85,19 +85,19 @@ const DesignCustomizer: React.FC<Props> = ({
   };
 
   return (
-    <div className="space-y-6 bg-white p-5 sm:p-6 rounded-[2rem] border border-slate-200 shadow-sm relative">
+    <div className="space-y-6 bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm relative">
       
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
             <Settings2 size={18} />
           </div>
           <div>
-            <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm font-noto">
+            <h3 className="font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider text-sm font-noto">
               {lang === 'bn' ? 'ডিজাইন কাস্টমাইজেশন' : 'Design Customization'}
             </h3>
-            <p className="text-[10px] font-bold text-slate-400">
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
               {lang === 'bn' ? 'পছন্দমতো ফরমের ডিজাইন সাজিয়ে নিন' : 'Customize your admission form template'}
             </p>
           </div>
@@ -107,11 +107,11 @@ const DesignCustomizer: React.FC<Props> = ({
       {/* Colors */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+          <label className="flex items-center gap-2 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
             <Palette size={14} className="text-blue-600" />
             {lang === 'bn' ? 'থিম কালার' : 'Theme Color'}
           </label>
-          <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+          <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
             {config.themeColor}
           </span>
         </div>
@@ -147,11 +147,11 @@ const DesignCustomizer: React.FC<Props> = ({
 
       {/* Font Scale */}
       <section className="space-y-3">
-        <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+        <label className="flex items-center gap-2 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           <Type size={14} className="text-blue-600" />
           {lang === 'bn' ? 'ফন্ট সাইজ / জুম স্কেল' : 'Font Size / Scale'}
         </label>
-        <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+        <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
           <input 
             type="range" 
             min="0.8" 
@@ -159,9 +159,9 @@ const DesignCustomizer: React.FC<Props> = ({
             step="0.05"
             value={config.fontScale}
             onChange={(e) => updateConfig('fontScale', parseFloat(e.target.value))}
-            className="flex-1 accent-blue-600 h-2 bg-slate-200 rounded-lg cursor-pointer"
+            className="flex-1 accent-blue-600 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
           />
-          <span className="text-xs font-black text-blue-600 bg-white px-2.5 py-1 rounded-xl shadow-xs border border-slate-200 w-14 text-center">
+          <span className="text-xs font-black text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 w-14 text-center">
             {Math.round(config.fontScale * 100)}%
           </span>
         </div>
@@ -169,7 +169,7 @@ const DesignCustomizer: React.FC<Props> = ({
 
       {/* Branding */}
       <section className="space-y-3">
-        <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+        <label className="flex items-center gap-2 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           <Image size={14} className="text-blue-600" />
           {lang === 'bn' ? 'ব্র্যান্ডিং ও লোগো' : 'Branding & Logo'}
         </label>
@@ -179,8 +179,8 @@ const DesignCustomizer: React.FC<Props> = ({
             onClick={() => updateConfig('showLogo', !config.showLogo)}
             className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl border text-xs font-black tracking-wide transition-all cursor-pointer ${
               config.showLogo 
-                ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-xs' 
-                : 'bg-slate-50 border-slate-200 text-slate-500'
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 shadow-xs' 
+                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-500'
             }`}
           >
             {config.showLogo ? <Check size={14} className="text-blue-600" strokeWidth={3} /> : <X size={14} />}
@@ -191,8 +191,8 @@ const DesignCustomizer: React.FC<Props> = ({
             onClick={() => updateConfig('showWatermark', !config.showWatermark)}
             className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl border text-xs font-black tracking-wide transition-all cursor-pointer ${
               config.showWatermark 
-                ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-xs' 
-                : 'bg-slate-50 border-slate-200 text-slate-500'
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 shadow-xs' 
+                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-500'
             }`}
           >
             {config.showWatermark ? <Check size={14} className="text-blue-600" strokeWidth={3} /> : <X size={14} />}
@@ -201,7 +201,7 @@ const DesignCustomizer: React.FC<Props> = ({
         </div>
         {config.showWatermark && (
           <div className="space-y-1 mt-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">
+            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">
               {lang === 'bn' ? 'জলছাপ টেক্সট' : 'Watermark Text'}
             </label>
             <input 
@@ -209,7 +209,7 @@ const DesignCustomizer: React.FC<Props> = ({
               value={config.watermarkText || ''}
               onChange={(e) => updateConfig('watermarkText', e.target.value)}
               placeholder={lang === 'bn' ? 'জলছাপ টেক্সট' : 'Watermark Text'}
-              className="w-full px-3.5 py-2.5 text-xs font-bold border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50"
+              className="w-full px-3.5 py-2.5 text-xs font-bold border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50 dark:bg-slate-800 dark:text-slate-200"
             />
           </div>
         )}
@@ -217,63 +217,63 @@ const DesignCustomizer: React.FC<Props> = ({
 
       {/* Headings */}
       <section className="space-y-3">
-        <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+        <label className="flex items-center gap-2 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           <Layout size={14} className="text-blue-600" />
           {lang === 'bn' ? 'বিভাগীয় শিরোনামসমূহ' : 'Section Headings'}
         </label>
-        <div className="space-y-2.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+        <div className="space-y-2.5 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">১. {lang === 'bn' ? 'শিক্ষার্থীর তথ্য' : 'Student Info'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">১. {lang === 'bn' ? 'শিক্ষার্থীর তথ্য' : 'Student Info'}</label>
             <input 
               type="text" 
               value={config.sectionHeadings.studentInfo || ''}
               onChange={(e) => updateHeading('studentInfo', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">২. {lang === 'bn' ? 'পিতামাতা/অভিভাবকের তথ্য' : 'Parent Info'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">২. {lang === 'bn' ? 'পিতামাতা/অভিভাবকের তথ্য' : 'Parent Info'}</label>
             <input 
               type="text" 
               value={config.sectionHeadings.parentInfo || ''}
               onChange={(e) => updateHeading('parentInfo', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">৩. {lang === 'bn' ? 'ঠিকানা' : 'Address Info'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">৩. {lang === 'bn' ? 'ঠিকানা' : 'Address Info'}</label>
             <input 
               type="text" 
               value={config.sectionHeadings.addressInfo || ''}
               onChange={(e) => updateHeading('addressInfo', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">৪. {lang === 'bn' ? 'পূর্ববর্তী প্রতিষ্ঠান' : 'Previous Institution'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">৪. {lang === 'bn' ? 'পূর্ববর্তী প্রতিষ্ঠান' : 'Previous Institution'}</label>
             <input 
               type="text" 
               value={config.sectionHeadings.prevInstInfo || ''}
               onChange={(e) => updateHeading('prevInstInfo', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">৫. {lang === 'bn' ? 'অঙ্গীকারনামা শিরোনাম' : 'Declaration'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">৫. {lang === 'bn' ? 'অঙ্গীকারনামা শিরোনাম' : 'Declaration'}</label>
             <input 
               type="text" 
               value={config.sectionHeadings.declaration || ''}
               onChange={(e) => updateHeading('declaration', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">৬. {lang === 'bn' ? 'অফিস ব্যবহারের বক্স' : 'Office Use'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">৬. {lang === 'bn' ? 'অফিস ব্যবহারের বক্স' : 'Office Use'}</label>
             <input 
               type="text" 
               value={config.sectionHeadings.officeUse || ''}
               onChange={(e) => updateHeading('officeUse', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
         </div>
@@ -281,36 +281,36 @@ const DesignCustomizer: React.FC<Props> = ({
 
       {/* Signature Labels */}
       <section className="space-y-3">
-        <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+        <label className="flex items-center gap-2 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           <PenTool size={14} className="text-blue-600" />
           {lang === 'bn' ? 'স্বাক্ষর ও পদবী' : 'Signature Labels'}
         </label>
-        <div className="space-y-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+        <div className="space-y-2 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">{lang === 'bn' ? 'শিক্ষার্থীর স্বাক্ষর' : 'Student Signature'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">{lang === 'bn' ? 'শিক্ষার্থীর স্বাক্ষর' : 'Student Signature'}</label>
             <input 
               type="text" 
               value={config.signatureLabels.student || ''}
               onChange={(e) => updateSignatureLabel('student', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">{lang === 'bn' ? 'অভিভাবকের স্বাক্ষর' : 'Parent Signature'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">{lang === 'bn' ? 'অভিভাবকের স্বাক্ষর' : 'Parent Signature'}</label>
             <input 
               type="text" 
               value={config.signatureLabels.parent || ''}
               onChange={(e) => updateSignatureLabel('parent', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 ml-1">{lang === 'bn' ? 'প্রধানের স্বাক্ষর ও সীল' : 'Principal Signature & Seal'}</label>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 ml-1">{lang === 'bn' ? 'প্রধানের স্বাক্ষর ও সীল' : 'Principal Signature & Seal'}</label>
             <input 
               type="text" 
               value={config.signatureLabels.principal || ''}
               onChange={(e) => updateSignatureLabel('principal', e.target.value)}
-              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              className="w-full px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
         </div>
@@ -319,7 +319,7 @@ const DesignCustomizer: React.FC<Props> = ({
       {/* Field Visibility */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-widest">
+          <label className="flex items-center gap-2 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
             <Shield size={14} className="text-blue-600" />
             {lang === 'bn' ? 'তথ্য ফিল্ড প্রদর্শন / লুকান' : 'Field Visibility'}
           </label>
@@ -331,17 +331,17 @@ const DesignCustomizer: React.FC<Props> = ({
               <label 
                 key={field} 
                 className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
-                  isVisible ? 'bg-slate-50 border-slate-200 hover:bg-blue-50/50' : 'bg-slate-100/60 border-slate-200 opacity-60'
+                  isVisible ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/20' : 'bg-slate-100/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 opacity-60'
                 }`}
               >
-                <span className="text-[11px] font-bold text-slate-700">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                   {lang === 'bn' ? labels.bn : labels.en}
                 </span>
                 <input 
                   type="checkbox" 
                   checked={isVisible}
                   onChange={() => toggleVisibility(field)}
-                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
                 />
               </label>
             );
@@ -350,7 +350,7 @@ const DesignCustomizer: React.FC<Props> = ({
       </section>
 
       {/* Bottom Sticky Action Buttons */}
-      <div className="pt-4 border-t border-slate-100 space-y-3">
+      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
         <div className="flex gap-2">
           {onSave && (
             <button
@@ -385,7 +385,7 @@ const DesignCustomizer: React.FC<Props> = ({
             <button
               type="button"
               onClick={onReset}
-              className="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-4 py-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
               title={lang === 'bn' ? 'ডিফল্ট ডিজাইনে ফিরুন' : 'Reset to default design'}
             >
               <RotateCcw size={15} />
@@ -394,9 +394,9 @@ const DesignCustomizer: React.FC<Props> = ({
           )}
         </div>
 
-        <div className="flex items-start gap-2 p-3 bg-blue-50/70 border border-blue-100 rounded-2xl">
-          <Sparkles size={16} className="text-blue-600 shrink-0 mt-0.5" />
-          <p className="text-[11px] font-bold text-blue-900 leading-tight">
+        <div className="flex items-start gap-2 p-3 bg-blue-50/70 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 rounded-2xl">
+          <Sparkles size={16} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] font-bold text-blue-900 dark:text-blue-200 leading-tight">
             {lang === 'bn' 
               ? 'ডিজাইন পরিবর্তন করে সেভ করলে যেকোনো শিক্ষার্থীর ভর্তি ফরম বা ব্ল্যাঙ্ক ফরম ডাউনলোড করার সময় এই সংরক্ষিত ডিজাইন স্বয়ংক্রিয়ভাবে কার্যকর হবে।'
               : 'Saving the design will permanently apply this layout and styling to all student admission form downloads and blank forms.'}

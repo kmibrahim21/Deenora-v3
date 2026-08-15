@@ -80,6 +80,17 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
 
   const isBn = lang === 'bn';
 
+  // Parse config_json if it's a string
+  let config: any = madrasah?.config_json;
+  if (typeof config === 'string') {
+    try {
+      config = JSON.parse(config);
+    } catch (e) {
+      config = {} as any;
+    }
+  }
+  const configObj = (config || {}) as any;
+
   // Determine classes to display
   const defaultClasses = [
     { id: '5', class_name: isBn ? '৫ম শ্রেণি' : 'Class 5' },
@@ -172,7 +183,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     const footerSignBoxMinWidth = isClassMode ? 'min-w-[150px] p-2' : 'min-w-[220px] p-3';
     const footerSignTextClass = isClassMode ? 'text-[10px]' : 'text-[11.5px]';
     const footerSignSubtextClass = isClassMode ? 'text-[9px]' : 'text-[10.5px]';
-    const signatureHeight = isClassMode ? 32 : (madrasah?.config_json?.signature_height || 50);
+    const signatureHeight = isClassMode ? 32 : (Math.max(Number(configObj?.signature_height) || 50, 40));
 
     return (
       <div className={`w-full h-full ${paddingClass} flex flex-col justify-between relative border-[8px] bg-white overflow-hidden`} style={{ borderColor: `${primary}1a` }}>
@@ -307,13 +318,13 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                           return (
                             <React.Fragment key={dayIdx}>
                               <td className={`border-r ${cellPaddingFormatA} align-middle text-center overflow-hidden`} style={{ borderColor: `${primary}33` }}>
-                                <span className={`font-black tracking-tight leading-[1.1] block max-h-full whitespace-normal break-words ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: mrnSub === '*****' ? undefined : primary }}>
+                                <span className={`font-black tracking-tight leading-[1.8] py-1 block max-h-full whitespace-normal break-words ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: mrnSub === '*****' ? undefined : primary }}>
                                   {mrnSub}
                                 </span>
                               </td>
                               {showRoutineAfternoon && (
                                 <td className={`border-r ${cellPaddingFormatA} align-middle text-center overflow-hidden`} style={{ borderColor: `${primary}33` }}>
-                                  <span className={`font-black tracking-tight leading-[1.1] block max-h-full whitespace-normal break-words ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: aftSub === '*****' ? undefined : primary }}>
+                                  <span className={`font-black tracking-tight leading-[1.8] py-1 block max-h-full whitespace-normal break-words ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: aftSub === '*****' ? undefined : primary }}>
                                     {aftSub}
                                   </span>
                                 </td>
@@ -354,7 +365,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                       
                       {/* Morning subject for selected class */}
                       <td className={`border-r ${tableCellPaddingClass} align-middle`} style={{ borderColor: `${primary}33` }}>
-                        <div className="text-center font-black whitespace-normal break-words leading-tight" style={{ color: primary }}>
+                        <div className="text-center font-black whitespace-normal break-words leading-[1.8] py-1" style={{ color: primary }}>
                           {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning')}
                         </div>
                       </td>
@@ -362,7 +373,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                       {/* Afternoon items */}
                       {showRoutineAfternoon && (
                         <td className={`${tableCellPaddingClass} align-middle`}>
-                          <div className="text-center font-black text-slate-800 whitespace-normal break-words leading-tight">
+                          <div className="text-center font-black text-slate-800 whitespace-normal break-words leading-[1.8] py-1">
                             {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon')}
                           </div>
                         </td>
@@ -406,8 +417,8 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             <div className="text-center">
               <div className={`border rounded-xl ${footerSignBoxMinWidth} relative`} style={{ borderColor: `${primary}33`, backgroundColor: `${light}26` }}>
                 <div className="relative flex flex-col items-center justify-center mb-0.5" style={{ height: `${signatureHeight}px` }}>
-                  {madrasah?.config_json?.signature_url && (
-                      <img src={madrasah.config_json.signature_url} style={{ height: `${signatureHeight}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                  {configObj?.signature_url && (
+                      <img src={configObj.signature_url} style={{ height: `${signatureHeight}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
                   )}
                 </div>
                 <p className={`${footerSignTextClass} font-black mb-0.5`} style={{ color: `${primary}e6` }}>{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>

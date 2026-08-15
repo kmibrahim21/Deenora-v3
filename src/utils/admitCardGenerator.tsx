@@ -18,6 +18,17 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
   const isBangla = lang === 'bn';
   const fontFamily = isBangla ? "'Noto Serif Bengali', serif" : "'Times New Roman', serif";
 
+  // Parse config_json if it's a string
+  let config = madrasah?.config_json;
+  if (typeof config === 'string') {
+    try {
+      config = JSON.parse(config);
+    } catch (e) {
+      config = {};
+    }
+  }
+  const configObj = (config || {}) as any;
+
   const toBanglaNum = (num: any) => {
     if (num === undefined || num === null || num === '') return '';
     const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -294,8 +305,8 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
             <div className="flex flex-col items-center flex-1 text-center">
               <div className="h-6 flex items-end justify-center mb-[1px]">
-                {madrasah?.config_json?.signature_url && (
-                  <img src={madrasah.config_json.signature_url} className="h-6 object-contain mix-blend-multiply" crossOrigin="anonymous" />
+                {configObj?.signature_url && (
+                  <img src={configObj.signature_url} className="h-6 object-contain mix-blend-multiply" crossOrigin="anonymous" />
                 )}
               </div>
               <div className="w-full border-t border-[#0c4a7e]/40 mb-[1px]"></div>
@@ -401,9 +412,9 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
                <p className="font-bold text-[20px]">{isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Controller of Exams'}</p>
             </div>
             <div className="text-center relative">
-               <div className="flex items-end justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 35}px` }}>
-                  {madrasah?.config_json?.signature_url && (
-                    <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 35}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
+               <div className="flex items-end justify-center relative mb-1" style={{ height: `${configObj?.signature_height || 35}px` }}>
+                  {configObj?.signature_url && (
+                    <img src={configObj.signature_url} style={{ height: `${configObj.signature_height || 35}px` }} className="object-contain mix-blend-multiply absolute bottom-0" alt="Sig" crossOrigin="anonymous" />
                   )}
                </div>
                <div className="w-56 border-b-2 border-black mb-2"></div>
@@ -511,9 +522,9 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
       {/* Footer Signatures */}
       <div className="absolute bottom-6 right-16 z-20 text-center flex flex-col items-center">
-         <div className="flex items-center justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 35}px` }}>
-            {madrasah?.config_json?.signature_url && (
-              <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 35}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+         <div className="flex items-center justify-center relative mb-1" style={{ height: `${configObj?.signature_height || 35}px` }}>
+            {configObj?.signature_url && (
+              <img src={configObj.signature_url} style={{ height: `${configObj.signature_height || 35}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
             )}
          </div>
         <div className="w-36 border-b border-blue-200 mb-1.5 opacity-50"></div>

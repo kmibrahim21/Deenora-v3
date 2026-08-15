@@ -35,6 +35,18 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
   const currentYearSuffix = dateStr.slice(-2);
   const bnYearSuffix = enToBnNumber(currentYearSuffix);
 
+  // Robust config_json parsing
+  const config = madrasah?.config_json;
+  let configObj: any = config;
+  if (typeof config === 'string') {
+    try {
+      configObj = JSON.parse(config);
+    } catch (e) {
+      configObj = {} as any;
+    }
+  }
+  const safeConfig = (configObj || {}) as any;
+
   const addressParts = (student.address || '').split(',').map(s => s.trim());
   const villageOrArea = addressParts[0] || '';
   const postOffice = addressParts[1] || '';
@@ -508,9 +520,9 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
            
            {/* Principal Signature */}
            <div className="flex flex-col items-center relative">
-              <div className="flex items-center justify-center relative mb-1" style={{ height: `${madrasah?.config_json?.signature_height || 45}px` }}>
-                {madrasah?.config_json?.signature_url && (
-                  <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height || 45}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+              <div className="flex items-center justify-center relative mb-1" style={{ height: `${safeConfig?.signature_height || 45}px` }}>
+                {safeConfig?.signature_url && (
+                  <img src={safeConfig.signature_url} style={{ height: `${safeConfig.signature_height || 45}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
                 )}
               </div>
               <span className="border-b-[1.5px] border-slate-400 w-48 mb-2"></span>

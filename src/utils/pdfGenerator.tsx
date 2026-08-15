@@ -296,7 +296,7 @@ export const generateSeatPlanPDF = async (
     
     await new Promise<void>((resolve) => {
         root.render(<SeatPlanTemplate assignments={assignments} madrasah={madrasah} templateId={templateId} lang={lang} examName={examName} />);
-        setTimeout(resolve, 500); // Give more time for fonts/images
+        setTimeout(resolve, 1500); // Give more time for fonts/images to render
     });
     onProgress?.(25);
 
@@ -313,10 +313,14 @@ export const generateSeatPlanPDF = async (
             const roomElement = roomDivs[i] as HTMLElement;
             
             const imgData = await toPng(roomElement, {
-                pixelRatio: 3,
+                pixelRatio: 4, // Higher resolution for sharpness
                 backgroundColor: '#ffffff',
-                width: 794, // A4 width at 96 DPI
-                height: 1123, // A4 height at 96 DPI
+                width: 794,
+                height: 1123,
+                style: {
+                    transform: 'scale(1)',
+                    transformOrigin: 'top left'
+                }
             });
 
             if (i > 0) doc.addPage();
