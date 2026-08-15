@@ -256,6 +256,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         if (selectedClass.id !== 'all') {
           fetchStudents(selectedClass.id);
           fetchDayEvents();
+        } else {
+          setStudents([]);
         }
       }
       else fetchReport(selectedClass.id);
@@ -407,13 +409,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     setFetchError(null);
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
+      const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
       
       // Use cachedFetch for offline support
       const { data: stdData, error: stdError } = await requestManager.cachedFetch(
         'students',
         (q) => {
           let query = q.select('*').eq('institution_id', madrasah.id).eq('class_id', cid).order('roll', { ascending: true });
-          if (activeYearId) {
+          if (activeYearId && isUuid(activeYearId)) {
             query = query.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
           }
           if ((window as any)._hasIsActive !== false) {
@@ -421,7 +424,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           }
           return query;
         },
-        `students:${madrasah.id}:${cid}:${activeYearId || 'all'}`,
+        `students:${madrasah.id}:${cid}:${(activeYearId && isUuid(activeYearId)) ? activeYearId : 'all'}`,
         CACHE_TTLS.LONG
       );
       
@@ -533,7 +536,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
             if (cid && cid !== 'all') {
                query = query.eq('class_id', cid);
             }
-            if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+            
+            // Safety check for session UUID
+            const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+            
+            if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily' && isUuid(selectedSession)) {
                query = query.eq('session', selectedSession);
             }
             return query;
@@ -569,7 +576,9 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
            if (cid && cid !== 'all') {
              attQuery = attQuery.eq('class_id', cid);
            }
-           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
+           
+           const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily' && isUuid(selectedSession)) {
              attQuery = attQuery.eq('session', selectedSession);
            }
            const { data: attData, error: attError } = await attQuery;
@@ -878,7 +887,14 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   };
 
   const handleSave = async () => {
-    if (!madrasah || !selectedClass) return;
+    if (!madrasah || !selectedClass || selectedClass.id === 'all') {
+      if (selectedClass?.id === 'all') {
+        setErrorTitle(lang === 'bn' ? 'ক্লাস নির্বাচন করুন' : 'Select Class');
+        setErrorDetails(lang === 'bn' ? 'সব ক্লাসের হাজিরা একসাথে সেভ করা সম্ভব নয়। অনুগ্রহ করে একটি নির্দিষ্ট ক্লাস নির্বাচন করুন।' : 'Saving attendance for all classes at once is not supported. Please select a specific class.');
+        setShowErrorModal(true);
+      }
+      return;
+    }
     setSaving(true);
     
     // Invalidate RequestManager pattern-based caches
@@ -893,6 +909,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
 
     try {
       const activeYearId = madrasah.config_json?.active_academic_year_id;
+      const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+      const validatedYearId = (activeYearId && isUuid(activeYearId)) ? activeYearId : null;
       
       const inserts = [];
       const updates = [];
@@ -914,11 +932,11 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           student_id: sid,
           status: status,
           date: date,
-          session: selectedSession,
+          session: (selectedSession === 'all' || selectedSession === 'daily') ? null : selectedSession,
           arrival_time: arrTime,
           late_minutes: mins,
           recorded_by: userId,
-          academic_year_id: activeYearId || null
+          academic_year_id: validatedYearId
         };
         
         payload.push(record);
