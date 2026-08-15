@@ -1,10 +1,9 @@
-import { jsPDF, toPng, toJpeg } from '../utils/serverPdfGenerator';
 import React, { useRef, useState } from "react";
 import { Download, X, Printer, Settings2 } from "lucide-react";
 import { Teacher, Institution, Language } from "types";
 import QRCode from "react-qr-code";
-
-
+import { jsPDF } from "jspdf";
+import { toPng, toJpeg } from "html-to-image";
 import { solaimanLipiBase64 } from "../utils/fonts";
 
 interface TeacherIdCardGeneratorProps {

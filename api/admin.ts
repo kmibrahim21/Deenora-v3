@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const { data: adminProfile } = await supabase.from('institutions').select('is_super_admin').eq('id', user.id).single();
     const { data: userProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
     
-    const isSuperAdmin = !!adminProfile?.is_super_admin || userProfile?.role === 'super_admin';
+    const isSuperAdmin = !!adminProfile?.is_super_admin;
     const isManager = userProfile?.role === 'manager';
 
     if (!isSuperAdmin && !isManager) {
@@ -558,7 +558,7 @@ export default async function handler(req, res) {
         .from('transactions')
         .select('*')
         .eq('institution_id', institution_id)
-        
+        .eq('module', 'subscription')
         .order('created_at', { ascending: false });
       
       if (error) throw error;

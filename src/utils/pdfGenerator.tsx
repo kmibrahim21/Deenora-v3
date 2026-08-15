@@ -1,10 +1,9 @@
-import { jsPDF, toPng, toJpeg } from './serverPdfGenerator';
-
+import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Exam, Student, ExamSubject, Institution, SeatAssignment, Class, ClassRoutine } from '../types';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-
+import { toJpeg, toPng } from 'html-to-image';
 import { ResultSheetTemplate } from '../components/pdf/ResultSheetTemplate';
 import { PremiumResultSheetTemplate } from '../components/pdf/PremiumResultSheetTemplate';
 import { ClassResultTemplate } from '../components/pdf/ClassResultTemplate';
@@ -18,81 +17,6 @@ import { RoutinePDFTemplate } from '../components/pdf/RoutinePDFTemplate';
 import { MasterRoutinePDFTemplate } from '../components/pdf/MasterRoutinePDFTemplate';
 import { ExamRoutinePDFTemplate } from '../components/pdf/ExamRoutinePDFTemplate';
 import { StudentListTemplate } from '../components/pdf/StudentListTemplate';
-
-export const generatePdfViaServer = async (
-    htmlBody: string,
-    filename: string,
-    options: {
-        format?: 'A4' | 'Letter' | 'Legal',
-        landscape?: boolean,
-        margin?: { top: string, right: string, bottom: string, left: string },
-        customStyles?: string
-    } = {}
-) => {
-    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
-    
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        ${styles}
-        <style>
-            @page { size: ${options.format || 'A4'} ${options.landscape ? 'landscape' : 'portrait'}; margin: 0; }
-            body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
-            .pdf-page-wrapper {
-                width: ${options.landscape ? '297mm' : '210mm'};
-                height: ${options.landscape ? '210mm' : '297mm'};
-                overflow: hidden;
-                box-sizing: border-box;
-                position: relative;
-                page-break-after: always;
-                page-break-inside: avoid;
-            }
-            .pdf-page-wrapper:last-child {
-                page-break-after: auto;
-            }
-            ${options.customStyles || ''}
-        </style>
-    </head>
-    <body class="light">
-        ${htmlBody}
-    </body>
-    </html>
-    `;
-
-    try {
-        const response = await fetch('/api/pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                html: htmlContent,
-                format: options.format || 'A4',
-                landscape: !!options.landscape,
-                margin: options.margin || { top: '0', right: '0', bottom: '0', left: '0' }
-            })
-        });
-
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Failed to generate PDF on server');
-        }
-
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    } catch (err) {
-        console.error('Server PDF Error:', err);
-        throw err;
-    }
-};
-
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
@@ -443,37 +367,38 @@ export const generateResultPDF = async (
     await new Promise<void>((resolve) => {
         if (templateId === 'premium') {
             root.render(
-                <PremiumResultSheetTemplate 
-                     exam={exam} 
-                     subjects={marks.map((m: any) => ({
-                        id: m.subject_id || m.id,
-                        subject_name: m.subject_name || m.name,
-                        full_marks: m.full_marks || 100,
-                        pass_marks: m.pass_marks || 33
-                    }))} 
-                     students={[]} 
-                     madrasah={madrasah} 
-                     lang={lang} 
-                     singleStudent={student} 
-                     singleStudentMarks={marks} 
-                 />
+                <div id="pdf-wrapper">
+                    <PremiumResultSheetTemplate 
+                        exam={exam} 
+                        subjects={marks.map((m: any) => ({
+                            id: m.subject_id || m.id,
+                            subject_name: m.subject_name || m.name,
+                            full_marks: m.full_marks || 100,
+                            pass_marks: m.pass_marks || 33
+                        }))} 
+                        students={[]} 
+                        madrasah={madrasah} 
+                        lang={lang} 
+                        singleStudent={student} 
+                        singleStudentMarks={marks} 
+                    />
+                </div>
             );
         } else {
             root.render(<ResultSheetTemplate student={student} exam={exam} marks={marks} madrasah={madrasah} lang={lang} />);
         }
         setTimeout(resolve, 1500); // Increased timeout for font loading
     });
-
     onProgress?.(50);
 
     const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
+
     const imgData = await toPng(targetEl, {
         pixelRatio: 3, // High quality for print
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
     });
-
     onProgress?.(85);
 
     const doc = new jsPDF('p', 'mm', 'a4');
@@ -486,7 +411,7 @@ export const generateResultPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    await doc.save(`Result_${student.student_name || student.name || 'Student'}.pdf`);
+    doc.save(`Result_${student.student_name || student.name || 'Student'}.pdf`);
     onProgress?.(100);
 };
 
@@ -512,27 +437,27 @@ export const generateMassMarksheetPDF = async (
                     <div key={idx} className="pdf-page-container">
                         {templateId === 'premium' ? (
                             <PremiumResultSheetTemplate 
-                                 exam={exam} 
-                                 subjects={std.marks.map((m: any) => ({
+                                exam={exam} 
+                                subjects={std.marks.map((m: any) => ({
                                     id: m.subject_id || m.id,
                                     subject_name: m.subject_name || m.name,
                                     full_marks: m.full_marks || 100,
                                     pass_marks: m.pass_marks || 33
                                 }))} 
-                                 students={[]} 
-                                 madrasah={madrasah} 
-                                 lang={lang} 
-                                 singleStudent={std.info} 
-                                 singleStudentMarks={std.marks} 
-                             />
+                                students={[]} 
+                                madrasah={madrasah} 
+                                lang={lang} 
+                                singleStudent={std.info} 
+                                singleStudentMarks={std.marks} 
+                            />
                         ) : (
                             <ResultSheetTemplate 
-                                 student={std.info} 
-                                 exam={exam} 
-                                 marks={std.marks} 
-                                 madrasah={madrasah} 
-                                 lang={lang} 
-                             />
+                                student={std.info} 
+                                exam={exam} 
+                                marks={std.marks} 
+                                madrasah={madrasah} 
+                                lang={lang} 
+                            />
                         )}
                     </div>
                 ))}
@@ -540,7 +465,6 @@ export const generateMassMarksheetPDF = async (
         );
         setTimeout(resolve, 1500);
     });
-
     onProgress?.(15);
 
     // We want 2 A4 portraits on 1 A4 landscape page.
@@ -580,7 +504,7 @@ export const generateMassMarksheetPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    await doc.save(`Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+    doc.save(`Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
     onProgress?.(100);
 };
 

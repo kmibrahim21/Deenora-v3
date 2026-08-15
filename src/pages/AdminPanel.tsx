@@ -1,13 +1,12 @@
-import { jsPDF, toPng, toJpeg } from '../utils/serverPdfGenerator';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@supabase/supabase-js';
-
+import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
+import { toPng } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
@@ -743,7 +742,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       adminPanelCache.detailedReport[cacheKey] = fullReport;
       setDetailedReport(fullReport);
     } catch (err) {
-      
+      console.error('Error in fetchDetailedReport API call:', err);
       // Fallback to client-side (might return 0 due to RLS)
       let startDate: Date;
       let endDate: Date;
@@ -816,7 +815,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         pendingApprovals: pendingCount || 0
       };
     } catch (err) {
-      
+      console.error('Error in fetchGlobalCounts API call:', err);
       // Fallback to client-side (might return 0 due to RLS)
       const [studentsRes, classesRes, teachersRes, smsAllocRes, currentBalRes, pendingRes, instsRes, stockRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }),
@@ -878,7 +877,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         class_count: (m as any).class_count?.[0]?.count || 0
       }));
     } catch (err) {
-      
+      console.error('Error in fetchAllMadrasahs API call:', err);
       // Fallback
       const { data, error } = await supabase.from('institutions')
         .select('*, student_count:students(count), class_count:classes(count)')
@@ -3876,7 +3875,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                          <History size={32} />
                                       </div>
                                       <h4 className={`text-lg font-black mb-1 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>No Payments Found</h4>
-                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no payment history.</p>
+                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no subscription payment history.</p>
                                    </div>
                                  ) : (
                                    <div className="space-y-4">

@@ -1,11 +1,10 @@
-import { jsPDF, toPng, toJpeg } from '../utils/serverPdfGenerator';
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, FileText, Download, UserCheck, Loader2, Eye } from 'lucide-react';
 import { Institution, Profile, Class, Student, Language } from '../types';
 import { supabase } from '../supabase';
 import { t } from '../translations';
 import { createRoot } from 'react-dom/client';
-
+import jsPDF from 'jspdf';
 import { toJpeg } from 'html-to-image';
 import { CertificateTemplate } from '../components/pdf/CertificateTemplate';
 

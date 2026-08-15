@@ -1,4 +1,3 @@
-import { jsPDF, toPng, toJpeg } from '../../utils/serverPdfGenerator';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -10,7 +9,7 @@ import { Globe, Download, ArrowLeft, Search, User, Settings2, Sparkles, CheckCir
 import { Institution, Student } from '../../types';
 import { supabase } from 'supabase';
 import html2canvas from 'html2canvas-pro';
-
+import { jsPDF } from 'jspdf';
 
 interface Props {
   madrasah: Institution | null;
