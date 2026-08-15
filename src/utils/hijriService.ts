@@ -12,7 +12,7 @@ export interface HijriData {
   isFromApi: boolean;
 }
 
-const CACHE_KEY = 'aladhan_hijri_cache_v2';
+const CACHE_KEY = 'aladhan_hijri_cache_v3';
 
 const WEEKDAYS_AR: Record<string, string> = {
   'Sunday': 'الأحد',
@@ -65,10 +65,8 @@ export function getTodayDateStringYYYYMMDD(date: Date = new Date()): string {
 
 // Fallback logic using calendarUtils
 export function getFallbackHijriData(date: Date = new Date()): HijriData {
-  // To match Bangladesh's 1-day behind Hijri calendar, we align the fallback
-  // by subtracting 1 day from the target date.
   const adjustedDate = new Date(date);
-  adjustedDate.setDate(adjustedDate.getDate() - 1);
+  // Remove the -1 day adjustment to follow standard Hijri calendar
   const localHijri = getHijriDate(adjustedDate);
   const weekdayEn = date.toLocaleDateString('en-US', { weekday: 'long' });
   const weekdayBn = WEEKDAYS_BN[weekdayEn] || weekdayEn;
@@ -92,10 +90,8 @@ export function getFallbackHijriData(date: Date = new Date()): HijriData {
 }
 
 export async function fetchHijriDateFromApi(date: Date = new Date()): Promise<HijriData> {
-  // To match Bangladesh's 1-day behind Hijri calendar compared to Saudi/Aladhan standard,
-  // we subtract 1 day from the target date when querying the API.
   const adjustedDate = new Date(date);
-  adjustedDate.setDate(adjustedDate.getDate() - 1);
+  // Remove the -1 day adjustment to follow standard Hijri calendar
   const dateStr = getTodayDateStringDDMMYYYY(adjustedDate);
   const url = `https://api.aladhan.com/v1/gToH/${dateStr}`;
 
@@ -149,7 +145,8 @@ export function calculateAndSaveOffset(data: HijriData): number {
       }
     }
     
-    localStorage.setItem('hijri_offset_v2', foundOffset.toString());
+    localStorage.setItem('hijri_offset_v3', foundOffset.toString());
+    localStorage.removeItem('hijri_offset_v2'); // Clean up old key
     return foundOffset;
   } catch (e) {
     console.error('Error calculating Hijri offset:', e);

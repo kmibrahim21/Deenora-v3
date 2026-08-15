@@ -87,14 +87,14 @@ export const getHijriDate = (date: Date, offset?: number) => {
     let resolvedOffset = offset;
     if (resolvedOffset === undefined) {
       if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem('hijri_offset_v2');
+        const cached = localStorage.getItem('hijri_offset_v3');
         if (cached !== null) {
           resolvedOffset = parseInt(cached, 10);
         }
       }
     }
     if (resolvedOffset === undefined) {
-      resolvedOffset = -1; // Default fallback
+      resolvedOffset = 0; // Default to standard Hijri date
     }
 
     adjustedDate.setDate(date.getDate() + resolvedOffset);
