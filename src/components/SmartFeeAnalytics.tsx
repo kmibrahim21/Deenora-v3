@@ -22,6 +22,8 @@ interface SmartFeeAnalyticsProps {
   activeYear?: any;
 }
 
+import { getTodayDateString, getTodayMonthString } from 'utils/calendarUtils';
+
 const localT = {
   allClasses: { en: 'All Classes', bn: 'সকল ক্লাস' },
   targetMonthly: { en: 'Target Monthly', bn: 'মাসিক লক্ষ্য' },
@@ -142,11 +144,11 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
   const [templates, setTemplates] = useState<SMSTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<SMSTemplate | null>(null);
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'yearly' | 'custom'>('monthly');
-  const [selectedMonth, setSelectedMonth] = useState(initialMonth || new Date().toISOString().slice(0, 7));
-  const [selectedReminderMonth, setSelectedReminderMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth || getTodayMonthString());
+  const [selectedReminderMonth, setSelectedReminderMonth] = useState(getTodayMonthString());
   const [selectedReminderClassId, setSelectedReminderClassId] = useState('all');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [localClasses, setLocalClasses] = useState<Class[]>(classes);
@@ -276,6 +278,12 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       const allSettings = settingsRes.data;
       const ledger = ledgerRes.data;
 
+      // Map ALL students to their classes for accurate filtering even when students list is filtered
+      const fullStudentClassMap: Record<string, string> = {};
+      studentsRes.data?.forEach(s => {
+        fullStudentClassMap[s.student_name] = s.class_id;
+      });
+
       const studentCounts: Record<string, number> = {};
       const studentClassMap: Record<string, string> = {};
       
@@ -284,28 +292,50 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         studentClassMap[s.student_name] = s.class_id;
       });
 
-      if (ledger) {
-        const filteredLedger = ledger.filter(l => isDateInRange(l.transaction_date));
-        setLedgerHistory(filteredLedger);
-      }
-
-      // 4. Process Data
-      const breakdownMap: Record<string, { expected: number, collected: number, students: number, transactions: number }> = {};
       let totalExpected = 0;
       let totalCollected = 0;
       let totalExpense = 0;
       let totalIncome = 0;
 
-      // Calculate Expenses and Total Income
-      ledger?.forEach(l => {
-        if (isDateInRange(l.transaction_date)) {
+      if (ledger) {
+        let filteredLedger = ledger.filter(l => isDateInRange(l.transaction_date));
+        
+        if (selectedClassId !== 'all') {
+          filteredLedger = filteredLedger.filter(l => {
+            // Expenses are general, exclude when class filter is active
+            if (l.type === 'expense') return false;
+            
+            const isStudentFee = l.category === 'Student Fee' || 
+                                 l.category === 'শিক্ষার্থী ফি' || 
+                                 l.category?.includes('Fee') || 
+                                 l.category?.includes('ফি') || 
+                                 l.description?.includes('FEE_ID:');
+            
+            if (!isStudentFee) return false;
+
+            const parts = l.description.split(' - ');
+            if (parts.length < 2) return false;
+            const studentInfo = parts.slice(1).join(' - ');
+            const studentName = studentInfo.split(' (')[0].trim();
+            
+            return fullStudentClassMap[studentName] === selectedClassId;
+          });
+        }
+        
+        setLedgerHistory(filteredLedger);
+
+        // Calculate Expenses and Total Income from the filtered ledger
+        filteredLedger.forEach(l => {
           if (l.type === 'expense') {
             totalExpense += l.amount;
           } else if (l.type === 'income') {
             totalIncome += l.amount;
           }
-        }
-      });
+        });
+      }
+
+      // 4. Process Data
+      const breakdownMap: Record<string, { expected: number, collected: number, students: number, transactions: number }> = {};
 
       structures.forEach(s => {
         // filter structures by selected class if needed

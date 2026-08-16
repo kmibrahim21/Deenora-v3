@@ -54,6 +54,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
   const [showClassFilterMenu, setShowClassFilterMenu] = useState(false);
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState<string>(() => localStorage.getItem('accounting_selectedHistoryMonth') || 'all');
   const [showMonthFilterMenu, setShowMonthFilterMenu] = useState(false);
+  const [historyFilterType, setHistoryFilterType] = useState<'month' | 'daily'>('month');
+  const [selectedHistoryDate, setSelectedHistoryDate] = useState<string>(getTodayDateString());
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense'>('all');
   const isDark = madrasah?.theme === 'dark';
   const isOnline = useOfflineStatus();
@@ -713,7 +715,23 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
               <div className="flex items-center justify-between sm:justify-start gap-4">
                 <div>
                   <h3 className={`text-sm font-black uppercase tracking-widest ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'লেনদেনের ইতিহাস' : 'Transaction History'}</h3>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">{ledger.length} {lang === 'bn' ? 'লেনদেন' : 'Transactions'}</span>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{ledger.length} {lang === 'bn' ? 'লেনদেন' : 'Transactions'}</span>
+                    <div className={`flex p-0.5 rounded-lg border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                      <button 
+                        onClick={() => setHistoryFilterType('month')}
+                        className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase transition-all ${historyFilterType === 'month' ? (isDark ? 'bg-slate-800 text-blue-400' : 'bg-white text-blue-600 shadow-sm') : 'text-slate-400'}`}
+                      >
+                        {lang === 'bn' ? 'মাসিক' : 'Month'}
+                      </button>
+                      <button 
+                        onClick={() => setHistoryFilterType('daily')}
+                        className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase transition-all ${historyFilterType === 'daily' ? (isDark ? 'bg-slate-800 text-blue-400' : 'bg-white text-blue-600 shadow-sm') : 'text-slate-400'}`}
+                      >
+                        {lang === 'bn' ? 'দৈনিক' : 'Daily'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2">
@@ -828,26 +846,39 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                     </div>
                   )}
 
-                  {/* Month Filter */}
+                  {/* Filter Inputs */}
                   <div className="relative w-full sm:w-auto">
-                    <button
-                      onClick={() => setShowMonthFilterMenu(!showMonthFilterMenu)}
-                      className={`flex items-center justify-between sm:justify-start gap-2 h-9 w-full sm:w-auto px-4 rounded-xl text-[10px] font-black tracking-wider transition-all border outline-none shadow-sm ${
-                        isDark 
-                          ? 'bg-slate-900/50 border-slate-700/50 text-slate-400 hover:text-slate-200' 
-                          : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:border-blue-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <Calendar size={12} className={selectedHistoryMonth !== 'all' ? 'text-blue-500' : ''} />
-                        <span className="truncate">
-                          {selectedHistoryMonth === 'all' 
-                            ? (lang === 'bn' ? 'সব মাস' : 'All Months') 
-                            : formatMonth(selectedHistoryMonth, lang)}
-                        </span>
-                      </div>
-                      <ChevronDown size={12} className={`transition-transform duration-300 ${showMonthFilterMenu ? 'rotate-180' : ''}`} />
-                    </button>
+                    {historyFilterType === 'month' ? (
+                      <button
+                        onClick={() => setShowMonthFilterMenu(!showMonthFilterMenu)}
+                        className={`flex items-center justify-between sm:justify-start gap-2 h-9 w-full sm:w-auto px-4 rounded-xl text-[10px] font-black tracking-wider transition-all border outline-none shadow-sm ${
+                          isDark 
+                            ? 'bg-slate-900/50 border-slate-700/50 text-slate-400 hover:text-slate-200' 
+                            : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Calendar size={12} className={selectedHistoryMonth !== 'all' ? 'text-blue-500' : ''} />
+                          <span className="truncate">
+                            {selectedHistoryMonth === 'all' 
+                              ? (lang === 'bn' ? 'সব মাস' : 'All Months') 
+                              : formatMonth(selectedHistoryMonth, lang)}
+                          </span>
+                        </div>
+                        <ChevronDown size={12} className={`transition-transform duration-300 ${showMonthFilterMenu ? 'rotate-180' : ''}`} />
+                      </button>
+                    ) : (
+                      <input 
+                        type="date"
+                        value={selectedHistoryDate}
+                        onChange={(e) => setSelectedHistoryDate(e.target.value)}
+                        className={`h-9 w-full sm:w-auto px-4 rounded-xl text-[10px] font-black tracking-wider transition-all border outline-none shadow-sm ${
+                          isDark 
+                            ? 'bg-slate-900/50 border-slate-700/50 text-slate-300' 
+                            : 'bg-white border-slate-200 text-slate-600'
+                        }`}
+                      />
+                    )}
 
                     <AnimatePresence>
                       {showMonthFilterMenu && (
@@ -944,15 +975,23 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
               {ledger.filter(e => {
                 const category = e.category || '';
                 const description = e.description || '';
-                if (selectedHistoryMonth !== 'all') {
-                  const transactionDate = e.transaction_date || '';
-                  const isMatchByDate = transactionDate.startsWith(selectedHistoryMonth);
-                  
-                  // For student fees, also match if the month is mentioned in the description
-                  const isStudentFee = category === 'Student Fee' || description.includes('FEE_ID:');
-                  const isMatchByDesc = isStudentFee && description.includes(selectedHistoryMonth);
-                  
-                  if (!isMatchByDate && !isMatchByDesc) {
+                const transactionDate = e.transaction_date || '';
+
+                if (historyFilterType === 'month') {
+                  if (selectedHistoryMonth !== 'all') {
+                    const isMatchByDate = transactionDate.startsWith(selectedHistoryMonth);
+                    
+                    // For student fees, also match if the month is mentioned in the description
+                    const isStudentFee = category === 'Student Fee' || description.includes('FEE_ID:');
+                    const isMatchByDesc = isStudentFee && description.includes(selectedHistoryMonth);
+                    
+                    if (!isMatchByDate && !isMatchByDesc) {
+                      return false;
+                    }
+                  }
+                } else {
+                  // Daily Filter
+                  if (transactionDate !== selectedHistoryDate) {
                     return false;
                   }
                 }
