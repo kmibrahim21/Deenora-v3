@@ -554,15 +554,19 @@ export default async function handler(req, res) {
 
     if (action === 'get_payment_history') {
       const { institution_id } = body;
+      if (!institution_id) return res.status(400).json({ error: 'Institution ID is required' });
+
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
         .eq('institution_id', institution_id)
-        .eq('module', 'subscription')
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return res.status(200).json({ history: data });
+      if (error) {
+        console.error('Error fetching payment history:', error);
+        throw error;
+      }
+      return res.status(200).json({ history: data || [] });
     }
 
     if (action === 'delete_payment_history') {

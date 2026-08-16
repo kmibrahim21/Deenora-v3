@@ -6,6 +6,74 @@ import { Buffer } from 'node:buffer';
 
 const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
 
+async function parseRawMultipart(req: any): Promise<{ fields: Record<string, string>, files: { name: string, filename: string, mime: string, buffer: Buffer }[] }> {
+  const contentType = req.headers['content-type'] || '';
+  const match = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!match) return { fields: {}, files: [] };
+  const boundary = match[1] || match[2];
+
+  let rawBuffer: Buffer;
+  if (Buffer.isBuffer(req.body)) {
+    rawBuffer = req.body;
+  } else if (typeof req.body === 'string') {
+    rawBuffer = Buffer.from(req.body, 'utf-8');
+  } else {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    rawBuffer = Buffer.concat(chunks);
+  }
+
+  if (!rawBuffer || rawBuffer.length === 0) return { fields: {}, files: [] };
+
+  const fields: Record<string, string> = {};
+  const files: { name: string, filename: string, mime: string, buffer: Buffer }[] = [];
+
+  const boundaryBuffer = Buffer.from(`--${boundary}`);
+  let start = 0;
+
+  while (start < rawBuffer.length) {
+    const boundaryIdx = rawBuffer.indexOf(boundaryBuffer, start);
+    if (boundaryIdx === -1) break;
+
+    const nextBoundaryIdx = rawBuffer.indexOf(boundaryBuffer, boundaryIdx + boundaryBuffer.length);
+    if (nextBoundaryIdx === -1) break;
+
+    const partBuffer = rawBuffer.subarray(boundaryIdx + boundaryBuffer.length, nextBoundaryIdx);
+    start = nextBoundaryIdx;
+
+    const headerEnd = partBuffer.indexOf('\r\n\r\n');
+    if (headerEnd === -1) continue;
+
+    const headerStr = partBuffer.subarray(0, headerEnd).toString('utf-8');
+    let bodyBuffer = partBuffer.subarray(headerEnd + 4);
+    if (bodyBuffer.length >= 2 && bodyBuffer[bodyBuffer.length - 2] === 13 && bodyBuffer[bodyBuffer.length - 1] === 10) {
+      bodyBuffer = bodyBuffer.subarray(0, bodyBuffer.length - 2);
+    }
+
+    const dispositionMatch = headerStr.match(/Content-Disposition:[^\r\n]*/i);
+    if (!dispositionMatch) continue;
+
+    const disp = dispositionMatch[0];
+    const nameMatch = disp.match(/name="([^"]+)"/i);
+    const filenameMatch = disp.match(/filename="([^"]+)"/i);
+    const contentTypeMatch = headerStr.match(/Content-Type:\s*([^\r\n]+)/i);
+
+    const fieldName = nameMatch ? nameMatch[1] : '';
+    const filename = filenameMatch ? filenameMatch[1] : '';
+    const mime = contentTypeMatch ? contentTypeMatch[1].trim() : 'application/octet-stream';
+
+    if (filename) {
+      files.push({ name: fieldName, filename, mime, buffer: bodyBuffer });
+    } else if (fieldName) {
+      fields[fieldName] = bodyBuffer.toString('utf-8').trim();
+    }
+  }
+
+  return { fields, files };
+}
+
 const getAwajHeaders = () => {
   const token = (process.env.AWAJ_API_TOKEN || '').trim();
   if (!token) {
@@ -101,6 +169,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         contentType = fileRes.headers.get('content-type') || 'audio/mpeg';
         const ext = body.file_url.split('.').pop()?.split('?')[0] || 'mp3';
         filename = `voice.${ext}`;
+      }
+      // 4. From raw multipart body parser (for Vercel Serverless environment without multer)
+      else if (!fileBuffer && (req.headers['content-type'] || '').includes('multipart/form-data')) {
+        try {
+          const parsed = await parseRawMultipart(req);
+          if (parsed.files && parsed.files.length > 0) {
+            const firstFile = parsed.files[0];
+            fileBuffer = firstFile.buffer;
+            filename = firstFile.filename || 'voice.mp3';
+            contentType = firstFile.mime || 'audio/mpeg';
+          }
+          if (parsed.fields) {
+            for (const k in parsed.fields) {
+              if (!body[k]) body[k] = parsed.fields[k];
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to parse raw multipart body:', e);
+        }
       }
 
       // Check header for x-voice-name if passed

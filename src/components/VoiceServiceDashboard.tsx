@@ -144,21 +144,28 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
     setIsUploading(true);
     try {
-      // Build multipart/form-data for Awaj Digital API upload
-      // Voice is uploaded directly to Awaj Digital and NOT to Supabase Storage!
-      const formData = new FormData();
-      formData.append('name', trimmedName);
-      formData.append('voice_name', trimmedName);
-      formData.append('title', trimmedName);
-      formData.append('audio', uploadFile);
+      // Read audio file as base64 for reliable Vercel serverless execution
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('অডিও ফাইল পড়তে সমস্যা হয়েছে'));
+        reader.readAsDataURL(uploadFile);
+      });
 
       const encodedName = encodeURIComponent(trimmedName);
       const response = await fetch(`/api/voices/upload?name=${encodedName}`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'X-Voice-Name': encodedName
         },
-        body: formData
+        body: JSON.stringify({
+          name: trimmedName,
+          voice_name: trimmedName,
+          title: trimmedName,
+          audio_base64: base64Audio,
+          filename: uploadFile.name
+        })
       });
 
       const resData = await response.json().catch(() => ({}));

@@ -651,6 +651,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   });
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
   const [detailsTab, setDetailsTab] = useState<'institution' | 'api' | 'permissions' | 'subscription' | 'history'>('institution');
+
+  useEffect(() => {
+    if (selectedUser?.id && (detailsTab === 'history' || view === 'details')) {
+      fetchPaymentHistory(selectedUser.id);
+    }
+  }, [selectedUser?.id, detailsTab, view]);
   const [showRefreshPopup, setShowRefreshPopup] = useState(false);
   const [showRechargeModal, setShowRechargeModal] = useState<{show: boolean, institution: any}>({show: false, institution: null});
   const [rechargeAmount, setRechargeAmount] = useState<string>('');
@@ -1495,6 +1501,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     fetchPackages();
     
     setView('details');
+    fetchPaymentHistory(user.id);
     
     // Fetch user stats
     setUserStats({ 
@@ -3875,17 +3882,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                          <History size={32} />
                                       </div>
                                       <h4 className={`text-lg font-black mb-1 ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>No Payments Found</h4>
-                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>This institution has no subscription payment history.</p>
+                                      <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>এই প্রতিষ্ঠানের কোনো লেনদেনের ইতিহাস পাওয়া যায়নি।</p>
                                    </div>
                                  ) : (
                                    <div className="space-y-4">
                                       {paymentHistory.map((tr) => (
                                         <div key={tr.id} className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/50' : 'bg-slate-50 border-slate-100'}`}>
                                            <div className="space-y-2">
-                                              <div className="flex items-center gap-3">
+                                              <div className="flex items-center gap-2 flex-wrap">
                                                  <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${tr.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : tr.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
                                                     {tr.status}
                                                  </span>
+                                                 {tr.module && (
+                                                   <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-blue-100 text-blue-700">
+                                                      {tr.module}
+                                                   </span>
+                                                 )}
                                                  <span className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                                                     {new Date(tr.created_at).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
                                                  </span>
@@ -3895,7 +3907,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                            </div>
                                            <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 shrink-0">
                                               <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                                 +{tr.amount.toLocaleString('bn-BD')} ৳
+                                                 +{(Number(tr.amount || 0)).toLocaleString('bn-BD')} ৳
                                               </p>
                                               <div className="flex items-center gap-2">
                                                 <button 
