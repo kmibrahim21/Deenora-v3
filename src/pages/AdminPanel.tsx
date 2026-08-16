@@ -915,7 +915,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       .select('*, institutions(*)')
       .neq('status', 'pending')
       .gte('created_at', thirtyDaysAgo.toISOString())
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(10000);
       
     if (modules && modules.length > 0) {
       query = query.in('module', modules);
