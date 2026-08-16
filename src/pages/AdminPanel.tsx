@@ -3494,6 +3494,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                        <option value="suspended">Suspended</option>
                                        <option value="trial">Trial Period</option>
                                     </select>
+                                    {editStatus === 'trial' && selectedUser?.created_at && (
+                                      <p className="text-[9px] font-black text-amber-500 mt-2 px-2 uppercase tracking-tighter">
+                                        Trial expires 3 days after creation ({new Date(new Date(selectedUser.created_at).getTime() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString()})
+                                      </p>
+                                    )}
                                  </div>
                                  <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Subscription End</label>

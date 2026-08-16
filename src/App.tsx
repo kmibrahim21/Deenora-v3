@@ -122,6 +122,15 @@ const App: React.FC = () => {
     return config || {};
   }, [madrasah?.config_json]);
 
+  const isTrialExpired = React.useMemo(() => {
+    if (madrasah && !madrasah.is_super_admin && madrasah.status === 'trial' && madrasah.created_at) {
+      const createdDate = new Date(madrasah.created_at);
+      const expiryDate = new Date(createdDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+      return new Date() > expiryDate;
+    }
+    return false;
+  }, [madrasah]);
+
   const triggerRefresh = () => {
     // Instead of total invalidation, we increment dataVersion to trigger targeted effect hooks
     // requestManager.invalidate() is too aggressive and causes "loading storms"
@@ -257,15 +266,19 @@ const App: React.FC = () => {
     </Suspense>
   );
 
-  if (madrasah && !madrasah.is_super_admin && !madrasah.is_active) {
+  if (madrasah && !madrasah.is_super_admin && (!madrasah.is_active || isTrialExpired)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] p-4 text-center">
         <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
           <ShieldAlert className="text-red-500" size={32} />
         </div>
-        <h2 className="text-2xl font-black text-white mb-2">Access Restricted</h2>
+        <h2 className="text-2xl font-black text-white mb-2">
+          {isTrialExpired ? 'Trial Period Expired' : 'Access Restricted'}
+        </h2>
         <p className="text-slate-400 mb-8 max-w-sm">
-          আপনার প্রতিষ্ঠানটির অ্যাক্সেস বন্ধ করা হয়েছে। দয়া করে অ্যাডমিনের সাথে যোগাযোগ করুন।
+          {isTrialExpired 
+            ? 'আপনার ট্রায়াল পিরিয়ড শেষ হয়ে গিয়েছে। সার্ভিসটি নিয়মিত ব্যবহার করতে দয়া করে সাবস্ক্রিপশন সম্পন্ন করুন।'
+            : 'আপনার প্রতিষ্ঠানটির অ্যাক্সেস বন্ধ করা হয়েছে। দয়া করে অ্যাডমিনের সাথে যোগাযোগ করুন।'}
         </p>
         
         <div className="flex flex-col gap-4 w-full max-w-xs mb-8">
