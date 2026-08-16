@@ -1961,109 +1961,109 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       ) : (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
           {view === 'dashboard' && (
-            <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
-              <div className="flex items-center justify-between">
+            <div className="space-y-6 md:space-y-8 animate-in slide-in-from-bottom-5 duration-500 pb-10">
+              <div className="flex items-center justify-between gap-4">
                  <div>
-                    <h1 className={`text-2xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>সিস্টেম ড্যাশবোর্ড</h1>
+                    <h1 className={`text-xl md:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'} font-noto tracking-tight`}>সিস্টেম ড্যাশবোর্ড</h1>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Real-time System Overview</p>
                  </div>
-                 <button onClick={handleRefresh} disabled={isRefreshing} className={`w-12 h-12 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
-                    <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                 <button onClick={handleRefresh} disabled={isRefreshing} className={`w-10 h-10 md:w-12 md:h-12 shrink-0 flex items-center justify-center ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-white text-blue-600 border-slate-200'} rounded-xl md:rounded-2xl active:scale-95 transition-all border shadow-sm disabled:opacity-50`}>
+                    <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
                  </button>
               </div>
 
               {/* Core System-wide Entity Metrics (All At Top) */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
                 {/* Portals count */}
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-blue-500/30 transition-all duration-300`}>
-                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-                     <Building2 size={24} />
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'} p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border flex items-center gap-3 md:gap-4 group hover:border-blue-500/30 transition-all duration-300`}>
+                   <div className={`w-10 h-10 md:w-12 md:h-12 ${madrasah?.theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-500'} rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <Building2 size={20} />
                    </div>
-                   <div>
-                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Portals</p>
-                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalInstitutions.toLocaleString('bn-BD')}</h4>
+                   <div className="min-w-0">
+                     <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 truncate">Portals</p>
+                     <h4 className={`text-lg md:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalInstitutions.toLocaleString('bn-BD')}</h4>
                    </div>
                 </div>
 
                 {/* Active count */}
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-emerald-500/30 transition-all duration-300`}>
-                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-                     <Activity size={24} />
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'} p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border flex items-center gap-3 md:gap-4 group hover:border-emerald-500/30 transition-all duration-300`}>
+                   <div className={`w-10 h-10 md:w-12 md:h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <Activity size={20} />
                    </div>
-                   <div>
-                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Active</p>
-                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.activeInstitutions.toLocaleString('bn-BD')}</h4>
+                   <div className="min-w-0">
+                     <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 truncate">Active</p>
+                     <h4 className={`text-lg md:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.activeInstitutions.toLocaleString('bn-BD')}</h4>
                    </div>
                 </div>
 
                 {/* Total System Students */}
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-blue-500/30 transition-all duration-300`}>
-                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-                     <GraduationCap size={24} />
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'} p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border flex items-center gap-3 md:gap-4 group hover:border-blue-500/30 transition-all duration-300`}>
+                   <div className={`w-10 h-10 md:w-12 md:h-12 ${madrasah?.theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-500'} rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <GraduationCap size={20} />
                    </div>
-                   <div>
-                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Students</p>
-                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalStudents.toLocaleString('bn-BD')}</h4>
+                   <div className="min-w-0">
+                     <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 truncate">Students</p>
+                     <h4 className={`text-lg md:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalStudents.toLocaleString('bn-BD')}</h4>
                    </div>
                 </div>
 
                 {/* Total Classrooms */}
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 group hover:border-orange-500/30 transition-all duration-300`}>
-                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-                     <Layers size={24} />
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'} p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border flex items-center gap-3 md:gap-4 group hover:border-orange-500/30 transition-all duration-300`}>
+                   <div className={`w-10 h-10 md:w-12 md:h-12 ${madrasah?.theme === 'dark' ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-500'} rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <Layers size={20} />
                    </div>
-                   <div>
-                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Classrooms</p>
-                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalClasses.toLocaleString('bn-BD')}</h4>
+                   <div className="min-w-0">
+                     <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 truncate">Classrooms</p>
+                     <h4 className={`text-lg md:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalClasses.toLocaleString('bn-BD')}</h4>
                    </div>
                 </div>
 
                 {/* Registered Teachers */}
-                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border flex items-center gap-4 col-span-2 md:col-span-1 group hover:border-emerald-500/30 transition-all duration-300`}>
-                   <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-                     <BookOpen size={24} />
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'} p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border flex items-center gap-3 md:gap-4 col-span-2 md:col-span-1 group hover:border-emerald-500/30 transition-all duration-300`}>
+                   <div className={`w-10 h-10 md:w-12 md:h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-500'} rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                     <BookOpen size={20} />
                    </div>
-                   <div>
-                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Registered Teachers</p>
-                     <h4 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalTeachers.toLocaleString('bn-BD')}</h4>
+                   <div className="min-w-0">
+                     <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 truncate">Teachers</p>
+                     <h4 className={`text-lg md:text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{globalStats.totalTeachers.toLocaleString('bn-BD')}</h4>
                    </div>
                 </div>
               </div>
 
-              {/* Bento Grid layout for Revenu and Approvals */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
+              {/* Bento Grid layout for Revenue and Approvals */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 {/* Revenue Overview - Span 8 */}
                 {isSuperAdmin && (
-                  <div className={`lg:col-span-8 ${madrasah?.theme === 'dark' ? 'bg-gradient-to-br from-slate-900 to-slate-800 border-slate-800' : 'bg-gradient-to-br from-blue-900 to-[#1E3A8A] border-blue-800 shadow-xl'} p-8 rounded-[3rem] border flex flex-col justify-between overflow-hidden relative group`}>
+                  <div className={`lg:col-span-8 ${madrasah?.theme === 'dark' ? 'bg-gradient-to-br from-slate-900 to-slate-800 border-slate-800' : 'bg-gradient-to-br from-blue-900 to-[#1E3A8A] border-blue-800 shadow-xl'} p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] border flex flex-col justify-between overflow-hidden relative group`}>
                     {/* Decorative circle */}
                     <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white opacity-5 group-hover:scale-110 transition-transform duration-700 pointer-events-none"></div>
                     
-                    <div className="mb-8">
-                      <p className={`text-xs font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-blue-200'}`}>Total System Revenue (Net)</p>
-                      <h2 className={`text-4xl md:text-5xl font-black mt-2 text-white`}>৳ {globalStats.totalRevenue?.toLocaleString('bn-BD') || 0}</h2>
+                    <div className="mb-8 relative z-10">
+                      <p className={`text-[10px] md:text-xs font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-blue-200'}`}>Total System Revenue (Net)</p>
+                      <h2 className={`text-3xl md:text-5xl font-black mt-2 text-white tabular-nums`}>৳ {globalStats.totalRevenue?.toLocaleString('bn-BD') || 0}</h2>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10 w-full">
-                       <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 relative z-10 w-full">
+                       <div className={`p-4 md:p-5 rounded-2xl md:rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
                           <div className="flex items-center gap-2 mb-2">
-                            <MessageSquare size={16} className={madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-300'} />
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">SMS Profit</p>
+                            <MessageSquare size={14} className={madrasah?.theme === 'dark' ? 'text-purple-400' : 'text-purple-300'} />
+                            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-slate-300">SMS Profit</p>
                           </div>
-                          <h4 className="text-2xl font-bold text-white">৳ {globalStats.smsRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                          <h4 className="text-xl md:text-2xl font-bold text-white tabular-nums">৳ {globalStats.smsRevenue?.toLocaleString('bn-BD') || 0}</h4>
                        </div>
-                       <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                       <div className={`p-4 md:p-5 rounded-2xl md:rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
                           <div className="flex items-center gap-2 mb-2">
-                            <Mic size={16} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-300'} />
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Voice Profit</p>
+                            <Mic size={14} className={madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-300'} />
+                            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-slate-300">Voice Profit</p>
                           </div>
-                          <h4 className="text-2xl font-bold text-white">৳ {globalStats.voiceRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                          <h4 className="text-xl md:text-2xl font-bold text-white tabular-nums">৳ {globalStats.voiceRevenue?.toLocaleString('bn-BD') || 0}</h4>
                        </div>
-                       <div className={`p-5 rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
+                       <div className={`p-4 md:p-5 rounded-2xl md:rounded-3xl ${madrasah?.theme === 'dark' ? 'bg-slate-900/50' : 'bg-white/10 backdrop-blur-md'} border ${madrasah?.theme === 'dark' ? 'border-slate-700' : 'border-white/10'}`}>
                           <div className="flex items-center gap-2 mb-2">
-                            <Banknote size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-300'} />
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">Sub. Revenue</p>
+                            <Banknote size={14} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-300'} />
+                            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-slate-300">Sub. Revenue</p>
                           </div>
-                          <h4 className="text-2xl font-bold text-white">৳ {globalStats.subscriptionRevenue?.toLocaleString('bn-BD') || 0}</h4>
+                          <h4 className="text-xl md:text-2xl font-bold text-white tabular-nums">৳ {globalStats.subscriptionRevenue?.toLocaleString('bn-BD') || 0}</h4>
                        </div>
                     </div>
                   </div>
@@ -2071,19 +2071,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
                 {/* Approvals - Span 4 */}
                 <div className={`${isSuperAdmin ? 'lg:col-span-4' : 'lg:col-span-12'} flex flex-col justify-stretch`}>
-                  <div onClick={() => setView('approvals')} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-yellow-900' : 'bg-white border-slate-100 shadow-premium hover:border-yellow-200 hover:shadow-xl'} p-8 rounded-[3rem] border flex flex-col justify-between cursor-pointer transition-all active:scale-95 group h-full`}>
+                  <div onClick={() => setView('approvals')} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none hover:border-yellow-900' : 'bg-white border-slate-100 shadow-premium hover:border-yellow-200 hover:shadow-xl'} p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border flex flex-col justify-between cursor-pointer transition-all active:scale-95 group h-full`}>
                       <div className="flex items-start justify-between w-full">
                         <div>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Requests</p>
-                          <h4 className={`text-4xl md:text-5xl font-black ${globalStats.pendingApprovals > 0 ? 'text-yellow-500' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900')}`}>{globalStats.pendingApprovals}</h4>
+                          <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Requests</p>
+                          <h4 className={`text-3xl md:text-5xl font-black ${globalStats.pendingApprovals > 0 ? 'text-yellow-500' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900')}`}>{globalStats.pendingApprovals}</h4>
                         </div>
-                        <div className={`w-16 h-16 ${madrasah?.theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-500'} rounded-[1.5rem] flex items-center justify-center shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-all`}>
-                          <CreditCard size={28} />
+                        <div className={`w-12 h-12 md:w-16 md:h-16 ${madrasah?.theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-50 text-yellow-500'} rounded-[1rem] md:rounded-[1.5rem] flex items-center justify-center shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-all`}>
+                          <CreditCard size={24} className="md:size-7" />
                         </div>
                       </div>
                       
                       <div className="mt-6 pt-4 border-t border-dashed border-slate-200/50 w-full flex items-center justify-between text-slate-400 group-hover:text-amber-500 transition-colors">
-                        <span className="text-[10px] font-bold uppercase tracking-wider">পেন্ডিং পেমেন্ট আ্যপ্রুভ করুন</span>
+                        <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider">পেন্ডিং পেমেন্ট আ্যপ্রুভ করুন</span>
                         <ChevronRight size={16} className="transform group-hover:translate-x-1 transition-transform" />
                       </div>
                   </div>
@@ -2091,78 +2091,86 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               </div>
 
               {/* Detailed Filter Section */}
-              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-8 rounded-[3rem] border space-y-6 mb-4`}>
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="space-y-1 w-full md:w-auto text-center md:text-left">
-                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>বিস্তারিত যোগাযোগ রিপোর্ট</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center md:justify-start gap-1">
-                      {detailedReport.loading && <RefreshCw size={12} className="animate-spin text-blue-500" />}
-                      <span>Custom Communications Report</span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 w-full md:w-auto">
-                    <select
-                      value={detailedFilterMode}
-                      onChange={(e) => setDetailedFilterMode(e.target.value as 'monthly' | 'yearly')}
-                      className={`text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
-                    >
-                      <option value="monthly">মাসিক (Monthly)</option>
-                      <option value="yearly">বাৎসরিক (Yearly)</option>
-                    </select>
-
-                    {detailedFilterMode === 'monthly' ? (
-                      <input 
-                        type="month"
-                        value={detailedMonth}
-                        onChange={(e) => setDetailedMonth(e.target.value)}
-                        className={`text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
-                      />
-                    ) : (
+              {!isManager && (
+                <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border space-y-6`}>
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="space-y-1 w-full md:w-auto text-center md:text-left">
+                      <h3 className={`text-lg md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>মাসিক আয় রিপোর্ট</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center md:justify-start gap-1">
+                        {detailedReport.loading && <RefreshCw size={12} className="animate-spin text-blue-500" />}
+                        <span>Monthly Revenue & Usage Report</span>
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
                       <select
-                        value={detailedYear}
-                        onChange={(e) => setDetailedYear(e.target.value)}
-                        className={`text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                        value={detailedFilterMode}
+                        onChange={(e) => setDetailedFilterMode(e.target.value as 'monthly' | 'yearly')}
+                        className={`w-full sm:w-auto text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
                       >
-                        {Array.from({ length: 5 }).map((_, i) => {
-                          const year = new Date().getFullYear() - i;
-                          return <option key={year} value={year}>{year}</option>;
-                        })}
+                        <option value="monthly">মাসিক (Monthly)</option>
+                        <option value="yearly">বাৎসরিক (Yearly)</option>
                       </select>
-                    )}
+                      {detailedFilterMode === 'monthly' ? (
+                        <input
+                          type="month"
+                          value={detailedMonth}
+                          onChange={(e) => setDetailedMonth(e.target.value)}
+                          className={`w-full sm:w-auto text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                        />
+                      ) : (
+                        <select
+                          value={detailedYear}
+                          onChange={(e) => setDetailedYear(e.target.value)}
+                          className={`w-full sm:w-auto text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                        >
+                          {Array.from({ length: 5 }).map((_, i) => {
+                            const year = new Date().getFullYear() - i;
+                            return <option key={year} value={year}>{year}</option>;
+                          })}
+                        </select>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center gap-2">
-                       <MessageSquare size={16} className="text-blue-500" />
-                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">SMS রিচার্জ</span>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                    <div className={`p-4 md:p-5 rounded-2xl md:rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-center gap-2">
+                        <CreditCard size={14} className="text-amber-500" />
+                        <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-wider">সাবস্ক্রিপশন ফি</span>
+                      </div>
+                      <p className={`text-base md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'} tabular-nums`}>৳ {(detailedReport.subRechargeTotal || 0).toLocaleString('bn-BD')}</p>
                     </div>
-                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>৳ {detailedReport.smsRechargeTotal.toLocaleString('bn-BD')}</p>
-                  </div>
-                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center gap-2">
-                       <Mic size={16} className="text-emerald-500" />
-                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">VOICE রিচার্জ</span>
+                    <div className={`p-4 md:p-5 rounded-2xl md:rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-center gap-2">
+                        <MessageSquare size={14} className="text-blue-500" />
+                        <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-wider">SMS রিচার্জ</span>
+                      </div>
+                      <p className={`text-base md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'} tabular-nums`}>৳ {detailedReport.smsRechargeTotal.toLocaleString('bn-BD')}</p>
                     </div>
-                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>৳ {detailedReport.voiceRechargeTotal.toLocaleString('bn-BD')}</p>
-                  </div>
-                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center gap-2">
-                       <Activity size={16} className="text-purple-500" />
-                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">মোট পাঠানো SMS</span>
+                    <div className={`p-4 md:p-5 rounded-2xl md:rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-center gap-2">
+                        <Mic size={14} className="text-emerald-500" />
+                        <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-wider">VOICE রিচার্জ</span>
+                      </div>
+                      <p className={`text-base md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'} tabular-nums`}>৳ {detailedReport.voiceRechargeTotal.toLocaleString('bn-BD')}</p>
                     </div>
-                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{detailedReport.smsSentNum.toLocaleString('bn-BD')}</p>
-                  </div>
-                  <div className={`p-5 rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center gap-2">
-                       <Megaphone size={16} className="text-orange-500" />
-                       <span className="text-[10px] font-bold text-slate-400 tracking-wider">মোট ভয়েস কল</span>
+                    <div className={`p-4 md:p-5 rounded-2xl md:rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-center gap-2">
+                        <Activity size={14} className="text-purple-500" />
+                        <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-wider">মোট SMS</span>
+                      </div>
+                      <p className={`text-base md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'} tabular-nums`}>{detailedReport.smsSentNum.toLocaleString('bn-BD')}</p>
                     </div>
-                    <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{detailedReport.voiceCallsNum.toLocaleString('bn-BD')}</p>
+                    <div className={`p-4 md:p-5 rounded-2xl md:rounded-[2rem] border flex flex-col gap-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'} col-span-2 md:col-span-1`}>
+                      <div className="flex items-center gap-2">
+                        <Megaphone size={14} className="text-orange-500" />
+                        <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-wider">ভয়েস কল</span>
+                      </div>
+                      <p className={`text-base md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'} tabular-nums`}>{detailedReport.voiceCallsNum.toLocaleString('bn-BD')}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Subscription tracking and SMS Inventory Row */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

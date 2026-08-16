@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, View, SubscriptionPackage, SmsProviderConfig } from 'types';
@@ -559,6 +559,32 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mx-1">
+        <button 
+          onClick={() => setView('admin-panel')} 
+          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+        >
+          <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Building2 size={24} />
+          </div>
+          <div>
+            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'প্রতিষ্ঠান তালিকা' : 'Institutions List'}</h5>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Schools</p>
+          </div>
+        </button>
+
+        <button 
+          onClick={() => setView('admin-dashboard')} 
+          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+        >
+          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <BarChart3 size={24} />
+          </div>
+          <div>
+            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ড্যাশবোর্ড ও রিপোর্ট' : 'Dashboard & Reports'}</h5>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Analytics Hub</p>
+          </div>
+        </button>
+
         <button 
           onClick={() => setView('admin-tutorials')} 
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}

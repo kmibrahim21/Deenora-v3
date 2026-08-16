@@ -122,35 +122,79 @@ export default async function handler(req, res) {
 
       const startISO = startDate.toISOString();
       const endISO = endDate.toISOString();
+      const monthStr = filterMode === 'monthly' ? month : null; // e.g. "2024-08"
 
+      // 1. Fetch SMS/Voice recharges and usage logs based on creation date
       const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
-        supabase.from('transactions').select('amount, description, module').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(10000),
-        supabase.from('sms_logs').select('*', { count: 'exact', head: true }).gte('created_at', startISO).lte('created_at', endISO),
-        supabase.from('voice_broadcasts').select('total_numbers').gte('created_at', startISO).lte('created_at', endISO).limit(10000)
+        supabase.from('transactions')
+          .select('amount, description, module, metadata, created_at')
+          .eq('status', 'approved')
+          .gte('created_at', startISO)
+          .lte('created_at', endISO)
+          .limit(10000),
+        supabase.from('sms_logs')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', startISO)
+          .lte('created_at', endISO),
+        supabase.from('voice_broadcasts')
+          .select('total_numbers')
+          .gte('created_at', startISO)
+          .lte('created_at', endISO)
+          .limit(10000)
       ]);
-      
+
+      // 2. Fetch Subscription payments specifically if they target this month (even if paid earlier/later)
+      let subRechargeTotal = 0;
+      if (monthStr) {
+        // Fetch all approved subscription transactions
+        // We fetch ALL to catch multi-month payments made in the past that cover this month
+        const { data: allSubTx } = await supabase.from('transactions')
+          .select('amount, metadata, created_at, module, description')
+          .eq('status', 'approved')
+          .eq('module', 'subscription');
+
+        (allSubTx || []).forEach(t => {
+          const months = t.metadata?.months;
+          if (Array.isArray(months) && months.length > 0) {
+            if (months.includes(monthStr)) {
+              // Pro-rata: Divide total amount by number of months it covers
+              subRechargeTotal += (Number(t.amount) || 0) / months.length;
+            }
+          } else {
+            // Fallback for legacy: use created_at if monthStr matches transaction's month
+            const tDate = new Date(t.created_at);
+            const tMonthStr = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+            if (tMonthStr === monthStr) {
+              subRechargeTotal += (Number(t.amount) || 0);
+            }
+          }
+        });
+      } else {
+        // Yearly mode: just sum subscriptions created in that year
+        const { data: yearlySubTx } = await supabase.from('transactions')
+          .select('amount')
+          .eq('status', 'approved')
+          .eq('module', 'subscription')
+          .gte('created_at', startISO)
+          .lte('created_at', endISO);
+        subRechargeTotal = (yearlySubTx || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      }
+
       const transactions = txRes.data || [];
       
-      const subTransactions = transactions.filter(t => 
-        t.module === 'subscription' || 
-        (t.description?.toLowerCase().includes('subscription')) || 
-        (t.description?.toLowerCase().includes('package')) ||
-        (t.description?.toLowerCase().includes('renew')) ||
-        (t.description?.toLowerCase().includes('প্যাকেজ')) ||
-        (t.description?.toLowerCase().includes('সাবস্ক্রিপশন'))
-      );
-      const subRechargeTotal = subTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-
       const smsTransactions = transactions.filter(t => {
-        const isSmsModule = t.module === 'sms' || !t.module;
-        const desc = (t.description || '').toLowerCase();
-        const isVoice = desc.includes('voice');
-        const isSub = desc.includes('subscription') || desc.includes('package') || desc.includes('renew') || desc.includes('প্যাকেজ') || desc.includes('সাবস্ক্রিপশন');
-        return isSmsModule && !isVoice && !isSub;
+        // SMS transactions are those explicitly marked as sms, OR recharges without a module that aren't subscriptions/voice
+        const isSmsModule = t.module === 'sms';
+        const isLegacySms = !t.module && !(t.description || '').toLowerCase().includes('voice') && !(t.description || '').toLowerCase().includes('subscription');
+        return isSmsModule || isLegacySms;
       });
       const smsRechargeTotal = smsTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
 
-      const voiceTransactions = transactions.filter(t => t.module === 'voice' || (t.module === 'sms' || !t.module ? (t.description || '').toLowerCase().includes('voice') : false));
+      const voiceTransactions = transactions.filter(t => {
+        const isVoiceModule = t.module === 'voice';
+        const isLegacyVoice = !t.module && (t.description || '').toLowerCase().includes('voice');
+        return isVoiceModule || isLegacyVoice;
+      });
       const voiceRechargeTotal = voiceTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
 
       const smsSentNum = smsLogsRes.count || 0;
