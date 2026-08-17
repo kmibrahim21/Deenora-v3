@@ -1109,6 +1109,75 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     setShowDeleteSubjectConfirm(true);
   };
 
+  const handleCopySubjects = async () => {
+    if (!selectedExam || !madrasah) return;
+    setIsSaving(true);
+
+    try {
+      // Find previous exams for the same class
+      const activeYearId = madrasah?.config_json?.active_academic_year_id;
+      let query = supabase.from('befaq_exams')
+        .select('id, exam_name')
+        .eq('institution_id', madrasah.id)
+        .eq('marhala_id', selectedExam.marhala_id)
+        .neq('id', selectedExam.id);
+
+      if (activeYearId) {
+        query = query.eq('academic_year_id', activeYearId);
+      }
+
+      const { data: prevExams, error: examsError } = await query.order('created_at', { ascending: false });
+
+      if (examsError) throw examsError;
+      if (!prevExams || prevExams.length === 0) {
+        alert(lang === 'bn' ? 'আগের কোনো পরীক্ষা পাওয়া যায়নি' : 'No previous exams found for this marhala');
+        setIsSaving(false);
+        return;
+      }
+
+      const lastExamId = prevExams[0].id;
+
+      const { data: prevSubjects, error: subjectsError } = await supabase
+        .from('befaq_subjects')
+        .select('*')
+        .eq('exam_id', lastExamId)
+        .order('sort_order', { ascending: true });
+
+      if (subjectsError) throw subjectsError;
+      if (!prevSubjects || prevSubjects.length === 0) {
+        alert(lang === 'bn' ? 'আগের পরীক্ষায় কোনো কিতাব পাওয়া যায়নি' : 'No subjects found in the previous exam');
+        setIsSaving(false);
+        return;
+      }
+
+      const newSubjects = prevSubjects.map(s => ({
+        exam_id: selectedExam.id,
+        subject_name: s.subject_name,
+        total_marks: s.total_marks,
+        passing_marks: s.passing_marks,
+        sort_order: s.sort_order || 0
+      }));
+
+      const { error: insertError } = await supabase
+        .from('befaq_subjects')
+        .insert(newSubjects);
+
+      if (insertError) throw insertError;
+
+      fetchSubjects(selectedExam.id);
+      
+      setRoutineSuccessTitle(lang === 'bn' ? 'সফল হয়েছে' : 'Success');
+      setRoutineSuccessMessage(lang === 'bn' ? 'আগের পরীক্ষা থেকে বিষয়গুলো কপি করা হয়েছে।' : 'Subjects have been copied from the previous exam.');
+      setRoutineModalMode('success');
+      setShowRoutineSuccessModal(true);
+    } catch (err: any) {
+      console.error('Error copying subjects:', err);
+      alert('Failed to copy subjects: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const confirmDeleteSubject = async () => {
     if (!subjectToDelete) return;
     setIsSaving(true);
@@ -2527,9 +2596,19 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {activeTab === 'exams' && view === 'subjects' && (
         <div className="space-y-4">
-           <button onClick={() => setShowAddSubject(true)} className={`w-full py-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} rounded-[2.2rem] text-emerald-600 font-black flex items-center justify-center gap-3 shadow-bubble border active:scale-95 transition-all`}>
-              <Plus size={24} strokeWidth={3} /> কিতাব যোগ করুন
-           </button>
+           <div className="flex gap-3">
+              <button onClick={() => setShowAddSubject(true)} className={`flex-1 py-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} rounded-[2.2rem] text-emerald-600 font-black flex items-center justify-center gap-3 shadow-bubble border active:scale-95 transition-all`}>
+                 <Plus size={24} strokeWidth={3} /> {lang === 'bn' ? 'কিতাব যোগ করুন' : 'Add Book'}
+              </button>
+              <button 
+                onClick={handleCopySubjects} 
+                disabled={isSaving}
+                className={`px-8 py-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} rounded-[2.2rem] text-emerald-600 font-black flex items-center justify-center gap-3 shadow-bubble border active:scale-95 transition-all disabled:opacity-50`}
+                title={lang === 'bn' ? 'আগের পরীক্ষা থেকে কপি করুন' : 'Copy from previous exam'}
+              >
+                 <RefreshCw size={24} strokeWidth={3} className={isSaving ? 'animate-spin' : ''} /> {lang === 'bn' ? 'কপি' : 'Copy'}
+              </button>
+           </div>
            <div className="space-y-3">
               {subjects.map(s => (
                 <div key={s.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
