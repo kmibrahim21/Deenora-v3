@@ -1,5 +1,5 @@
 import { supabase } from 'lib/supabase';
-import { Student } from 'types';
+import { Student, SystemSettings, SmsProviderConfig } from 'types';
 import { getSmsLengthInfo } from 'utils/smsUtils';
 import { ShortcodeService } from './ShortcodeService';
 
@@ -23,7 +23,8 @@ export const SMSService = {
         .eq('id', '00000000-0000-0000-0000-000000000001')
         .maybeSingle();
       
-      const defaults = { 
+      const defaults: SystemSettings = {
+        id: '00000000-0000-0000-0000-000000000001',
         reve_api_key: '1762419e515c6f28', 
         reve_secret_key: '326edcba', 
         bkash_number: '০১৭৬৬-XXXXXX', 
@@ -38,18 +39,18 @@ export const SMSService = {
         sms_provider_config: {
           reve: { masking_enabled: true, non_masking_enabled: true },
           automas: { masking_enabled: false, non_masking_enabled: false },
-          primary: { masking: 'reve', non_masking: 'reve' }
+          primary: { masking: 'reve', non_masking: 'reve' },
+          masking_rate: 0.55,
+          non_masking_rate: 0.35
         },
         sms_rate: 0.50,
         voice_rate: 1.00,
-        manager_permissions: {} as any,
-        global_update_active: false,
-        global_update_message: '',
-        global_update_version: 0
+        manager_permissions: {} as any
       };
 
       if (!data) return defaults;
       return {
+        id: data.id || defaults.id,
         reve_api_key: (data.reve_api_key || defaults.reve_api_key).trim(),
         reve_secret_key: (data.reve_secret_key || defaults.reve_secret_key).trim(),
         reve_caller_id: (data.reve_caller_id || defaults.reve_caller_id).trim(),
@@ -58,7 +59,7 @@ export const SMSService = {
         automas_api_key: (data.automas_api_key || defaults.automas_api_key).trim(),
         automas_masking_sender_id: (data.automas_masking_sender_id || defaults.automas_masking_sender_id).trim(),
         automas_non_masking_sender_id: (data.automas_non_masking_sender_id || defaults.automas_non_masking_sender_id).trim(),
-        sms_provider_config: data.sms_provider_config || defaults.sms_provider_config,
+        sms_provider_config: (data.sms_provider_config || defaults.sms_provider_config) as SmsProviderConfig,
         bkash_number: data.bkash_number || defaults.bkash_number,
         nagad_number: data.nagad_number || defaults.nagad_number,
         support_number: data.support_number || defaults.support_number,
@@ -68,9 +69,10 @@ export const SMSService = {
         global_update_active: data.global_update_active || false,
         global_update_message: data.global_update_message || '',
         global_update_version: data.global_update_version || 0
-      };
+      } as SystemSettings;
     } catch (e) {
       return { 
+        id: '00000000-0000-0000-0000-000000000001',
         reve_api_key: '1762419e515c6f28', 
         reve_secret_key: '326edcba', 
         bkash_number: '০১৭৬৬-XXXXXX', 
@@ -85,7 +87,9 @@ export const SMSService = {
         sms_provider_config: {
           reve: { masking_enabled: true, non_masking_enabled: true },
           automas: { masking_enabled: false, non_masking_enabled: false },
-          primary: { masking: 'reve', non_masking: 'reve' }
+          primary: { masking: 'reve', non_masking: 'reve' } as const,
+          masking_rate: 0.55,
+          non_masking_rate: 0.35
         },
         sms_rate: 0.50,
         voice_rate: 1.00,
@@ -93,7 +97,7 @@ export const SMSService = {
         global_update_active: false,
         global_update_message: '',
         global_update_version: 0
-      };
+      } as SystemSettings;
     }
   },
 

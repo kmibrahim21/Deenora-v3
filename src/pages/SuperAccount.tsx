@@ -210,7 +210,9 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
       sms_provider_config: settings.sms_provider_config || {
         reve: { masking_enabled: true, non_masking_enabled: true },
         automas: { masking_enabled: false, non_masking_enabled: false },
-        primary: { masking: 'reve', non_masking: 'reve' }
+        primary: { masking: 'reve', non_masking: 'reve' },
+        masking_rate: 0.55,
+        non_masking_rate: 0.35
       },
       bkash_number: settings.bkash_number || '',
       nagad_number: settings.nagad_number || '',
@@ -1345,6 +1347,53 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     </div>
                  </div>
 
+                 {/* Rates */}
+                 <div className="space-y-3">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Service Rates (Per Unit)</h4>
+                    <div className={`p-4 rounded-[2rem] border grid grid-cols-1 md:grid-cols-2 gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Non-Masking Rate (TK)</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} 
+                            value={globalSettings.sms_provider_config?.non_masking_rate || 0} 
+                            onChange={(e) => setGlobalSettings({
+                               ...globalSettings,
+                               sms_provider_config: {
+                                  ...globalSettings.sms_provider_config,
+                                  non_masking_rate: parseFloat(e.target.value)
+                               }
+                            })} 
+                          />
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Masking Rate (TK)</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} 
+                            value={globalSettings.sms_provider_config?.masking_rate || 0} 
+                            onChange={(e) => setGlobalSettings({
+                               ...globalSettings,
+                               sms_provider_config: {
+                                  ...globalSettings.sms_provider_config,
+                                  masking_rate: parseFloat(e.target.value)
+                               }
+                            })} 
+                          />
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Bulk SMS Rate (TK)</label>
+                          <input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.sms_rate} onChange={(e) => setGlobalSettings({...globalSettings, sms_rate: parseFloat(e.target.value)})} />
+                       </div>
+                       <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase px-1">Voice Call Rate (TK)</label>
+                          <input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.voice_rate} onChange={(e) => setGlobalSettings({...globalSettings, voice_rate: parseFloat(e.target.value)})} />
+                       </div>
+                    </div>
+                 </div>
+
                  {/* Default SMS Type & Primary Provider Configuration */}
                  <div className="space-y-3">
                     <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">Global Routing Rules</h4>
@@ -1400,15 +1449,6 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                              <option value="automas">Automas</option>
                           </select>
                        </div>
-                    </div>
-                 </div>
-
-                 {/* Rates */}
-                 <div className="space-y-3">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Service Rates (Per Unit)</h4>
-                    <div className={`p-4 rounded-[2rem] border grid grid-cols-2 gap-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Bulk SMS Rate (TK)</label><input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.sms_rate} onChange={(e) => setGlobalSettings({...globalSettings, sms_rate: parseFloat(e.target.value)})} /></div>
-                       <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase px-1">Voice Call Rate (TK)</label><input type="number" step="0.01" className={`w-full h-11 rounded-xl px-4 font-bold text-[11px] outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-[#2563EB]'}`} value={globalSettings.voice_rate} onChange={(e) => setGlobalSettings({...globalSettings, voice_rate: parseFloat(e.target.value)})} /></div>
                     </div>
                  </div>
 

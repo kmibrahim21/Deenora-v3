@@ -11,7 +11,8 @@ import { toPng } from 'html-to-image';
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
-import { Institution, Language, Transaction, AdminSMSStock } from 'types';
+import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Profile } from 'types';
+import { SMSService } from '../services/SMSService';
 import { generateSystemPaymentReportPDF, generateSubscriptionMatrixPDF } from '../utils/pdfGenerator';
 
 interface InstitutionWithStats extends Institution {
@@ -100,7 +101,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const isSuperAdmin = profile?.role === 'super_admin';
   const isManager = profile?.role === 'manager';
 
-  const [managerPermissions, setManagerPermissions] = useState<Record<string, boolean>>({});
+  const [managerPermissions, setManagerPermissions] = useState<Profile['permissions']>({});
 
   const canWrite = (moduleKey: string) => {
     if (isSuperAdmin) return true;
@@ -169,6 +170,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
   
   const [smsEnabledMap, setSmsEnabledMap] = useState<{ [key: string]: boolean }>({});
+  const [smsRatesTypeMap, setSmsRatesTypeMap] = useState<{ [key: string]: 'masking' | 'non_masking' }>({});
+  const [systemGlobalSettings, setSystemGlobalSettings] = useState<SystemSettings | null>(null);
 
   const [rejectConfirm, setRejectConfirm] = useState<Transaction | null>(null);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -1200,9 +1203,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         }
       }
       if (view === 'approvals') {
-        const [pTrans, tHist] = await Promise.all([
+        const [pTrans, tHist, gSettings] = await Promise.all([
           fetchPendingTransactions(),
-          fetchTransactionHistory() // Fetch all requests from last 30 days
+          fetchTransactionHistory(), // Fetch all requests from last 30 days
+          SMSService.getGlobalSettings()
         ]);
         if (isMounted) {
           // Update Cache
@@ -1212,16 +1216,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
           setPendingTrans(pTrans);
           setTransactionHistory(tHist);
+          setSystemGlobalSettings(gSettings);
+
           const newSmsMap = { ...smsEnabledMap };
+          const newSmsTypeMap = { ...smsRatesTypeMap };
           const newSmsToCredit = { ...smsToCredit };
+          
           pTrans.forEach(tr => {
             if (newSmsMap[tr.id] === undefined) newSmsMap[tr.id] = true;
+            
+            // Try to detect if it's masking based on tr.metadata or just default
+            const isMasking = tr.metadata?.sms_type === 'masking';
+            if (newSmsTypeMap[tr.id] === undefined) newSmsTypeMap[tr.id] = isMasking ? 'masking' : 'non_masking';
+
             if (!newSmsToCredit[tr.id] && tr.module === 'sms') {
-              const rate = Number(tr.institutions?.sms_rate || 0.50);
-              newSmsToCredit[tr.id] = String(Math.ceil(tr.amount / rate));
+              const currentType = newSmsTypeMap[tr.id];
+              let rate = Number(tr.institutions?.sms_rate || 0.35);
+              
+              if (currentType === 'masking' && gSettings.sms_provider_config?.masking_rate) {
+                rate = Number(gSettings.sms_provider_config.masking_rate);
+              } else if (currentType === 'non_masking' && gSettings.sms_provider_config?.non_masking_rate) {
+                rate = Number(gSettings.sms_provider_config.non_masking_rate);
+              }
+
+              newSmsToCredit[tr.id] = String(Math.ceil(tr.amount / (rate || 0.35)));
             }
           });
           setSmsEnabledMap(newSmsMap);
+          setSmsRatesTypeMap(newSmsTypeMap);
           setSmsToCredit(newSmsToCredit);
         }
       }
@@ -3200,21 +3222,58 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                 disabled={approvingIds.has(tr.id)}
                                 className={`w-full h-12 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl font-black text-sm text-center outline-none focus:border-blue-500/30 disabled:opacity-50 transition-all`} 
                                 value={correctionAmounts[tr.id] || ''} 
-                                onChange={(e) => setCorrectionAmounts({...correctionAmounts, [tr.id]: e.target.value})} 
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setCorrectionAmounts({...correctionAmounts, [tr.id]: val});
+                                  if (paymentTab === 'sms' && tr.module === 'sms') {
+                                    const currentType = smsRatesTypeMap[tr.id] || 'non_masking';
+                                    const rate = currentType === 'masking' ? (systemGlobalSettings?.sms_provider_config?.masking_rate || 0.55) : (systemGlobalSettings?.sms_provider_config?.non_masking_rate || tr.institutions?.sms_rate || 0.35);
+                                    setSmsToCredit({...smsToCredit, [tr.id]: String(Math.ceil((Number(val) || tr.amount) / Number(rate)))});
+                                  }
+                                }} 
                                 placeholder={`Amount Correction (Original: ${tr.amount})`} 
                               />
                            </div>
                            {paymentTab === 'sms' && !tr.description?.toLowerCase().includes('subscription') && tr.module !== 'subscription' && (
-                             <div className="space-y-1">
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-1">SMS সংখ্যা</p>
-                                <input 
-                                  type="number" 
-                                  disabled={approvingIds.has(tr.id)}
-                                  className={`w-full h-12 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl font-black text-sm text-center outline-none focus:border-blue-500/30 disabled:opacity-50 transition-all`} 
-                                  value={smsToCredit[tr.id] || ''} 
-                                  onChange={(e) => setSmsToCredit({...smsToCredit, [tr.id]: e.target.value})} 
-                                  placeholder="SMS Quantity" 
-                                />
+                             <div className="flex flex-col gap-2">
+                               <div className="space-y-1">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-1">রেট ধরণ</p>
+                                  <div className={`flex p-1 rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
+                                     <button 
+                                       onClick={() => {
+                                         const newType = 'non_masking';
+                                         const rate = systemGlobalSettings?.sms_provider_config?.non_masking_rate || tr.institutions?.sms_rate || 0.35;
+                                         setSmsRatesTypeMap({...smsRatesTypeMap, [tr.id]: newType});
+                                         setSmsToCredit({...smsToCredit, [tr.id]: String(Math.ceil((Number(correctionAmounts[tr.id]) || tr.amount) / rate))});
+                                       }}
+                                       className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${smsRatesTypeMap[tr.id] === 'non_masking' ? (madrasah?.theme === 'dark' ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white shadow-md') : 'text-slate-400'}`}
+                                     >
+                                       Non-Masking
+                                     </button>
+                                     <button 
+                                       onClick={() => {
+                                         const newType = 'masking';
+                                         const rate = systemGlobalSettings?.sms_provider_config?.masking_rate || 0.55;
+                                         setSmsRatesTypeMap({...smsRatesTypeMap, [tr.id]: newType});
+                                         setSmsToCredit({...smsToCredit, [tr.id]: String(Math.ceil((Number(correctionAmounts[tr.id]) || tr.amount) / rate))});
+                                       }}
+                                       className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${smsRatesTypeMap[tr.id] === 'masking' ? (madrasah?.theme === 'dark' ? 'bg-purple-600 text-white' : 'bg-purple-600 text-white shadow-md') : 'text-slate-400'}`}
+                                     >
+                                       Masking
+                                     </button>
+                                  </div>
+                               </div>
+                               <div className="space-y-1">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-1">SMS সংখ্যা</p>
+                                  <input 
+                                    type="number" 
+                                    disabled={approvingIds.has(tr.id)}
+                                    className={`w-full h-12 px-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'} border rounded-2xl font-black text-sm text-center outline-none focus:border-blue-500/30 disabled:opacity-50 transition-all`} 
+                                    value={smsToCredit[tr.id] || ''} 
+                                    onChange={(e) => setSmsToCredit({...smsToCredit, [tr.id]: e.target.value})} 
+                                    placeholder="SMS Quantity" 
+                                  />
+                               </div>
                              </div>
                            )}
                         </div>

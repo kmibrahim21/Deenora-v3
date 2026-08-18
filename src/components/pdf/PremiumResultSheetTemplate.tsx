@@ -299,8 +299,8 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
             <div className="absolute inset-[9px] border-2 border-[#1E3A8A] border-dashed opacity-30 pointer-events-none z-0"></div>
 
             {/* Main Content Area */}
-            <div className="relative z-10 flex-1 flex flex-col justify-between">
-              <div>
+            <div className="relative z-10 flex-1 flex flex-col">
+              <div className="flex-1">
                 {/* ================= HEADER SECTION ================= */}
                 <div className={`flex justify-between items-center border-b-2 border-[#1E3A8A] ${
                   numStudentsOnPage > 22 ? 'pb-2 mb-2' : 'pb-3 mb-3'
@@ -528,122 +528,125 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                 </div>
               </div>
 
-              {/* ================= BOTTOM SUMMARY CARDS (ON LAST PAGE) ================= */}
-              {isLastPage && (
-                <div>
-                  <div className={`grid grid-cols-2 ${
-                    numStudentsOnPage > 22 ? 'gap-3 mb-2' : 'gap-4 mb-3'
-                  }`}>
-                    {/* Card 1: CLASS SUMMARY */}
-                    <div className={`border border-blue-200 rounded-xl ${
-                      numStudentsOnPage > 22 ? 'p-2' : 'p-2.5'
-                    } bg-[#F8FAFC] flex flex-col justify-between shadow-sm`}>
-                      <div className={`bg-[#1E3A8A] text-white ${
-                        numStudentsOnPage > 22 ? 'text-[8.5px] py-0.5 px-1.5' : 'text-[9.5px] py-1 px-2'
-                      } font-black rounded-md uppercase tracking-wider mb-1 flex items-center gap-1`}>
-                        📊 {t.classSummary}
+              {/* ================= BOTTOM SECTION: SUMMARY & SIGNATURES ================= */}
+              <div className="mt-auto z-10 relative">
+                {/* ================= BOTTOM SUMMARY CARDS (ON LAST PAGE) ================= */}
+                {isLastPage && (
+                <div className={`grid grid-cols-2 ${
+                  numStudentsOnPage > 22 ? 'gap-3 mb-2' : 'gap-4 mb-3'
+                }`}>
+                  {/* Card 1: CLASS SUMMARY */}
+                  <div className={`border border-blue-200 rounded-xl ${
+                    numStudentsOnPage > 22 ? 'p-2' : 'p-2.5'
+                  } bg-[#F8FAFC] flex flex-col justify-between shadow-sm`}>
+                    <div className={`bg-[#1E3A8A] text-white ${
+                      numStudentsOnPage > 22 ? 'text-[8.5px] py-0.5 px-1.5' : 'text-[9.5px] py-1 px-2'
+                    } font-black rounded-md uppercase tracking-wider mb-1 flex items-center gap-1`}>
+                      📊 {t.classSummary}
+                    </div>
+                    <div className={`space-y-0.5 ${
+                      numStudentsOnPage > 22 ? 'text-[8.5px]' : 'text-[9.5px]'
+                    } font-semibold text-slate-700`}>
+                      <div className="flex justify-between border-b border-slate-200 pb-0.5">
+                        <span>{t.totalStudents}</span>
+                        <span className="font-bold text-slate-900">: {toBnNum(totalStudents)}</span>
                       </div>
-                      <div className={`space-y-0.5 ${
-                        numStudentsOnPage > 22 ? 'text-[8.5px]' : 'text-[9.5px]'
-                      } font-semibold text-slate-700`}>
-                        <div className="flex justify-between border-b border-slate-200 pb-0.5">
-                          <span>{t.totalStudents}</span>
-                          <span className="font-bold text-slate-900">: {toBnNum(totalStudents)}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-slate-200 pb-0.5">
-                          <span>{t.studentsPresent}</span>
-                          <span className="font-bold text-slate-900">: {toBnNum(presentCount)}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-slate-200 pb-0.5">
-                          <span>{t.absent}</span>
-                          <span className="font-bold text-slate-900">: {toBnNum(absentCount)}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-slate-200 pb-0.5">
-                          <span>{t.passed}</span>
-                          <span className="font-bold text-emerald-700">: {toBnNum(passedCount)}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-slate-200 pb-0.5">
-                          <span>{t.failed}</span>
-                          <span className="font-bold text-red-600">: {toBnNum(failedCount)}</span>
-                        </div>
+                      <div className="flex justify-between border-b border-slate-200 pb-0.5">
+                        <span>{t.studentsPresent}</span>
+                        <span className="font-bold text-slate-900">: {toBnNum(presentCount)}</span>
                       </div>
-                      <div className="mt-1 text-center pt-0.5 border-t border-blue-200">
-                        <span className={`${numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[8.5px]'} font-extrabold uppercase text-slate-500 block`}>{t.passPercentage}</span>
-                        <span className={`${numStudentsOnPage > 22 ? 'text-base' : 'text-lg'} font-black text-[#1E3A8A] leading-tight`}>{toBnNum(passPercentage)}%</span>
+                      <div className="flex justify-between border-b border-slate-200 pb-0.5">
+                        <span>{t.absent}</span>
+                        <span className="font-bold text-slate-900">: {toBnNum(absentCount)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-200 pb-0.5">
+                        <span>{t.passed}</span>
+                        <span className="font-bold text-emerald-700">: {toBnNum(passedCount)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-200 pb-0.5">
+                        <span>{t.failed}</span>
+                        <span className="font-bold text-red-600">: {toBnNum(failedCount)}</span>
                       </div>
                     </div>
+                    <div className="mt-1 text-center pt-0.5 border-t border-blue-200">
+                      <span className={`${numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[8.5px]'} font-extrabold uppercase text-slate-500 block`}>{t.passPercentage}</span>
+                      <span className={`${numStudentsOnPage > 22 ? 'text-base' : 'text-lg'} font-black text-[#1E3A8A] leading-tight`}>{toBnNum(passPercentage)}%</span>
+                    </div>
+                  </div>
 
-                    {/* Card 2: GRADE SCALE */}
-                    <div className={`border border-blue-200 rounded-xl ${
-                      numStudentsOnPage > 22 ? 'p-2' : 'p-2.5'
-                    } bg-[#F8FAFC] flex flex-col justify-between shadow-sm`}>
-                      <div className={`bg-[#1E3A8A] text-white ${
-                        numStudentsOnPage > 22 ? 'text-[8.5px] py-0.5 px-1.5' : 'text-[9.5px] py-1 px-2'
-                      } font-black rounded-md uppercase tracking-wider mb-1`}>
-                        📜 {t.gradeScale}
-                      </div>
-                      <table className={`w-full ${
-                        numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[8.5px]'
-                      } font-medium text-left border-collapse`}>
-                        <thead>
-                          <tr className="border-b border-slate-300 font-bold text-slate-700">
-                            <th className="py-0.5">Grade</th>
-                            <th className="py-0.5">Range</th>
-                            <th className="py-0.5">Remarks</th>
+                  {/* Card 2: GRADE SCALE */}
+                  <div className={`border border-blue-200 rounded-xl ${
+                    numStudentsOnPage > 22 ? 'p-2' : 'p-2.5'
+                  } bg-[#F8FAFC] flex flex-col justify-between shadow-sm`}>
+                    <div className={`bg-[#1E3A8A] text-white ${
+                      numStudentsOnPage > 22 ? 'text-[8.5px] py-0.5 px-1.5' : 'text-[9.5px] py-1 px-2'
+                    } font-black rounded-md uppercase tracking-wider mb-1`}>
+                      📜 {t.gradeScale}
+                    </div>
+                    <table className={`w-full ${
+                      numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[8.5px]'
+                    } font-medium text-left border-collapse`}>
+                      <thead>
+                        <tr className="border-b border-slate-300 font-bold text-slate-700">
+                          <th className="py-0.5">Grade</th>
+                          <th className="py-0.5">Range</th>
+                          <th className="py-0.5">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {gradeScaleData.map((row) => (
+                          <tr key={row.grade}>
+                            <td className="py-0.5 font-bold text-[#1E3A8A]">{row.grade}</td>
+                            <td className="py-0.5">{row.range}</td>
+                            <td className="py-0.5 text-slate-600">{row.remarks}</td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200">
-                          {gradeScaleData.map((row) => (
-                            <tr key={row.grade}>
-                              <td className="py-0.5 font-bold text-[#1E3A8A]">{row.grade}</td>
-                              <td className="py-0.5">{row.range}</td>
-                              <td className="py-0.5 text-slate-600">{row.remarks}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* SIGNATURE SECTION */}
-                  <div className={`flex justify-between items-end border-t border-slate-300 ${
-                    numStudentsOnPage > 22 ? 'pt-1.5 mt-1.5 mb-1 px-8' : 'pt-3 mt-2 mb-2 px-10'
-                  }`}>
-                    {/* Class Teacher */}
-                    <div className="text-center w-40">
-                      <div className={`${
-                        numStudentsOnPage > 22 ? 'h-6 mb-0.5' : 'h-7 mb-1'
-                      } border-b border-slate-400 border-dashed flex items-end justify-center`}>
-                        {madrasah?.teacher_signature_url && (
-                          <img src={madrasah.teacher_signature_url} className={`${numStudentsOnPage > 22 ? 'h-5' : 'h-6'} object-contain mx-auto`} alt="Signature" />
-                        )}
-                      </div>
-                      <p className={`${numStudentsOnPage > 22 ? 'text-[9px]' : 'text-[10px]'} font-bold text-slate-800`}>{t.classTeacher}</p>
-                      <p className={`${numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[9px]'} font-semibold text-slate-500`}>{madrasah?.teacher_name || 'Class Teacher'}</p>
-                    </div>
-
-                    {/* Principal */}
-                    <div className="text-center w-40">
-                      <div className={`${
-                        numStudentsOnPage > 22 ? 'h-6 mb-0.5' : 'h-7 mb-1'
-                      } border-b border-slate-400 border-dashed flex items-end justify-center`}>
-                        {madrasah?.principal_signature_url && (
-                          <img src={madrasah.principal_signature_url} className={`${numStudentsOnPage > 22 ? 'h-5' : 'h-6'} object-contain mx-auto`} alt="Signature" />
-                        )}
-                      </div>
-                      <p className={`${numStudentsOnPage > 22 ? 'text-[9px]' : 'text-[10px]'} font-bold text-slate-800`}>{t.principal}</p>
-                      <p className={`${numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[9px]'} font-semibold text-slate-500`}>{madrasah?.principal_name || 'Principal'}</p>
-                    </div>
-                  </div>
-
-                  {/* FOOTER */}
-                  <div className={`text-center ${
-                    numStudentsOnPage > 22 ? 'text-[8px] pt-0.5' : 'text-[9px] pt-1'
-                  } font-extrabold text-[#1E3A8A] tracking-[0.2em] uppercase border-t border-slate-200`}>
-                    {t.knowledgeDisciplineSuccess}
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
+
+              {/* SIGNATURE SECTION (ON EVERY PAGE) */}
+              <div>
+                <div className={`flex justify-between items-end border-t border-slate-300 ${
+                  numStudentsOnPage > 22 ? 'pt-1.5 mt-1.5 mb-1 px-8' : 'pt-3 mt-2 mb-2 px-10'
+                }`}>
+                  {/* Class Teacher */}
+                  <div className="text-center w-40">
+                    <div className={`${
+                      numStudentsOnPage > 22 ? 'h-6 mb-0.5' : 'h-7 mb-1'
+                    } border-b border-slate-400 border-dashed flex items-end justify-center`}>
+                      {madrasah?.teacher_signature_url && (
+                        <img src={madrasah.teacher_signature_url} className={`${numStudentsOnPage > 22 ? 'h-5' : 'h-6'} object-contain mx-auto`} alt="Signature" />
+                      )}
+                    </div>
+                    <p className={`${numStudentsOnPage > 22 ? 'text-[9px]' : 'text-[10px]'} font-bold text-slate-800`}>{t.classTeacher}</p>
+                    <p className={`${numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[9px]'} font-semibold text-slate-500`}>{madrasah?.teacher_name || 'Class Teacher'}</p>
+                  </div>
+
+                  {/* Principal */}
+                  <div className="text-center w-40">
+                    <div className={`${
+                      numStudentsOnPage > 22 ? 'h-6 mb-0.5' : 'h-7 mb-1'
+                    } border-b border-slate-400 border-dashed flex items-end justify-center`}>
+                      {madrasah?.principal_signature_url && (
+                        <img src={madrasah.principal_signature_url} className={`${numStudentsOnPage > 22 ? 'h-5' : 'h-6'} object-contain mx-auto`} alt="Signature" />
+                      )}
+                    </div>
+                    <p className={`${numStudentsOnPage > 22 ? 'text-[9px]' : 'text-[10px]'} font-bold text-slate-800`}>{t.principal}</p>
+                    <p className={`${numStudentsOnPage > 22 ? 'text-[8px]' : 'text-[9px]'} font-semibold text-slate-500`}>{madrasah?.principal_name || 'Principal'}</p>
+                  </div>
+                </div>
+
+                {/* FOOTER */}
+                <div className={`text-center ${
+                  numStudentsOnPage > 22 ? 'text-[8px] pt-0.5' : 'text-[9px] pt-1'
+                } font-extrabold text-[#1E3A8A] tracking-[0.2em] uppercase border-t border-slate-200`}>
+                  {t.knowledgeDisciplineSuccess}
+                </div>
+                </div>
+              </div>
             </div>
           </div>
         );

@@ -21,6 +21,8 @@ export interface SmsProviderConfig {
     non_masking: 'reve' | 'automas';
   };
   default_type?: 'masking' | 'non_masking';
+  masking_rate?: number;
+  non_masking_rate?: number;
 }
 
 export interface Institution {
@@ -594,4 +596,7 @@ export interface SystemSettings {
   manager_permissions?: Profile['permissions'];
   support_number?: string;
   updated_at?: string;
+  global_update_active?: boolean;
+  global_update_message?: string;
+  global_update_version?: number;
 }
