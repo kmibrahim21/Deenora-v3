@@ -532,12 +532,29 @@ export default async function handler(req, res) {
     }
 
     if (action === 'approve_transaction') {
-      const { id, status, amount, institution_id, module, metadata } = body;
+      const { id, status, amount, institution_id, module, metadata, sms_count } = body;
       
       // Update transaction status
       const updatePayload: any = { status };
       if (amount !== undefined) updatePayload.amount = amount;
+      if (sms_count !== undefined) updatePayload.sms_count = sms_count;
       
+      // If module/inst_id is missing, fetch them
+      let targetModule = module;
+      let targetInstId = institution_id;
+      let targetAmount = amount;
+      let targetSmsCount = sms_count;
+
+      if (!targetModule || !targetInstId || targetAmount === undefined) {
+        const { data: tr } = await supabase.from('transactions').select('*').eq('id', id).single();
+        if (tr) {
+          targetModule = targetModule || tr.module;
+          targetInstId = targetInstId || tr.institution_id;
+          targetAmount = targetAmount === undefined ? tr.amount : targetAmount;
+          targetSmsCount = targetSmsCount === undefined ? tr.sms_count : targetSmsCount;
+        }
+      }
+
       const { error: trError } = await supabase
         .from('transactions')
         .update(updatePayload)
@@ -546,17 +563,21 @@ export default async function handler(req, res) {
       if (trError) throw trError;
 
       if (status === 'approved') {
-        if (module === 'voice' || module === 'payment') {
-          const { data: instData, error: instError } = await supabase.from('institutions').select('balance').eq('id', institution_id).single();
+        if (targetModule === 'voice' || targetModule === 'payment') {
+          const { data: instData, error: instError } = await supabase.from('institutions').select('balance').eq('id', targetInstId).single();
           if (instError) throw instError;
-          const newBalance = Number(instData.balance || 0) + Number(amount);
-          const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', institution_id);
+          const newBalance = Number(instData.balance || 0) + Number(targetAmount);
+          const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', targetInstId);
           if (balanceError) throw balanceError;
-        } else if (module === 'sms') {
-          const { data: instData, error: instError } = await supabase.from('institutions').select('sms_balance').eq('id', institution_id).single();
+        } else if (targetModule === 'sms') {
+          const { data: instData, error: instError } = await supabase.from('institutions').select('sms_balance').eq('id', targetInstId).single();
           if (instError) throw instError;
-          const newBalance = Number(instData.sms_balance || 0) + Number(amount);
-          const { error: balanceError } = await supabase.from('institutions').update({ sms_balance: newBalance }).eq('id', institution_id);
+          
+          // Use sms_count for balance update
+          const creditAmount = Number(targetSmsCount || targetAmount || 0);
+          const newBalance = Number(instData.sms_balance || 0) + creditAmount;
+          
+          const { error: balanceError } = await supabase.from('institutions').update({ sms_balance: newBalance }).eq('id', targetInstId);
           if (balanceError) throw balanceError;
 
           // Update Admin SMS Stock
@@ -569,16 +590,16 @@ export default async function handler(req, res) {
             await supabase
               .from('admin_sms_stock')
               .update({ 
-                remaining_sms: (stockData.remaining_sms || 0) - Number(amount),
+                remaining_sms: (stockData.remaining_sms || 0) - creditAmount,
                 last_updated: new Date().toISOString()
               })
               .eq('id', stockData.id);
           }
-        } else if (module === 'subscription') {
+        } else if (targetModule === 'subscription') {
           const { data: instData, error: instFetchError } = await supabase
             .from('institutions')
             .select('config_json, subscription_end')
-            .eq('id', institution_id)
+            .eq('id', targetInstId)
             .single();
           
           if (!instFetchError && instData) {

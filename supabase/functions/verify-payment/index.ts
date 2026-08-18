@@ -271,8 +271,29 @@ serve(async (req) => {
 
     if (trxModule === 'sms') {
       // SMS Balance Update
-      const smsRate = Number(settings?.sms_rate || 0.5)
-      const smsToCredit = pendingTrx.sms_count || Math.ceil(parsedAmount / smsRate)
+      const providerConfig = settings?.sms_provider_config || {}
+      const defaultType = providerConfig.default_type || 'non_masking'
+      
+      // Calculate rate: 
+      // 1. Prefer institution.sms_rate if set (> 0)
+      // 2. Then check if it's a masking account (has reve_client_id) and use corresponding global rate
+      // 3. Fallback to global default_type rate
+      let smsRate = Number(institution.sms_rate)
+      const isMaskingAccount = !!institution.reve_client_id
+      const instSmsType = isMaskingAccount ? 'masking' : (institution.sms_type || defaultType)
+      
+      if (!smsRate || smsRate <= 0) {
+        if (instSmsType === 'masking' && providerConfig.masking_rate) {
+          smsRate = Number(providerConfig.masking_rate)
+        } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+          smsRate = Number(providerConfig.non_masking_rate)
+        } else {
+          // Ultimate fallback
+          smsRate = Number(settings?.sms_rate || 0.5)
+        }
+      }
+
+      const smsToCredit = Math.ceil(parsedAmount / smsRate)
       
       updateFields.sms_count = smsToCredit
       institutionUpdate.sms_balance = Number(institution.sms_balance || 0) + smsToCredit

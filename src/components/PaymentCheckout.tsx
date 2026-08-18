@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
-import { Institution, Language, Transaction } from '../types';
+import { Institution, Language, Transaction, SystemSettings } from '../types';
 
 interface PaymentCheckoutProps {
   lang: Language;
@@ -52,6 +52,7 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
   const [adminNagad, setAdminNagad] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const pollingInterval = useRef<any>(null);
 
   const storageKey = `pending_payment_${madrasah?.id}_${module}`;
@@ -163,6 +164,7 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
 
         if (data) {
           setAdminBkash(data.bkash_number || '');
+          setSystemSettings(data as any);
           // @ts-ignore
           setAdminNagad(data.nagad_number || data.bkash_number || '');
         }
@@ -255,9 +257,35 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
 
     try {
       const isSubscription = module === 'subscription';
+      const parsedAmount = parseInt(amount);
+
+      let smsCount = null;
+      if (module === 'sms' && systemSettings) {
+        const providerConfig = (systemSettings.sms_provider_config as any) || {};
+        const defaultType = providerConfig.default_type || 'non_masking';
+        
+        // Calculate rate: Prefer institution rate, then institution type-based rate (detected by reve_client_id), then global default
+        let rate = Number(madrasah.sms_rate);
+        const isMaskingAccount = !!madrasah.reve_client_id;
+        const instSmsType = isMaskingAccount ? 'masking' : ((madrasah as any).sms_type || defaultType);
+        
+        if (!rate || rate <= 0) {
+          if (instSmsType === 'masking' && providerConfig.masking_rate) {
+            rate = Number(providerConfig.masking_rate);
+          } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+            rate = Number(providerConfig.non_masking_rate);
+          } else {
+            // Ultimate fallback
+            rate = Number(systemSettings.sms_rate || 0.5);
+          }
+        }
+        
+        smsCount = Math.ceil(parsedAmount / rate);
+      }
+
       const { data, error } = await supabase.from('transactions').insert({
         institution_id: madrasah.id,
-        amount: parseInt(amount),
+        amount: parsedAmount,
         transaction_id: `PENDING_${Date.now()}`,
         description: isSubscription 
           ? `Subscription Payment via ${paymentMethod.toUpperCase()}`
@@ -266,13 +294,15 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
         status: 'pending',
         module: module,
         sender_phone: normalizedSender,
+        sms_count: smsCount,
         metadata: { 
           ...metadata,
           payment_method: paymentMethod,
           sender_number: normalizedSender,
           checkout_session: true,
-          requested_amount: parseInt(amount),
-          expected_amount: fixedAmount || metadata?.expected_amount
+          requested_amount: parsedAmount,
+          expected_amount: fixedAmount || metadata?.expected_amount,
+          sms_type: module === 'sms' ? (systemSettings?.sms_provider_config?.default_type || 'non_masking') : undefined
         }
       }).select().single();
 

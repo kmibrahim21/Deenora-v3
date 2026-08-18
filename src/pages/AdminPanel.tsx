@@ -1225,21 +1225,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           pTrans.forEach(tr => {
             if (newSmsMap[tr.id] === undefined) newSmsMap[tr.id] = true;
             
-            // Try to detect if it's masking based on tr.metadata or just default
-            const isMasking = tr.metadata?.sms_type === 'masking';
+            // Detect masking based on reve_client_id presence, metadata, or institution setting
+            const isMasking = !!tr.institutions?.reve_client_id || (tr.institutions as any)?.sms_type === 'masking' || tr.metadata?.sms_type === 'masking';
             if (newSmsTypeMap[tr.id] === undefined) newSmsTypeMap[tr.id] = isMasking ? 'masking' : 'non_masking';
 
             if (!newSmsToCredit[tr.id] && tr.module === 'sms') {
               const currentType = newSmsTypeMap[tr.id];
-              let rate = Number(tr.institutions?.sms_rate || 0.35);
+              let rate = Number(tr.institutions?.sms_rate);
               
-              if (currentType === 'masking' && gSettings.sms_provider_config?.masking_rate) {
-                rate = Number(gSettings.sms_provider_config.masking_rate);
-              } else if (currentType === 'non_masking' && gSettings.sms_provider_config?.non_masking_rate) {
-                rate = Number(gSettings.sms_provider_config.non_masking_rate);
+              if (!rate || rate <= 0) {
+                if (currentType === 'masking' && gSettings.sms_provider_config?.masking_rate) {
+                  rate = Number(gSettings.sms_provider_config.masking_rate);
+                } else if (currentType === 'non_masking' && gSettings.sms_provider_config?.non_masking_rate) {
+                  rate = Number(gSettings.sms_provider_config.non_masking_rate);
+                } else {
+                  rate = 0.35;
+                }
               }
 
-              newSmsToCredit[tr.id] = String(Math.ceil(tr.amount / (rate || 0.35)));
+              newSmsToCredit[tr.id] = String(Math.ceil(tr.amount / rate));
             }
           });
           setSmsEnabledMap(newSmsMap);
@@ -1868,7 +1872,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           action: 'approve_transaction',
           id: tr.id,
           status: 'approved',
-          amount: isSubscription || isVoice ? finalAmount : sms,
+          amount: isSubscription || isVoice ? finalAmount : Number(tr.amount),
+          sms_count: isSubscription || isVoice ? 0 : sms,
           institution_id: tr.institution_id,
           module: isSubscription ? 'subscription' : (isVoice ? 'voice' : 'sms'),
           metadata: tr.metadata
@@ -3227,7 +3232,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   setCorrectionAmounts({...correctionAmounts, [tr.id]: val});
                                   if (paymentTab === 'sms' && tr.module === 'sms') {
                                     const currentType = smsRatesTypeMap[tr.id] || 'non_masking';
-                                    const rate = currentType === 'masking' ? (systemGlobalSettings?.sms_provider_config?.masking_rate || 0.55) : (systemGlobalSettings?.sms_provider_config?.non_masking_rate || tr.institutions?.sms_rate || 0.35);
+                                    let rate = Number(tr.institutions?.sms_rate);
+                                    if (!rate || rate <= 0) {
+                                      rate = currentType === 'masking' ? (systemGlobalSettings?.sms_provider_config?.masking_rate || 0.55) : (systemGlobalSettings?.sms_provider_config?.non_masking_rate || 0.35);
+                                    }
                                     setSmsToCredit({...smsToCredit, [tr.id]: String(Math.ceil((Number(val) || tr.amount) / Number(rate)))});
                                   }
                                 }} 
@@ -3242,7 +3250,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                      <button 
                                        onClick={() => {
                                          const newType = 'non_masking';
-                                         const rate = systemGlobalSettings?.sms_provider_config?.non_masking_rate || tr.institutions?.sms_rate || 0.35;
+                                         let rate = Number(tr.institutions?.sms_rate);
+                                         if (!rate || rate <= 0) {
+                                           rate = systemGlobalSettings?.sms_provider_config?.non_masking_rate || 0.35;
+                                         }
                                          setSmsRatesTypeMap({...smsRatesTypeMap, [tr.id]: newType});
                                          setSmsToCredit({...smsToCredit, [tr.id]: String(Math.ceil((Number(correctionAmounts[tr.id]) || tr.amount) / rate))});
                                        }}
@@ -3253,7 +3264,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                      <button 
                                        onClick={() => {
                                          const newType = 'masking';
-                                         const rate = systemGlobalSettings?.sms_provider_config?.masking_rate || 0.55;
+                                         let rate = Number(tr.institutions?.sms_rate);
+                                         if (!rate || rate <= 0) {
+                                           rate = systemGlobalSettings?.sms_provider_config?.masking_rate || 0.55;
+                                         }
                                          setSmsRatesTypeMap({...smsRatesTypeMap, [tr.id]: newType});
                                          setSmsToCredit({...smsToCredit, [tr.id]: String(Math.ceil((Number(correctionAmounts[tr.id]) || tr.amount) / rate))});
                                        }}

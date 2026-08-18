@@ -128,11 +128,20 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [smsBalance, setSmsBalance] = useState<number>(0);
 
   const fetchWalletBalance = async () => {
-    if (!madrasah) return;
+    if (!madrasah?.id) return;
     try {
-      const { data } = await supabase.from('institutions').select('sms_balance').eq('id', madrasah.id).single();
-      if (data) setSmsBalance(data.sms_balance || 0);
-    } catch (e) {}
+      const { data, error } = await supabase.from('institutions').select('sms_balance').eq('id', madrasah.id).single();
+      if (error) {
+        console.error('[WalletSMS] Error fetching balance:', error);
+        return;
+      }
+      if (data) {
+        console.log('[WalletSMS] Fetched balance:', data.sms_balance);
+        setSmsBalance(data.sms_balance || 0);
+      }
+    } catch (e) {
+      console.error('[WalletSMS] Exception in fetchWalletBalance:', e);
+    }
   };
 
   useEffect(() => {
@@ -154,16 +163,29 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
       let vRate = madrasah?.voice_rate;
       let sRate = madrasah?.sms_rate;
       
-      if (!vRate || !sRate) {
-        try {
-          const { data } = await supabase.from('system_settings').select('sms_rate, voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
-          if (!vRate) vRate = data?.voice_rate || 0.50;
-          if (!sRate) sRate = data?.sms_rate || 0.50;
-        } catch(e) {
-          if (!vRate) vRate = 0.50;
-          if (!sRate) sRate = 0.50;
+      try {
+        const { data } = await supabase.from('system_settings').select('sms_rate, voice_rate, sms_provider_config').eq('id', '00000000-0000-0000-0000-000000000001').single();
+        
+        const providerConfig = (data?.sms_provider_config as any) || {};
+        const defaultType = providerConfig.default_type || 'non_masking';
+        
+        // Prioritize institution-specific rate, then provider-config rate, then system default
+        if (!sRate) {
+          if (defaultType === 'masking' && providerConfig.masking_rate) {
+            sRate = providerConfig.masking_rate;
+          } else if (defaultType === 'non_masking' && providerConfig.non_masking_rate) {
+            sRate = providerConfig.non_masking_rate;
+          } else {
+            sRate = data?.sms_rate || 0.50;
+          }
         }
+        
+        if (!vRate) vRate = data?.voice_rate || 0.50;
+      } catch(e) {
+        if (!vRate) vRate = 0.50;
+        if (!sRate) sRate = 0.50;
       }
+
       setVoiceRate(vRate);
       setSmsRate(sRate);
     };
@@ -200,7 +222,25 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     const settings = await smsApi.getGlobalSettings();
     if (settings.bkash_number) setAdminBkash(settings.bkash_number);
     if ((settings as any).nagad_number) setAdminNagad((settings as any).nagad_number);
-    if (settings.sms_rate) setSmsRate(settings.sms_rate);
+    
+    // Determine the active SMS rate based on provider config
+    const providerConfig = (settings.sms_provider_config as any) || {};
+    const defaultType = providerConfig.default_type || 'non_masking';
+    const isMaskingAccount = !!madrasah?.reve_client_id;
+    const instSmsType = isMaskingAccount ? 'masking' : (defaultType);
+    let activeSmsRate = madrasah?.sms_rate;
+
+    if (!activeSmsRate || activeSmsRate <= 0) {
+      if (instSmsType === 'masking' && providerConfig.masking_rate) {
+        activeSmsRate = providerConfig.masking_rate;
+      } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+        activeSmsRate = providerConfig.non_masking_rate;
+      } else {
+        activeSmsRate = settings.sms_rate || 0.50;
+      }
+    }
+
+    if (activeSmsRate) setSmsRate(activeSmsRate);
     if (settings.voice_rate) setVoiceRate(settings.voice_rate);
   };
 
