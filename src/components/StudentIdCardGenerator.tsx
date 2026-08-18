@@ -457,11 +457,6 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
                           <span className="text-[11px] font-extrabold text-slate-800 leading-normal line-clamp-3 max-w-[155px] font-solaiman">{currentRenderStudent.address || "-"}</span>
                        </div>
-                       <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.issueDate}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{new Date().toLocaleDateString('en-GB')}</span>
-                       </div>
                   </div>
 
                   {/* Footer */}
@@ -613,6 +608,10 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                     <span className="leading-tight flex-1 font-solaiman line-clamp-2">
                       {madrasah?.address || "Institution Address Here"}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-200/50">
+                    <span className="text-[8px] font-bold text-slate-500 font-solaiman uppercase tracking-wider">{t.issueDate}</span>
+                    <span className="text-[8px] font-bold text-slate-700 font-solaiman">: {new Date().toLocaleDateString('en-GB')}</span>
                   </div>
                 </div>
               </div>
