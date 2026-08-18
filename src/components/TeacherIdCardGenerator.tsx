@@ -39,9 +39,9 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
   const nameLen = instName.length;
   const addressLen = instAddress.length;
   
-  const nameSizeClass = nameLen > 80 ? "text-[6.5px]" : nameLen > 65 ? "text-[7.5px]" : nameLen > 50 ? "text-[9px]" : nameLen > 35 ? "text-[11.5px]" : "text-[14px]";
+  const nameSizeClass = nameLen > 85 ? "text-[5.5px]" : nameLen > 70 ? "text-[6.5px]" : nameLen > 55 ? "text-[8px]" : nameLen > 40 ? "text-[10px]" : nameLen > 25 ? "text-[12px]" : "text-[14px]";
   const nameTrackingClass = nameLen > 60 ? "tracking-tighter" : nameLen > 40 ? "tracking-tight" : "tracking-wide";
-  const addressSizeClass = addressLen > 65 ? "text-[7.5px] leading-normal" : addressLen > 40 ? "text-[8px] leading-normal" : "text-[8.5px] leading-normal";
+  const addressSizeClass = addressLen > 75 ? "text-[6.5px] leading-tight" : addressLen > 55 ? "text-[7px] leading-tight" : addressLen > 35 ? "text-[7.5px] leading-tight" : "text-[8px] leading-tight";
 
   React.useEffect(() => {
     setCurrentRenderTeacher(teacher);
@@ -348,18 +348,18 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                             </div>
                           )}
                        </div>
-                       <div className="flex-1 text-center overflow-hidden">
-                           <h3 className={`font-bold text-white font-solaiman drop-shadow-md whitespace-normal line-clamp-2 w-full mx-auto text-center leading-[1.1] ${nameSizeClass} ${nameTrackingClass}`}>
+                       <div className="flex-1 text-center overflow-hidden flex flex-col justify-center">
+                           <h3 className={`font-bold text-white font-solaiman drop-shadow-md whitespace-nowrap w-full mx-auto text-center leading-none ${nameSizeClass} ${nameTrackingClass}`}>
                             {instName}
                           </h3>
-                          <p className={`text-white/95 font-medium tracking-wide mt-[2px] line-clamp-2 max-w-[200px] mx-auto text-center ${addressSizeClass}`}>
+                          <p className={`text-white/95 font-medium tracking-wide mt-[2px] whitespace-nowrap w-full mx-auto text-center ${addressSizeClass}`}>
                             {instAddress}
                           </p>
                        </div>
                   </div>
 
-                  <div className="flex flex-col items-center mt-2 w-full relative z-10 px-5">
-                      <div className="w-[75px] h-[85px] bg-white border-[2.5px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                  <div className="flex flex-col items-center mt-1 w-full relative z-10 px-5">
+                      <div className="w-[75px] h-[85px] bg-white border-[2px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0">
                          {currentRenderTeacher.photo_url ? (
                              <img src={currentRenderTeacher.photo_url} alt="Photo" className="w-full h-full object-cover" crossOrigin="anonymous"onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                          ) : (
@@ -379,25 +379,30 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                   </div>
 
                   <div className="pl-10 pr-4 w-full flex flex-col gap-[1.5px] mt-0.5 z-10 relative">
-                       <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.designation}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
-                       </div>
-                       <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.phone}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderTeacher.phone || "-"}</span>
-                       </div>
-                       <div className="flex items-center">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman">{t.joinDate}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-normal font-solaiman tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
+                       <div className="flex items-start">
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.id}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-none font-solaiman tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] uppercase">{currentRenderTeacher.id.substring(0, 8)}</span>
                        </div>
                        <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[65px] font-solaiman shrink-0 mt-[1px]">{t.address}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.designation}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
+                       </div>
+                       <div className="flex items-start">
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.phone}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{currentRenderTeacher.phone || "-"}</span>
+                       </div>
+                       <div className="flex items-start">
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.joinDate}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
+                       </div>
+                       <div className="flex items-start">
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 mt-[1px]">{t.address}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-normal line-clamp-3 max-w-[155px] font-solaiman">{currentRenderTeacher.address || "-"}</span>
+                          <span className="text-[10px] font-extrabold text-slate-800 leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman">{currentRenderTeacher.address || "-"}</span>
                        </div>
                   </div>
 
@@ -454,12 +459,12 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
             </div>
 
             <div className="w-full pt-5 pb-1 px-2 text-center z-10 relative">
-               <div className="flex items-center justify-center">
-                  <h3 className={`font-bold leading-[1.1] font-solaiman whitespace-normal line-clamp-2 w-full px-1 ${nameLen > 60 ? 'text-[8px] tracking-tighter' : nameLen > 45 ? 'text-[9.5px] tracking-tight' : nameLen > 30 ? 'text-[11.5px]' : 'text-[13.5px]'}`} style={{ color: themeColor }}>
+               <div className="flex items-center justify-center overflow-hidden px-2">
+                  <h3 className={`font-bold leading-none font-solaiman whitespace-nowrap w-full ${nameLen > 70 ? 'text-[7.5px]' : nameLen > 55 ? 'text-[8.5px]' : nameLen > 40 ? 'text-[10px]' : nameLen > 25 ? 'text-[12px]' : 'text-[13.5px]'}`} style={{ color: themeColor }}>
                     {madrasah?.name}
                   </h3>
                </div>
-               <div className="w-[100px] h-[1px] bg-slate-200 mx-auto mt-1.5 opacity-50" />
+               <div className="w-[100px] h-[1px] bg-slate-200 mx-auto mt-1 opacity-50" />
             </div>
 
             <div className="px-4 py-1 flex-1 flex flex-col z-10 relative overflow-hidden">
@@ -486,9 +491,12 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                     size={55}
                   />
                 </div>
+                <p className="text-[8px] font-bold tracking-widest text-slate-500 uppercase mt-0.5">
+                   {currentRenderTeacher.id.substring(0, 8)}
+                </p>
               </div>
 
-              <div className="mt-0.5 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">
+              <div className="mt-1.5 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">
                 <div
                   className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-solaiman mb-1"
                   style={{ backgroundColor: themeColor }}
