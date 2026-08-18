@@ -254,8 +254,8 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
   // Total possible marks across all subjects
   const totalSubjectFullMarks = subjects.reduce((sum, s) => sum + Number(s.full_marks || 100), 0);
 
-  // Paginate if > 30 students
-  const STUDENTS_PER_PAGE = 30;
+  // Paginate if > 28 students
+  const STUDENTS_PER_PAGE = 28;
   const totalPages = Math.ceil(studentList.length / STUDENTS_PER_PAGE) || 1;
 
   // Grade scale reference table
