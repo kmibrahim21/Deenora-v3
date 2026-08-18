@@ -204,8 +204,8 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                     <th style={thStyle}>{isBn ? 'উপস্থিত' : 'Present'}</th>
                                     <th style={thStyle}>{isBn ? 'অনুপস্থিত' : 'Absent'}</th>
                                     <th style={thStyle}>{isBn ? 'দেরি' : 'Late'}</th>
+                                    <th style={thStyle}>{isBn ? 'অর্ধ দিবস' : 'Half Day'}</th>
                                     <th style={thStyle}>{isBn ? 'ছুটি' : 'Leave'}</th>
-                                    <th style={thStyle}>{isBn ? 'বন্ধ' : 'Holiday'}</th>
                                     <th style={thStyle}>{isBn ? 'শতকরা' : 'Percentage'}</th>
                                     <th style={thStyle}>{isBn ? 'পজিশন' : 'Position'}</th>
                                 </tr>
@@ -220,8 +220,8 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                             <td style={{ ...tdStyle, color: '#16a34a', fontWeight: 'bold' }}>{item.present}</td>
                                             <td style={{ ...tdStyle, color: '#dc2626' }}>{item.absent}</td>
                                             <td style={{ ...tdStyle, color: '#d97706' }}>{item.late}</td>
+                                            <td style={{ ...tdStyle, color: '#a855f7' }}>{item.halfDay}</td>
                                             <td style={{ ...tdStyle, color: '#6366f1' }}>{item.leave}</td>
-                                            <td style={{ ...tdStyle, color: '#64748b' }}>{item.holiday}</td>
                                             <td style={{ ...tdStyle, fontWeight: 'bold' }}>{item.pct}%</td>
                                             <td style={{ ...tdStyle, fontWeight: 'bold', color: '#3b82f6' }}>{item.rank}</td>
                                         </tr>

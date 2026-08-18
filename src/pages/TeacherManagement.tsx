@@ -343,7 +343,6 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       let absentCount = 0;
       let lateCount = 0;
       let halfDayCount = 0;
-      let holidayCount = 0;
       let leaveCount = 0;
       let totalDays = 0;
       
@@ -356,7 +355,6 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
           else if (status === 'absent') absentCount++;
           else if (status === 'late') lateCount++;
           else if (status === 'half_day') halfDayCount++;
-          else if (status === 'holiday') holidayCount++;
           else if (status === 'leave') leaveCount++;
         });
       }
@@ -369,7 +367,6 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         absent_days: absentCount,
         late_days: lateCount,
         half_day: halfDayCount,
-        holiday_days: holidayCount,
         leave_days: leaveCount
       };
     });
@@ -1115,7 +1112,6 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                               <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={14}/></button>
                               <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-[10px] font-black">1/2</span></button>
                               <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'leave'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Leave"><Briefcase size={14}/></button>
-                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'holiday'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'holiday' ? 'bg-blue-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Holiday"><CalendarOff size={14}/></button>
                             </div>
                           </div>
                         );
@@ -1247,7 +1243,6 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       let absentCount = 0;
                       let lateCount = 0;
                       let halfDayCount = 0;
-                      let holidayCount = 0;
                       let leaveCount = 0;
                       
                       Object.values(reportData).forEach(dailyRecord => {
@@ -1256,7 +1251,6 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         else if (status === 'absent') absentCount++;
                         else if (status === 'late') lateCount++;
                         else if (status === 'half_day') halfDayCount++;
-                        else if (status === 'holiday') holidayCount++;
                         else if (status === 'leave') leaveCount++;
                       });
                       
@@ -1272,7 +1266,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                             </div>
                           </div>
                           
-                          <div className="grid grid-cols-6 gap-1 w-full sm:w-52">
+                          <div className="grid grid-cols-5 gap-1 w-full sm:w-44">
                             <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                               <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>P</span>
                               <span className="text-[11px] font-black text-emerald-500">{presentCount}</span>
@@ -1286,16 +1280,12 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                               <span className="text-[11px] font-black text-amber-500">{lateCount}</span>
                             </div>
                             <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>LV</span>
-                              <span className="text-[11px] font-black text-indigo-500">{leaveCount}</span>
-                            </div>
-                            <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                               <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>H</span>
                               <span className="text-[11px] font-black text-purple-500">{halfDayCount}</span>
                             </div>
                             <div className={`px-1 py-1 rounded-lg flex flex-col items-center justify-center text-center transition-all ${isDark ? 'bg-slate-900/50' : 'bg-slate-50'} border ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>O</span>
-                              <span className="text-[11px] font-black text-blue-500">{holidayCount}</span>
+                              <span className={`text-[7px] font-black uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>LV</span>
+                              <span className="text-[11px] font-black text-indigo-500">{leaveCount}</span>
                             </div>
                           </div>
                         </div>
