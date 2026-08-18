@@ -21,10 +21,19 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
 
-    const { data: adminProfile } = await supabase.from('institutions').select('is_super_admin').eq('id', user.id).single();
-    const { data: userProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    const superAdminEmails = [
+      'kmibrahim@gmail.com',
+      'thedevomix@gmail.com',
+      'ibrahimkhan269596@gmail.com',
+      'admin@deenora.com'
+    ];
+    const userEmail = user.email?.trim().toLowerCase();
+    const isSuperAdminEmail = superAdminEmails.includes(userEmail || '');
+
+    const { data: adminProfile } = await supabase.from('institutions').select('is_super_admin').eq('id', user.id).maybeSingle();
+    const { data: userProfile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
     
-    const isSuperAdmin = !!adminProfile?.is_super_admin;
+    const isSuperAdmin = isSuperAdminEmail || !!adminProfile?.is_super_admin;
     const isManager = userProfile?.role === 'manager';
 
     if (!isSuperAdmin && !isManager) {
@@ -107,7 +116,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'get_detailed_report') {
-      const { filterMode, month, year } = body;
+      const { filterMode, month, year, startDate: customStart, endDate: customEnd } = body;
       let startDate: Date;
       let endDate: Date;
       
@@ -115,6 +124,11 @@ export default async function handler(req, res) {
         const [y, m] = month.split('-');
         startDate = new Date(Number(y), Number(m) - 1, 1);
         endDate = new Date(Number(y), Number(m), 0, 23, 59, 59);
+      } else if (filterMode === 'custom' && customStart && customEnd) {
+        startDate = new Date(customStart);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(customEnd);
+        endDate.setHours(23, 59, 59, 999);
       } else {
         startDate = new Date(Number(year), 0, 1);
         endDate = new Date(Number(year), 11, 31, 23, 59, 59);
@@ -127,10 +141,11 @@ export default async function handler(req, res) {
       // 1. Fetch SMS/Voice recharges and usage logs based on creation date
       const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
         supabase.from('transactions')
-          .select('amount, description, module, metadata, created_at')
+          .select('id, amount, description, module, metadata, created_at, transaction_id, status, institution_id, institutions(name)')
           .eq('status', 'approved')
           .gte('created_at', startISO)
           .lte('created_at', endISO)
+          .order('created_at', { ascending: false })
           .limit(10000),
         supabase.from('sms_logs')
           .select('*', { count: 'exact', head: true })
@@ -205,7 +220,8 @@ export default async function handler(req, res) {
         voiceRechargeTotal,
         subRechargeTotal,
         smsSentNum,
-        voiceCallsNum
+        voiceCallsNum,
+        transactions
       });
     }
 
@@ -349,6 +365,10 @@ export default async function handler(req, res) {
       const { id, action: _action, ...updateFields } = body;
       if (!id) return res.status(400).json({ error: 'Institution ID is required' });
 
+      if (updateFields.reve_non_masking_id !== undefined && !updateFields.reve_caller_id) {
+        updateFields.reve_caller_id = updateFields.reve_non_masking_id;
+      }
+
       // If updating config_json, ensure it's handled as an object
       if (updateFields.config_json && typeof updateFields.config_json === 'string') {
         try {
@@ -420,6 +440,9 @@ export default async function handler(req, res) {
 
     if (action === 'update_system_settings') {
       const { id, action: _ignoreAction, ...updates } = body;
+      if (updates.reve_non_masking_id !== undefined && !updates.reve_caller_id) {
+        updates.reve_caller_id = updates.reve_non_masking_id;
+      }
       const { data, error } = await supabase
         .from('system_settings')
         .upsert({ id: id || '00000000-0000-0000-0000-000000000001', ...updates })

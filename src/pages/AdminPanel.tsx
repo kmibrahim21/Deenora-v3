@@ -12,6 +12,7 @@ import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database,
 import { supabase, smsApi } from 'supabase';
 import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock } from 'types';
+import { generateSystemPaymentReportPDF, generateSubscriptionMatrixPDF } from '../utils/pdfGenerator';
 
 interface InstitutionWithStats extends Institution {
   student_count?: number;
@@ -191,15 +192,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     adminSMSStock: 0,
     typeBreakdown: { madrasah: 0, school: 0, kindergarten: 0, choching: 0, system: 0 }
   });
-  const [detailedFilterMode, setDetailedFilterMode] = useState<'monthly' | 'yearly'>('monthly');
+  const [detailedFilterMode, setDetailedFilterMode] = useState<'monthly' | 'yearly' | 'custom'>('monthly');
   const [detailedMonth, setDetailedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [detailedYear, setDetailedYear] = useState(new Date().getFullYear().toString());
+  const [detailedStartDate, setDetailedStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [detailedEndDate, setDetailedEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [detailedReport, setDetailedReport] = useState({
     smsRechargeTotal: 0,
     voiceRechargeTotal: 0,
     subRechargeTotal: 0,
     smsSentNum: 0,
     voiceCallsNum: 0,
+    transactions: [] as any[],
     loading: false
   });
   const [recentInstitutions, setRecentInstitutions] = useState<Institution[]>([]);
@@ -718,7 +722,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [isCreatingInst, setIsCreatingInst] = useState(false);
 
   const fetchDetailedReport = async (force = false) => {
-    const cacheKey = `${detailedFilterMode}_${detailedMonth}_${detailedYear}`;
+    const cacheKey = `${detailedFilterMode}_${detailedMonth}_${detailedYear}_${detailedStartDate}_${detailedEndDate}`;
     if (!force && adminPanelCache.detailedReport[cacheKey]) {
       setDetailedReport(adminPanelCache.detailedReport[cacheKey]);
       return;
@@ -737,7 +741,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           action: 'get_detailed_report',
           filterMode: detailedFilterMode,
           month: detailedMonth,
-          year: detailedYear
+          year: detailedYear,
+          startDate: detailedStartDate,
+          endDate: detailedEndDate
         })
       });
 
@@ -757,6 +763,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const [year, month] = detailedMonth.split('-');
         startDate = new Date(Number(year), Number(month) - 1, 1);
         endDate = new Date(Number(year), Number(month), 0, 23, 59, 59);
+      } else if (detailedFilterMode === 'custom') {
+        startDate = new Date(detailedStartDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(detailedEndDate);
+        endDate.setHours(23, 59, 59, 999);
       } else {
         startDate = new Date(Number(detailedYear), 0, 1);
         endDate = new Date(Number(detailedYear), 11, 31, 23, 59, 59);
@@ -766,7 +777,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       const endISO = endDate.toISOString();
 
       const [txRes, smsLogsRes, voiceBroadcastsRes] = await Promise.all([
-        supabase.from('transactions').select('amount, description, module').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(10000),
+        supabase.from('transactions').select('id, amount, description, module, metadata, created_at, transaction_id, status, institution_id, institutions(name)').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO).limit(10000),
         supabase.from('sms_logs').select('*', { count: 'exact', head: true }).gte('created_at', startISO).lte('created_at', endISO),
         supabase.from('voice_broadcasts').select('total_numbers').gte('created_at', startISO).lte('created_at', endISO).limit(10000)
       ]);
@@ -784,6 +795,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         subRechargeTotal,
         smsSentNum,
         voiceCallsNum,
+        transactions,
         loading: false
       };
 
@@ -796,7 +808,96 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     if (view === 'dashboard') {
       fetchDetailedReport();
     }
-  }, [detailedFilterMode, detailedMonth, detailedYear, view]);
+  }, [detailedFilterMode, detailedMonth, detailedYear, detailedStartDate, detailedEndDate, view]);
+
+  const handleDownloadDetailedPDF = async () => {
+    let period = '';
+    if (detailedFilterMode === 'monthly') {
+      try {
+        const [year, month] = detailedMonth.split('-');
+        const date = new Date(Number(year), Number(month) - 1, 1);
+        period = date.toLocaleDateString('bn-BD', { year: 'numeric', month: 'long' });
+      } catch (e) {
+        period = detailedMonth;
+      }
+    } else if (detailedFilterMode === 'yearly') {
+      period = `${detailedYear} সাল`;
+    } else if (detailedFilterMode === 'custom') {
+      try {
+        const startFormatted = new Date(detailedStartDate).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' });
+        const endFormatted = new Date(detailedEndDate).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' });
+        period = `${startFormatted} থেকে ${endFormatted}`;
+      } catch (e) {
+        period = `${detailedStartDate} - ${detailedEndDate}`;
+      }
+    }
+
+    try {
+      setStatusModal({ show: true, type: 'success', title: 'অপেক্ষা করুন', message: 'পিডিএফ রিপোর্ট তৈরি করা হচ্ছে...' });
+      await generateSystemPaymentReportPDF(
+        period,
+        {
+          smsRechargeTotal: detailedReport.smsRechargeTotal || 0,
+          voiceRechargeTotal: detailedReport.voiceRechargeTotal || 0,
+          subRechargeTotal: detailedReport.subRechargeTotal || 0,
+          smsSentNum: detailedReport.smsSentNum || 0,
+          voiceCallsNum: detailedReport.voiceCallsNum || 0,
+          transactions: detailedReport.transactions || []
+        },
+        lang === 'bn' ? 'bn' : 'en'
+      );
+      setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'রিপোর্ট সফলভাবে ডাউনলোড করা হয়েছে।' });
+    } catch (err) {
+      console.error("Failed to generate detailed report PDF:", err);
+      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: 'রিপোর্ট তৈরি করতে সমস্যা হয়েছে।' });
+    }
+  };
+
+  const handleDownloadSubscriptionMatrixPDF = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    const [matrixYear] = (selectedMonthForReminder || '').split('-');
+    const yearStr = matrixYear || new Date().getFullYear().toString();
+    try {
+      setStatusModal({ 
+        show: true, 
+        type: 'success', 
+        title: lang === 'bn' ? 'অপেক্ষা করুন' : 'Please Wait', 
+        message: lang === 'bn' ? 'সাবস্ক্রিপশন ম্যাট্রিক্স পিডিএফ তৈরি করা হচ্ছে...' : 'Generating Subscription Matrix PDF...' 
+      });
+      await generateSubscriptionMatrixPDF(
+        yearStr,
+        madrasahs,
+        lang === 'bn' ? 'bn' : 'en',
+        (progress) => {
+          setStatusModal({
+            show: true,
+            type: 'success',
+            title: lang === 'bn' ? 'অপেক্ষা করুন' : 'Please Wait',
+            message: lang === 'bn' 
+              ? `সাবস্ক্রিপশন ম্যাট্রিক্স পিডিএফ তৈরি করা হচ্ছে... (${progress}%)` 
+              : `Generating Subscription Matrix PDF... (${progress}%)`
+          });
+        }
+      );
+      setStatusModal({ 
+        show: true, 
+        type: 'success', 
+        title: lang === 'bn' ? 'সফল' : 'Success', 
+        message: lang === 'bn' ? 'ম্যাট্রিক্স রিপোর্ট সফলভাবে ডাউনলোড করা হয়েছে।' : 'Matrix report downloaded successfully.' 
+      });
+    } catch (err: any) {
+      console.error("Failed to generate subscription matrix PDF:", err);
+      setStatusModal({ 
+        show: true, 
+        type: 'error', 
+        title: lang === 'bn' ? 'ব্যর্থ' : 'Failed', 
+        message: lang === 'bn' 
+          ? `ম্যাট্রিক্স রিপোর্ট তৈরি করতে সমস্যা হয়েছে: ${err?.message || err || 'Unknown Error'}` 
+          : `Failed to generate matrix report: ${err?.message || err || 'Unknown Error'}`
+      });
+    }
+  };
 
   const fetchGlobalCounts = async () => {
     try {
@@ -2095,29 +2196,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                 <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-none' : 'bg-white border-slate-100 shadow-premium'} p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border space-y-6`}>
                   <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                     <div className="space-y-1 w-full md:w-auto text-center md:text-left">
-                      <h3 className={`text-lg md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>মাসিক আয় রিপোর্ট</h3>
+                      <h3 className={`text-lg md:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>সিস্টেম আয় রিপোর্ট</h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center md:justify-start gap-1">
                         {detailedReport.loading && <RefreshCw size={12} className="animate-spin text-blue-500" />}
-                        <span>Monthly Revenue & Usage Report</span>
+                        <span>System Revenue & Usage Report</span>
                       </p>
                     </div>
                     <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
                       <select
                         value={detailedFilterMode}
-                        onChange={(e) => setDetailedFilterMode(e.target.value as 'monthly' | 'yearly')}
+                        onChange={(e) => setDetailedFilterMode(e.target.value as 'monthly' | 'yearly' | 'custom')}
                         className={`w-full sm:w-auto text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
                       >
                         <option value="monthly">মাসিক (Monthly)</option>
                         <option value="yearly">বাৎসরিক (Yearly)</option>
+                        <option value="custom">কাস্টম (Custom)</option>
                       </select>
-                      {detailedFilterMode === 'monthly' ? (
+                      {detailedFilterMode === 'monthly' && (
                         <input
                           type="month"
                           value={detailedMonth}
                           onChange={(e) => setDetailedMonth(e.target.value)}
                           className={`w-full sm:w-auto text-[11px] font-black py-2.5 px-3 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
                         />
-                      ) : (
+                      )}
+                      {detailedFilterMode === 'yearly' && (
                         <select
                           value={detailedYear}
                           onChange={(e) => setDetailedYear(e.target.value)}
@@ -2129,6 +2232,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                           })}
                         </select>
                       )}
+                      {detailedFilterMode === 'custom' && (
+                        <div className="flex items-center gap-1 w-full sm:w-auto">
+                          <input
+                            type="date"
+                            value={detailedStartDate}
+                            onChange={(e) => setDetailedStartDate(e.target.value)}
+                            className={`w-full sm:w-auto text-[11px] font-black py-2 px-2.5 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                          />
+                          <span className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>থেকে</span>
+                          <input
+                            type="date"
+                            value={detailedEndDate}
+                            onChange={(e) => setDetailedEndDate(e.target.value)}
+                            className={`w-full sm:w-auto text-[11px] font-black py-2 px-2.5 rounded-xl border cursor-pointer outline-none transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500'}`}
+                          />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleDownloadDetailedPDF}
+                        disabled={detailedReport.loading}
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 text-[11px] font-black py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-95 transition-all disabled:opacity-50 shrink-0 cursor-pointer"
+                      >
+                        <Download size={14} />
+                        <span>PDF ডাউনলোড</span>
+                      </button>
                     </div>
                   </div>
 
@@ -2200,6 +2329,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                         <h5 className={`text-2xl font-black ${madrasah?.theme === 'dark' ? 'text-red-400' : 'text-red-600'}`}>{unpaidInstitutions.length}</h5>
                       </div>
                    </div>
+
+                    <button 
+                      type="button"
+                      onClick={(e) => handleDownloadSubscriptionMatrixPDF(e)}
+                      className="w-full min-h-[48px] py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-md hover:shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer mb-2"
+                    >
+                      <Download size={14} />
+                      <span>পেমেন্ট ও বকেয়া ম্যাট্রিক্স (PDF)</span>
+                    </button>
 
                    {unpaidInstitutions.length > 0 && (
                      <div className="flex gap-3 relative z-[100]">

@@ -82,6 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           sysSettings = {
             ...sysSettings,
             ...sysData,
+            reve_non_masking_id: sysData.reve_non_masking_id || sysData.reve_caller_id || '',
             sms_provider_config: sysData.sms_provider_config || sysSettings.sms_provider_config
           };
         }
@@ -89,10 +90,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (institutionId) {
           const { data: instData } = await supabase
             .from('institutions')
-            .select('reve_api_key, reve_secret_key, reve_client_id, reve_non_masking_id, automas_api_key, automas_masking_sender_id, automas_non_masking_sender_id')
+            .select('reve_api_key, reve_secret_key, reve_client_id, reve_caller_id, reve_non_masking_id, automas_api_key, automas_masking_sender_id, automas_non_masking_sender_id')
             .eq('id', institutionId)
             .single();
-          if (instData) instSettings = instData;
+          if (instData) {
+            instSettings = {
+              ...instData,
+              reve_non_masking_id: instData.reve_non_masking_id || instData.reve_caller_id || ''
+            };
+          }
         }
       } catch (dbErr) {
         console.warn('Could not fetch SMS settings from database, fallback to defaults:', dbErr);
