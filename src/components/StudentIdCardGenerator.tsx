@@ -39,7 +39,8 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   const nameLen = instName.length;
   const addressLen = instAddress.length;
   
-  const nameSizeClass = nameLen > 45 ? "text-[11px] leading-normal" : nameLen > 30 ? "text-[13px] leading-normal" : "text-[15px] leading-normal";
+  const nameSizeClass = nameLen > 80 ? "text-[6.5px]" : nameLen > 65 ? "text-[7.5px]" : nameLen > 50 ? "text-[9px]" : nameLen > 35 ? "text-[11.5px]" : "text-[14px]";
+  const nameTrackingClass = nameLen > 60 ? "tracking-tighter" : nameLen > 40 ? "tracking-tight" : "tracking-wide";
   const addressSizeClass = addressLen > 65 ? "text-[7.5px] leading-normal" : addressLen > 40 ? "text-[8px] leading-normal" : "text-[8.5px] leading-normal";
 
   React.useEffect(() => {
@@ -373,8 +374,8 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                             </div>
                           )}
                        </div>
-                       <div className="flex-1 text-center">
-                           <h3 className={`font-bold text-white font-solaiman tracking-wide drop-shadow-md line-clamp-2 max-w-[200px] mx-auto text-center ${nameSizeClass}`}>
+                       <div className="flex-1 text-center overflow-hidden">
+                           <h3 className={`font-bold text-white font-solaiman drop-shadow-md whitespace-normal line-clamp-2 w-full mx-auto text-center leading-[1.1] ${nameSizeClass} ${nameTrackingClass}`}>
                             {instName}
                           </h3>
                           <p className={`text-white/95 font-medium tracking-wide mt-[2px] line-clamp-2 max-w-[200px] mx-auto text-center ${addressSizeClass}`}>
@@ -521,35 +522,27 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             </div>
 
             {/* Back Header Content */}
-            <div className="w-full pt-5 pb-1 px-4 text-center z-10 relative">
-               <div className="flex items-center justify-center gap-2">
-                  {madrasah?.logo_url && (
-                    <img
-                      src={madrasah.logo_url}
-                      className="w-[24px] h-[24px] object-contain rounded-full"
-                      alt="logo"
-                      crossOrigin="anonymous"
-                     onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  )}
-                  <h3 className="font-bold text-[13px] leading-normal font-solaiman" style={{ color: themeColor }}>
+            <div className="w-full pt-5 pb-1 px-2 text-center z-10 relative">
+               <div className="flex items-center justify-center">
+                  <h3 className={`font-bold leading-[1.1] font-solaiman whitespace-normal line-clamp-2 w-full px-1 ${nameLen > 60 ? 'text-[8px] tracking-tighter' : nameLen > 45 ? 'text-[9.5px] tracking-tight' : nameLen > 30 ? 'text-[11.5px]' : 'text-[13.5px]'}`} style={{ color: themeColor }}>
                     {madrasah?.name}
                   </h3>
                </div>
-               <div className="w-[100px] h-[1px] bg-slate-200 mx-auto mt-2 opacity-50" />
+               <div className="w-[100px] h-[1px] bg-slate-200 mx-auto mt-1.5 opacity-50" />
             </div>
 
-            <div className="px-4 py-1.5 flex-1 flex flex-col z-10 relative">
+            <div className="px-4 py-1 flex-1 flex flex-col z-10 relative overflow-hidden">
               {/* Rules Section */}
-              <div className="mb-2">
+              <div className="mb-1">
                 <div
-                  className="inline-block px-3 py-0.5 rounded-sm text-white text-[9.5px] font-bold font-solaiman mb-1.5 shadow-sm"
+                  className="inline-block px-3 py-0.5 rounded-sm text-white text-[9.5px] font-bold font-solaiman mb-1 shadow-sm"
                   style={{ backgroundColor: themeColor }}
                 >
                   {t.instructions}
                 </div>
-                <ul className="text-[9px] text-slate-700 font-medium font-solaiman list-disc pl-4 space-y-1 pr-1">
+                <ul className="text-[9px] text-slate-700 font-medium font-solaiman list-disc pl-4 space-y-0.5 pr-1">
                   {t.rules.map((rule, idx) => (
-                    <li key={idx} className="leading-normal">
+                    <li key={idx} className="leading-tight">
                       {rule}
                     </li>
                   ))}
@@ -557,14 +550,14 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               </div>
 
               {/* QR Code Segment - Compact */}
-              <div className="my-auto py-1 flex flex-col items-center w-full">
+              <div className="py-1 flex flex-col items-center w-full">
                 <div className="p-1 px-1.5 bg-white rounded-lg shadow-sm border border-slate-100 inline-block mb-1">
                   <QRCode
                     value={madrasah ? `Name: ${madrasah.name}\nAddress: ${madrasah.address || ''}\nMobile: ${madrasah.phone || ''}\nStudent: ${currentRenderStudent.student_name} (${currentRenderStudent.registration_number || currentRenderStudent.roll || ''})` : `ID:${currentRenderStudent.id}`}
-                    size={60}
+                    size={55}
                   />
                 </div>
-                <p className="text-[9px] font-bold tracking-widest text-slate-500 font-solaiman">
+                <p className="text-[8px] font-bold tracking-widest text-slate-500 font-solaiman">
                   {currentRenderStudent.registration_number ||
                     currentRenderStudent.roll ||
                     currentRenderStudent.id.substring(0, 8)}
@@ -572,14 +565,14 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               </div>
 
               {/* Emergency Contact */}
-              <div className="mt-1 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">
+              <div className="mt-0.5 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">
                 <div
                   className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-solaiman mb-1"
                   style={{ backgroundColor: themeColor }}
                 >
                   {t.emergency}
                 </div>
-                <div className="flex flex-col gap-1 text-[9px] font-medium text-slate-700 font-solaiman">
+                <div className="flex flex-col gap-0.5 text-[8.5px] font-medium text-slate-700 font-solaiman">
                   <div className="flex items-center gap-1.5">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -617,7 +610,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                     >
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg>
-                    <span className="leading-snug flex-1 font-solaiman">
+                    <span className="leading-tight flex-1 font-solaiman line-clamp-2">
                       {madrasah?.address || "Institution Address Here"}
                     </span>
                   </div>
@@ -626,20 +619,20 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             </div>
 
             {/* Bottom Curve Design */}
-            <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[80px]">
+            <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[60px]">
                <svg 
                 xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 280 80" 
+                viewBox="0 0 280 60" 
                 preserveAspectRatio="none" 
                 className="w-full h-full"
                >
-                   <path d="M0,80 L280,80 L280,50 C180,10 100,70 0,30 Z" fill={themeColor} opacity={0.12}></path>
-                   <path d="M0,80 L280,80 L280,40 C180,0 100,60 0,20 Z" fill={themeColor} opacity={0.08}></path>
+                   <path d="M0,60 L280,60 L280,30 C180,0 100,50 0,20 Z" fill={themeColor} opacity={0.12}></path>
+                   <path d="M0,60 L280,60 L280,20 C180,-10 100,40 0,10 Z" fill={themeColor} opacity={0.08}></path>
                </svg>
             </div>
 
             {/* Bottom Motto Styled */}
-            <div className="w-full pb-3.5 pt-1 text-center z-10 relative mt-auto px-5">
+            <div className="w-full pb-2.5 pt-1 text-center z-10 relative mt-auto px-5">
                <div className="px-4 py-1 rounded-lg inline-block mx-auto shadow-sm border border-white/50" style={{ backgroundColor: themeColor }}>
                   <p className="text-[8.5px] font-bold text-white font-solaiman tracking-[0.2em] uppercase">
                     {t.motto}
