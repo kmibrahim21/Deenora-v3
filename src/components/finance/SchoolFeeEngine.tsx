@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, UserRole, Profile } from 'types';
-import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone, Check } from 'lucide-react';
+import { Loader2, Plus, X, DollarSign, Tag, CheckCircle2, Download, ChevronDown, RefreshCw, AlertCircle, Info, Users, Edit3, Trash2, Calendar, Phone, Check, Printer } from 'lucide-react';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 import { OfflineService } from '../../services/OfflineService';
+import { ThermalReceiptPreviewModal } from './ThermalReceiptPreviewModal';
 
 interface SchoolFeeEngineProps {
   activeTab: 'fees' | 'structures';
@@ -89,6 +90,15 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
 
   // Structure State
   const [showAddStructure, setShowAddStructure] = useState(false);
+
+  // 58mm Thermal Print Modal State
+  const [showThermalModal, setShowThermalModal] = useState(false);
+  const [thermalReceiptData, setThermalReceiptData] = useState<{
+    student: any;
+    month: string;
+    receiptId?: string;
+    paymentDetails?: any;
+  } | null>(null);
   const [structureSelectedClass, setStructureSelectedClass] = useState<string>('');
   const [showStructureClassDropdown, setShowStructureClassDropdown] = useState(false);
   const [editingStructureId, setEditingStructureId] = useState<string | null>(null);
@@ -572,6 +582,36 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
       setCollectAmount('');
       setDiscount('');
       setSelectedStudent(null);
+
+      // Trigger 58mm Thermal Receipt Modal after successful payment
+      const previousDue = Math.max(0, Number(currentStudent.balance_due || 0));
+      const currentDue = Math.max(0, previousDue - totalAmt - totalDiscount);
+      const feeCategories = selectedFeeCategories.length > 0 
+        ? selectedFeeCategories.map(c => ({ name: c, amount: totalAmt + totalDiscount }))
+        : [{ name: lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Fee Collection', amount: totalAmt + totalDiscount }];
+
+      setThermalReceiptData({
+        student: {
+          ...currentStudent,
+          class_name: className,
+          total_paid: totalAmt,
+          total_payable: totalAmt + totalDiscount,
+          balance_due: currentDue,
+          discount: totalDiscount,
+          previous_due: previousDue,
+          fee_items: feeCategories,
+        },
+        month: selectedMonth,
+        paymentDetails: {
+          paidAmount: totalAmt,
+          discount: totalDiscount,
+          previousDue: previousDue,
+          currentDue: currentDue,
+          paymentMethod: 'Cash',
+          feeItems: feeCategories,
+        }
+      });
+      setShowThermalModal(true);
       
       await requestManager.invalidatePattern(`fees:${madrasah.id}`);
       await requestManager.invalidatePattern(`all_fees:${madrasah.id}`);
@@ -688,7 +728,34 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     }
   };
 
-  const handleDownloadReceipt = async (student: any, downloadLang: 'en' | 'bn' = lang) => {
+  const handleDownloadReceipt = async (student: any, downloadLang: 'en' | 'bn' = lang, mode: 'print' | 'download' = 'download') => {
+    if (mode === 'print') {
+      const className = classes.find(c => c.id === student.class_id)?.class_name || student.class_name || '';
+      const previousDue = Math.max(0, Number(student.balance_due || 0));
+      const feeCats = student.fee_items || [{ name: downloadLang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee', amount: Number(student.total_payable || student.total_paid || 0) }];
+      
+      setThermalReceiptData({
+        student: {
+          ...student,
+          class_name: className,
+          section: student.student_type || '',
+          previous_due: previousDue,
+          fee_items: feeCats
+        },
+        month: selectedMonth,
+        paymentDetails: {
+          paidAmount: Number(student.total_paid || 0),
+          discount: Number(student.discount || 0),
+          previousDue: previousDue,
+          currentDue: Number(student.balance_due || 0),
+          paymentMethod: 'Cash',
+          feeItems: feeCats
+        }
+      });
+      setShowThermalModal(true);
+      return;
+    }
+
     const className = classes.find(c => c.id === student.class_id)?.class_name || '';
     setIsDownloading(true);
     setDownloadProgress(0);
@@ -698,7 +765,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             selectedMonth,
             madrasah,
             downloadLang,
-            (p) => setDownloadProgress(p)
+            (p) => setDownloadProgress(p),
+            false
         );
     } catch (error) {
         console.error('Download error:', error);
@@ -912,16 +980,26 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                              <Phone size={14} />
                           </a>
                        )}
-                       <button 
-                          onClick={() => {
-                              setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l));
-                              setShowDownloadLangModal(true);
-                          }}
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-white text-slate-400 border-slate-100 hover:bg-blue-50 hover:text-[#2563EB] hover:border-blue-100'} active:scale-95`}
-                          title="Download Receipt"
-                       >
-                          <Download size={16} />
-                       </button>
+                       {(madrasah?.config_json as any)?.features?.receipt_print_mode ? (
+                        <button 
+                           onClick={() => handleDownloadReceipt(item, lang, 'print')}
+                           className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-blue-900/20 text-blue-400 border-blue-700/50 hover:bg-blue-800/40 hover:text-blue-300' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 hover:text-[#1d4ed8]'} active:scale-95`}
+                           title="Print Receipt"
+                        >
+                           <Printer size={16} />
+                        </button>
+                      ) : (
+                        <button 
+                           onClick={() => {
+                               setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadReceipt(item, l, 'download'));
+                               setShowDownloadLangModal(true);
+                           }}
+                           className={`w-9 h-9 rounded-lg flex items-center justify-center border shadow-sm transition-all ${isDark ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-blue-400' : 'bg-white text-slate-400 border-slate-100 hover:bg-blue-50 hover:text-[#2563EB] hover:border-blue-100'} active:scale-95`}
+                           title="Download Receipt"
+                        >
+                           <Download size={16} />
+                        </button>
+                      )}
                        <button 
                           onClick={() => { setSelectedStudent(item); setCollectAmount(''); setShowFeeCollection(true); }} 
                           disabled={isFullyPaid || isNoFeeSet} 
@@ -1254,6 +1332,23 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                     </div>
                 </div>
             </div>
+         )}
+
+         {/* 58mm Thermal Receipt Preview & Print Modal */}
+         {thermalReceiptData && (
+            <ThermalReceiptPreviewModal
+              isOpen={showThermalModal}
+              onClose={() => {
+                setShowThermalModal(false);
+                setThermalReceiptData(null);
+              }}
+              student={thermalReceiptData.student}
+              month={thermalReceiptData.month}
+              madrasah={madrasah}
+              lang={lang}
+              receiptId={thermalReceiptData.receiptId}
+              paymentDetails={thermalReceiptData.paymentDetails}
+            />
          )}
       </div>
     );

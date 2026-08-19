@@ -39,9 +39,8 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
   const nameLen = instName.length;
   const addressLen = instAddress.length;
   
-  const nameSizeClass = nameLen > 85 ? "text-[5.5px]" : nameLen > 70 ? "text-[6.5px]" : nameLen > 55 ? "text-[8px]" : nameLen > 40 ? "text-[10px]" : nameLen > 25 ? "text-[12px]" : "text-[14px]";
-  const nameTrackingClass = nameLen > 60 ? "tracking-tighter" : nameLen > 40 ? "tracking-tight" : "tracking-wide";
-  const addressSizeClass = addressLen > 75 ? "text-[6.5px] leading-tight" : addressLen > 55 ? "text-[7px] leading-tight" : addressLen > 35 ? "text-[7.5px] leading-tight" : "text-[8px] leading-tight";
+  const nameSizeClass = nameLen > 65 ? "text-[8px] leading-snug" : nameLen > 45 ? "text-[9.5px] leading-snug" : nameLen > 30 ? "text-[11px] leading-snug" : nameLen > 20 ? "text-[12.5px] leading-snug" : "text-[14px] leading-snug";
+  const addressSizeClass = addressLen > 60 ? "text-[6.5px] leading-snug" : addressLen > 40 ? "text-[7.5px] leading-snug" : "text-[8px] leading-snug";
 
   React.useEffect(() => {
     setCurrentRenderTeacher(teacher);
@@ -338,21 +337,21 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
               </div>
 
               <div className="relative z-10 flex flex-col h-full w-full">
-                  <div className="flex items-center gap-3 pt-5 px-5">
-                       <div className="w-[50px] h-[50px] bg-white rounded-full p-[2px] shadow-sm flex items-center justify-center shrink-0">
+                  <div className="flex items-center gap-2.5 pt-4 px-4">
+                       <div className="w-[48px] h-[48px] bg-white rounded-full p-[2px] shadow-sm flex items-center justify-center shrink-0">
                           {madrasah?.logo_url ? (
                             <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain rounded-full" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                           ) : (
-                            <div className="w-full h-full rounded-full flex items-center justify-center text-[20px] font-black" style={{ color: themeColor }}>
+                            <div className="w-full h-full rounded-full flex items-center justify-center text-[18px] font-black" style={{ color: themeColor }}>
                               {instName.charAt(0) || "M"}
                             </div>
                           )}
                        </div>
-                       <div className="flex-1 text-center overflow-hidden flex flex-col justify-center">
-                           <h3 className={`font-bold text-white font-solaiman drop-shadow-md whitespace-nowrap w-full mx-auto text-center leading-none ${nameSizeClass} ${nameTrackingClass}`}>
+                       <div className="flex-1 text-center flex flex-col justify-center min-w-0 px-0.5">
+                           <h3 className={`font-bold text-white font-solaiman drop-shadow-sm w-full mx-auto text-center py-0.5 ${nameSizeClass}`}>
                             {instName}
                           </h3>
-                          <p className={`text-white/95 font-medium tracking-wide mt-[2px] whitespace-nowrap w-full mx-auto text-center ${addressSizeClass}`}>
+                          <p className={`text-white/95 font-medium mt-[1px] w-full mx-auto text-center py-0.5 ${addressSizeClass}`}>
                             {instAddress}
                           </p>
                        </div>
@@ -367,42 +366,42 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                          )}
                       </div>
 
-                      <div className="mt-1 px-3 py-0.5 rounded-full text-white text-[8.5px] font-bold shadow-sm tracking-widest border border-white/20 uppercase inline-block" style={{ backgroundColor: themeColor }}>
+                      <div className="mt-1 px-3 py-0.5 rounded-full text-white text-[8.5px] font-bold shadow-sm tracking-wide border border-white/20 uppercase inline-block font-solaiman" style={{ backgroundColor: themeColor }}>
                         {t.idBadge}
                       </div>
 
-                      <div className="mt-1 text-center px-2">
-                         <h2 className="font-extrabold text-[17px] font-solaiman leading-snug tracking-tight pt-0.5" style={{ color: themeColor }}>
+                      <div className="mt-0.5 text-center px-2">
+                         <h2 className="font-extrabold text-[16px] font-solaiman leading-snug py-0.5" style={{ color: themeColor }}>
                               {currentRenderTeacher.name || 'Teacher Name'}
                           </h2>
                       </div>
                   </div>
 
-                  <div className="pl-10 pr-4 w-full flex flex-col gap-[1.5px] mt-0.5 z-10 relative">
+                  <div className="pl-10 pr-4 w-full flex flex-col gap-[1px] mt-0.5 z-10 relative">
                        <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.id}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-none font-solaiman tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] uppercase">{currentRenderTeacher.id.substring(0, 8)}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.id}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] uppercase">{currentRenderTeacher.id.substring(0, 8)}</span>
                        </div>
                        <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.designation}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.designation}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{currentRenderTeacher.designation || (isBangla ? 'শিক্ষক' : 'Teacher')}</span>
                        </div>
                        <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.phone}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{currentRenderTeacher.phone || "-"}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.phone}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{currentRenderTeacher.phone || "-"}</span>
                        </div>
                        <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0">{t.joinDate}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-none font-solaiman tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.joinDate}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderTeacher.join_date ? new Date(currentRenderTeacher.join_date).toLocaleDateString('en-GB') : "-"}</span>
                        </div>
                        <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 mt-[1px]">{t.address}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 mt-[1px]">:</span>
-                          <span className="text-[10px] font-extrabold text-slate-800 leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman">{currentRenderTeacher.address || "-"}</span>
+                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.address}</span>
+                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
+                          <span className="text-[10px] font-extrabold text-slate-800 leading-tight py-0.5 line-clamp-2 max-w-[155px] font-solaiman break-words">{currentRenderTeacher.address || "-"}</span>
                        </div>
                   </div>
 
@@ -421,7 +420,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                            )}
                            </div>
                            <div className="w-full h-[1px] bg-white/50 mb-0.5" />
-                           <p className="text-[6.5px] font-bold text-white font-solaiman uppercase tracking-wider shadow-sm">
+                           <p className="text-[7px] font-bold text-white font-solaiman uppercase tracking-wider shadow-sm leading-snug py-0.5">
                                {t.principal}
                            </p>
                         </div>
@@ -458,10 +457,10 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                 </svg>
             </div>
 
-            <div className="w-full pt-5 pb-1 px-2 text-center z-10 relative">
-               <div className="flex items-center justify-center overflow-hidden px-2">
-                  <h3 className={`font-bold leading-none font-solaiman whitespace-nowrap w-full ${nameLen > 70 ? 'text-[7.5px]' : nameLen > 55 ? 'text-[8.5px]' : nameLen > 40 ? 'text-[10px]' : nameLen > 25 ? 'text-[12px]' : 'text-[13.5px]'}`} style={{ color: themeColor }}>
-                    {madrasah?.name}
+            <div className="w-full pt-4 pb-1 px-3 text-center z-10 relative">
+               <div className="flex items-center justify-center px-1">
+                  <h3 className={`font-bold font-solaiman w-full leading-snug py-0.5 ${nameLen > 65 ? 'text-[8px]' : nameLen > 45 ? 'text-[9.5px]' : nameLen > 30 ? 'text-[11px]' : nameLen > 20 ? 'text-[12.5px]' : 'text-[13.5px]'}`} style={{ color: themeColor }}>
+                    {madrasah?.name || instName}
                   </h3>
                </div>
                <div className="w-[100px] h-[1px] bg-slate-200 mx-auto mt-1 opacity-50" />
@@ -470,14 +469,14 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
             <div className="px-4 py-1 flex-1 flex flex-col z-10 relative overflow-hidden">
               <div className="mb-1">
                 <div
-                  className="inline-block px-3 py-0.5 rounded-sm text-white text-[9.5px] font-bold font-solaiman mb-1 shadow-sm"
+                  className="inline-block px-3 py-0.5 rounded-sm text-white text-[9.5px] font-bold font-solaiman mb-1 shadow-sm leading-snug"
                   style={{ backgroundColor: themeColor }}
                 >
                   {t.instructions}
                 </div>
                 <ul className="text-[9px] text-slate-700 font-medium font-solaiman list-disc pl-4 space-y-0.5 pr-1">
                   {t.rules.map((rule, idx) => (
-                    <li key={idx} className="leading-tight">
+                    <li key={idx} className="leading-snug py-0.5">
                       {rule}
                     </li>
                   ))}
@@ -491,14 +490,14 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                     size={55}
                   />
                 </div>
-                <p className="text-[8px] font-bold tracking-widest text-slate-500 uppercase mt-0.5">
+                <p className="text-[8px] font-bold tracking-widest text-slate-500 uppercase mt-0.5 font-solaiman">
                    {currentRenderTeacher.id.substring(0, 8)}
                 </p>
               </div>
 
               <div className="mt-1.5 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">
                 <div
-                  className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-solaiman mb-1"
+                  className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-solaiman mb-1 leading-snug"
                   style={{ backgroundColor: themeColor }}
                 >
                   {t.emergency}
@@ -541,13 +540,13 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                     >
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg>
-                    <span className="leading-tight flex-1 font-solaiman line-clamp-2">
+                    <span className="leading-snug flex-1 font-solaiman line-clamp-2 py-0.5">
                       {madrasah?.address || "Institution Address Here"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-200/50">
-                    <span className="text-[8px] font-bold text-slate-500 font-solaiman uppercase tracking-wider">{t.issueDate}</span>
-                    <span className="text-[8px] font-bold text-slate-700 font-solaiman">: {new Date().toLocaleDateString('en-GB')}</span>
+                    <span className="text-[8px] font-bold text-slate-500 font-solaiman uppercase tracking-wider leading-snug py-0.5">{t.issueDate}</span>
+                    <span className="text-[8px] font-bold text-slate-700 font-solaiman leading-snug py-0.5">: {new Date().toLocaleDateString('en-GB')}</span>
                   </div>
                 </div>
               </div>
@@ -567,7 +566,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
 
             <div className="w-full pb-2.5 pt-1 text-center z-10 relative mt-auto px-5">
                <div className="px-4 py-1 rounded-lg inline-block mx-auto shadow-sm border border-white/50" style={{ backgroundColor: themeColor }}>
-                  <p className="text-[8.5px] font-bold text-white font-solaiman tracking-[0.2em] uppercase">
+                  <p className="text-[8.5px] font-bold text-white font-solaiman tracking-wide uppercase leading-snug py-0.5">
                     {t.motto}
                   </p>
                </div>

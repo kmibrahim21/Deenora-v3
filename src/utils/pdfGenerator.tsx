@@ -965,7 +965,19 @@ export const generateFeeReceiptPDF = async (
     month: string,
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    isPrintMode: boolean = false
+) => {
+    return generateFeeReceiptPDF_Universal(student, month, madrasah, lang, onProgress, isPrintMode);
+};
+
+export const generateFeeReceiptPDF_Universal = async (
+    student: any,
+    month: string,
+    madrasah: any,
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void,
+    isPrintMode: boolean = false
 ) => {
     onProgress?.(10);
     const container = document.createElement('div');
@@ -974,6 +986,9 @@ export const generateFeeReceiptPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
     const receiptId = `#REC-${Date.now().toString().slice(-6)}`;
+    
+    // Paper size from config
+    const paperSize = (madrasah?.config_json as any)?.features?.printer_paper_size || 'A4';
     
     // Convert month string (YYYY-MM) to month name if needed
     let displayMonth = month;
@@ -996,26 +1011,141 @@ export const generateFeeReceiptPDF = async (
     });
     onProgress?.(40);
 
-    const imgData = await toJpeg(container.firstElementChild as HTMLElement, {
-        pixelRatio: 1.5,
-        quality: 0.8,
-        backgroundColor: '#ffffff',
-        width: 794,
-        height: 1123,
-    });
-    onProgress?.(80);
-
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
+    const receiptEl = container.firstElementChild as HTMLElement;
     
-    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    let doc: jsPDF;
+    let imgData: string;
+    
+    if (isPrintMode && (paperSize === '58mm' || paperSize === '80mm')) {
+        // Thermal printing logic
+        const widthMm = paperSize === '58mm' ? 58 : 80;
+        const pixelWidth = widthMm * 3.78; // approx mm to px
+        
+        // Measure the height dynamically based on content
+        receiptEl.style.width = `${pixelWidth}px`;
+        receiptEl.style.height = 'auto';
+        const heightPx = receiptEl.offsetHeight;
+        const heightMm = heightPx / 3.78;
+        
+        imgData = await toJpeg(receiptEl, {
+            pixelRatio: 3,
+            quality: 1.0,
+            backgroundColor: '#ffffff',
+            width: pixelWidth,
+            height: heightPx,
+        });
+        
+        doc = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: [widthMm, heightMm],
+            putOnlyUsedFonts: true
+        });
+        doc.addImage(imgData, 'JPEG', 0, 0, widthMm, heightMm, undefined, 'FAST');
+    } else {
+        // Standard A4 PDF Download
+        imgData = await toJpeg(receiptEl, {
+            pixelRatio: 1.5,
+            quality: 0.9,
+            backgroundColor: '#ffffff',
+            width: 794,
+            height: 1123,
+        });
+        
+        doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    }
+    
+    onProgress?.(80);
+    
+    if (isPrintMode) {
+        onProgress?.(90);
+        
+        // Android Native Bridge Detection
+        const deenoraPrint = (window as any).DeenoraPrint;
+        if (deenoraPrint && typeof deenoraPrint.printPdf === 'function') {
+            const pdfBase64 = doc.output('datauristring').split(',')[1];
+            try {
+                deenoraPrint.printPdf(pdfBase64, `Receipt_${student.student_name}.pdf`);
+            } catch (e) {
+                console.error("Native print failed", e);
+            }
+        } else {
+            // Standard Web Print Fallback directly using the main window
+            // We inject the image into the DOM and hide everything else using print CSS
+            // This avoids issues on mobile browsers where iframe.print() prints the main window anyway.
+            const printWrapper = document.createElement('div');
+            printWrapper.className = 'fee-receipt-native-print';
+            
+            const printImg = document.createElement('img');
+            printImg.src = imgData;
+            printImg.style.width = '100%';
+            if (paperSize === '58mm') {
+                printImg.style.maxWidth = '58mm';
+            } else if (paperSize === '80mm') {
+                printImg.style.maxWidth = '80mm';
+            } else {
+                printImg.style.maxWidth = '210mm';
+            }
+            printImg.style.height = 'auto';
+            printImg.style.margin = '0 auto';
+            printImg.style.display = 'block';
+            printWrapper.appendChild(printImg);
+            
+            const style = document.createElement('style');
+            style.innerHTML = `
+                @media print {
+                    /* Hide everything in the body EXCEPT our print wrapper */
+                    body > *:not(.fee-receipt-native-print) {
+                        display: none !important;
+                    }
+                    html, body {
+                        background: white !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        height: auto !important;
+                    }
+                    .fee-receipt-native-print {
+                        display: block !important;
+                        width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        position: static !important;
+                    }
+                    @page { 
+                        margin: ${paperSize === '58mm' || paperSize === '80mm' ? '0' : '0.5cm'}; 
+                        ${paperSize === '58mm' ? 'size: 58mm auto;' : paperSize === '80mm' ? 'size: 80mm auto;' : 'size: portrait;'}
+                    }
+                }
+            `;
+            
+            document.body.appendChild(printWrapper);
+            document.head.appendChild(style);
+            
+            // Allow the DOM to update and the image to render before calling print
+            await new Promise(r => setTimeout(r, 200));
+            
+            window.print();
+            
+            // Cleanup after print dialog closes
+            setTimeout(() => {
+                if (document.body.contains(printWrapper)) {
+                    document.body.removeChild(printWrapper);
+                }
+                if (document.head.contains(style)) {
+                    document.head.removeChild(style);
+                }
+            }, 1000);
+        }
+    } else {
+        doc.save(`Receipt-${student.student_name}-${month}.pdf`);
+    }
     
     onProgress?.(95);
     root.unmount();
     document.body.removeChild(container);
-    
-    doc.save(`Receipt-${student.student_name}-${month}.pdf`);
     onProgress?.(100);
 };
 

@@ -50,6 +50,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
   const [featureTeacherSalarySms, setFeatureTeacherSalarySms] = useState((madrasah?.config_json as any)?.features?.teacher_salary_sms ?? false);
   const [featureTeacherDeduction, setFeatureTeacherDeduction] = useState((madrasah?.config_json as any)?.features?.teacher_attendance_deduction ?? false);
+  const [receiptPrintMode, setReceiptPrintMode] = useState((madrasah?.config_json as any)?.features?.receipt_print_mode ?? false);
+  const [printerPaperSize, setPrinterPaperSize] = useState((madrasah?.config_json as any)?.features?.printer_paper_size ?? 'A4');
 
   const [featureDeleteClass, setFeatureDeleteClass] = useState((madrasah?.config_json as any)?.features?.delete_class ?? false);
   const [featureDeleteAccounting, setFeatureDeleteAccounting] = useState((madrasah?.config_json as any)?.features?.delete_accounting ?? false);
@@ -134,6 +136,8 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
           fee_collection_sms: featureFeeSms,
           teacher_salary_sms: featureTeacherSalarySms,
           teacher_attendance_deduction: featureTeacherDeduction,
+          receipt_print_mode: receiptPrintMode,
+          printer_paper_size: printerPaperSize,
           delete_class: featureDeleteClass,
           delete_accounting: featureDeleteAccounting
         }
@@ -565,17 +569,45 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                     { label: lang === 'bn' ? 'বেতন আদায় SMS' : 'Fee SMS', description: lang === 'bn' ? 'বেতন আদায়ের পর SMS যাবে' : 'Auto SMS on fee collection', checked: featureFeeSms, setter: setFeatureFeeSms },
                     { label: lang === 'bn' ? 'শিক্ষক বেতন SMS' : 'Teacher Salary SMS', description: lang === 'bn' ? 'শিক্ষক বেতন প্রদানের পর SMS যাবে' : 'Auto SMS on teacher salary', checked: featureTeacherSalarySms, setter: setFeatureTeacherSalarySms },
                     { label: lang === 'bn' ? 'শিক্ষক বেতন কর্তন' : 'Teacher Deduction', description: lang === 'bn' ? 'হাজিরার উপর ভিত্তি করে বেতন কর্তন' : 'Auto-deduct by attendance', checked: featureTeacherDeduction, setter: setFeatureTeacherDeduction },
+                    { label: lang === 'bn' ? 'রশিদ প্রিন্ট মোড' : 'Receipt Print Mode', description: lang === 'bn' ? 'ডাউনলোডের পরিবর্তে সরাসরি প্রিন্ট করুন' : 'Direct print instead of download', checked: receiptPrintMode, setter: setReceiptPrintMode },
                   ].map((feature, idx) => (
-                    <label key={idx} className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.02] ${feature.checked ? (isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white border-blue-100 shadow-md shadow-blue-500/5') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white/60 border-transparent')}`}>
-                      <div className="relative inline-flex items-center">
-                        <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => feature.setter(e.target.checked)} />
-                        <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-[#2563EB] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-blue-400' : 'text-[#2563EB]') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
-                      </div>
-                    </label>
+                    <div key={idx} className="space-y-3">
+                      <label className={`flex items-center gap-4 cursor-pointer p-4 rounded-[1.5rem] border transition-all duration-300 group hover:scale-[1.02] ${feature.checked ? (isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white border-blue-100 shadow-md shadow-blue-500/5') : (isDark ? 'bg-slate-800/50 border-slate-700/50' : 'bg-white/60 border-transparent')}`}>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" className="peer sr-only" checked={feature.checked} onChange={(e) => feature.setter(e.target.checked)} />
+                          <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'} peer-checked:bg-[#2563EB] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-inner shadow-black/5`}></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-black transition-colors ${feature.checked ? (isDark ? 'text-blue-400' : 'text-[#2563EB]') : (isDark ? 'text-slate-300' : 'text-slate-700')}`}>{feature.label}</p>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">{feature.description}</p>
+                        </div>
+                      </label>
+                      
+                      {feature.label === (lang === 'bn' ? 'রশিদ প্রিন্ট মোড' : 'Receipt Print Mode') && feature.checked && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 space-y-3"
+                        >
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'প্রিন্ট পেপার সাইজ' : 'Printer Paper Size'}</label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {['58mm', '80mm', 'A4', 'A5'].map((size) => (
+                              <button
+                                key={size}
+                                onClick={() => setPrinterPaperSize(size)}
+                                className={`py-2 rounded-xl text-[10px] font-black transition-all border ${
+                                  printerPaperSize === size 
+                                    ? (isDark ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600')
+                                    : (isDark ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-white border-slate-100 text-slate-400')
+                                }`}
+                              >
+                                {size}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>

@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, LedgerEntry, Fee } from 'types';
-import { X, ArrowLeft, Download, Calendar, DollarSign, ArrowUpCircle, FileText, Loader2, TrendingUp, TrendingDown, Clock, Trash2, User, ChevronRight, Check } from 'lucide-react';
+import { X, ArrowLeft, Download, Calendar, DollarSign, ArrowUpCircle, FileText, Loader2, TrendingUp, TrendingDown, Clock, Trash2, User, ChevronRight, Check, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CacheService } from '../../services/cacheService';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 import { clearGlobalSchoolFeeCache } from './SchoolFeeEngine';
 import { clearGlobalQawmiFeeCache } from './QawmiFeeEngine';
-import { generateFeeReceiptPDF } from '../../utils/pdfGenerator';
+import { generateFeeReceiptPDF_Universal } from '../../utils/pdfGenerator';
+import { ThermalReceiptPreviewModal } from './ThermalReceiptPreviewModal';
 
 interface StudentAccountingDetailProps {
   student: any;
@@ -304,7 +305,59 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
   };
 
   const [isDownloading, setIsDownloading] = useState(false);
-  const handleDownloadReceipt = async (entry: LedgerEntry) => {
+  const [thermalModalOpen, setThermalModalOpen] = useState(false);
+  const [thermalReceiptData, setThermalReceiptData] = useState<{
+    student: any;
+    month: string;
+    receiptId?: string;
+    paymentDetails?: any;
+  } | null>(null);
+
+  const handleOpenThermalReceipt = (entry: LedgerEntry) => {
+    const description = entry.description || '';
+    
+    // Parse months from description
+    let monthText = new Date().toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' });
+    const monthsMatch = description.match(/Month[s]?:\s*([^\)]+)/);
+    if (monthsMatch && monthsMatch[1]) monthText = monthsMatch[1];
+    
+    // Parse discount from description
+    let discount = 0;
+    const discountMatch = description.match(/ছাড়:\s*৳([0-9.]+)/);
+    if (discountMatch && discountMatch[1]) discount = parseFloat(discountMatch[1]);
+    
+    // Parse fee items categories
+    const categoriesMatch = description.split(' - ')[0];
+    const categories = categoriesMatch ? categoriesMatch : (lang === 'bn' ? 'স্টুডেন্ট ফি' : 'Student Fee');
+
+    const receiptStudent = {
+      ...student,
+      total_payable: entry.amount + discount,
+      total_paid: entry.amount,
+      balance_due: 0,
+      discount: discount,
+      fee_items: [
+         { name: categories, amount: entry.amount + discount }
+      ]
+    };
+
+    setThermalReceiptData({
+      student: receiptStudent,
+      month: monthText,
+      receiptId: entry.id ? `#REC-${entry.id.slice(0, 6)}` : undefined,
+      paymentDetails: {
+        paidAmount: entry.amount,
+        discount: discount,
+        currentDue: 0,
+        paymentMethod: 'Cash',
+        transactionDate: entry.transaction_date,
+        feeItems: [{ name: categories, amount: entry.amount + discount }]
+      }
+    });
+    setThermalModalOpen(true);
+  };
+
+  const handleDownloadReceipt = async (entry: LedgerEntry, mode: 'print' | 'download' = 'download') => {
     setIsDownloading(true);
     try {
       const description = entry.description || '';
@@ -334,11 +387,13 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
         ]
       };
       
-      await generateFeeReceiptPDF(
+      await generateFeeReceiptPDF_Universal(
          receiptStudent,
          monthText,
          madrasah,
-         lang
+         lang,
+         undefined,
+         mode === 'print'
       );
     } catch (err) {
       console.error(err);
@@ -991,16 +1046,34 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
                         <div className={`p-4 rounded-2xl border text-[11px] font-bold leading-relaxed whitespace-pre-wrap font-noto ${isDark ? 'bg-slate-800/50 border-slate-700/50 text-slate-400' : 'bg-slate-50/50 border-slate-100 text-slate-600'}`}>
                           {(entry.description || '').split(' || FEE_ID: ')[0]}
                         </div>
-                        <div className="flex justify-between items-center pt-2">
-                           <button
-                             onClick={() => handleDownloadReceipt(entry)}
-                             disabled={isDownloading}
-                             className={`px-3 py-1.5 rounded-lg transition-all active:scale-95 flex items-center gap-1.5 ${isDark ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} disabled:opacity-50 text-[10px] font-bold shadow-sm`}
-                             title="Download Receipt"
-                           >
-                             {isDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                             {lang === 'bn' ? 'রসিদ ডাউনলোড' : 'Download Receipt'}
-                           </button>
+                        <div className="flex justify-between items-center pt-2 gap-2">
+                           <div className="flex gap-2">
+                             {Boolean((madrasah?.config_json as any)?.features?.receipt_print_mode) ? (
+                               <button
+                                 onClick={() => handleOpenThermalReceipt(entry)}
+                                 disabled={isDownloading}
+                                 className={`px-3 py-1.5 rounded-lg transition-all active:scale-95 flex items-center gap-1.5 ${isDark ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} disabled:opacity-50 text-[10px] font-bold shadow-sm`}
+                                 title="Print Receipt"
+                               >
+                                 <Printer size={14} />
+                                 {lang === 'bn' ? 'প্রিন্ট' : 'Print'}
+                               </button>
+                             ) : (
+                               <button
+                                 onClick={() => handleDownloadReceipt(entry, 'download')}
+                                 disabled={isDownloading}
+                                 className={`px-3 py-1.5 rounded-lg transition-all active:scale-95 flex items-center gap-1.5 ${isDark ? 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'} disabled:opacity-50 text-[10px] font-bold shadow-sm`}
+                                 title="Download Receipt"
+                               >
+                                 {isDownloading ? (
+                                   <Loader2 size={14} className="animate-spin" />
+                                 ) : (
+                                   <Download size={14} />
+                                 )}
+                                 {lang === 'bn' ? 'ডাউনলোড' : 'Download'}
+                               </button>
+                             )}
+                           </div>
 
                            <button
                              onClick={() => confirmDeleteLedger(entry.id)}
@@ -1235,6 +1308,23 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
           </div>
         )}
       </AnimatePresence>
+
+      {/* 58mm Thermal Receipt Preview & Print Modal */}
+      {thermalReceiptData && (
+        <ThermalReceiptPreviewModal
+          isOpen={thermalModalOpen}
+          onClose={() => {
+            setThermalModalOpen(false);
+            setThermalReceiptData(null);
+          }}
+          student={thermalReceiptData.student}
+          month={thermalReceiptData.month}
+          madrasah={madrasah}
+          lang={lang}
+          receiptId={thermalReceiptData.receiptId}
+          paymentDetails={thermalReceiptData.paymentDetails}
+        />
+      )}
     </motion.div>
   );
 };

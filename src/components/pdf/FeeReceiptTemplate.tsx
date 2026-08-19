@@ -42,7 +42,7 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     ];
 
     return (
-    <div className="flex-1 p-3 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between">
+    <div className="flex-1 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between p-3">
       {/* Watermark */}
       <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none -rotate-[30deg] px-10">
          {madrasah.logo_url ? (
@@ -67,9 +67,9 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
                <span className="text-xl font-black text-[#1E3A8A]">{madrasah.name.charAt(0)}</span>
             )}
           </div>
-          <div className="flex-1 relative z-10 min-w-0 pr-12">
-            <h1 className={`text-lg font-black text-[#1E3A8A] leading-tight ${isBangla ? 'font-tiro' : ''}`}>{madrasah.name}</h1>
-            {madrasah.address && <p className="text-[9px] font-bold text-slate-500 uppercase leading-normal mt-0.5">{madrasah.address}</p>}
+          <div className="flex-1 relative z-10 min-w-0 pr-2">
+            <h1 className={`text-lg font-black text-[#1E3A8A] leading-tight break-words whitespace-normal ${isBangla ? 'font-tiro' : ''}`}>{madrasah.name}</h1>
+            {madrasah.address && <p className="text-[9px] font-bold text-slate-500 uppercase leading-normal mt-0.5 break-words whitespace-normal">{madrasah.address}</p>}
           </div>
         </div>
 
@@ -88,8 +88,8 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-x-3 gap-y-1 mb-1 bg-slate-50/50 p-2 rounded-lg border border-slate-100 relative z-10">
-          <div className="col-span-2 border-r border-slate-200 pr-3 space-y-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-3 gap-y-1 mb-1 bg-slate-50/50 p-2 rounded-lg border border-slate-100 relative z-10">
+          <div className="col-span-1 sm:col-span-2 sm:border-r border-slate-200 sm:pr-3 space-y-1">
             <div className="flex items-center">
                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest w-10">{t.name}:</span>
                 <span className={`text-[11px] font-bold text-slate-800 truncate ${isBangla ? 'font-tiro' : ''}`}>{student.student_name}</span>
@@ -181,7 +181,6 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     </div>
     );
   };
-
 
   return (
     <div className={`w-[794px] h-[1123px] box-border p-4 bg-white flex flex-col gap-4 ${isBangla ? 'font-noto' : 'font-hind'}`}>
