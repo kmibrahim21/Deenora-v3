@@ -515,39 +515,39 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             </div>
 
             {/* Back Header Content */}
-            <div className="w-full pt-4 pb-1 px-3 text-center z-10 relative">
+            <div className="w-full pt-3 pb-0.5 px-3 text-center z-10 relative">
                <div className="flex items-center justify-center px-1">
-                  <h3 className={`font-bold font-solaiman w-full leading-snug py-0.5 ${nameLen > 65 ? 'text-[8px]' : nameLen > 45 ? 'text-[9.5px]' : nameLen > 30 ? 'text-[11px]' : nameLen > 20 ? 'text-[12.5px]' : 'text-[13.5px]'}`} style={{ color: themeColor }}>
+                  <h3 className={`font-bold font-solaiman w-full leading-snug py-0.5 ${nameLen > 65 ? 'text-[8px]' : nameLen > 45 ? 'text-[9.5px]' : nameLen > 30 ? 'text-[11px]' : nameLen > 20 ? 'text-[12.5px]' : 'text-[13px]'}`} style={{ color: themeColor }}>
                     {madrasah?.name || instName}
                   </h3>
                </div>
-               <div className="w-[100px] h-[1px] bg-slate-200 mx-auto mt-1 opacity-50" />
+               <div className="w-[80px] h-[1px] bg-slate-200 mx-auto mt-0.5 opacity-50" />
             </div>
 
-            <div className="px-4 py-1 flex-1 flex flex-col z-10 relative overflow-hidden">
+            <div className="px-3.5 py-0.5 flex-1 flex flex-col z-10 relative">
               {/* Rules Section */}
-              <div className="mb-1">
+              <div className="mb-0.5">
                 <div
-                  className="inline-block px-3 py-0.5 rounded-sm text-white text-[9.5px] font-bold font-solaiman mb-1 shadow-sm leading-snug"
+                  className="inline-block px-2.5 py-0.5 rounded-sm text-white text-[9px] font-bold font-solaiman mb-0.5 shadow-sm leading-snug"
                   style={{ backgroundColor: themeColor }}
                 >
                   {t.instructions}
                 </div>
-                <ul className="text-[9px] text-slate-700 font-medium font-solaiman list-disc pl-4 space-y-0.5 pr-1">
+                <ul className="text-[8.5px] text-slate-700 font-medium font-solaiman list-disc pl-3.5 space-y-0.5 pr-1">
                   {t.rules.map((rule, idx) => (
-                    <li key={idx} className="leading-snug py-0.5">
+                    <li key={idx} className="leading-snug">
                       {rule}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              {/* QR Code Segment - Compact */}
-              <div className="py-1 flex flex-col items-center w-full">
-                <div className="p-1 px-1.5 bg-white rounded-lg shadow-sm border border-slate-100 inline-block mb-1">
+              {/* QR Code Segment - Enlarged */}
+              <div className="my-1 flex flex-col items-center w-full">
+                <div className="p-1.5 bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-100 inline-block mb-1">
                   <QRCode
                     value={madrasah ? `Name: ${madrasah.name}\nAddress: ${madrasah.address || ''}\nMobile: ${madrasah.phone || ''}\nStudent: ${currentRenderStudent.student_name} (${currentRenderStudent.registration_number || currentRenderStudent.roll || ''})` : `ID:${currentRenderStudent.id}`}
-                    size={55}
+                    size={60}
                   />
                 </div>
                 <p className="text-[8px] font-bold tracking-widest text-slate-500 font-solaiman">
@@ -557,8 +557,8 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                 </p>
               </div>
 
-              {/* Emergency Contact */}
-              <div className="mt-1.5 w-full bg-slate-50 border border-slate-100/60 rounded-xl p-2">
+              {/* Emergency Contact - Slightly raised with balanced margins */}
+              <div className="mt-1.5 mb-2 w-full bg-slate-50 border border-slate-100/80 rounded-lg p-2 shadow-sm">
                 <div
                   className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-solaiman mb-1 leading-snug"
                   style={{ backgroundColor: themeColor }}
@@ -569,7 +569,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                   <div className="flex items-center gap-1.5">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="w-2.5 h-2.5 text-emerald-600"
+                      className="w-2.5 h-2.5 text-emerald-600 shrink-0"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -583,13 +583,13 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                      <div className="flex items-center gap-1.5">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          className="w-2.5 h-2.5 text-emerald-600"
+                          className="w-2.5 h-2.5 text-emerald-600 shrink-0"
                           fill="currentColor"
                           viewBox="0 0 24 24"
                         >
                            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
                         </svg>
-                        <span className="font-bold tracking-wide break-all">
+                        <span className={`font-bold tracking-tight whitespace-nowrap truncate max-w-[210px] ${madrasah.email.length > 28 ? 'text-[7px]' : madrasah.email.length > 22 ? 'text-[7.5px]' : 'text-[8px]'}`}>
                           {madrasah.email}
                         </span>
                      </div>
@@ -603,13 +603,13 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                     >
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg>
-                    <span className="leading-snug flex-1 font-solaiman line-clamp-2 py-0.5">
+                    <span className="leading-tight flex-1 font-solaiman line-clamp-1 py-0.5 text-[8px]">
                       {madrasah?.address || "Institution Address Here"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-200/50">
-                    <span className="text-[8px] font-bold text-slate-500 font-solaiman uppercase tracking-wider leading-snug py-0.5">{t.issueDate}</span>
-                    <span className="text-[8px] font-bold text-slate-700 font-solaiman leading-snug py-0.5">: {new Date().toLocaleDateString('en-GB')}</span>
+                  <div className="flex items-center gap-1.5 mt-0.5 pt-1 border-t border-slate-200/70">
+                    <span className="text-[7.5px] font-bold text-slate-500 font-solaiman uppercase tracking-wider leading-snug py-0.5">{t.issueDate}</span>
+                    <span className="text-[7.5px] font-bold text-slate-800 font-solaiman leading-snug py-0.5">: {new Date().toLocaleDateString('en-GB')}</span>
                   </div>
                 </div>
               </div>
@@ -629,9 +629,9 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             </div>
 
             {/* Bottom Motto Styled */}
-            <div className="w-full pb-2.5 pt-1 text-center z-10 relative mt-auto px-5">
-               <div className="px-4 py-1 rounded-lg inline-block mx-auto shadow-sm border border-white/50" style={{ backgroundColor: themeColor }}>
-                  <p className="text-[8.5px] font-bold text-white font-solaiman tracking-wide uppercase leading-snug py-0.5">
+            <div className="w-full pb-2 pt-0.5 text-center z-10 relative mt-auto px-4">
+               <div className="px-3.5 py-0.5 rounded-lg inline-block mx-auto shadow-sm border border-white/50" style={{ backgroundColor: themeColor }}>
+                  <p className="text-[8px] font-bold text-white font-solaiman tracking-wide uppercase leading-snug py-0.5">
                     {t.motto}
                   </p>
                </div>
