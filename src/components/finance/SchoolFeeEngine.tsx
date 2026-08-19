@@ -34,6 +34,13 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
   const isDark = madrasah.theme === 'dark';
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
 
+  const institutionPossessiveBn = React.useMemo(() => {
+    if (madrasah?.institution_type === 'school') return 'স্কুলের';
+    if (madrasah?.institution_type === 'kindergarten') return 'কিন্ডারগার্টেনের';
+    if (madrasah?.institution_type === 'choching') return 'কোচিংয়ের';
+    return 'মাদরাসার';
+  }, [madrasah?.institution_type]);
+
   const activeYearId = React.useMemo(() => {
     if (!madrasah?.config_json) return null;
     let config = madrasah.config_json as any;
@@ -1043,7 +1050,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                  <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wide leading-relaxed">
                    {anyStudentsInMadrasah 
                       ? 'আপনার ডাটাবেসে শিক্ষার্থী আছে, কিন্তু তারা সম্ভবত সঠিক শ্রেণিতে নিবন্ধিত নয় অথবা ডাটাবেস ফাংশনে সমস্যা হচ্ছে।'
-                      : 'এই মাদরাসার অধীনে কোনো শিক্ষার্থী নিবন্ধিত নেই। অনুগ্রহ করে শিক্ষার্থী যোগ করুন।'}
+                      : `এই ${institutionPossessiveBn} অধীনে কোনো শিক্ষার্থী নিবন্ধিত নেই। অনুগ্রহ করে শিক্ষার্থী যোগ করুন।`}
                  </p>
               </div>
             )}
@@ -1374,7 +1381,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h3 className={`text-lg font-black font-noto ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'ফি সেটিংস' : 'Fee Settings'}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">{lang === 'bn' ? 'মাদরাসার ফি কাঠামো নির্ধারণ করুন' : 'Set up institution fee structures'}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">{lang === 'bn' ? `${institutionPossessiveBn} ফি কাঠামো নির্ধারণ করুন` : 'Set up institution fee structures'}</p>
                 </div>
                 <button 
                     onClick={() => {
