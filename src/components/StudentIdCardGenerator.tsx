@@ -327,7 +327,9 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             className={`relative overflow-hidden bg-white shadow-[0_10px_40px_rgb(0,0,0,0.12)] rounded-xl border border-slate-200 transition-all shrink-0 flex-col ${activeSide === 'front' || isGenerating ? 'flex' : 'hidden'}`}
             style={{ 
               width: "280px", 
-              height: "448px"
+              height: "448px",
+              WebkitTextSizeAdjust: "100%",
+              textSizeAdjust: "100%"
             }}
             ref={cardRef}
           >
@@ -486,7 +488,12 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
           {/* BACK SIDE */}
           <div
             className={`relative overflow-hidden bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-xl border border-slate-200 transition-all shrink-0 flex-col ${activeSide === 'back' || isGenerating ? 'flex' : 'hidden'} md:mx-0`}
-            style={{ width: "280px", height: "448px" }}
+            style={{ 
+              width: "280px", 
+              height: "448px",
+              WebkitTextSizeAdjust: "100%",
+              textSizeAdjust: "100%"
+            }}
             ref={backCardRef}
           >
             {/* Background Watermark */}
@@ -580,7 +587,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                     </span>
                   </div>
                   {madrasah?.email && (
-                     <div className="flex items-center gap-1.5">
+                     <div className="flex items-center gap-1.5 overflow-hidden">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           className="w-2.5 h-2.5 text-emerald-600 shrink-0"
@@ -589,7 +596,13 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                         >
                            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
                         </svg>
-                        <span className={`font-bold tracking-tight whitespace-nowrap truncate max-w-[210px] ${madrasah.email.length > 28 ? 'text-[7px]' : madrasah.email.length > 22 ? 'text-[7.5px]' : 'text-[8px]'}`}>
+                        <span 
+                          className="font-bold tracking-tight whitespace-nowrap"
+                          style={{
+                            fontSize: `${(madrasah.email.length || 0) > 30 ? 6.5 : (madrasah.email.length || 0) > 24 ? 7 : (madrasah.email.length || 0) > 18 ? 7.5 : 8}px`,
+                            lineHeight: '1.2'
+                          }}
+                        >
                           {madrasah.email}
                         </span>
                      </div>
