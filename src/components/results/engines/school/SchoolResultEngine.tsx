@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout, Globe, Eye, EyeOff } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout, Globe, Eye, EyeOff, Type } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -101,6 +101,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [routineAfternoonEnd, setRoutineAfternoonEnd] = useState<string>('17:00');
   const [routineStartDate, setRoutineStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [routineThemeColor, setRoutineThemeColor] = useState<string>('emerald');
+  const [fontScale, setFontScale] = useState<number>(1.2);
   const [routinePrincipalName, setRoutinePrincipalName] = useState<string>('');
   const [routinePrincipalMobile, setRoutinePrincipalMobile] = useState<string>('');
   const [routineInstructions, setRoutineInstructions] = useState<string[]>([
@@ -565,6 +566,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         routineMorningTime,
         routineAfternoonTime,
         routineThemeColor,
+        fontScale: fontScale || 1.2,
         activeExamName,
         routineStartDate,
         showRoutineAfternoon,
@@ -637,6 +639,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (routine.routineMorningTime) setRoutineMorningTime(routine.routineMorningTime);
     if (routine.routineAfternoonTime) setRoutineAfternoonTime(routine.routineAfternoonTime);
     if (routine.routineThemeColor) setRoutineThemeColor(routine.routineThemeColor);
+    if (routine.fontScale) setFontScale(routine.fontScale);
     if (routine.customRoutineTitle) setCustomRoutineTitle(routine.customRoutineTitle);
     else if (routine.activeExamName && routine.routineSelectionMode === 'all') setCustomRoutineTitle(routine.activeExamName);
     if (routine.routineStartDate) setRoutineStartDate(routine.routineStartDate);
@@ -769,7 +772,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           routinePrincipalMobile,
           showRoutineAfternoon,
           examYear: currentYear,
-          themeColor: routineThemeColor
+          themeColor: routineThemeColor,
+          fontScale: fontScale || 1.2
         }
       );
     } catch (err) {
@@ -2489,6 +2493,42 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                       ))}
                     </div>
                   </div>
+
+                  {/* Font Scale Selection */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Type size={12} className="text-emerald-600" />
+                        {lang === 'bn' ? 'ফন্ট সাইজ' : 'Font Size'}
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        {fontScale === 1.0 ? (lang === 'bn' ? 'স্বাভাবিক' : 'Normal') : fontScale === 1.2 ? (lang === 'bn' ? 'বড়' : 'Large') : (lang === 'bn' ? 'অনেক বড়' : 'Extra Large')}
+                      </span>
+                    </label>
+                    <div className={`grid grid-cols-3 gap-1 p-1 rounded-xl border ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
+                      <button
+                        type="button"
+                        onClick={() => setFontScale(1.0)}
+                        className={`h-8 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.0 ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'স্বাভাবিক' : 'Normal'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFontScale(1.2)}
+                        className={`h-8 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.2 ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'বড়' : 'Large'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFontScale(1.4)}
+                        className={`h-8 rounded-lg text-[10px] font-black tracking-wider transition-all flex items-center justify-center ${fontScale === 1.4 ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'অনেক বড়' : 'Extra Large'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Exam Times */}
@@ -2790,7 +2830,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         routinePrincipalMobile: routinePrincipalMobile,
                                         showRoutineAfternoon: r.showRoutineAfternoon,
                                         examYear: currentYear,
-                                        themeColor: r.routineThemeColor
+                                        themeColor: r.routineThemeColor,
+                                        fontScale: r.fontScale || fontScale || 1.2
                                       }
                                     );
                                   } finally {
@@ -2891,20 +2932,20 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     {(() => {
                       const isClassMode = routineSelectionMode === 'class';
                       const previewNameFontSize = isClassMode 
-                        ? (madrasah?.name && madrasah.name.length > 25 ? 'text-[20px]' : 'text-[24px]') 
-                        : (madrasah?.name && madrasah.name.length > 25 ? 'text-[26px]' : 'text-[32px]');
+                        ? (madrasah?.name && madrasah.name.length > 25 ? 'text-[22px]' : 'text-[26px]') 
+                        : (madrasah?.name && madrasah.name.length > 25 ? 'text-[28px]' : 'text-[34px]');
                       
-                      const previewLogoSize = isClassMode ? 'w-[64px] h-[64px]' : 'w-[85px] h-[85px]';
-                      const previewCalendarBoxClass = isClassMode ? 'w-[125px] h-[90px] p-2' : 'w-[160px] h-[105px] p-3';
+                      const previewLogoSize = isClassMode ? 'w-[68px] h-[68px]' : 'w-[88px] h-[88px]';
+                      const previewCalendarBoxClass = isClassMode ? 'w-[130px] h-[88px] p-2' : 'w-[170px] h-[105px] p-2.5';
                       const previewCalendarIconSize = isClassMode ? 'w-5 h-5 text-xs' : 'w-7 h-7 text-sm';
-                      const previewCalendarTextClass1 = isClassMode ? 'text-[9.5px]' : 'text-[11px]';
-                      const previewCalendarTextClass2 = isClassMode ? 'text-[9.5px]' : 'text-[11px]';
-                      const previewCalendarTextClass3 = isClassMode ? 'text-[8.5px]' : 'text-[10px]';
-                      const previewContactTextSize = isClassMode ? 'text-[10.5px]' : 'text-[12px]';
-                      const previewPillBadgeClass = isClassMode ? 'px-3 py-1 text-[10px]' : 'px-5 py-1.5 text-[11px]';
+                      const previewCalendarTextClass1 = isClassMode ? 'text-[11px]' : 'text-[13px]';
+                      const previewCalendarTextClass2 = isClassMode ? 'text-[10px]' : 'text-[12px]';
+                      const previewCalendarTextClass3 = isClassMode ? 'text-[9px]' : 'text-[11px]';
+                      const previewContactTextSize = isClassMode ? 'text-[11px]' : 'text-[12.5px]';
+                      const previewPillBadgeClass = isClassMode ? 'px-4 py-1 text-[10.5px]' : 'px-6 py-1.5 text-[12.5px]';
 
                       return (
-                        <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                        <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between font-solaiman" style={{ borderColor: `${rtTheme.primary}1a`, fontFamily: "'SolaimanLipi', sans-serif" }}>
                           {/* Frame Design corners */}
                           <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
                           <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 rounded-tr-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
@@ -2913,10 +2954,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
                           <div className="flex-1 flex flex-col justify-between">
                             {/* Banner Block */}
-                            <div className="flex justify-between items-center w-full px-2 py-2 rounded-3xl border mb-3 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
+                            <div className="flex justify-between items-center w-full px-4 py-2.5 rounded-3xl border mb-2 relative" style={{ backgroundColor: `${rtTheme.light}66`, borderColor: `${rtTheme.primary}1a`, backgroundImage: `linear-gradient(to right, ${rtTheme.light}33, ${rtTheme.accent}66)` }}>
                               
                               {/* Left Column: Logotype */}
-                              <div className="flex-shrink-0 flex items-center justify-center pl-4">
+                              <div className="flex-shrink-0 flex items-center justify-center pl-2">
                                 <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: rtTheme.primary }}>
                                   {madrasah?.logo_url ? (
                                     <img src={madrasah.logo_url} className={`${previewLogoSize} object-contain rounded-full bg-white`} alt="Logo" referrerPolicy="no-referrer" />
@@ -2927,13 +2968,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                               </div>
 
                               {/* Center Column: Madrasah Title, location, etc */}
-                              <div className="flex-1 text-center px-3 leading-normal">
-                                <h1 className={`${previewNameFontSize} font-black tracking-tight leading-none mb-1 font-serif-bn italic`} style={{ color: rtTheme.primary }}>
+                              <div className="flex-1 text-center px-4 leading-normal">
+                                <h1 className={`${previewNameFontSize} font-black tracking-tight leading-tight mb-1 font-solaiman`} style={{ color: rtTheme.primary }}>
                                   {madrasah?.name || 'মাদরাসার নাম'}
                                 </h1>
                                 
-                                <div className={`flex items-center justify-center gap-2 ${previewContactTextSize} font-bold text-[#475569] leading-tight flex-wrap font-noto`}>
-                                  <span className="inline-flex items-center gap-0.5 italic" style={{ color: rtTheme.primary }}>
+                                <div className={`flex items-center justify-center gap-2 ${previewContactTextSize} font-bold text-[#475569] leading-tight flex-wrap font-solaiman`}>
+                                  <span className="inline-flex items-center gap-0.5" style={{ color: rtTheme.primary }}>
                                     {madrasah?.address || 'ঠিকানা'}
                                   </span>
                                   <span className="text-slate-300">|</span>
@@ -2943,8 +2984,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                 </div>
 
                                 {/* Center pill badge matching bottom-center of image */}
-                                <div className="mt-2 inline-block">
-                                  <div className={`text-white ${previewPillBadgeClass} rounded-full shadow-sm font-black tracking-wide border`} style={{ backgroundColor: rtTheme.secondary, borderColor: `${rtTheme.primary}80` }}>
+                                <div className="mt-1.5 inline-block">
+                                  <div className={`text-white ${previewPillBadgeClass} rounded-full shadow-sm font-black tracking-wide border font-solaiman`} style={{ backgroundColor: rtTheme.secondary, borderColor: `${rtTheme.primary}80` }}>
                                     {lang === 'bn' 
                                       ? (activeExamName.includes('সময়সূচি') ? activeExamName : `${activeExamName} সময়সূচি - ${currentYearBn}`)
                                       : (activeExamName.includes('Schedule') ? activeExamName : `${activeExamName} Schedule - ${currentYear}`)}
@@ -2953,7 +2994,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                               </div>
 
                               {/* Right Column: Solid Premium Calendar Box matching top-right box exactly */}
-                              <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-center border shadow mr-4`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
+                              <div className={`flex-shrink-0 ${previewCalendarBoxClass} text-white rounded-2xl flex flex-col justify-center border shadow mr-2`} style={{ backgroundColor: rtTheme.primary, borderColor: `${rtTheme.primary}b3` }}>
                                 <div className="text-center leading-normal">
                                   <p className={`${previewCalendarTextClass1} font-black leading-none mb-0.5 whitespace-nowrap overflow-hidden`} style={{ color: rtTheme.accent }}>
                                     {activeExamName ? activeExamName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|Schedule/g, '').trim() : (lang === 'bn' ? 'সাময়িক' : 'Term')}
@@ -2969,7 +3010,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                             </div>
 
                         {/* Main Grid Table matching image perfectly */}
-                        <div className="flex-1 mt-2 overflow-x-auto pb-4 custom-scrollbar">
+                        <div className="flex-1 mt-2.5 mb-auto flex flex-col justify-start overflow-x-auto custom-scrollbar min-h-0">
                           
                           {routineSelectionMode === 'all' ? (
                             /* FORMAT A: ALL CLASSES TOGETHER GRID */
@@ -2977,14 +3018,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                               <thead>
                                 {/* First row of Table Header: Days/Dates */}
                                 <tr className="text-white h-11 border-b" style={{ backgroundColor: rtTheme.primary, borderColor: rtTheme.primary }}>
-                                  <th className="border-r px-2 py-1.5 text-xs font-black w-24" rowSpan={2} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                  <th className="border-r px-2 py-1.5 font-black w-24 align-middle" rowSpan={2} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary, fontSize: `${Math.round(12 * fontScale)}px` }}>
                                     <div className="flex flex-col items-center justify-center">
-                                      <span className="text-[11px] tracking-wider leading-none mb-1 border-b pb-0.5" style={{ borderColor: `${rtTheme.primary}66` }}>{lang === 'bn' ? 'বার' : 'DAY'}</span>
-                                      <span className="text-[10px] tracking-widest opacity-80 leading-none">{lang === 'bn' ? 'তারিখ' : 'DATE'}</span>
+                                      <span className="tracking-wider leading-none mb-1 border-b pb-0.5" style={{ borderColor: `${rtTheme.primary}66` }}>{lang === 'bn' ? 'বার' : 'DAY'}</span>
+                                      <span className="tracking-widest opacity-80 leading-none">{lang === 'bn' ? 'তারিখ' : 'DATE'}</span>
                                     </div>
                                   </th>
                                   {routineData.map((col, idx) => (
-                                    <th key={col.id || idx} className="border-r p-1 text-xs font-black min-w-[100px] relative group" colSpan={showRoutineAfternoon ? 2 : 1} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
+                                    <th key={col.id || idx} className="border-r p-1 font-black min-w-[100px] relative group" colSpan={showRoutineAfternoon ? 2 : 1} style={{ borderColor: `${rtTheme.primary}b3`, backgroundColor: rtTheme.primary }}>
                                       <button 
                                         onClick={() => handleRemoveRoutineDay(col.id)}
                                         className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-30 shadow-sm"
@@ -3023,11 +3064,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                             updated[idx].day = e.target.value;
                                             setRoutineData(updated);
                                           }}
-                                          className={`bg-transparent text-[11px] font-black leading-tight text-white w-full text-center border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none relative z-10`}
+                                          style={{ fontSize: `${Math.round(12 * fontScale)}px` }}
+                                          className={`bg-transparent font-black leading-tight text-white w-full text-center border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none relative z-10`}
                                         />
                                         <div className="flex items-center justify-center gap-1 mt-0.5 opacity-90 relative z-10">
-                                          <Calendar size={8} style={{ color: rtTheme.accent }} />
-                                          <span className="text-[9px] font-bold" style={{ color: rtTheme.accent }}>{col.date}</span>
+                                          <Calendar size={10} style={{ color: rtTheme.accent }} />
+                                          <span className="font-bold" style={{ color: rtTheme.accent, fontSize: `${Math.round(11 * fontScale)}px` }}>{col.date}</span>
                                         </div>
                                       </div>
                                     </th>
@@ -3035,19 +3077,19 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                 </tr>
                                 
                                 {/* Second row of Table Header: Morning/Afternoon Shifts */}
-                                <tr className="h-9 border-b" style={{ backgroundColor: rtTheme.accent, borderColor: rtTheme.primary }}>
+                                <tr className="h-10 border-b" style={{ backgroundColor: rtTheme.accent, borderColor: rtTheme.primary }}>
                                   {routineData.map((_, idx) => (
                                     <React.Fragment key={idx}>
-                                      <th className="border-r p-1 text-[9px] font-black font-noto tracking-tighter w-[55px]" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: rtTheme.accent, color: rtTheme.primary }}>
+                                      <th className="border-r p-1 font-black font-solaiman tracking-tighter w-[60px]" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: rtTheme.accent, color: rtTheme.primary, fontSize: `${Math.round(12 * fontScale)}px` }}>
                                         {lang === 'bn' ? 'সকাল' : 'Morning'}
-                                        <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
+                                        <span className="block font-black text-[#1e293b] mt-0.5 leading-tight" style={{ fontSize: `${Math.round(11 * fontScale)}px` }}>
                                           {formatRoutineTime(routineMorningTime)}
                                         </span>
                                       </th>
                                       {showRoutineAfternoon && (
-                                        <th className="border-r p-1 text-[9px] font-black font-noto tracking-tighter w-[55px]" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: rtTheme.accent, color: rtTheme.primary }}>
+                                        <th className="border-r p-1 font-black font-solaiman tracking-tighter w-[60px]" style={{ borderColor: `${rtTheme.primary}33`, backgroundColor: rtTheme.accent, color: rtTheme.primary, fontSize: `${Math.round(12 * fontScale)}px` }}>
                                           {lang === 'bn' ? 'বিকাল' : 'Afternoon'}
-                                          <span className="block text-[8px] font-bold text-[#475569] mt-0.5 leading-none">
+                                          <span className="block font-black text-[#1e293b] mt-0.5 leading-tight" style={{ fontSize: `${Math.round(11 * fontScale)}px` }}>
                                             {formatRoutineTime(routineAfternoonTime)}
                                           </span>
                                         </th>
@@ -3085,12 +3127,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     return found ? found.subject : '*****';
                                   };
 
+                                  const cellPy = displayClassesList.length <= 4 ? 'py-3' : displayClassesList.length <= 6 ? 'py-2' : 'py-1.5';
+
                                   return displayClassesList.map((cls, idx) => (
-                                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : ''} hover:opacity-80 transition-opacity border-b h-[2.75rem]`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}4d`, borderColor: `${rtTheme.primary}26` }}>
-                                      {/* Leftmost column showing class label with cute small ribbon or text */}
-                                      <td className="border-r-2 p-2 font-black text-xs text-center" style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary }}>
+                                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : ''} hover:opacity-80 transition-opacity border-b`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}4d`, borderColor: `${rtTheme.primary}26` }}>
+                                      {/* Leftmost column showing class label */}
+                                      <td className={`border-r-2 ${cellPy} px-2 font-black text-center align-middle`} style={{ borderColor: rtTheme.primary, backgroundColor: `${rtTheme.light}66`, color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}>
                                         <div className="flex items-center justify-center gap-1">
-                                          <span className="text-[12px] font-black tracking-tight">{cls.class_name}</span>
+                                          <span className="font-black tracking-tight">{cls.class_name}</span>
                                         </div>
                                       </td>
 
@@ -3102,7 +3146,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         return (
                                           <React.Fragment key={dayIdx}>
                                             {/* Morning Shift subject cell */}
-                                            <td className="border-r p-1 align-middle text-center" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                            <td className={`border-r ${cellPy} px-1 align-middle text-center`} style={{ borderColor: `${rtTheme.primary}26` }}>
                                               <input 
                                                 type="text"
                                                 value={mrnSub === '*****' ? '' : mrnSub}
@@ -3126,13 +3170,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                   setRoutineData(updated);
                                                 }}
                                                 placeholder="-"
-                                                className={`w-full bg-transparent text-center text-[10px] font-black border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-0.5`}
-                                                style={{ color: mrnSub === '*****' ? '#cbd5e1' : rtTheme.primary }}
+                                                className={`w-full bg-transparent text-center font-black border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-0.5`}
+                                                style={{ 
+                                                  color: mrnSub === '*****' ? '#cbd5e1' : rtTheme.primary,
+                                                  fontSize: `${Math.round(14 * fontScale)}px`
+                                                }}
                                               />
                                             </td>
                                             {/* Afternoon Shift subject cell */}
                                             {showRoutineAfternoon && (
-                                              <td className="border-r p-1 align-middle text-center" style={{ borderColor: `${rtTheme.primary}26` }}>
+                                              <td className={`border-r ${cellPy} px-1 align-middle text-center`} style={{ borderColor: `${rtTheme.primary}26` }}>
                                                 <input 
                                                   type="text"
                                                   value={aftSub === '*****' ? '' : aftSub}
@@ -3156,8 +3203,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                     setRoutineData(updated);
                                                   }}
                                                   placeholder="-"
-                                                  className={`w-full bg-transparent text-center text-[10px] font-black border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-0.5`}
-                                                  style={{ color: aftSub === '*****' ? '#cbd5e1' : rtTheme.primary }}
+                                                  className={`w-full bg-transparent text-center font-black border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-0.5`}
+                                                  style={{ 
+                                                    color: aftSub === '*****' ? '#cbd5e1' : rtTheme.primary,
+                                                    fontSize: `${Math.round(14 * fontScale)}px`
+                                                  }}
                                                 />
                                               </td>
                                             )}
@@ -3174,14 +3224,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                             <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: rtTheme.primary }}>
                               <thead>
                                 <tr className="text-white h-11" style={{ backgroundColor: rtTheme.primary }}>
-                                  <th className="border-r p-2 text-xs font-black w-32" style={{ borderColor: `${rtTheme.primary}b3` }}>
+                                  <th className="border-r p-2 font-black w-32" style={{ borderColor: `${rtTheme.primary}b3`, fontSize: `${Math.round(12.5 * fontScale)}px` }}>
                                     {lang === 'bn' ? 'বার / তারিখ' : 'Day / Date'}
                                   </th>
-                                  <th className="border-r p-2 text-xs font-black" style={{ borderColor: `${rtTheme.primary}b3` }}>
+                                  <th className="border-r p-2 font-black" style={{ borderColor: `${rtTheme.primary}b3`, fontSize: `${Math.round(12.5 * fontScale)}px` }}>
                                     {lang === 'bn' ? `সকাল (${formatRoutineTime(routineMorningTime)})` : `Morning (${formatRoutineTime(routineMorningTime)})`}
                                   </th>
                                   {showRoutineAfternoon && (
-                                    <th className="p-2 text-xs font-black w-48">
+                                    <th className="p-2 font-black w-48" style={{ fontSize: `${Math.round(12.5 * fontScale)}px` }}>
                                       {lang === 'bn' ? `বিকাল (${formatRoutineTime(routineAfternoonTime)})` : `Afternoon (${formatRoutineTime(routineAfternoonTime)})`}
                                     </th>
                                   )}
@@ -3203,8 +3253,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                   };
 
                                   return routineData.map((row, idx) => (
-                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b h-[3.25rem] relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
-                                      <td className="border-r p-2 text-center relative group" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: `${rtTheme.light}4d` }}>
+                                    <tr key={row.id || idx} className={`${idx % 2 === 0 ? 'bg-white' : ''} border-b relative group`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : `${rtTheme.accent}33`, borderColor: `${rtTheme.primary}26` }}>
+                                      <td className="border-r p-2 text-center align-middle relative group" style={{ borderColor: `${rtTheme.primary}26`, backgroundColor: `${rtTheme.light}4d` }}>
                                         <button 
                                           onClick={() => handleRemoveRoutineDay(row.id)}
                                           className="absolute -left-2 top-1/2 -translate-y-1/2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-sm"
@@ -3214,7 +3264,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         </button>
                                         <div className="relative group/date border rounded-lg p-1 transition-colors" style={{ borderColor: `${rtTheme.primary}26` }}>
                                           <input 
-                                            type="date"
+                                            type="date" 
                                             value={row.isoDate || ''}
                                             onChange={(e) => {
                                               const selectedDate = e.target.value;
@@ -3233,11 +3283,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                             className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
                                           />
                                           <div className="flex flex-col items-center">
-                                            <p className="text-[10px] font-black leading-none mb-0.5" style={{ color: rtTheme.primary }}>
+                                            <p className="font-black leading-none mb-0.5" style={{ color: rtTheme.primary, fontSize: `${Math.round(12 * fontScale)}px` }}>
                                               {row.day}
                                             </p>
-                                            <p className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
-                                              <Calendar size={8} />
+                                            <p className="font-bold text-slate-500 flex items-center gap-1" style={{ fontSize: `${Math.round(10.5 * fontScale)}px` }}>
+                                              <Calendar size={9} />
                                               {row.date}
                                             </p>
                                           </div>
@@ -3268,8 +3318,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                             }
                                             setRoutineData(updated);
                                           }}
-                                          className={`bg-transparent text-center font-black text-xs w-full border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-1`}
-                                          style={{ color: rtTheme.primary }}
+                                          className={`bg-transparent text-center font-black w-full border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-1`}
+                                          style={{ color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}
                                           placeholder={lang === 'bn' ? 'বিষয়ের নাম লেখুন' : 'Enter Topic'}
                                         />
                                       </td>
@@ -3299,8 +3349,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                               }
                                               setRoutineData(updated);
                                             }}
-                                            className={`bg-transparent text-center font-black text-xs w-full border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-1`}
-                                            style={{ color: rtTheme.primary }}
+                                            className={`bg-transparent text-center font-black w-full border-none focus:ring-1 focus:ring-${routineThemeColor === 'emerald' ? 'emerald' : 'blue'}-400 rounded outline-none p-1`}
+                                            style={{ color: rtTheme.primary, fontSize: `${Math.round(14 * fontScale)}px` }}
                                             placeholder={lang === 'bn' ? 'বিষয়ের নাম লেখুন' : 'Enter Topic'}
                                           />
                                         </td>

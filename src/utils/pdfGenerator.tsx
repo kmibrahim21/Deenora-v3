@@ -19,6 +19,7 @@ import { ExamRoutinePDFTemplate } from '../components/pdf/ExamRoutinePDFTemplate
 import { StudentListTemplate } from '../components/pdf/StudentListTemplate';
 import { SystemPaymentReportTemplate } from '../components/pdf/SystemPaymentReportTemplate';
 import { SubscriptionMatrixTemplate } from '../components/pdf/SubscriptionMatrixTemplate';
+import { solaimanLipiBase64 } from './fonts';
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
@@ -1497,6 +1498,7 @@ export const generateExamRoutinePDF = async (
       showRoutineAfternoon?: boolean;
       examYear?: string;
       themeColor?: string;
+      fontScale?: number;
     },
     onProgress?: (progress: number) => void
 ) => {
@@ -1535,14 +1537,22 @@ export const generateExamRoutinePDF = async (
         const pageElement = wrapper.querySelector('.pdf-page-container') as HTMLElement;
         if (pageElement) {
             const imgData = await toJpeg(pageElement, {
-                pixelRatio: 2,
-                quality: 0.95,
+                pixelRatio: 2.5,
+                quality: 0.98,
                 backgroundColor: '#ffffff',
                 width: 1123,
                 height: 794,
+                fontEmbedCSS: `
+                  @font-face {
+                    font-family: 'SolaimanLipi';
+                    src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype');
+                    font-weight: normal;
+                    font-style: normal;
+                  }
+                `,
             });
             onProgress?.(85);
-            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
         }
     }
     

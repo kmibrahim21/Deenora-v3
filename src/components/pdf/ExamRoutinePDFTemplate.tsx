@@ -30,6 +30,7 @@ interface ExamRoutinePDFTemplateProps {
   showRoutineAfternoon?: boolean;
   examYear?: string;
   themeColor?: string;
+  fontScale?: number;
 }
 
 export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
@@ -47,7 +48,8 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
   routinePrincipalMobile = '',
   showRoutineAfternoon = true,
   examYear = '২০২৬',
-  themeColor = '#013c28'
+  themeColor = '#013c28',
+  fontScale = 1.2
 }) => {
   const themes: { [key: string]: { primary: string; secondary: string; light: string; accent: string } } = {
     'emerald': { primary: '#013c28', secondary: '#023c28', light: '#E6F4EA', accent: '#EAF7EE' },
@@ -70,7 +72,6 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
 
   const formatTime = (timeStr: string) => {
     if (!timeStr) return '';
-    // Remove AM, PM, am, pm and any extra spaces
     const cleanTime = timeStr.replace(/\s*(am|pm|AM|PM)\s*/g, '').trim();
     if (isBn) {
       return getBanglaNumber(cleanTime);
@@ -129,79 +130,192 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
     isBn ? 'পরীক্ষা চলাকালীন সময় কোনো অভিভাবক পরীক্ষা হলে প্রবেশ করতে পারবেন না।' : 'Guardians are strictly forbidden from entering the halls.'
   ];
 
-  const SingleRoutineContent = () => {
+  const SingleRoutineContent = ({ copyTitle }: { copyTitle?: string } = {}) => {
     const isClassMode = routineSelectionMode === 'class';
-    const paddingClass = isClassMode ? 'p-4' : 'p-8';
+    const numClasses = displayClasses.length;
+    const numDays = routineData.length;
     
-    // Madrasah name font size - dynamically small if class mode or name is very long
+    // Dynamic proportioning based on class count & day count
+    const isVeryFewClasses = !isClassMode && numClasses <= 3;
+    const isMediumClasses = !isClassMode && numClasses > 3 && numClasses <= 6;
+    const isManyClasses = !isClassMode && numClasses > 7;
+
+    const paddingClass = isClassMode 
+      ? 'p-2.5 sm:p-3' 
+      : 'p-4 sm:p-5';
+    
+    // Madrasah name font size - prominent, large & bold
     const nameFontSize = isClassMode 
-      ? (madrasah?.name && madrasah.name.length > 25 ? 'text-[14px]' : 'text-[16px]') 
-      : (madrasah?.name && madrasah.name.length > 25 ? 'text-[20px]' : 'text-[24px]');
+      ? (madrasah?.name && madrasah.name.length > 25 ? 'text-[20px]' : 'text-[23px]') 
+      : (madrasah?.name && madrasah.name.length > 25 ? 'text-[28px]' : 'text-[34px]');
     
-    const logoSizeClass = isClassMode ? 'w-[48px] h-[48px]' : 'w-[66px] h-[66px]';
-    const calendarBoxClass = isClassMode ? 'w-[125px] h-[82px] p-1.5' : 'w-[155px] h-[95px] p-2.5';
-    const calendarIconClass = isClassMode ? 'w-4 h-4 text-[10px]' : 'w-6 h-6 text-[12px]';
+    const logoSizeClass = isClassMode 
+      ? 'w-[52px] h-[52px]' 
+      : 'w-[78px] h-[78px]';
+
+    const calendarBoxClass = isClassMode 
+      ? 'w-[124px] h-[82px] p-1.5' 
+      : 'w-[160px] h-[98px] p-2';
     
     const processedExamName = examName ? examName.replace(/পরীক্ষার|পরীক্ষা|Exam|সময়সূচি|Schedule/g, '').trim() : (isBn ? 'সাময়িক' : 'Term');
     const getDynamicExamNameFontSize = () => {
       const len = processedExamName.length;
       if (isClassMode) {
-        if (len > 15) return 'text-[7.5px]';
-        if (len > 10) return 'text-[8.5px]';
-        return 'text-[9.5px]';
-      } else {
         if (len > 15) return 'text-[9px]';
         if (len > 10) return 'text-[10.5px]';
         return 'text-[12px]';
+      } else {
+        if (len > 15) return 'text-[12px]';
+        if (len > 10) return 'text-[14px]';
+        return 'text-[15.5px]';
       }
     };
     const dynamicExamNameFontSize = getDynamicExamNameFontSize();
 
     const calendarTextClass1 = dynamicExamNameFontSize;
-    const calendarTextClass2 = isClassMode ? 'text-[8.5px]' : 'text-[11px]';
-    const calendarTextClass3 = isClassMode ? 'text-[8px]' : 'text-[9.5px]';
+    const calendarTextClass2 = isClassMode ? 'text-[9.5px]' : 'text-[12px]';
+    const calendarTextClass3 = isClassMode ? 'text-[8.5px]' : 'text-[10.5px]';
     
-    const contactTextClass = isClassMode ? 'text-[10px]' : 'text-[12px]';
-    const pillBadgeClass = isClassMode ? 'px-3 py-1 text-[10px]' : 'px-5 py-1.5 text-[12px]';
+    const contactTextClass = isClassMode ? 'text-[10px]' : 'text-[12.5px]';
+    const pillBadgeClass = isClassMode 
+      ? 'px-3 py-0.5 text-[10px]' 
+      : 'px-6 py-1 text-[12.5px]';
     
-    // Dynamic table sizing to prevent overflow
-    const tableRowHeight = isClassMode 
-      ? (routineData.length > 7 ? 'h-[30px]' : routineData.length > 5 ? 'h-[36px]' : 'h-[44px]') 
-      : 'h-[44px]';
-    
-    const tableCellPaddingClass = isClassMode 
-      ? (routineData.length > 7 ? 'p-0.5 text-[9.5px]' : routineData.length > 5 ? 'p-1 text-[10.5px]' : 'p-1.5 text-[11.5px]') 
-      : 'p-1 align-middle text-center';
+    // Direct font scale multiplier so 'অনেক বড়' (1.4) visibly scales up prominently
+    const effectiveScale = fontScale || 1.0;
 
-    const tableHeaderHeight = isClassMode && routineData.length > 5 ? 'h-8' : 'h-11';
+    // Row font sizes
+    let cellFontSizePx: number;
+    let classNameFontSizePx: number;
+    let headerDayFontPx: number;
+    let headerDateFontPx: number;
+    let shiftTitleFontPx: number;
+    let shiftTimeFontPx: number;
+    let rowPaddingClass: string;
     
+    if (isClassMode) {
+      cellFontSizePx = Math.round(14 * effectiveScale);
+      classNameFontSizePx = Math.round(13.5 * effectiveScale);
+      headerDayFontPx = Math.round(12.5 * effectiveScale);
+      headerDateFontPx = Math.round(11 * effectiveScale);
+      shiftTitleFontPx = Math.round(12 * effectiveScale);
+      shiftTimeFontPx = Math.round(11 * effectiveScale);
+      rowPaddingClass = numDays <= 5 ? 'py-2.5 px-2' : 'py-1.5 px-1.5';
+    } else {
+      if (numClasses <= 3) {
+        cellFontSizePx = Math.round(16 * effectiveScale);
+        classNameFontSizePx = Math.round(15.5 * effectiveScale);
+        headerDayFontPx = Math.round(13.5 * effectiveScale);
+        headerDateFontPx = Math.round(12 * effectiveScale);
+        shiftTitleFontPx = Math.round(13.5 * effectiveScale);
+        shiftTimeFontPx = Math.round(12.5 * effectiveScale);
+        rowPaddingClass = 'py-3 px-2';
+      } else if (numClasses <= 5) {
+        cellFontSizePx = Math.round(14.5 * effectiveScale);
+        classNameFontSizePx = Math.round(14 * effectiveScale);
+        headerDayFontPx = Math.round(13 * effectiveScale);
+        headerDateFontPx = Math.round(11.5 * effectiveScale);
+        shiftTitleFontPx = Math.round(13 * effectiveScale);
+        shiftTimeFontPx = Math.round(12 * effectiveScale);
+        rowPaddingClass = 'py-2.5 px-1.5';
+      } else if (numClasses <= 7) {
+        cellFontSizePx = Math.round(13 * effectiveScale);
+        classNameFontSizePx = Math.round(13 * effectiveScale);
+        headerDayFontPx = Math.round(12 * effectiveScale);
+        headerDateFontPx = Math.round(10.5 * effectiveScale);
+        shiftTitleFontPx = Math.round(12 * effectiveScale);
+        shiftTimeFontPx = Math.round(11 * effectiveScale);
+        rowPaddingClass = 'py-2 px-1.5';
+      } else if (numClasses <= 9) {
+        cellFontSizePx = Math.round(11.5 * effectiveScale);
+        classNameFontSizePx = Math.round(11.5 * effectiveScale);
+        headerDayFontPx = Math.round(11 * effectiveScale);
+        headerDateFontPx = Math.round(9.5 * effectiveScale);
+        shiftTitleFontPx = Math.round(11 * effectiveScale);
+        shiftTimeFontPx = Math.round(10 * effectiveScale);
+        rowPaddingClass = 'py-1.5 px-1';
+      } else {
+        cellFontSizePx = Math.round(10.5 * effectiveScale);
+        classNameFontSizePx = Math.round(10.5 * effectiveScale);
+        headerDayFontPx = Math.round(10 * effectiveScale);
+        headerDateFontPx = Math.round(9 * effectiveScale);
+        shiftTitleFontPx = Math.round(10 * effectiveScale);
+        shiftTimeFontPx = Math.round(9 * effectiveScale);
+        rowPaddingClass = 'py-1 px-1';
+      }
+    }
+
     // Footer elements sizing
-    const footerInstructionsMaxWidth = isClassMode ? 'max-w-[250px]' : 'max-w-[420px]';
-    const footerInstructionsBadgeClass = isClassMode ? 'px-2 py-1 text-[9.5px] mb-1' : 'px-3.5 py-1.5 text-[11.5px] mb-2';
-    const footerInstructionsTextClass = isClassMode ? 'text-[9px] space-y-0.5 font-bold text-slate-600' : 'text-[11.2px] space-y-1 font-bold text-slate-600';
+    const footerInstructionsMaxWidth = isClassMode 
+      ? 'max-w-[220px]' 
+      : isVeryFewClasses 
+        ? 'max-w-[460px]' 
+        : 'max-w-[420px]';
+
+    const footerInstructionsBadgeClass = isClassMode 
+      ? 'px-2 py-0.5 text-[8.5px] mb-1' 
+      : isVeryFewClasses
+        ? 'px-3 py-1 text-[11px] mb-1.5'
+        : 'px-3 py-1 text-[10px] mb-1';
+
+    const footerInstructionsTextClass = isClassMode 
+      ? 'text-[8px] space-y-0.5 font-bold text-slate-600' 
+      : isVeryFewClasses
+        ? 'text-[10.5px] space-y-1 font-bold text-slate-600'
+        : isManyClasses
+          ? 'text-[8.5px] space-y-0.5 font-bold text-slate-600'
+          : 'text-[9.5px] space-y-0.5 font-bold text-slate-600';
     
-    const footerSignBoxMinWidth = isClassMode ? 'min-w-[150px] p-2' : 'min-w-[220px] p-3';
-    const footerSignTextClass = isClassMode ? 'text-[10px]' : 'text-[11.5px]';
-    const footerSignSubtextClass = isClassMode ? 'text-[9px]' : 'text-[10.5px]';
-    const signatureHeight = isClassMode ? 32 : (Math.max(Number(configObj?.signature_height) || 50, 40));
+    const footerSignBoxMinWidth = isClassMode 
+      ? 'min-w-[130px] p-1.5' 
+      : isVeryFewClasses
+        ? 'min-w-[210px] p-2.5'
+        : 'min-w-[190px] p-2';
+
+    const footerSignTextClass = isClassMode ? 'text-[9px]' : isVeryFewClasses ? 'text-[11px]' : 'text-[10px]';
+    const footerSignSubtextClass = isClassMode ? 'text-[8px]' : isVeryFewClasses ? 'text-[10px]' : 'text-[9px]';
+    const signatureHeight = isClassMode 
+      ? 24 
+      : isVeryFewClasses
+        ? Math.min(Math.max(Number(configObj?.signature_height) || 42, 32), 48)
+        : isManyClasses
+          ? Math.min(Math.max(Number(configObj?.signature_height) || 28, 22), 34)
+          : Math.min(Math.max(Number(configObj?.signature_height) || 36, 26), 40);
+
+    const bannerPadding = isVeryFewClasses ? 'px-3 py-2 mb-2' : isManyClasses ? 'px-2 py-1 mb-1' : 'px-2.5 py-1.5 mb-1.5';
 
     return (
-      <div className={`w-full h-full ${paddingClass} flex flex-col justify-between relative border-[8px] bg-white overflow-hidden`} style={{ borderColor: `${primary}1a` }}>
-        {/* Frame Design corners */}
-        <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 rounded-tl-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
-        <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 rounded-tr-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
-        <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 rounded-bl-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
-        <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 rounded-br-xl m-1.5 opacity-80" style={{ borderColor: primary }}></div>
+      <div 
+        className={`w-full h-full ${paddingClass} flex flex-col justify-between relative border-[4px] bg-white overflow-hidden font-solaiman`} 
+        style={{ borderColor: primary, fontFamily: "'SolaimanLipi', 'Hind Siliguri', sans-serif" }}
+      >
+        {/* Inner fine border for official certificate feel */}
+        <div className="absolute inset-[3px] border border-dashed pointer-events-none opacity-40 z-0" style={{ borderColor: primary }}></div>
+
+        {/* Decorative corner motifs */}
+        <div className="absolute top-1.5 left-1.5 w-6 h-6 border-t-2 border-l-2 pointer-events-none z-10" style={{ borderColor: primary }}></div>
+        <div className="absolute top-1.5 right-1.5 w-6 h-6 border-t-2 border-r-2 pointer-events-none z-10" style={{ borderColor: primary }}></div>
+        <div className="absolute bottom-1.5 left-1.5 w-6 h-6 border-b-2 border-l-2 pointer-events-none z-10" style={{ borderColor: primary }}></div>
+        <div className="absolute bottom-1.5 right-1.5 w-6 h-6 border-b-2 border-r-2 pointer-events-none z-10" style={{ borderColor: primary }}></div>
+
+        {/* Copy badge for 2-in-1 layout */}
+        {copyTitle && (
+          <div className="absolute top-2 right-4 z-20">
+            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shadow-2xs font-solaiman text-white" style={{ backgroundColor: secondary, borderColor: primary }}>
+              {copyTitle}
+            </span>
+          </div>
+        )}
 
         <div className="flex-1 flex flex-col justify-between relative z-10 w-full h-full max-h-full">
           {/* Banner Container */}
-          <div className="flex justify-between items-center w-full px-3 py-2 rounded-2xl border mb-2 relative" style={{ backgroundColor: `${light}66`, borderColor: `${primary}1a`, backgroundImage: `linear-gradient(to right, ${light}33, ${accent}66)` }}>
+          <div className={`flex justify-between items-center w-full ${bannerPadding} rounded-xl border relative shrink-0 shadow-2xs`} style={{ backgroundColor: `${light}80`, borderColor: `${primary}26`, backgroundImage: `linear-gradient(135deg, ${light}99 0%, #ffffff 50%, ${accent}99 100%)` }}>
             
             {/* Left Column: Round Logo */}
-            <div className="flex-shrink-0 flex items-center justify-center pl-2">
-              <div className="relative p-1 rounded-full border bg-white shadow-sm" style={{ borderColor: primary }}>
+            <div className="flex-shrink-0 flex items-center justify-center pl-1">
+              <div className="relative p-1 rounded-full border-2 bg-white shadow-xs" style={{ borderColor: primary }}>
                 {madrasah?.logo_url ? (
-                  <img src={madrasah.logo_url} className={`${logoSizeClass} object-contain rounded-full bg-white`} alt="Logo" />
+                  <img src={madrasah.logo_url} className={`${logoSizeClass} object-contain rounded-full bg-white`} alt="Logo" crossOrigin="anonymous" />
                 ) : (
                   <div className={`${logoSizeClass} bg-emerald-50 rounded-full border border-emerald-100 flex items-center justify-center text-emerald-900 font-black text-[10px]`}>LOGO</div>
                 )}
@@ -209,28 +323,28 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             </div>
 
             {/* Center Column */}
-            <div className="flex-1 text-center px-3 leading-tight">
-              <h1 className={`${nameFontSize} font-black tracking-tight leading-normal mb-1 font-serif-bn italic`} style={{ color: primary }}>
-                {madrasah?.name || 'মাদরাসার নাম'}
+            <div className="flex-1 text-center px-2 leading-tight">
+              <h1 className={`${nameFontSize} font-black tracking-tight leading-tight mb-0.5 font-solaiman drop-shadow-2xs`} style={{ color: primary }}>
+                {madrasah?.name || 'প্রতিষ্ঠানের নাম'}
               </h1>
               
-              <div className={`flex items-center justify-center gap-1.5 ${contactTextClass} font-bold text-[#475569] leading-tight flex-wrap font-noto`}>
-                <span className="inline-flex items-center gap-0.5 italic" style={{ color: primary }}>
-                  {madrasah?.address || 'ঠিকানা'}
+              <div className={`flex items-center justify-center gap-2 ${contactTextClass} font-bold text-slate-700 leading-tight flex-wrap font-solaiman`}>
+                <span className="inline-flex items-center gap-0.5">
+                  📍 {madrasah?.address || 'ঠিকানা'}
                 </span>
                 {(madrasah?.phone) && (
                   <>
-                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-300">•</span>
                     <span className="inline-flex items-center gap-0.5" style={{ color: primary }}>
-                      {isBn ? 'মোবাইলঃ ' : 'Mobile: '} {isBn ? getBanglaNumber(madrasah.phone) : madrasah.phone}
+                      📞 {isBn ? 'মোবাইল: ' : 'Mobile: '} {isBn ? getBanglaNumber(madrasah.phone) : madrasah.phone}
                     </span>
                   </>
                 )}
               </div>
 
               {/* Central pill badge */}
-              <div className="mt-1.5 inline-block">
-                <div className={`text-white ${pillBadgeClass} rounded-full shadow-sm font-black tracking-wide border`} style={{ backgroundColor: secondary, borderColor: `${primary}80` }}>
+              <div className="mt-1 inline-block">
+                <div className={`text-white ${pillBadgeClass} rounded-full shadow-xs font-black tracking-wide border font-solaiman`} style={{ backgroundColor: secondary, borderColor: primary }}>
                   {isBn 
                     ? (examName.includes('সময়সূচি') || examName.includes('Schedule') ? examName : `${examName} সময়সূচি - ${isBn ? getBanglaNumber(examYear) : examYear}`)
                     : (examName.includes('সময়সূচি') || examName.includes('Schedule') ? examName : `${examName} Schedule - ${examYear}`)}
@@ -239,39 +353,39 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
             </div>
 
             {/* Right Column: Calendar Box */}
-            <div className={`flex-shrink-0 ${calendarBoxClass} text-white rounded-xl flex flex-col justify-center border shadow mr-2`} style={{ backgroundColor: primary, borderColor: `${primary}b3` }}>
-              <div className="text-center leading-normal">
-                <p className={`${calendarTextClass1} font-black leading-tight mb-0.5 whitespace-normal break-words px-1`} style={{ color: accent }}>
+            <div className={`flex-shrink-0 ${calendarBoxClass} text-white rounded-xl flex flex-col justify-center border shadow-xs mr-1`} style={{ backgroundColor: primary, borderColor: primary }}>
+              <div className="text-center leading-tight">
+                <p className={`${calendarTextClass1} font-black leading-tight mb-0.5 whitespace-normal break-words px-1 font-solaiman`} style={{ color: '#fef08a' }}>
                   {processedExamName}
                 </p>
-                <p className={`${calendarTextClass2} font-extrabold block mb-0.5`} style={{ color: `${accent}cc` }}>
-                  পরীক্ষা সময়সূচি
+                <p className={`${calendarTextClass2} font-extrabold block mb-0.5 font-solaiman text-white/95`}>
+                  {isBn ? 'পরীক্ষা সময়সূচি' : 'Exam Routine'}
                 </p>
-                <p className={`${calendarTextClass3} font-semibold text-white/70 block`}>
-                  {isBn ? getBanglaNumber(examYear) : examYear}ইং
+                <p className={`${calendarTextClass3} font-bold text-white/80 block font-solaiman`}>
+                  {isBn ? getBanglaNumber(examYear) : examYear} {isBn ? 'ইং' : ''}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Main Grid Table */}
-          <div className="flex-1 overflow-hidden">
+          {/* Main Grid Table - Clean, top-aligned closer to upper header */}
+          <div className="flex-1 flex flex-col justify-start mt-2 mb-auto overflow-hidden relative">
             {routineSelectionMode === 'all' ? (
               /* FORMAT A: ALL CLASSES TOGETHER GRID */
-              <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: primary }}>
-                <thead>
+              <table className="w-full border-collapse border-2 rounded-lg overflow-hidden shadow-xs text-center font-solaiman table-fixed" style={{ borderColor: primary }}>
+                <thead className="shrink-0">
                   {/* First row of Table Header: Days/Dates */}
-                  <tr className="text-white h-11 border-b" style={{ backgroundColor: primary, borderColor: primary }}>
-                    <th className="border-r px-1 py-1 text-[12.5px] font-black w-24" rowSpan={2} style={{ borderColor: `${primary}b3`, backgroundColor: primary }}>
+                  <tr className="text-white border-b" style={{ backgroundColor: primary, borderColor: primary }}>
+                    <th className="border-r px-1.5 py-1.5 font-black w-24 align-middle" rowSpan={2} style={{ borderColor: `${primary}cc`, backgroundColor: primary }}>
                       <div className="flex flex-col items-center justify-center">
-                        <span className="text-[12.5px] tracking-wider leading-none mb-0.5 border-b pb-0.5" style={{ borderColor: `${primary}66` }}>{isBn ? 'বার' : 'DAY'}</span>
-                        <span className="text-[11px] tracking-widest opacity-80 leading-none">{isBn ? 'তারিখ' : 'DATE'}</span>
+                        <span className="tracking-wider leading-none mb-0.5 border-b pb-0.5 font-solaiman" style={{ borderColor: `${primary}66`, fontSize: `${headerDayFontPx}px` }}>{isBn ? 'বার' : 'DAY'}</span>
+                        <span className="tracking-widest opacity-80 leading-none font-solaiman" style={{ fontSize: `${headerDateFontPx}px` }}>{isBn ? 'তারিখ' : 'DATE'}</span>
                       </div>
                     </th>
                     {routineData.map((col, idx) => (
-                      <th key={idx} className="border-r p-1 text-[12.5px] font-black min-w-[85px]" colSpan={showRoutineAfternoon ? 2 : 1} style={{ borderColor: `${primary}b3`, backgroundColor: primary }}>
-                        <p className="text-[12.5px] font-black leading-tight text-white">{col.day}</p>
-                        <p className="text-[10px] font-bold mt-0.5" style={{ color: accent }}>
+                      <th key={idx} className="border-r px-1 py-1 font-black" colSpan={showRoutineAfternoon ? 2 : 1} style={{ borderColor: `${primary}cc`, backgroundColor: primary }}>
+                        <p className="font-black leading-tight text-white font-solaiman" style={{ fontSize: `${headerDayFontPx}px` }}>{col.day}</p>
+                        <p className="font-bold mt-0.5 font-solaiman" style={{ color: '#fef08a', fontSize: `${headerDateFontPx}px` }}>
                           {isBn ? getBanglaNumber(col.date) : col.date}
                         </p>
                       </th>
@@ -279,19 +393,23 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                   </tr>
                   
                   {/* Second row of Table Header: Morning/Afternoon Shifts */}
-                  <tr className="text-emerald-950 h-9 border-b" style={{ backgroundColor: accent, borderColor: primary }}>
+                  <tr className="border-b" style={{ backgroundColor: accent, borderColor: primary }}>
                     {routineData.map((_, idx) => (
                       <React.Fragment key={idx}>
-                        <th className="border-r p-1 text-[11px] font-black font-noto tracking-tighter w-[50px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
-                          {isBn ? 'সকাল' : 'Morning'}
-                          <span className="block text-[9px] font-bold text-[#475569] mt-0.5 leading-none">
+                        <th className="border-r px-1 py-1 font-black font-solaiman tracking-tighter" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
+                          <span className="block font-black leading-tight font-solaiman" style={{ fontSize: `${shiftTitleFontPx}px` }}>
+                            {isBn ? 'সকাল' : 'Morning'}
+                          </span>
+                          <span className="block font-black text-slate-800 mt-0.5 leading-tight px-0.5 font-solaiman" style={{ fontSize: `${shiftTimeFontPx}px` }}>
                             {formatTime(routineMorningTime)}
                           </span>
                         </th>
                         {showRoutineAfternoon && (
-                          <th className="border-r p-1 text-[11px] font-black font-noto tracking-tighter w-[50px]" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
-                            {isBn ? 'বিকাল' : 'Afternoon'}
-                            <span className="block text-[9px] font-bold text-[#475569] mt-0.5 leading-none">
+                          <th className="border-r px-1 py-1 font-black font-solaiman tracking-tighter" style={{ borderColor: `${primary}33`, backgroundColor: accent, color: primary }}>
+                            <span className="block font-black leading-tight font-solaiman" style={{ fontSize: `${shiftTitleFontPx}px` }}>
+                              {isBn ? 'বিকাল' : 'Afternoon'}
+                            </span>
+                            <span className="block font-black text-slate-800 mt-0.5 leading-tight px-0.5 font-solaiman" style={{ fontSize: `${shiftTimeFontPx}px` }}>
                               {formatTime(routineAfternoonTime)}
                             </span>
                           </th>
@@ -302,111 +420,134 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                 </thead>
                 
                 <tbody>
-                  {/* Classes display rows */}
-                  {displayClasses.map((cls, idx) => {
-                    const rowHeightFormatA = displayClasses.length > 8 ? 'h-7' : displayClasses.length > 5 ? 'h-9' : 'h-11';
-                    const cellPaddingFormatA = displayClasses.length > 8 ? 'p-0.5 text-[10.5px]' : displayClasses.length > 5 ? 'p-1 text-[11.5px]' : 'p-1 py-1.5 text-[12.5px]';
+                  {/* Classes display rows with balanced vertical padding */}
+                  {displayClasses.map((cls, idx) => (
+                    <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} border-b`} style={{ borderColor: `${primary}26` }}>
+                      <td className={`border-r-2 ${rowPaddingClass} font-black text-center align-middle`} style={{ borderColor: primary, backgroundColor: `${light}80`, color: primary, fontSize: `${classNameFontSizePx}px` }}>
+                        <span className="tracking-tight font-solaiman block leading-tight">{cls.class_name}</span>
+                      </td>
+                      {routineData.map((_, dayIdx) => {
+                        const mrnSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'morning');
+                        const aftSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'afternoon');
+                        const isMrnEmpty = !mrnSub || mrnSub === '*****' || mrnSub.trim() === '';
+                        const isAftEmpty = !aftSub || aftSub === '*****' || aftSub.trim() === '';
 
-                    return (
-                      <tr key={cls.id} className={`${idx % 2 === 0 ? 'bg-white' : `${accent}1a`} border-b ${rowHeightFormatA}`} style={{ borderColor: `${primary}33` }}>
-                        <td className={`border-r-2 ${cellPaddingFormatA} font-black text-center`} style={{ borderColor: primary, backgroundColor: `${light}66`, color: primary }}>
-                          <span className="tracking-tight">{cls.class_name}</span>
-                        </td>
-                        {routineData.map((_, dayIdx) => {
-                          const mrnSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'morning');
-                          const aftSub = getSubjectForClassAndDayAndShift(cls, dayIdx, 'afternoon');
-                          return (
-                            <React.Fragment key={dayIdx}>
-                              <td className={`border-r ${cellPaddingFormatA} align-middle text-center overflow-hidden`} style={{ borderColor: `${primary}33` }}>
-                                <span className={`font-black tracking-tight leading-[1.8] py-1 block max-h-full whitespace-normal break-words ${mrnSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: mrnSub === '*****' ? undefined : primary }}>
+                        return (
+                          <React.Fragment key={dayIdx}>
+                            <td className={`border-r ${rowPaddingClass} align-middle text-center`} style={{ borderColor: `${primary}26` }}>
+                              {isMrnEmpty ? (
+                                <span className="text-slate-300 font-bold block text-sm select-none">—</span>
+                              ) : (
+                                <span className="font-black tracking-tight leading-snug block whitespace-normal break-words font-solaiman" style={{ color: primary, fontSize: `${cellFontSizePx}px` }}>
                                   {mrnSub}
                                 </span>
-                              </td>
-                              {showRoutineAfternoon && (
-                                <td className={`border-r ${cellPaddingFormatA} align-middle text-center overflow-hidden`} style={{ borderColor: `${primary}33` }}>
-                                  <span className={`font-black tracking-tight leading-[1.8] py-1 block max-h-full whitespace-normal break-words ${aftSub === '*****' ? 'text-slate-300 tracking-wider font-mono font-bold' : ''}`} style={{ color: aftSub === '*****' ? undefined : primary }}>
+                              )}
+                            </td>
+                            {showRoutineAfternoon && (
+                              <td className={`border-r ${rowPaddingClass} align-middle text-center`} style={{ borderColor: `${primary}26` }}>
+                                {isAftEmpty ? (
+                                  <span className="text-slate-300 font-bold block text-sm select-none">—</span>
+                                ) : (
+                                  <span className="font-black tracking-tight leading-snug block whitespace-normal break-words font-solaiman text-slate-800" style={{ fontSize: `${cellFontSizePx}px` }}>
                                     {aftSub}
                                   </span>
-                                </td>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
+                                )}
+                              </td>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             ) : (
               /* FORMAT B: CLASS-WISE SINGLE ROUTINE */
-              <table className="w-full border-collapse border-2 rounded-xl overflow-hidden shadow-sm text-center" style={{ borderColor: primary }}>
-                <thead>
-                  <tr className={`text-white ${tableHeaderHeight}`} style={{ backgroundColor: primary }}>
-                    <th className="border-r p-1 text-[12px] font-black w-24" style={{ borderColor: `${primary}b3` }}>
+              <table className="w-full border-collapse border-2 rounded-lg overflow-hidden shadow-xs text-center font-solaiman table-fixed" style={{ borderColor: primary }}>
+                <thead className="shrink-0">
+                  <tr className="text-white" style={{ backgroundColor: primary }}>
+                    <th className="border-r p-1.5 font-black w-28 align-middle" style={{ borderColor: `${primary}cc`, fontSize: `${headerDayFontPx}px` }}>
                       {isBn ? 'বার / তারিখ' : 'Day / Date'}
                     </th>
-                    <th className="border-r p-1 text-[12px] font-black" style={{ borderColor: `${primary}b3` }}>
-                      {isBn ? `সকাল (${formatTime(routineMorningTime)})` : `Morning (${formatTime(routineMorningTime)})`}
+                    <th className="border-r p-1.5 font-black align-middle" style={{ borderColor: `${primary}cc` }}>
+                      <div className="font-solaiman leading-tight" style={{ fontSize: `${shiftTitleFontPx}px` }}>{isBn ? 'সকাল' : 'Morning'}</div>
+                      <div className="font-bold opacity-90 text-[10px] mt-0.5 font-solaiman" style={{ color: '#fef08a' }}>{routineMorningTime}</div>
                     </th>
                     {showRoutineAfternoon && (
-                      <th className="p-1 text-[12px] font-black w-36">
-                        {isBn ? `বিকাল (${formatTime(routineAfternoonTime)})` : `Afternoon (${formatTime(routineAfternoonTime)})`}
+                      <th className="p-1.5 font-black align-middle" style={{ fontSize: `${shiftTitleFontPx}px` }}>
+                        <div className="font-solaiman leading-tight">{isBn ? 'বিকাল' : 'Afternoon'}</div>
+                        <div className="font-bold opacity-90 text-[10px] mt-0.5 font-solaiman" style={{ color: '#fef08a' }}>{routineAfternoonTime}</div>
                       </th>
                     )}
                   </tr>
                 </thead>
                 <tbody>
-                  {routineData.map((row, idx) => (
-                    <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : `${light}33`} border-b ${tableRowHeight}`} style={{ borderColor: `${primary}33` }}>
-                      <td className="border-r p-1 text-center" style={{ borderColor: `${primary}33`, backgroundColor: `${light}4d` }}>
-                        <p className="font-black mb-0 leading-tight text-[11px]" style={{ color: primary }}>{row.day}</p>
-                        <p className="text-[9.5px] font-bold text-slate-500 mt-0.5 leading-none">{isBn ? getBanglaNumber(row.date) : row.date}</p>
-                      </td>
-                      
-                      {/* Morning subject for selected class */}
-                      <td className={`border-r ${tableCellPaddingClass} align-middle`} style={{ borderColor: `${primary}33` }}>
-                        <div className="text-center font-black whitespace-normal break-words leading-[1.8] py-1" style={{ color: primary }}>
-                          {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning')}
-                        </div>
-                      </td>
-                      
-                      {/* Afternoon items */}
-                      {showRoutineAfternoon && (
-                        <td className={`${tableCellPaddingClass} align-middle`}>
-                          <div className="text-center font-black text-slate-800 whitespace-normal break-words leading-[1.8] py-1">
-                            {getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon')}
-                          </div>
+                  {routineData.map((row, idx) => {
+                    const mrnSub = getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'morning');
+                    const aftSub = getSubjectForClassAndDayAndShift(displayClasses[0], idx, 'afternoon');
+                    const isMrnEmpty = !mrnSub || mrnSub === '*****' || mrnSub.trim() === '';
+                    const isAftEmpty = !aftSub || aftSub === '*****' || aftSub.trim() === '';
+
+                    return (
+                      <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} border-b`} style={{ borderColor: `${primary}26` }}>
+                        <td className={`border-r ${rowPaddingClass} align-middle text-center`} style={{ borderColor: `${primary}26`, backgroundColor: `${light}66` }}>
+                          <p className="font-black leading-tight font-solaiman" style={{ color: primary, fontSize: `${headerDayFontPx}px` }}>{row.day}</p>
+                          <p className="font-bold text-slate-600 mt-0.5 leading-none font-solaiman" style={{ fontSize: `${headerDateFontPx}px` }}>{isBn ? getBanglaNumber(row.date) : row.date}</p>
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        
+                        {/* Morning subject for selected class */}
+                        <td className={`border-r ${rowPaddingClass} align-middle`} style={{ borderColor: `${primary}26` }}>
+                          {isMrnEmpty ? (
+                            <span className="text-slate-300 font-bold block text-sm select-none">—</span>
+                          ) : (
+                            <div className="text-center font-black whitespace-normal break-words leading-snug font-solaiman" style={{ color: primary, fontSize: `${cellFontSizePx}px` }}>
+                              {mrnSub}
+                            </div>
+                          )}
+                        </td>
+                        
+                        {/* Afternoon items */}
+                        {showRoutineAfternoon && (
+                          <td className={`px-2 ${rowPaddingClass} align-middle`}>
+                            {isAftEmpty ? (
+                              <span className="text-slate-300 font-bold block text-sm select-none">—</span>
+                            ) : (
+                              <div className="text-center font-black text-slate-800 whitespace-normal break-words leading-snug font-solaiman" style={{ fontSize: `${cellFontSizePx}px` }}>
+                                {aftSub}
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
 
             {/* Natural Watermark stamp */}
-            <div className="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none -rotate-12 select-none z-[-1]">
+            <div className="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.04] pointer-events-none select-none z-[-1]">
               {madrasah?.logo_url ? (
-                <img src={madrasah.logo_url} className="w-[300px] h-[300px] object-contain" alt="" />
+                <img src={madrasah.logo_url} className="w-[280px] h-[280px] object-contain" alt="" crossOrigin="anonymous" />
               ) : (
-                <div className="text-9xl font-black" style={{ color: primary }}>{madrasah?.name?.slice(0, 1) || 'ম'}</div>
+                <div className="text-9xl font-black font-solaiman" style={{ color: primary }}>{madrasah?.name?.slice(0, 1) || 'ম'}</div>
               )}
             </div>
           </div>
 
           {/* Footer Block */}
-          <div className="mt-2 flex justify-between items-end pt-2 border-t" style={{ borderColor: `${primary}1a` }}>
+          <div className="mt-1 flex justify-between items-end pt-1.5 border-t shrink-0" style={{ borderColor: `${primary}26` }}>
             
             {/* Left Column: Special Instructions */}
-            <div className={`${footerInstructionsMaxWidth} text-left leading-relaxed`}>
-              <div className={`text-white ${footerInstructionsBadgeClass} rounded-md inline-flex items-center gap-1.5 font-black shadow-sm uppercase font-noto`} style={{ backgroundColor: primary }}>
-                <span>📖</span>
-                {isBn ? 'বিশেষ নির্দেশনা' : 'Special Instructions'}
+            <div className={`${footerInstructionsMaxWidth} text-left leading-tight`}>
+              <div className={`text-white ${footerInstructionsBadgeClass} rounded-md inline-flex items-center gap-1.5 font-black shadow-2xs uppercase font-solaiman`} style={{ backgroundColor: primary }}>
+                <span>📋</span>
+                {isBn ? 'বিশেষ নির্দেশাবলী' : 'Special Instructions'}
               </div>
-              <ul className={`${footerInstructionsTextClass} max-h-[140px] overflow-hidden pr-2`}>
+              <ul className={`${footerInstructionsTextClass} max-h-[110px] overflow-hidden pr-1 font-solaiman`}>
                 {instructionsToShow.map((inst, i) => (
-                  <li key={i} className="flex gap-1.5 leading-normal">
-                    <span className="font-extrabold shrink-0" style={{ color: primary }}>{isBn ? getBanglaNumber((i + 1).toString()) : i + 1} ।</span>
+                  <li key={i} className="flex gap-1 leading-snug font-solaiman">
+                    <span className="font-extrabold shrink-0" style={{ color: primary }}>{isBn ? getBanglaNumber((i + 1).toString()) : i + 1}।</span>
                     <span>{inst}</span>
                   </li>
                 ))}
@@ -415,31 +556,31 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
 
             {/* Right Column: Sign Box */}
             <div className="text-center">
-              <div className={`border rounded-xl ${footerSignBoxMinWidth} relative`} style={{ borderColor: `${primary}33`, backgroundColor: `${light}26` }}>
+              <div className={`border-2 rounded-xl ${footerSignBoxMinWidth} relative font-solaiman shadow-2xs`} style={{ borderColor: `${primary}40`, backgroundColor: `${light}33` }}>
                 <div className="relative flex flex-col items-center justify-center mb-0.5" style={{ height: `${signatureHeight}px` }}>
                   {configObj?.signature_url && (
-                      <img src={configObj.signature_url} style={{ height: `${signatureHeight}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
+                    <img src={configObj.signature_url} style={{ height: `${signatureHeight}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
                   )}
                 </div>
-                <p className={`${footerSignTextClass} font-black mb-0.5`} style={{ color: `${primary}e6` }}>{isBn ? 'ধন্যবাদান্তে,' : 'Best Regards,'}</p>
-                <div className="h-px bg-slate-200 w-full mb-1"></div>
-                <p className={`${footerSignTextClass} font-black leading-tight`} style={{ color: primary }}>
-                  {routinePrincipalName || (isBn ? 'পরিচালক' : 'Director')}
+                <p className={`${footerSignTextClass} font-black mb-0.5 font-solaiman`} style={{ color: primary }}>{isBn ? 'স্বাক্ষর ও সিল' : 'Signature & Seal'}</p>
+                <div className="h-px w-full mb-1" style={{ backgroundColor: `${primary}33` }}></div>
+                <p className={`${footerSignTextClass} font-black leading-tight font-solaiman`} style={{ color: primary }}>
+                  {routinePrincipalName || (isBn ? 'পরীক্ষা নিয়ন্ত্রক / অধ্যক্ষ' : 'Controller of Exams / Principal')}
                 </p>
-                <p className={`${footerSignSubtextClass} font-bold text-slate-400 mt-0.5 truncate max-w-[150px]`}>{madrasah?.name}</p>
+                <p className={`${footerSignSubtextClass} font-bold text-slate-500 mt-0.5 truncate max-w-[170px] font-solaiman`}>{madrasah?.name}</p>
                 {routinePrincipalMobile && (
-                  <p className={`${footerSignSubtextClass} font-black mt-0.5 inline-flex items-center gap-0.5`} style={{ color: `${primary}cc` }}>
+                  <p className={`${footerSignSubtextClass} font-black mt-0.5 inline-flex items-center gap-0.5 font-solaiman`} style={{ color: primary }}>
                     📞 {routinePrincipalMobile}
                   </p>
                 )}
-                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t border-r rounded-tr-md" style={{ borderColor: primary }}></div>
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t-2 border-r-2 rounded-tr-md" style={{ borderColor: primary }}></div>
               </div>
             </div>
           </div>
 
           {/* Institute Management System bottom tagline */}
-          <div className="text-center mt-1.5 pt-1 text-[9px] font-bold text-slate-300 border-t border-slate-100 tracking-wider font-mono uppercase">
-            Institute Management System
+          <div className="text-center mt-0.5 pt-0.5 text-[8px] font-bold text-slate-400 border-t border-slate-100 tracking-wider font-mono uppercase">
+            Official Examination Schedule • Institute Management System
           </div>
         </div>
       </div>
@@ -447,7 +588,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
   };
 
   return (
-    <div className="bg-white font-noto">
+    <div className="bg-white font-solaiman" style={{ fontFamily: "'SolaimanLipi', sans-serif" }}>
       <div className="pdf-page-container w-[1123px] h-[794px] bg-white mx-auto overflow-hidden flex relative flex-row">
         {routineSelectionMode === 'all' ? (
           <div className="w-full h-full p-2">
@@ -456,12 +597,12 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
         ) : (
           <div className="w-full h-full flex flex-row">
             {/* Left Copy */}
-            <div className="w-1/2 h-full border-r-2 border-dashed border-slate-300 p-2">
-              <SingleRoutineContent />
+            <div className="w-1/2 h-full border-r-2 border-dashed border-slate-300 p-2 relative">
+              <SingleRoutineContent copyTitle={isBn ? 'শিক্ষার্থী কপি' : 'Student Copy'} />
             </div>
             {/* Right Copy */}
-            <div className="w-1/2 h-full p-2">
-              <SingleRoutineContent />
+            <div className="w-1/2 h-full p-2 relative">
+              <SingleRoutineContent copyTitle={isBn ? 'অভিভাবক কপি' : 'Guardian Copy'} />
             </div>
           </div>
         )}
