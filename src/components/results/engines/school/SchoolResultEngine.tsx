@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout, Globe, Eye, EyeOff } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -112,6 +112,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [routineData, setRoutineData] = useState<any[]>([]);
   const [savedRoutines, setSavedRoutines] = useState<any[]>([]);
   const [isRestoringRoutine, setIsRestoringRoutine] = useState(false);
+  const [routineIsPublished, setRoutineIsPublished] = useState<boolean>(true);
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
+  const [editingRoutineName, setEditingRoutineName] = useState<string>('');
 
   // Load saved routines from config_json
   React.useEffect(() => {
@@ -535,13 +538,28 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setRoutineData(prev => prev.filter(d => d.id !== id));
   };
 
-  const saveRoutineToDB = async () => {
+  const handleCreateNewRoutine = () => {
+    setEditingRoutineId(null);
+    setEditingRoutineName('');
+    setCustomRoutineTitle('');
+  };
+
+  const saveRoutineToDB = async (saveAsNew: boolean = false) => {
     if (!madrasah) return;
     try {
+      const isUpdating = !saveAsNew && Boolean(editingRoutineId);
+      const currentConfig = madrasah.config_json || {};
+      const existingRoutines: any[] = (currentConfig as any).saved_exam_routines || [];
+      const existingRoutine = isUpdating ? existingRoutines.find((r: any) => r.id === editingRoutineId) : null;
+      
+      const routineId = isUpdating && existingRoutine ? existingRoutine.id : Date.now().toString();
+
       const payload = {
-        id: Date.now().toString(),
+        id: routineId,
         name: customRoutineTitle || activeExamName || (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine'),
-        createdAt: new Date().toISOString(),
+        createdAt: existingRoutine?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        is_published: routineIsPublished,
         routineData,
         routineInstructions,
         routineMorningTime,
@@ -564,8 +582,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         routineTermGroup
       };
 
-      const currentConfig = madrasah.config_json || {};
-      const updatedRoutines = [...((currentConfig as any).saved_exam_routines || []), payload];
+      let updatedRoutines: any[];
+      if (isUpdating && existingRoutines.some((r: any) => r.id === routineId)) {
+        updatedRoutines = existingRoutines.map((r: any) => r.id === routineId ? payload : r);
+      } else {
+        updatedRoutines = [...existingRoutines, payload];
+      }
+
       const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
 
       const { error } = await supabase
@@ -580,8 +603,19 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         (madrasah.config_json as any).saved_exam_routines = updatedRoutines;
       }
       
-      setSuccessTitle(lang === 'bn' ? 'রুটিন সেভ হয়েছে' : 'Routine Saved');
-      setSuccessMessage(lang === 'bn' ? 'আপনার পরীক্ষার রুটিনটি সফলভাবে সার্ভারে সংরক্ষিত হয়েছে।' : 'Your exam routine has been successfully saved to the server.');
+      setEditingRoutineId(routineId);
+      setEditingRoutineName(payload.name);
+
+      setSuccessTitle(
+        isUpdating 
+          ? (lang === 'bn' ? 'রুটিন আপডেট হয়েছে' : 'Routine Updated') 
+          : (lang === 'bn' ? 'রুটিন সেভ হয়েছে' : 'Routine Saved')
+      );
+      setSuccessMessage(
+        isUpdating 
+          ? (lang === 'bn' ? 'আপনার পরীক্ষার রুটিনটি সফলভাবে আপডেট করা হয়েছে।' : 'Your exam routine has been successfully updated.')
+          : (lang === 'bn' ? 'আপনার পরীক্ষার রুটিনটি সফলভাবে সার্ভারে সংরক্ষিত হয়েছে।' : 'Your exam routine has been successfully saved to the server.')
+      );
       setModalMode('success');
       setShowSuccessModal(true);
     } catch (err) {
@@ -595,6 +629,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
   const loadRoutineFromDB = (routine: any) => {
     setIsRestoringRoutine(true);
+    setEditingRoutineId(routine.id);
+    setEditingRoutineName(routine.name || routine.customRoutineTitle || (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine'));
 
     if (routine.routineData) setRoutineData(routine.routineData);
     if (routine.routineInstructions) setRoutineInstructions(routine.routineInstructions);
@@ -618,9 +654,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (routine.selectedRoutineExamId) setSelectedRoutineExamId(routine.selectedRoutineExamId);
     if (routine.selectedRoutineAllExamIds) setSelectedRoutineAllExamIds(routine.selectedRoutineAllExamIds);
     if (routine.routineTermGroup) setRoutineTermGroup(routine.routineTermGroup);
+    if (routine.is_published !== undefined) setRoutineIsPublished(Boolean(routine.is_published));
 
     setSuccessTitle(lang === 'bn' ? 'রুটিন লোড হয়েছে' : 'Routine Loaded');
-    setSuccessMessage(lang === 'bn' ? 'রুটিনটি সফলভাবে লোড করা হয়েছে। আপনি এখন এটি এডিট করতে পারেন।' : 'Routine has been loaded successfully. You can now edit it.');
+    setSuccessMessage(lang === 'bn' ? `"${routine.name || 'রুটিন'}" সফলভাবে লোড হয়েছে। পরিবর্তন করে 'রুটিন আপডেট' চাপলে এটিই আপডেট হবে।` : `"${routine.name || 'Routine'}" has been loaded. Clicking 'Update Routine' will update this routine.`);
     setModalMode('success');
     setShowSuccessModal(true);
 
@@ -628,6 +665,33 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     setTimeout(() => {
       setIsRestoringRoutine(false);
     }, 500);
+  };
+
+  const toggleRoutinePublish = async (id: string, currentPublished: boolean) => {
+    if (!madrasah) return;
+    try {
+      const currentConfig = madrasah.config_json || {};
+      const updatedRoutines = ((currentConfig as any).saved_exam_routines || []).map((r: any) => {
+        if (r.id === id) {
+          return { ...r, is_published: !currentPublished };
+        }
+        return r;
+      });
+      const updatedConfig = { ...currentConfig, saved_exam_routines: updatedRoutines };
+
+      const { error } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (error) throw error;
+      setSavedRoutines(updatedRoutines);
+      if (madrasah.config_json) {
+        (madrasah.config_json as any).saved_exam_routines = updatedRoutines;
+      }
+    } catch (err) {
+      console.error('Error toggling routine publish status:', err);
+    }
   };
 
   const deleteRoutineFromDB = async (id: string) => {
@@ -654,6 +718,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         setSavedRoutines(updatedRoutines);
         if (madrasah.config_json) {
           (madrasah.config_json as any).saved_exam_routines = updatedRoutines;
+        }
+        
+        if (id === editingRoutineId) {
+          setEditingRoutineId(null);
+          setEditingRoutineName('');
         }
         
         setSuccessTitle(lang === 'bn' ? 'রুটিন মুছে ফেলা হয়েছে' : 'Routine Deleted');
@@ -2260,6 +2329,32 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                   {lang === 'bn' ? 'রুটিন কনফিগারেশন' : 'Routine Configuration'}
                 </h3>
 
+                {/* Active Editing Notification Banner */}
+                {editingRoutineId && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-2xl flex items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                        <Edit3 size={13} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider font-noto">
+                          {lang === 'bn' ? 'এডিট মোড সক্রিয়' : 'Editing Mode Active'}
+                        </p>
+                        <p className="text-xs font-bold text-amber-700 dark:text-amber-300 truncate max-w-[160px] sm:max-w-[180px]">
+                          {editingRoutineName || customRoutineTitle || (lang === 'bn' ? 'রুটিন' : 'Routine')}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCreateNewRoutine}
+                      className="text-[10px] font-black bg-white dark:bg-slate-800 hover:bg-amber-100 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-700 shadow-xs transition-colors shrink-0 whitespace-nowrap"
+                    >
+                      {lang === 'bn' ? '+ নতুন তৈরি' : '+ New'}
+                    </button>
+                  </div>
+                )}
+
                 {/* Routine Selection Mode Option */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === 'bn' ? 'রুটিনের ধরণ' : 'Routine Type'}</label>
@@ -2527,6 +2622,30 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                   </div>
                 </div>
 
+                {/* Published Option Toggle */}
+                <div className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${routineIsPublished ? (madrasah?.theme === 'dark' ? 'bg-emerald-950/30 border-emerald-800/60' : 'bg-emerald-50/70 border-emerald-200') : (madrasah?.theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200')}`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${routineIsPublished ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-500 dark:bg-slate-700'}`}>
+                      <Globe size={16} />
+                    </div>
+                    <div>
+                      <p className={`text-xs font-black ${routineIsPublished ? (madrasah?.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-800') : (madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}`}>
+                        {lang === 'bn' ? 'পাবলিশ করুন (Published)' : 'Publish to Parent Portal'}
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-400">
+                        {lang === 'bn' ? 'অন থাকলে অভিভাবকরা প্যারেন্ট পোর্টালে রুটিন দেখতে পাবেন' : 'Visible to parents in their portal'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRoutineIsPublished(prev => !prev)}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${routineIsPublished ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                  >
+                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${routineIsPublished ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
                 {/* Master Action Button */}
                 <button 
                   onClick={handleDownloadCustomExamRoutine}
@@ -2554,69 +2673,139 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                       {lang === 'bn' ? 'সেভ করা রুটিন সমূহ' : 'Saved Routines'}
                     </h4>
                     <div className="space-y-2">
-                      {savedRoutines.map((r, i) => (
-                        <div key={r.id || i} className="flex flex-col gap-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-bold text-slate-800">{r.name}</p>
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                {new Date(r.createdAt).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', {
-                                  day: '2-digit', month: 'long', year: 'numeric'
-                                })} • {r.routineSelectionMode === 'all' ? (lang === 'bn' ? 'মাস্টার রুটিন' : 'Master Routine') : (lang === 'bn' ? 'সিঙ্গেল ক্লাস' : 'Single Class')}
-                              </p>
+                      {savedRoutines.map((r, i) => {
+                        const isCurrentEditing = r.id === editingRoutineId;
+                        return (
+                          <div 
+                            key={r.id || i} 
+                            className={`flex flex-col gap-3.5 p-4 sm:p-5 rounded-2xl border transition-all shadow-sm ${
+                              isCurrentEditing 
+                                ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 ring-2 ring-amber-400/50' 
+                                : 'bg-white dark:bg-slate-800 border-slate-200/80 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            }`}
+                          >
+                            {/* Card Header & Controls (Same line on mobile & desktop) */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                  <h5 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 font-noto truncate" title={r.name}>
+                                    {r.name}
+                                  </h5>
+                                  {isCurrentEditing && (
+                                    <span className="bg-amber-500 text-white text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 rounded-full flex items-center gap-0.5 shrink-0 shadow-xs">
+                                      <Edit3 size={9} /> <span className="hidden xs:inline">{lang === 'bn' ? 'এডিট হচ্ছে' : 'Editing'}</span>
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Right Controls: Status, Publish Toggle, Delete */}
+                                <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                                  <span className={`inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black border ${
+                                    r.is_published !== false 
+                                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300' 
+                                      : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300'
+                                  }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${r.is_published !== false ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                                    <span>{r.is_published !== false ? (lang === 'bn' ? 'পাবলিশড' : 'Published') : (lang === 'bn' ? 'ড্রাফট' : 'Draft')}</span>
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleRoutinePublish(r.id, r.is_published !== false)}
+                                    className={`text-[9px] sm:text-[10px] font-black px-2 sm:px-2.5 py-1 rounded-lg sm:rounded-xl border transition-all flex items-center gap-1 shadow-xs ${
+                                      r.is_published !== false
+                                        ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600'
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                                    }`}
+                                    title={r.is_published !== false ? (lang === 'bn' ? 'প্যারেন্ট পোর্টাল থেকে হাইড করুন' : 'Hide from parent portal') : (lang === 'bn' ? 'প্যারেন্ট পোর্টালে পাবলিশ করুন' : 'Publish to parent portal')}
+                                  >
+                                    {r.is_published !== false ? <EyeOff size={11} /> : <Eye size={11} />}
+                                    <span className="hidden sm:inline">{r.is_published !== false ? (lang === 'bn' ? 'আনপাবলিশ' : 'Unpublish') : (lang === 'bn' ? 'পাবলিশ' : 'Publish')}</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => deleteRoutineFromDB(r.id)}
+                                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-900/50 border border-red-100 dark:border-red-900/50 flex items-center justify-center transition-colors shadow-xs"
+                                    title={lang === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium font-noto flex-wrap">
+                                <span>
+                                  {new Date(r.createdAt).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', {
+                                    day: '2-digit', month: 'short', year: 'numeric'
+                                  })}
+                                </span>
+                                <span>•</span>
+                                <span className="bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-bold">
+                                  {r.routineSelectionMode === 'all' ? (lang === 'bn' ? 'মাস্টার রুটিন' : 'Master Routine') : (lang === 'bn' ? 'সিঙ্গেল ক্লাস' : 'Single Class')}
+                                </span>
+                                {r.updatedAt && r.updatedAt !== r.createdAt && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-amber-600 dark:text-amber-400 font-bold text-[9px] sm:text-[10px]">
+                                      {lang === 'bn' ? 'আপডেট:' : 'Updated:'} {new Date(r.updatedAt).toLocaleTimeString(lang === 'bn' ? 'bn-BD' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <button 
-                              onClick={() => deleteRoutineFromDB(r.id)}
-                              className="text-red-400 hover:text-red-500 transition-colors p-1"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+
+                            {/* Action Buttons: Edit / Load and Download */}
+                            <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-700/60 font-noto">
+                              <button 
+                                onClick={() => loadRoutineFromDB(r)}
+                                className={`h-9 sm:h-10 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all shadow-xs ${
+                                  isCurrentEditing 
+                                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20' 
+                                    : 'bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800'
+                                }`}
+                              >
+                                {isCurrentEditing ? <Edit3 size={14} /> : <Upload size={14} />}
+                                {isCurrentEditing ? (lang === 'bn' ? 'বর্তমানে এডিট হচ্ছে' : 'Currently Editing') : (lang === 'bn' ? 'এডিট / লোড করুন' : 'Edit / Load Routine')}
+                              </button>
+
+                              <button 
+                                onClick={async () => {
+                                  // Direct download of this saved routine context
+                                  setIsDownloading(true);
+                                  try {
+                                    const tempName = r.customRoutineTitle || r.activeExamName || (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine');
+                                    await generateExamRoutinePDF(
+                                      { ...madrasah, name: madrasah?.name || 'School' } as any,
+                                      tempName,
+                                      r.routineData,
+                                      lang,
+                                      {
+                                        routineSelectionMode: r.routineSelectionMode,
+                                        selectedRoutineClassId: r.selectedRoutineClassId,
+                                        classesList: classes,
+                                        routineMorningTime: r.routineMorningTime,
+                                        routineAfternoonTime: r.routineAfternoonTime,
+                                        routineInstructions: r.routineInstructions,
+                                        routinePrincipalName: routinePrincipalName,
+                                        routinePrincipalMobile: routinePrincipalMobile,
+                                        showRoutineAfternoon: r.showRoutineAfternoon,
+                                        examYear: currentYear,
+                                        themeColor: r.routineThemeColor
+                                      }
+                                    );
+                                  } finally {
+                                    setIsDownloading(false);
+                                  }
+                                }}
+                                className="h-9 sm:h-10 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-colors border border-emerald-200 dark:border-emerald-800 shadow-xs"
+                              >
+                                <Download size={14} />
+                                {lang === 'bn' ? 'পিডিএফ ডাউনলোড' : 'Download PDF'}
+                              </button>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 mt-1">
-                            <button 
-                              onClick={() => loadRoutineFromDB(r)}
-                              className="h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
-                            >
-                              <Upload size={12} />
-                              {lang === 'bn' ? 'লোড করুন' : 'Load'}
-                            </button>
-                            <button 
-                              onClick={async () => {
-                                // Direct download of this saved routine context
-                                setIsDownloading(true);
-                                try {
-                                  const tempName = r.customRoutineTitle || r.activeExamName || (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine');
-                                  await generateExamRoutinePDF(
-                                    { ...madrasah, name: madrasah?.name || 'School' } as any,
-                                    tempName,
-                                    r.routineData,
-                                    lang,
-                                    {
-                                      routineSelectionMode: r.routineSelectionMode,
-                                      selectedRoutineClassId: r.selectedRoutineClassId,
-                                      classesList: classes,
-                                      routineMorningTime: r.routineMorningTime,
-                                      routineAfternoonTime: r.routineAfternoonTime,
-                                      routineInstructions: r.routineInstructions,
-                                      routinePrincipalName: routinePrincipalName,
-                                      routinePrincipalMobile: routinePrincipalMobile,
-                                      showRoutineAfternoon: r.showRoutineAfternoon,
-                                      examYear: currentYear,
-                                      themeColor: r.routineThemeColor
-                                    }
-                                  );
-                                } finally {
-                                  setIsDownloading(false);
-                                }
-                              }}
-                              className="h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
-                            >
-                              <Download size={12} />
-                              {lang === 'bn' ? 'ডাউনলোড' : 'Download'}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
@@ -2641,14 +2830,25 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                   </h3>
                   <div className="flex flex-wrap items-center gap-2">
                     {routineSelectionMode !== 'saved' && (
-                      <div className="flex bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                        <button 
-                          onClick={saveRoutineToDB}
-                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black transition-colors flex items-center gap-1"
-                        >
-                          <Save size={12} />
-                          {lang === 'bn' ? 'রুটিন সেভ' : 'Save Routine'}
-                        </button>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {editingRoutineId ? (
+                          <button 
+                            onClick={() => saveRoutineToDB(false)}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black rounded-lg transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                            title={lang === 'bn' ? 'বর্তমান রুটিনটি আপডেট করুন' : 'Update existing routine'}
+                          >
+                            <Save size={12} />
+                            {lang === 'bn' ? 'রুটিন আপডেট' : 'Update Routine'}
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => saveRoutineToDB(false)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black rounded-lg transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          >
+                            <Save size={12} />
+                            {lang === 'bn' ? 'রুটিন সেভ' : 'Save Routine'}
+                          </button>
+                        )}
                       </div>
                     )}
                     <div className="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">

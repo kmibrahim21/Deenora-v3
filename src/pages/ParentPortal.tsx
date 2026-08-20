@@ -145,8 +145,9 @@ interface ParentPortalProps {
 const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'results' | 'fees' | 'notices' | 'profile'>('home');
   const modules = useMemo(() => madrasah?.config_json?.modules || {} as any, [madrasah]);
-  const [activeNoticeTab, setActiveNoticeTab] = useState<'diary' | 'notice' | 'syllabus'>('notice');
+  const [activeNoticeTab, setActiveNoticeTab] = useState<'notice' | 'diary' | 'syllabus' | 'routine'>('notice');
   const [student, setStudent] = useState<any>(null);
+  const [currentInstitution, setCurrentInstitution] = useState<Institution | null>(madrasah);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
   const [feeStructures, setFeeStructures] = useState<any[]>([]);
@@ -187,6 +188,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
   const applyData = useCallback((data: any) => {
     setStudent(data.student);
+    if (data.institution) {
+      setCurrentInstitution(data.institution);
+    }
     setAttendance(data.attendance);
     setFees(data.fees);
     setFeeStructures(data.feeStructures || []);
@@ -196,6 +200,95 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     setEvents(data.events || []);
     setClassTotal(data.classTotal || 0);
   }, []);
+
+  // Filter published routines that belong to student's class
+  const publishedClassRoutines = useMemo(() => {
+    const currentInst = currentInstitution || madrasah;
+    const config = currentInst?.config_json as any;
+    let allSavedRoutines: any[] = [];
+    if (config?.saved_exam_routines && Array.isArray(config.saved_exam_routines)) {
+      allSavedRoutines = config.saved_exam_routines;
+    }
+    
+    // Filter only published routines (is_published !== false)
+    const published = allSavedRoutines.filter(r => r.is_published !== false);
+    
+    const studentClassId = student?.class_id || student?.classes?.id;
+    const studentClassName = (student?.classes?.class_name || '').toLowerCase().trim();
+
+    const matchedRoutines: any[] = [];
+
+    published.forEach(r => {
+      const isSingleClassMode = r.routineSelectionMode === 'class';
+      if (isSingleClassMode && r.selectedRoutineClassId && studentClassId && r.selectedRoutineClassId !== studentClassId) {
+        return;
+      }
+
+      const classDays: any[] = [];
+      let hasAnyAfternoonInRoutine = false;
+
+      (r.routineData || []).forEach((dayObj: any) => {
+        const morningSlots = dayObj?.morning?.subjects || (Array.isArray(dayObj?.subjects) ? dayObj.subjects : []);
+        const afternoonSlots = dayObj?.afternoon?.subjects || [];
+        
+        let morningMatch = null;
+        let afternoonMatch = null;
+
+        if (isSingleClassMode) {
+          morningMatch = morningSlots.find((s: any) => 
+            (studentClassId && s.classId === studentClassId) || 
+            (studentClassName && s.className && s.className.toLowerCase().trim() === studentClassName)
+          ) || morningSlots[0];
+
+          afternoonMatch = afternoonSlots.find((s: any) => 
+            (studentClassId && s.classId === studentClassId) || 
+            (studentClassName && s.className && s.className.toLowerCase().trim() === studentClassName)
+          ) || afternoonSlots[0];
+        } else {
+          morningMatch = morningSlots.find((s: any) => 
+            (studentClassId && s.classId === studentClassId) || 
+            (studentClassName && s.className && s.className.toLowerCase().trim() === studentClassName)
+          );
+          afternoonMatch = afternoonSlots.find((s: any) => 
+            (studentClassId && s.classId === studentClassId) || 
+            (studentClassName && s.className && s.className.toLowerCase().trim() === studentClassName)
+          );
+        }
+
+        const morningSubject = morningMatch?.subject?.trim() || (typeof dayObj?.morningSubject === 'string' ? dayObj.morningSubject.trim() : '');
+        const afternoonSubject = afternoonMatch?.subject?.trim() || (typeof dayObj?.afternoonSubject === 'string' ? dayObj.afternoonSubject.trim() : '');
+
+        const hasMorning = Boolean(morningSubject && morningSubject !== '*****' && morningSubject !== '---');
+        const hasAfternoon = Boolean(afternoonSubject && afternoonSubject !== '*****' && afternoonSubject !== '---');
+
+        if (hasAfternoon) hasAnyAfternoonInRoutine = true;
+
+        if (hasMorning || hasAfternoon) {
+          classDays.push({
+            id: dayObj.id || Math.random().toString(),
+            date: dayObj.date || dayObj.isoDate || '',
+            day: dayObj.day || '',
+            morningSubject: hasMorning ? morningSubject : '—',
+            morningTime: dayObj.morning?.time || r.routineMorningTime || (r.routineMorningStart ? `${r.routineMorningStart} - ${r.routineMorningEnd}` : ''),
+            morningRoom: morningMatch?.room || dayObj.morningRoom || '',
+            afternoonSubject: hasAfternoon ? afternoonSubject : '—',
+            afternoonTime: dayObj.afternoon?.time || r.routineAfternoonTime || (r.routineAfternoonStart ? `${r.routineAfternoonStart} - ${r.routineAfternoonEnd}` : ''),
+            afternoonRoom: afternoonMatch?.room || dayObj.afternoonRoom || ''
+          });
+        }
+      });
+
+      if (classDays.length > 0) {
+        matchedRoutines.push({
+          ...r,
+          hasAfternoon: hasAnyAfternoonInRoutine || Boolean(r.showRoutineAfternoon),
+          days: classDays
+        });
+      }
+    });
+
+    return matchedRoutines;
+  }, [currentInstitution, madrasah, student]);
 
   const fetchData = async () => {
     if (!loading) setRefreshing(true);
@@ -2010,7 +2103,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   {[
                     { id: 'notice', label: 'নোটিশ', icon: Bell },
                     { id: 'diary', label: 'ডায়েরি', icon: BookOpen },
-                    { id: 'syllabus', label: 'সিলেবাস', icon: FileText }
+                    { id: 'syllabus', label: 'সিলেবাস', icon: FileText },
+                    { id: 'routine', label: 'রুটিন', icon: Calendar }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -2028,7 +2122,163 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 </div>
               </div>
 
-              {(() => {
+              {activeNoticeTab === 'routine' ? (
+                <div>
+                  {publishedClassRoutines.length === 0 ? (
+                    <div className="bg-white/50 border border-dashed border-slate-200 p-12 rounded-[3rem] text-center space-y-4">
+                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border border-slate-100">
+                        <Calendar size={40} className="text-slate-300" />
+                      </div>
+                      <div>
+                        <p className="text-base font-black text-slate-700 font-noto">কোনো পরীক্ষার রুটিন প্রকাশিত হয়নি</p>
+                        <p className="text-xs text-slate-400 font-medium font-noto mt-1">আপনার শ্রেণির জন্য পরীক্ষার রুটিন পাবলিশ করা হলে এখানে দেখতে পাবেন।</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {publishedClassRoutines.map((routine, rIdx) => (
+                        <motion.div
+                          key={routine.id || rIdx}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: rIdx * 0.08 }}
+                          className="bg-white border border-slate-100 rounded-[2.5rem] p-5 sm:p-7 shadow-premium relative overflow-hidden group hover:border-blue-200 transition-all duration-300"
+                        >
+                          {/* Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                  {student?.classes?.class_name || 'নিজ শ্রেণি'}
+                                </span>
+                                {routine.createdAt && (
+                                  <span className="text-[10px] text-slate-400 font-bold font-noto">
+                                    প্রকাশ: {new Date(routine.createdAt).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  </span>
+                                )}
+                              </div>
+                              <h3 className="text-lg sm:text-xl font-black text-slate-900 font-noto tracking-tight">
+                                {routine.name}
+                              </h3>
+                            </div>
+                            
+                            {/* Shifts time */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {(routine.routineMorningTime || routine.routineMorningStart) && (
+                                <div className="flex items-center gap-1.5 bg-blue-50/70 border border-blue-100 px-3 py-1.5 rounded-xl text-blue-700">
+                                  <Clock size={12} className="text-blue-500" />
+                                  <span className="text-[10px] font-black font-noto">
+                                    সকাল: {routine.routineMorningTime || `${routine.routineMorningStart} - ${routine.routineMorningEnd}`}
+                                  </span>
+                                </div>
+                              )}
+                              {routine.hasAfternoon && (routine.routineAfternoonTime || routine.routineAfternoonStart) && (
+                                <div className="flex items-center gap-1.5 bg-purple-50/70 border border-purple-100 px-3 py-1.5 rounded-xl text-purple-700">
+                                  <Clock size={12} className="text-purple-500" />
+                                  <span className="text-[10px] font-black font-noto">
+                                    বিকাল: {routine.routineAfternoonTime || `${routine.routineAfternoonStart} - ${routine.routineAfternoonEnd}`}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Routine Table */}
+                          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse min-w-[480px]">
+                                <thead>
+                                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-wider font-noto">
+                                    <th className="py-3 px-4 w-[160px]">তারিখ ও বার</th>
+                                    <th className="py-3 px-4">সকালের পরীক্ষা</th>
+                                    {routine.hasAfternoon && (
+                                      <th className="py-3 px-4">বিকালের পরীক্ষা</th>
+                                    )}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50 font-noto">
+                                  {routine.days.map((d: any, dIdx: number) => (
+                                    <tr key={d.id || dIdx} className="hover:bg-slate-50/50 transition-colors">
+                                      <td className="py-3.5 px-4 align-top">
+                                        <p className="text-xs font-black text-slate-800">{d.date}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">{d.day}</p>
+                                      </td>
+                                      <td className="py-3.5 px-4 align-top">
+                                        {d.morningSubject && d.morningSubject !== '—' ? (
+                                          <div className="space-y-1">
+                                            <span className="inline-block text-xs font-black text-blue-900 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100">
+                                              {d.morningSubject}
+                                            </span>
+                                            {(d.morningTime || d.morningRoom) && (
+                                              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
+                                                {d.morningTime && <span>সময়: {d.morningTime}</span>}
+                                                {d.morningRoom && <span>• কক্ষ: {d.morningRoom}</span>}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs text-slate-300 font-bold">—</span>
+                                        )}
+                                      </td>
+                                      {routine.hasAfternoon && (
+                                        <td className="py-3.5 px-4 align-top">
+                                          {d.afternoonSubject && d.afternoonSubject !== '—' ? (
+                                            <div className="space-y-1">
+                                              <span className="inline-block text-xs font-black text-purple-900 bg-purple-50/80 px-2.5 py-1 rounded-lg border border-purple-100">
+                                                {d.afternoonSubject}
+                                              </span>
+                                              {(d.afternoonTime || d.afternoonRoom) && (
+                                                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
+                                                  {d.afternoonTime && <span>সময়: {d.afternoonTime}</span>}
+                                                  {d.afternoonRoom && <span>• কক্ষ: {d.afternoonRoom}</span>}
+                                                </div>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="text-xs text-slate-300 font-bold">—</span>
+                                          )}
+                                        </td>
+                                      )}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* Instructions */}
+                          {routine.routineInstructions && routine.routineInstructions.length > 0 && (
+                            <div className="mt-5 p-4 rounded-2xl bg-amber-50/50 border border-amber-100/60 font-noto">
+                              <div className="flex items-center gap-2 mb-2 text-amber-800 text-xs font-black">
+                                <Info size={14} className="text-amber-600" />
+                                <span>পরীক্ষার্থীদের জন্য বিশেষ নির্দেশনাবলী:</span>
+                              </div>
+                              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-amber-900/80 font-bold">
+                                {routine.routineInstructions.map((inst: string, iIdx: number) => (
+                                  <li key={iIdx} className="flex items-start gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                                    <span>{inst}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Principal info */}
+                          {routine.routinePrincipalName && (
+                            <div className="mt-4 flex justify-end">
+                              <div className="text-right">
+                                <p className="text-xs font-black text-slate-700 font-noto">{routine.routinePrincipalName}</p>
+                                <p className="text-[10px] font-bold text-slate-400 font-noto">কর্তৃপক্ষ / অধ্যক্ষ</p>
+                              </div>
+                            </div>
+                          )}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (() => {
                 const filtered = notices.filter(n => {
                   const studentClass = student?.classes?.class_name?.toLowerCase() || '___';
                   const msgClass = n.class_name?.toLowerCase() || '';
