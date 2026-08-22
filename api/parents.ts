@@ -203,7 +203,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // 4. Notices (Messages)
+      // 4. Notices & Diaries (Filtered by student's class or all classes)
       const { data: rawNotices } = await supabase
         .from('messages')
         .select('*')
@@ -211,12 +211,85 @@ export default async function handler(req, res) {
         .order('created_at', { ascending: false })
         .limit(100);
 
+      const studentClassName = (student.classes?.class_name || student.class_name || student.class || '').trim().toLowerCase();
+      const studentClassId = String(student.class_id || student.classes?.id || '').trim().toLowerCase();
+
+      const isForStudentClass = (targetClass: string | null | undefined): boolean => {
+        if (!targetClass) return true;
+        const norm = targetClass.trim().toLowerCase();
+        if (
+          norm === 'all' || 
+          norm === 'all classes' || 
+          norm === 'all_classes' || 
+          norm === 'সকল' || 
+          norm === 'সকল শ্রেণী' || 
+          norm === 'সকল শ্রেণি' || 
+          norm === 'সকলের জন্য' || 
+          norm === 'সব' || 
+          norm === 'সব শ্রেণি' || 
+          norm === 'সব শ্রেণী' ||
+          norm === 'all parents' ||
+          norm === 'all students'
+        ) {
+          return true;
+        }
+
+        if (!studentClassName && !studentClassId) return false;
+
+        if (studentClassName && norm === studentClassName) return true;
+        if (studentClassId && norm === studentClassId) return true;
+
+        const cleanNorm = norm.replace(/[\s_-]+/g, '');
+        const cleanSName = studentClassName.replace(/[\s_-]+/g, '');
+        if (cleanNorm && cleanSName && cleanNorm === cleanSName) return true;
+
+        return false;
+      };
+
       const notices = (rawNotices || []).filter(n => {
         try {
-          const payload = typeof n.message === 'string' ? JSON.parse(n.message) : n.message;
+          let payload: any = {};
+          if (typeof n.message === 'string') {
+            try { payload = JSON.parse(n.message); } catch (e) { payload = { desc: n.message }; }
+          } else {
+            payload = n.message || {};
+          }
+
           if (payload && payload.status === 'draft') return false;
-        } catch (e) {}
-        return true;
+
+          const msgClass = (n.class_name || '').trim();
+          const targetClassGroup = (payload?.classGroup || payload?.target_class || payload?.class || '').trim();
+
+          // 1. Notice types (APP_NOTICE, APP_HOLIDAY, APP_PTM, APP_EVENT, APP_DIARY, all, সকলের জন্য)
+          if (
+            msgClass === 'APP_NOTICE' || 
+            msgClass === 'APP_HOLIDAY' || 
+            msgClass === 'APP_PTM' || 
+            msgClass === 'APP_EVENT' ||
+            msgClass === 'APP_DIARY' ||
+            msgClass === 'all' || 
+            msgClass === 'সকলের জন্য'
+          ) {
+            return isForStudentClass(targetClassGroup);
+          }
+
+          // 2. Syllabus type (APP_SYLLABUS_...)
+          if (msgClass.startsWith('APP_SYLLABUS_')) {
+            const syllabusClass = msgClass.replace('APP_SYLLABUS_', '').trim();
+            return isForStudentClass(syllabusClass);
+          }
+
+          // 3. Routine type (APP_ROUTINE_...)
+          if (msgClass.startsWith('APP_ROUTINE_')) {
+            const routineClass = msgClass.replace('APP_ROUTINE_', '').trim();
+            return isForStudentClass(routineClass);
+          }
+
+          // 4. Diary / Specific class message (class_name is the target class)
+          return isForStudentClass(msgClass);
+        } catch (e) {
+          return true;
+        }
       }).slice(0, 50);
 
       // 5. Class Total

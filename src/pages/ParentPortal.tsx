@@ -2279,21 +2279,93 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   )}
                 </div>
               ) : (() => {
+                const studentClassName = (student?.classes?.class_name || student?.class_name || student?.class || '').trim().toLowerCase();
+                const studentClassId = String(student?.class_id || student?.classes?.id || '').trim().toLowerCase();
+
+                const isClassMatch = (targetClass: string | null | undefined): boolean => {
+                  if (!targetClass) return true;
+                  const norm = targetClass.trim().toLowerCase();
+                  if (
+                    norm === 'all' || 
+                    norm === 'all classes' || 
+                    norm === 'all_classes' || 
+                    norm === 'সকল' || 
+                    norm === 'সকল শ্রেণী' || 
+                    norm === 'সকল শ্রেণি' || 
+                    norm === 'সকলের জন্য' || 
+                    norm === 'সব' || 
+                    norm === 'সব শ্রেণি' || 
+                    norm === 'সব শ্রেণী' ||
+                    norm === 'all parents' ||
+                    norm === 'all students'
+                  ) {
+                    return true;
+                  }
+
+                  if (!studentClassName && !studentClassId) return false;
+                  if (studentClassName && norm === studentClassName) return true;
+                  if (studentClassId && norm === studentClassId) return true;
+
+                  const cleanNorm = norm.replace(/[\s_-]+/g, '');
+                  const cleanSName = studentClassName.replace(/[\s_-]+/g, '');
+                  if (cleanNorm && cleanSName && cleanNorm === cleanSName) return true;
+
+                  return false;
+                };
+
                 const filtered = notices.filter(n => {
-                  const studentClass = student?.classes?.class_name?.toLowerCase() || '___';
-                  const msgClass = n.class_name?.toLowerCase() || '';
+                  let parsed: any = {};
+                  try {
+                    if (typeof n.message === 'string') {
+                      parsed = JSON.parse(n.message);
+                    } else {
+                      parsed = n.message || {};
+                    }
+                  } catch (e) {
+                    parsed = { desc: n.message };
+                  }
+
+                  if (parsed?.status === 'draft') return false;
+
+                  const msgClass = (n.class_name || '').trim();
+                  const lowerMsgClass = msgClass.toLowerCase();
+                  const targetClassGroup = (parsed?.classGroup || parsed?.target_class || parsed?.class || '').trim();
 
                   if (activeNoticeTab === 'notice') {
-                    return msgClass === 'app_notice' || msgClass === 'app_holiday' || msgClass === 'app_ptm' || msgClass === 'all' || n.class_name === 'সকলের জন্য';
+                    // Regular notices, holidays, PTMs, events
+                    const isNoticeType = 
+                      lowerMsgClass === 'app_notice' || 
+                      lowerMsgClass === 'app_holiday' || 
+                      lowerMsgClass === 'app_ptm' || 
+                      lowerMsgClass === 'app_event' ||
+                      lowerMsgClass === 'all' || 
+                      lowerMsgClass === 'সকলের জন্য' ||
+                      (!lowerMsgClass.startsWith('app_') && !Array.isArray(parsed?.subjects));
+
+                    if (!isNoticeType) return false;
+                    
+                    const target = targetClassGroup || (lowerMsgClass === 'all' || lowerMsgClass === 'সকলের জন্য' ? 'all' : (lowerMsgClass.startsWith('app_') ? 'all' : msgClass));
+                    return isClassMatch(target);
                   }
+
                   if (activeNoticeTab === 'diary') {
-                    const isDiaryType = msgClass === 'app_diary' || !msgClass.startsWith('app_');
-                    const isForMyClass = msgClass === studentClass || msgClass === 'all' || n.message?.toLowerCase().includes(studentClass);
-                    return isDiaryType && isForMyClass;
+                    // Diary entries
+                    const isDiaryType = 
+                      lowerMsgClass === 'app_diary' || 
+                      (!lowerMsgClass.startsWith('app_') && (Array.isArray(parsed?.subjects) || parsed?.activities || parsed?.homework || parsed?.note));
+
+                    if (!isDiaryType) return false;
+
+                    const target = lowerMsgClass === 'app_diary' ? targetClassGroup : msgClass;
+                    return isClassMatch(target);
                   }
+
                   if (activeNoticeTab === 'syllabus') {
-                    return msgClass === `app_syllabus_${studentClass}`;
+                    if (!lowerMsgClass.startsWith('app_syllabus_')) return false;
+                    const target = msgClass.replace(/^APP_SYLLABUS_/i, '').trim();
+                    return isClassMatch(target);
                   }
+
                   return false;
                 });
 
@@ -2337,7 +2409,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                              {activeNoticeTab !== 'diary' && (
+                              {activeNoticeTab !== 'diary' ? (
                                 <span className={`text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border whitespace-nowrap ${
                                   notice.class_name === 'APP_HOLIDAY' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 
                                   notice.class_name === 'APP_PTM' ? 'bg-purple-50 border-purple-100 text-purple-600' : 
@@ -2346,6 +2418,10 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                   {notice.class_name === 'APP_HOLIDAY' ? 'ছুটি' : 
                                    notice.class_name === 'APP_PTM' ? 'মিটিং' : 
                                    notice.class_name === 'all' ? 'সকলের জন্য' : 'সাধারণ'}
+                                </span>
+                              ) : (
+                                <span className="text-[7px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border whitespace-nowrap bg-blue-50 border-blue-100 text-blue-700">
+                                  {notice.class_name?.startsWith('APP_') ? 'ডায়েরি' : notice.class_name}
                                 </span>
                               )}
                               <h3 className="text-sm md:text-xl font-black text-slate-900 leading-tight font-noto tracking-tight flex-1 truncate">{notice.title}</h3>
@@ -2360,10 +2436,10 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                         <div className="w-full pt-3">
                         {(() => {
                           try {
-                            const parsed = JSON.parse(notice.message);
+                            const parsed = typeof notice.message === 'string' ? JSON.parse(notice.message) : (notice.message || {});
                             return (
                               <div className="space-y-3">
-                                {parsed.desc && <p className="text-xs md:text-sm text-slate-600 leading-relaxed font-noto">{parsed.desc}</p>}
+                                {parsed.desc && <p className="text-xs md:text-sm text-slate-600 leading-relaxed font-noto whitespace-pre-wrap">{parsed.desc}</p>}
                                 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   {parsed.activities && (
@@ -2390,13 +2466,20 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                                   )}
                                 </div>
 
+                                {parsed.note && (
+                                  <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-100 text-amber-900 text-xs leading-relaxed font-noto">
+                                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1 font-noto">বিশেষ দ্রষ্টব্য / নোট:</p>
+                                    <p className="whitespace-pre-wrap">{parsed.note}</p>
+                                  </div>
+                                )}
+
                                 {parsed.exam && (
                                   <div className="flex items-center gap-2 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-100 mb-2 w-fit">
                                     <GraduationCap size={14} className="text-purple-600" />
                                     <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider font-noto">{parsed.exam}</span>
                                   </div>
                                 )}
-                                {parsed.subjects && (
+                                {parsed.subjects && Array.isArray(parsed.subjects) && parsed.subjects.length > 0 && (
                                   <SyllabusAccordion subjects={parsed.subjects} />
                                 )}
                               </div>

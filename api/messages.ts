@@ -140,7 +140,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(response.status).json({ success: false, message: data.message || 'Error fetching messages' });
     }
 
-    return res.status(200).json({ success: true, data: Array.isArray(data) ? data : [] });
+    let resultList = Array.isArray(data) ? data : [];
+    if (class_name && String(class_name).toLowerCase() !== 'all') {
+      const targetCls = String(class_name).trim().toLowerCase();
+      resultList = resultList.filter((item: any) => {
+        try {
+          const payload = typeof item.message === 'string' ? JSON.parse(item.message) : (item.message || {});
+          if (payload?.status === 'draft') return false;
+          const classGroup = (payload?.classGroup || payload?.target_class || '').trim().toLowerCase();
+          if (classGroup && classGroup !== 'all' && classGroup !== 'all classes' && classGroup !== 'সকল' && classGroup !== 'সকল শ্রেণী' && classGroup !== 'সকল শ্রেণি' && classGroup !== 'সকলের জন্য' && classGroup !== 'সব') {
+            if (classGroup !== targetCls && classGroup.replace(/\s+/g, '') !== targetCls.replace(/\s+/g, '')) {
+              return false;
+            }
+          }
+        } catch (e) {}
+        return true;
+      });
+    }
+
+    return res.status(200).json({ success: true, data: resultList });
 
   } catch (error: any) {
     console.error('API Error /messages:', error);
