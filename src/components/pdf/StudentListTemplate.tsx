@@ -148,7 +148,7 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
                                 fontWeight: 'bold',
                                 color: '#1e3a8a'
                             }}>
-                                {isBn ? 'অধ্যক্ষ/পরিচালক' : 'Principal/Director'}
+                                {isBn ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution'}
                             </div>
                         </div>
 

@@ -46,7 +46,7 @@ export const ADMISSION_T = {
     rejected: "প্রত্যাখ্যাত",
     signatureStudent: "শিক্ষার্থীর স্বাক্ষর",
     signatureParent: "অভিভাবকের স্বাক্ষর",
-    signaturePrincipal: "অধ্যক্ষ/প্রধানের স্বাক্ষর ও সীল",
+    signaturePrincipal: "প্রতিষ্ঠান প্রধানের স্বাক্ষর ও সীল",
     saveForm: "ফরম সংরক্ষণ করুন",
     preview: "প্রিভিউ",
     downloadPdf: "পিডিএফ ডাউনলোড",

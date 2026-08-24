@@ -526,7 +526,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
                 )}
               </div>
               <span className="border-b-[1.5px] border-slate-400 w-48 mb-2"></span>
-              <p className="text-[16px] font-bold text-[#0f2c59] tracking-wide">{isBn ? 'প্রধান শিক্ষক/অধ্যক্ষ' : 'Principal / Superintendent'}</p>
+              <p className="text-[16px] font-bold text-[#0f2c59] tracking-wide">{isBn ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution'}</p>
            </div>
 
         </div>

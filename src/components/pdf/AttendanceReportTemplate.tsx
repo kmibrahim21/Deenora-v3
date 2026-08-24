@@ -267,7 +267,7 @@ export const AttendanceReportTemplate: React.FC<AttendanceReportTemplateProps> =
                                     <div style={{ borderTop: '1px solid #1e293b', width: '150px', position: 'absolute', bottom: '-8px' }}></div>
                                 </div>
                                 <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#1e293b', marginTop: '12px' }}>
-                                    {isBn ? 'অধ্যক্ষের স্বাক্ষর' : 'Principal Signature'}
+                                    {isBn ? 'প্রতিষ্ঠান প্রধানের স্বাক্ষর' : 'Principal Signature'}
                                 </div>
                             </div>
                         </div>

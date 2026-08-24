@@ -127,7 +127,7 @@ export const MasterRoutinePDFTemplate: React.FC<MasterRoutinePDFTemplateProps> =
                 )}
               </div>
               <div className="border-t border-slate-400 pt-1">
-                <p className="font-bold">অধ্যক্ষ / মুহতামিম</p>
+                <p className="font-bold">প্রতিষ্ঠান প্রধান</p>
               </div>
            </div>
         </div>

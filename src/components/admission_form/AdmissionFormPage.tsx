@@ -53,7 +53,7 @@ const getDefaultAdmissionConfig = (lang: AdmissionFormLang = 'bn', madrasahName?
   signatureLabels: {
     student: ADMISSION_T[lang]?.signatureStudent || (lang === 'bn' ? 'শিক্ষার্থীর স্বাক্ষর' : "Student's Signature"),
     parent: ADMISSION_T[lang]?.signatureParent || (lang === 'bn' ? 'অভিভাবকের স্বাক্ষর' : "Parent's Signature"),
-    principal: ADMISSION_T[lang]?.signaturePrincipal || (lang === 'bn' ? 'অধ্যক্ষ/প্রধানের স্বাক্ষর ও সীল' : "Principal's Signature & Seal"),
+    principal: ADMISSION_T[lang]?.signaturePrincipal || (lang === 'bn' ? 'প্রতিষ্ঠান প্রধানের স্বাক্ষর ও সীল' : "Principal's Signature & Seal"),
   }
 });
 

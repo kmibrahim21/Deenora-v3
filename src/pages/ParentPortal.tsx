@@ -2269,7 +2269,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                             <div className="mt-4 flex justify-end">
                               <div className="text-right">
                                 <p className="text-xs font-black text-slate-700 font-noto">{routine.routinePrincipalName}</p>
-                                <p className="text-[10px] font-bold text-slate-400 font-noto">কর্তৃপক্ষ / অধ্যক্ষ</p>
+                                <p className="text-[10px] font-bold text-slate-400 font-noto">কর্তৃপক্ষ / প্রতিষ্ঠান প্রধান</p>
                               </div>
                             </div>
                           )}

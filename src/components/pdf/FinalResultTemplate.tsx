@@ -22,7 +22,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
     gpa: 'GPA',
     date: isBangla ? 'তারিখ' : 'Date',
     examController: isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Exam Controller',
-    principal: isBangla ? 'অধ্যক্ষ' : 'Principal',
+    principal: isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Principal',
     page: isBangla ? 'পৃষ্ঠা' : 'Page'
   };
 

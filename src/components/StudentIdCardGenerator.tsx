@@ -210,7 +210,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
     address: isBangla ? "ঠিকানা" : "Address",
     section: isBangla ? "বিভাগ/শাখা" : "Section",
     validity: isBangla ? "মেয়াদ" : "Validity",
-    principal: isBangla ? "অধ্যক্ষ" : "Principal",
+    principal: isBangla ? "প্রতিষ্ঠান প্রধান" : "Principal",
     instructions: isBangla ? "নিয়মাবলি" : "Instructions",
     rules: isBangla
       ? [

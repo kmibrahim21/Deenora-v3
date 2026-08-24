@@ -310,7 +310,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
                 )}
               </div>
               <div className="w-full border-t border-[#0c4a7e]/40 mb-[1px]"></div>
-              <p className="text-[10px] font-black text-[#0c4a7e] text-center leading-normal pt-1">{(madrasah.institution_type === 'school') ? (isBangla ? 'প্রধান শিক্ষক' : 'Principal / Headmaster') : (isBangla ? 'অধ্যক্ষ' : 'Principal')}</p>
+              <p className="text-[10px] font-black text-[#0c4a7e] text-center leading-normal pt-1">{(madrasah.institution_type === 'school') ? (isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution') : (isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution')}</p>
             </div>
           </div>
         </div>
@@ -418,7 +418,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
                   )}
                </div>
                <div className="w-56 border-b-2 border-black mb-2"></div>
-               <p className="font-bold text-[20px]">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
+               <p className="font-bold text-[20px]">{isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution'}</p>
             </div>
           </div>
         </div>
@@ -528,7 +528,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
             )}
          </div>
         <div className="w-36 border-b border-blue-200 mb-1.5 opacity-50"></div>
-        <p className="text-white text-[11px] font-bold tracking-widest">{isBangla ? 'অধ্যক্ষ' : 'Principal'}</p>
+        <p className="text-white text-[11px] font-bold tracking-widest">{isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution'}</p>
       </div>
       
     </div>

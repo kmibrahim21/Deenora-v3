@@ -1062,7 +1062,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                                 </div>
                                 <div className="h-px bg-slate-300 w-full mb-1"></div>
                                 <p className="text-[11px] font-black" style={{ color: rtTheme.primary }}>
-                                  {lang === 'bn' ? 'অধ্যক্ষ / পরিচালক' : 'Principal / Director'}
+                                  {lang === 'bn' ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution'}
                                 </p>
                                 <p className="text-[9px] font-bold text-slate-400 mt-1">{madrasah?.name}</p>
                               </div>

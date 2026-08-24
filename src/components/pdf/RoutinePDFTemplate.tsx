@@ -93,7 +93,7 @@ export const RoutinePDFTemplate: React.FC<RoutinePDFTemplateProps> = ({ madrasah
                    )}
                 </div>
                 <div className="border-t border-slate-400 pt-1">
-                  <p className="text-[10px] font-bold">{lang === 'bn' ? 'অধ্যক্ষ / মুহতামিম' : 'Principal / Muhtamim'}</p>
+                  <p className="text-[10px] font-bold">{lang === 'bn' ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution'}</p>
                 </div>
               </div>
             </div>

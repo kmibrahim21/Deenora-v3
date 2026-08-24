@@ -197,7 +197,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
     phone: isBangla ? "মোবাইল" : "Phone",
     address: isBangla ? "ঠিকানা" : "Address",
     joinDate: isBangla ? "যোগদানের তারিখ" : "Join Date",
-    principal: isBangla ? "অধ্যক্ষ" : "Principal",
+    principal: isBangla ? "প্রতিষ্ঠান প্রধান" : "Principal",
     instructions: isBangla ? "নিয়মাবলি" : "Instructions",
     rules: isBangla
       ? [

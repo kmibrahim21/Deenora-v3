@@ -74,7 +74,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
     remarksCol: isBangla ? 'মূল্যায়ন' : 'Remarks',
     noOfStudents: isBangla ? 'শিক্ষার্থী সংখ্যা' : 'No. of Students',
     classTeacher: isBangla ? 'শ্রেণি শিক্ষক' : 'Class Teacher',
-    principal: isBangla ? 'অধ্যক্ষ / প্রতিষ্ঠান প্রধান' : 'Principal',
+    principal: isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Principal',
     knowledgeDisciplineSuccess: isBangla ? 'জ্ঞান | শৃঙ্খলা | সাফল্য' : 'Knowledge  |  Discipline  |  Success',
     congratulations: isBangla 
       ? 'সকল সফল শিক্ষার্থীদের তাদের কঠোর পরিশ্রম ও নিষ্ঠার জন্য অভিনন্দন। শুভকামনা রইল।' 

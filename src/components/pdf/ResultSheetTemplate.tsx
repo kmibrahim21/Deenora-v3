@@ -65,7 +65,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
     rank: "Merit Position",
     attendance: isBangla ? "উপস্থিতি" : "Attendance",
     issueDate: isBangla ? "ইস্যু তারিখ" : "Date of Publication",
-    principalSign: isBangla ? "অধ্যক্ষের স্বাক্ষর" : "Head of Institution",
+    principalSign: isBangla ? "প্রতিষ্ঠান প্রধানের স্বাক্ষর" : "Head of Institution",
     controllerSign: isBangla ? "পরীক্ষা নিয়ন্ত্রক" : "Controller of Exam",
     guardianSign: isBangla ? "অভিভাবকের স্বাক্ষর" : "Guardian's Signature",
     eiin: isBangla ? "ইআইআইএন" : "EIIN",

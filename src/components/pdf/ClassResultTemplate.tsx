@@ -37,7 +37,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
     exam: isBangla ? 'পরীক্ষা' : 'Exam',
     date: isBangla ? 'তারিখ' : 'Date',
     examController: isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Exam Controller',
-    principal: isBangla ? 'অধ্যক্ষ' : 'Principal',
+    principal: isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Principal',
     signature: isBangla ? 'স্বাক্ষর' : 'Signature'
   };
 

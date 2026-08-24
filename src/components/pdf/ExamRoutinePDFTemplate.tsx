@@ -565,7 +565,7 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
                 <p className={`${footerSignTextClass} font-black mb-0.5 font-solaiman`} style={{ color: primary }}>{isBn ? 'স্বাক্ষর ও সিল' : 'Signature & Seal'}</p>
                 <div className="h-px w-full mb-1" style={{ backgroundColor: `${primary}33` }}></div>
                 <p className={`${footerSignTextClass} font-black leading-tight font-solaiman`} style={{ color: primary }}>
-                  {routinePrincipalName || (isBn ? 'পরীক্ষা নিয়ন্ত্রক / অধ্যক্ষ' : 'Controller of Exams / Principal')}
+                  {routinePrincipalName || (isBn ? 'পরীক্ষা নিয়ন্ত্রক / প্রতিষ্ঠান প্রধান' : 'Controller of Exams / Principal')}
                 </p>
                 <p className={`${footerSignSubtextClass} font-bold text-slate-500 mt-0.5 truncate max-w-[170px] font-solaiman`}>{madrasah?.name}</p>
                 {routinePrincipalMobile && (
