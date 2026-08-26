@@ -9,6 +9,7 @@ import { requestManager } from 'services/RequestManager';
 import { Student, Class, Language, Institution } from 'types';
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
+import { extractStudentExtraFields, packStudentNotesWithExtra } from 'utils/studentExtraFields';
 
 interface StudentFormProps {
   student?: Student | null;
@@ -22,6 +23,8 @@ interface StudentFormProps {
 }
 
 const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultClassId, isEditing, onSuccess, onCancel, lang, title }) => {
+  const initialExtra = extractStudentExtraFields(student);
+
   const [name, setName] = useState(student?.student_name || '');
   const [nameEn, setNameEn] = useState(student?.name_en || '');
   const [registrationNumber, setRegistrationNumber] = useState(student?.registration_number || '');
@@ -38,6 +41,19 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
+
+  // Additional Admission Form fields
+  const [gender, setGender] = useState(initialExtra.gender || '');
+  const [nationality, setNationality] = useState(initialExtra.nationality || '');
+  const [religion, setReligion] = useState(initialExtra.religion || '');
+  const [fatherName, setFatherName] = useState(initialExtra.father_name || '');
+  const [fatherOccupation, setFatherOccupation] = useState(initialExtra.father_occupation || '');
+  const [motherOccupation, setMotherOccupation] = useState(initialExtra.mother_occupation || '');
+  const [guardianRelation, setGuardianRelation] = useState(initialExtra.guardian_relation || '');
+  const [permanentAddress, setPermanentAddress] = useState(initialExtra.permanent_address || '');
+  const [previousInstitution, setPreviousInstitution] = useState(initialExtra.previous_institution || '');
+  const [previousClass, setPreviousClass] = useState(initialExtra.previous_class || '');
+
   
   const [errorModal, setErrorModal] = useState<{show: boolean, message: string}>({show: false, message: ''});
 
@@ -125,6 +141,23 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
       const bengaliToEnglish: Record<string, string> = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
       const englishRoll = roll ? roll.replace(/[০-৯]/g, match => bengaliToEnglish[match]) : '';
 
+      const extraFields: any = {
+        gender: (gender || '').trim() || null,
+        nationality: (nationality || '').trim() || null,
+        religion: (religion || '').trim() || null,
+        father_name: (fatherName || '').trim() || null,
+        father_occupation: (fatherOccupation || '').trim() || null,
+        mother_occupation: (motherOccupation || '').trim() || null,
+        guardian_relation: (guardianRelation || '').trim() || null,
+        permanent_address: (permanentAddress || '').trim() || null,
+        previous_institution: (previousInstitution || '').trim() || null,
+        previous_class: (previousClass || '').trim() || null
+      };
+
+      // Pack extra admission fields into notes as fallback so data is NEVER lost regardless of DB schema state
+      const existingNotes = isEditing ? (student?.notes || '') : '';
+      const packedNotes = packStudentNotesWithExtra(existingNotes, extraFields);
+
       const payload: any = {
         student_name: name.trim(),
         name_en: nameEn.trim() || null,
@@ -140,81 +173,64 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         class_id: classId,
         section: section.trim() || null,
         institution_id: madrasah.id,
-        academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null
+        academic_year_id: (activeYearId && isValidUUID(activeYearId)) ? activeYearId : null,
+        notes: packedNotes || null,
+        ...extraFields
       };
 
-      let finalStudent = null;
-      try {
-        if (isEditing && student) {
-          finalStudent = await OfflineService.safeUpdate('students', student.id, payload);
-        } else {
-          finalStudent = await OfflineService.safeInsert('students', payload);
-        }
-      } catch (innerErr: any) {
-        // If mother_name is missing, retry without it
-        if (innerErr.code === 'PGRST204' || innerErr.message?.includes('mother_name does not exist')) {
-          console.warn('mother_name column missing in students table, retrying without it...');
-          
-          // Remember it for the session
-          (window as any)._hasMotherName = false;
-          
-          const retryPayload = { ...payload };
-          delete retryPayload.mother_name;
-          
+      let finalStudent: any = null;
+      let currentPayload = { ...payload };
+      const extraFieldKeys = [
+        'gender', 'nationality', 'religion', 'father_name', 'father_occupation',
+        'mother_occupation', 'guardian_relation', 'permanent_address',
+        'previous_institution', 'previous_class'
+      ];
+
+      // Robust retry loop (handles missing columns or foreign key violations gracefully)
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
           if (isEditing && student) {
-            finalStudent = await OfflineService.safeUpdate('students', student.id, retryPayload);
+            finalStudent = await OfflineService.safeUpdate('students', student.id, currentPayload);
           } else {
-            finalStudent = await OfflineService.safeInsert('students', retryPayload);
+            finalStudent = await OfflineService.safeInsert('students', currentPayload);
           }
-          
-          // Alert user that mother_name was skipped (optional, but good for UX)
-          console.log('Successfully saved without mother_name');
-        } else if (innerErr.code === 'PGRST204' || innerErr.message?.includes('section does not exist')) {
-          console.warn('section column missing in students table, retrying without it...');
-          
-          // Remember it for the session
-          (window as any)._hasSection = false;
-          
-          const retryPayload = { ...payload };
-          delete retryPayload.section;
-          if ((window as any)._hasMotherName === false) delete retryPayload.mother_name;
-          
-          if (isEditing && student) {
-            finalStudent = await OfflineService.safeUpdate('students', student.id, retryPayload);
-          } else {
-            finalStudent = await OfflineService.safeInsert('students', retryPayload);
+          break; // Successful save!
+        } catch (innerErr: any) {
+          console.error(`Save attempt ${attempt + 1} encountered error:`, innerErr);
+
+          // If foreign key violation on academic_year_id, retry with null
+          if (currentPayload.academic_year_id && (innerErr.message?.includes('foreign key constraint') || innerErr.code === '23503')) {
+            currentPayload.academic_year_id = null;
+            continue;
           }
-          console.log('Successfully saved without section');
-        } else if (innerErr.code === 'PGRST204' || innerErr.message?.includes('name_en does not exist')) {
-          console.warn('name_en column missing in students table, retrying without it...');
-          
-          // Remember it for the session
-          (window as any)._hasNameEn = false;
-          
-          const retryPayload = { ...payload };
-          delete retryPayload.name_en;
-          if ((window as any)._hasMotherName === false) delete retryPayload.mother_name;
-          if ((window as any)._hasSection === false) delete retryPayload.section;
-          
-          if (isEditing && student) {
-            finalStudent = await OfflineService.safeUpdate('students', student.id, retryPayload);
-          } else {
-            finalStudent = await OfflineService.safeInsert('students', retryPayload);
+
+          // If specific column does not exist in DB, strip the column and retry
+          if (innerErr.code === 'PGRST204' || innerErr.message?.includes('does not exist') || innerErr.message?.includes('column')) {
+            const missingColumn = innerErr.message?.match(/column "(.*?)"/)?.[1];
+            if (missingColumn && currentPayload.hasOwnProperty(missingColumn)) {
+              delete currentPayload[missingColumn];
+            } else {
+              // Strip all extra column keys at once if single key not identified
+              extraFieldKeys.forEach(k => delete currentPayload[k]);
+            }
+            continue;
           }
-          console.log('Successfully saved without name_en');
-        } else if (innerErr.message?.includes('foreign key constraint') || innerErr.code === '23503') {
-          // If foreign key error, retry with null academic_year_id
-          console.warn('Foreign key violation for academic_year_id in students, retrying with null...');
-          const retryPayload = { ...payload, academic_year_id: null };
-          if (isEditing && student) {
-            await OfflineService.safeUpdate('students', student.id, retryPayload);
-          } else {
-            await OfflineService.safeInsert('students', retryPayload);
-          }
-        } else {
+
+          // Other unexpected error, rethrow
           throw innerErr;
         }
       }
+
+      // Merge saved payload fields to ensure local state and caller receives 100% complete data
+      const mergedStudent = Array.isArray(finalStudent) ? finalStudent[0] : (finalStudent || {});
+      const enrichedStudent: Student = {
+        ...(student || {}),
+        ...payload,
+        ...mergedStudent,
+        ...extraFields,
+        notes: packedNotes || mergedStudent.notes || null,
+        id: mergedStudent.id || student?.id || payload.id || '',
+      };
       
       // Cache Invalidation
       if (madrasah) {
@@ -236,7 +252,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         }
       }
       
-      onSuccess(Array.isArray(finalStudent) ? finalStudent[0] : (finalStudent || undefined));
+      onSuccess(enrichedStudent);
     } catch (err: any) { 
       let msg = err.message;
       if (err.code === '23505') {
@@ -493,6 +509,168 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   onChange={(e) => handlePhoneChange(e.target.value, setPhone2)} 
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Optional Admission Fields Section */}
+        <div className={`p-4 sm:p-7 rounded-[2rem] border-2 transition-all duration-300 ${isDark ? 'bg-slate-800/50 border-slate-700/50 hover:border-slate-600' : 'bg-white border-blue-50/80 hover:border-blue-100 shadow-[0_15px_40px_-20px_rgba(37,99,235,0.05)]'}`}>
+          <div className="flex items-center justify-between mb-8 pb-4 border-b-2 border-slate-100 dark:border-slate-700">
+            <div>
+              <h2 className={`text-lg sm:text-xl font-black font-noto tracking-tight flex items-center gap-2 ${isDark ? 'text-white' : 'text-[#0F172A]'}`}>
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-500'}`}>
+                  <BookOpen size={20} className="stroke-[2.5]" />
+                </div>
+                {lang === 'bn' ? 'অতিরিক্ত তথ্য (ঐচ্ছিক)' : 'Additional Information (Optional)'}
+              </h2>
+              <p className={`text-[11px] font-black uppercase tracking-[0.2em] mt-2 flex items-center gap-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {lang === 'bn' ? 'ভর্তি ফরমের জন্য' : 'For Admission Form'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-7">
+            {/* Gender */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'লিঙ্গ' : 'Gender'}
+              </label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+              >
+                <option value="">{lang === 'bn' ? 'নির্বাচন করুন' : 'Select'}</option>
+                <option value="male">{lang === 'bn' ? 'ছাত্র' : 'Male'}</option>
+                <option value="female">{lang === 'bn' ? 'ছাত্রী' : 'Female'}</option>
+                <option value="other">{lang === 'bn' ? 'অন্যান্য' : 'Other'}</option>
+              </select>
+            </div>
+
+            {/* Nationality */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'জাতীয়তা' : 'Nationality'}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'যেমন: বাংলাদেশী' : 'e.g. Bangladeshi'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={nationality}
+                onChange={(e) => setNationality(e.target.value)}
+              />
+            </div>
+
+            {/* Religion */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'ধর্ম' : 'Religion'}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'যেমন: ইসলাম' : 'e.g. Islam'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={religion}
+                onChange={(e) => setReligion(e.target.value)}
+              />
+            </div>
+
+            {/* Father's Name */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'পিতার নাম' : "Father's Name"}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'পিতার নাম' : "Father's Name"}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={fatherName}
+                onChange={(e) => setFatherName(e.target.value)}
+              />
+            </div>
+
+            {/* Father's Occupation */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'পিতার পেশা' : "Father's Occupation"}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'যেমন: ব্যবসায়ী' : 'e.g. Businessman'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={fatherOccupation}
+                onChange={(e) => setFatherOccupation(e.target.value)}
+              />
+            </div>
+
+            {/* Mother's Occupation */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'মাতার পেশা' : "Mother's Occupation"}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'যেমন: গৃহিণী' : 'e.g. Housewife'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={motherOccupation}
+                onChange={(e) => setMotherOccupation(e.target.value)}
+              />
+            </div>
+
+            {/* Guardian Relation */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'অভিভাবকের সাথে সম্পর্ক' : 'Guardian Relation'}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'যেমন: পিতা/মাতা' : 'e.g. Father'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={guardianRelation}
+                onChange={(e) => setGuardianRelation(e.target.value)}
+              />
+            </div>
+
+            {/* Previous Institution */}
+            <div className="space-y-2 md:col-span-2 lg:col-span-1">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'পূর্ববর্তী প্রতিষ্ঠান' : 'Previous Institution'}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={previousInstitution}
+                onChange={(e) => setPreviousInstitution(e.target.value)}
+              />
+            </div>
+
+            {/* Previous Class */}
+            <div className="space-y-2">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'পূর্ববর্তী শ্রেণী' : 'Previous Class'}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'শ্রেণীর নাম' : 'Class Name'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={previousClass}
+                onChange={(e) => setPreviousClass(e.target.value)}
+              />
+            </div>
+
+            {/* Permanent Address */}
+            <div className="space-y-2 md:col-span-2 lg:col-span-3">
+              <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-indigo-400' : 'text-indigo-700'} uppercase tracking-wider px-2`}>
+                {lang === 'bn' ? 'স্থায়ী ঠিকানা' : 'Permanent Address'}
+              </label>
+              <input
+                type="text"
+                placeholder={lang === 'bn' ? 'বিস্তারিত ঠিকানা লিখুন...' : 'Enter permanent address...'}
+                className={`w-full h-[54px] px-4 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-indigo-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-indigo-500'} border-2 rounded-[1.2rem] font-black text-sm outline-none focus:bg-transparent focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm`}
+                value={permanentAddress}
+                onChange={(e) => setPermanentAddress(e.target.value)}
+              />
             </div>
           </div>
         </div>

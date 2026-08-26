@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save, Camera } from 'lucide-react';
+import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save, Camera, MapPin, School, ShieldCheck } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
 import { SupabaseWrapper } from 'services/supabaseWrapper';
 import { requestManager } from 'services/RequestManager';
 import { CacheService } from 'services/cacheService';
 import { t } from 'translations';
+import { extractStudentExtraFields, packStudentNotesWithExtra, getDisplayNotes } from 'utils/studentExtraFields';
 
 interface StudentDetailsProps {
   student: Student;
@@ -84,10 +85,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
-  const [editedNotes, setEditedNotes] = useState(student.notes || '');
+  const [editedNotes, setEditedNotes] = useState(getDisplayNotes(student.notes) || '');
 
   useEffect(() => {
-    setEditedNotes(student.notes || '');
+    setEditedNotes(getDisplayNotes(student.notes) || '');
   }, [student.id, student.notes]);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [libraryIssues, setLibraryIssues] = useState<any[]>([]);
@@ -165,12 +166,21 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const handleSaveNotes = async () => {
     setIsSavingNotes(true);
     try {
-      await SupabaseWrapper.safeUpdate('students', student.id, { notes: editedNotes });
+      // Preserve any admission extra data tags and start tags in notes
+      const extra = extractStudentExtraFields(student);
+      const accMatch = student.notes?.match(/\[ACC_START:(.*?)\]/);
+      let newFullNotes = packStudentNotesWithExtra(editedNotes, extra);
+      if (accMatch && !newFullNotes.includes(accMatch[0])) {
+        newFullNotes = `${newFullNotes}\n${accMatch[0]}`.trim();
+      }
+
+      await SupabaseWrapper.safeUpdate('students', student.id, { notes: newFullNotes });
       
+      const updatedStudentObj = { ...student, notes: newFullNotes };
       if (onStudentUpdate) {
-        onStudentUpdate({ ...student, notes: editedNotes });
+        onStudentUpdate(updatedStudentObj);
       } else {
-        student.notes = editedNotes;
+        student.notes = newFullNotes;
       }
       setIsEditingNotes(false);
       
@@ -180,7 +190,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         // Update local cache to prevent stale data on refresh
         CacheService.getCachedData('students', madrasah.id).then(cached => {
           if (Array.isArray(cached)) {
-            const updated = cached.map((s: any) => s.id === student.id ? { ...s, notes: editedNotes } : s);
+            const updated = cached.map((s: any) => s.id === student.id ? { ...s, notes: newFullNotes } : s);
             CacheService.cacheData('students', madrasah.id, updated);
           }
         }).catch(() => {});
@@ -711,6 +721,92 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
               </div>
             )}
 
+            {/* Additional Admission Information Section */}
+            {(() => {
+              const extraInfo = extractStudentExtraFields(student);
+              const hasAnyExtraInfo = Boolean(
+                extraInfo.father_name || extraInfo.father_occupation || extraInfo.mother_occupation ||
+                extraInfo.guardian_relation || extraInfo.gender || extraInfo.nationality ||
+                extraInfo.religion || extraInfo.permanent_address || extraInfo.previous_institution ||
+                extraInfo.previous_class
+              );
+              if (!hasAnyExtraInfo) return null;
+
+              return (
+                <div className={`p-4 sm:p-5 rounded-[1.2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-emerald-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-emerald-500/30 hover:shadow-lg'}`}>
+                  <div className="flex items-center gap-1.5 px-1.5 mb-3">
+                    <div className="w-0.5 h-3.5 bg-gradient-to-b from-emerald-500 to-teal-700 rounded-full shadow-lg shadow-emerald-500/20" />
+                    <h3 className={`text-xs font-black uppercase tracking-[0.15em] flex items-center gap-2 ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>
+                      {lang === 'bn' ? 'অতিরিক্ত / ভর্তি তথ্য' : 'Additional Information'}
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {extraInfo.father_name && (
+                      <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'পিতার নাম' : "Father's Name"}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{extraInfo.father_name}</p>
+                      </div>
+                    )}
+
+                    {extraInfo.father_occupation && (
+                      <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'পিতার পেশা' : "Father's Occupation"}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{extraInfo.father_occupation}</p>
+                      </div>
+                    )}
+
+                    {extraInfo.mother_occupation && (
+                      <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'মাতার পেশা' : "Mother's Occupation"}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{extraInfo.mother_occupation}</p>
+                      </div>
+                    )}
+
+                    {extraInfo.guardian_relation && (
+                      <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'অভিভাবকের সম্পর্ক' : 'Guardian Relation'}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{extraInfo.guardian_relation}</p>
+                      </div>
+                    )}
+
+                    {extraInfo.gender && (
+                      <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'লিঙ্গ' : 'Gender'}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{extraInfo.gender}</p>
+                      </div>
+                    )}
+
+                    {(extraInfo.religion || extraInfo.nationality) && (
+                      <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'ধর্ম ও জাতীয়তা' : 'Religion & Nationality'}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                          {[extraInfo.religion, extraInfo.nationality].filter(Boolean).join(' | ')}
+                        </p>
+                      </div>
+                    )}
+
+                    {extraInfo.permanent_address && (
+                      <div className={`p-3 rounded-xl border sm:col-span-2 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'স্থায়ী ঠিকানা' : 'Permanent Address'}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{extraInfo.permanent_address}</p>
+                      </div>
+                    )}
+
+                    {(extraInfo.previous_institution || extraInfo.previous_class) && (
+                      <div className={`p-3 rounded-xl border sm:col-span-2 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{lang === 'bn' ? 'পূর্ববর্তী প্রতিষ্ঠান ও শ্রেণী' : 'Previous School & Class'}</p>
+                        <p className={`text-sm font-bold mt-0.5 font-noto ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                          {extraInfo.previous_institution ? `${extraInfo.previous_institution}` : ''}
+                          {extraInfo.previous_class ? ` (শ্রেণী: ${extraInfo.previous_class})` : ''}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Library History */}
             {libraryIssues.length > 0 && (
               <div className={`p-4 sm:p-5 rounded-[1.2rem] border-2 transition-all group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-indigo-500/30' : 'bg-slate-50/80 border-slate-100 hover:bg-white hover:border-indigo-500/30 hover:shadow-lg'}`}>
@@ -761,7 +857,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 {!readOnly && !isEditingNotes && (
                   <button 
                     onClick={() => {
-                        setEditedNotes(student.notes || '');
+                        setEditedNotes(getDisplayNotes(student.notes) || '');
                         setIsEditingNotes(true);
                     }}
                     className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all active:scale-95 ${isDark ? 'bg-slate-900 border-slate-700 text-amber-500 hover:bg-slate-800 hover:border-amber-500/50' : 'bg-white border-amber-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300'} shadow-sm`}
@@ -784,7 +880,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                     <button
                       onClick={() => {
                         setIsEditingNotes(false);
-                        setEditedNotes(student.notes || '');
+                        setEditedNotes(getDisplayNotes(student.notes) || '');
                       }}
                       className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-lg border transition-all active:scale-95 ${isDark ? 'text-slate-400 border-slate-700 hover:bg-slate-800' : 'text-slate-500 border-slate-200 hover:bg-slate-50'}`}
                       disabled={isSavingNotes}
@@ -793,7 +889,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                     </button>
                     <button
                       onClick={handleSaveNotes}
-                      disabled={isSavingNotes || editedNotes === student.notes}
+                      disabled={isSavingNotes || editedNotes === (getDisplayNotes(student.notes) || '')}
                       className="px-4 py-2 text-xs font-black uppercase tracking-widest rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2"
                     >
                       {isSavingNotes ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
@@ -803,8 +899,8 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 </div>
               ) : (
                 <div className={`mt-1 p-4 rounded-xl border ${isDark ? 'bg-slate-900/50 border-slate-800/50 text-slate-300' : 'bg-white/60 border-amber-50 text-slate-700'} shadow-inner min-h-[60px]`}>
-                  {student.notes ? (
-                    <p className="text-sm font-medium font-noto leading-relaxed whitespace-pre-wrap">{student.notes}</p>
+                  {getDisplayNotes(student.notes) ? (
+                    <p className="text-sm font-medium font-noto leading-relaxed whitespace-pre-wrap">{getDisplayNotes(student.notes)}</p>
                   ) : (
                     <p className={`text-xs italic ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
                       {lang === 'bn' ? 'কোনো নোট দেওয়া নেই।' : 'No notes added.'}

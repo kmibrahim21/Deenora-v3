@@ -180,7 +180,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const [attendanceDate, setAttendanceDate] = useState(() => getTodayDateString());
   const [isHoliday, setIsHoliday] = useState(false);
   const [dayEvents, setDayEvents] = useState<any[]>([]);
-  const [teacherAttendance, setTeacherAttendance] = useState<Record<string, string>>({});
+  const [teacherAttendance, setTeacherAttendance] = useState<Record<string, any>>({});
+  const [teacherArrivalTime, setTeacherArrivalTime] = useState<Record<string, string>>({});
   const [savingAttendance, setSavingAttendance] = useState(false);
   const [paidSalaries, setPaidSalaries] = useState<Record<string, number>>({});
   const [paymentHistory, setPaymentHistory] = useState<Record<string, any[]>>({});
@@ -250,12 +251,21 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       const data = await res.json();
       if (data.attendance && Object.keys(data.attendance).length > 0) {
         setTeacherAttendance(data.attendance);
+        // Sync arrival times
+        const initialArrival: Record<string, string> = {};
+        Object.entries(data.attendance).forEach(([tid, val]) => {
+           if (typeof val === 'object' && val !== null && (val as any).arrival_time) {
+             initialArrival[tid] = (val as any).arrival_time;
+           }
+        });
+        setTeacherArrivalTime(initialArrival);
       } else {
         const initial: Record<string, string> = {};
         sortedTeachers.forEach(t => {
           initial[t.id] = forceHoliday ? 'holiday' : 'present';
         });
         setTeacherAttendance(initial);
+        setTeacherArrivalTime({});
       }
     } catch(err) {
       console.error("Error fetching teacher attendance:", err);
@@ -302,13 +312,36 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
+  const computeLateMins = (arrTime: string | null | undefined) => {
+    const sTime = madrasah?.config_json?.attendance_settings?.start_time || '08:00';
+    if (!arrTime || !sTime) return 0;
+    const [sh, sm] = sTime.split(':').map(Number);
+    const [lh, lm] = arrTime.split(':').map(Number);
+    const mins = (lh * 60 + lm) - (sh * 60 + sm);
+    return mins > 0 ? mins : 0;
+  };
+
   const saveTeacherAttendance = async () => {
     if (!madrasah?.id) return;
     setSavingAttendance(true);
 
-    const finalAttendance = { ...teacherAttendance };
+    const finalAttendance: Record<string, any> = {};
     sortedTeachers.forEach(t => {
-      if (!finalAttendance[t.id]) finalAttendance[t.id] = isHoliday ? 'holiday' : 'present';
+      let val = teacherAttendance[t.id];
+      if (!val) val = isHoliday ? 'holiday' : 'present';
+      
+      const status = typeof val === 'string' ? val : val.status;
+      
+      if (status === 'late') {
+        const arrTime = teacherArrivalTime[t.id];
+        finalAttendance[t.id] = {
+          status: 'late',
+          arrival_time: arrTime,
+          late_minutes: computeLateMins(arrTime)
+        };
+      } else {
+        finalAttendance[t.id] = status;
+      }
     });
 
     try {
@@ -350,7 +383,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         Object.keys(reportData).forEach(dateStr => {
           totalDays++;
           const dayData = reportData[dateStr] || {};
-          const status = dayData[teacher.id];
+          const rawStatus = dayData[teacher.id];
+          const status = typeof rawStatus === 'string' ? rawStatus : (rawStatus as any)?.status;
+          
           if (status === 'present') presentCount++;
           else if (status === 'absent') absentCount++;
           else if (status === 'late') lateCount++;
@@ -1093,25 +1128,48 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         if (teacher.leave_date && attendanceDate > teacher.leave_date) {
                           return null;
                         }
-                        const status = teacherAttendance[teacher.id] || 'present';
+                        const rawVal = teacherAttendance[teacher.id] || 'present';
+                        const status = typeof rawVal === 'string' ? rawVal : rawVal.status;
+                        const arrival_time = teacherArrivalTime[teacher.id] || (typeof rawVal === 'object' ? rawVal.arrival_time : '');
+
                         return (
-                          <div key={teacher.id} className={`p-3 rounded-2xl border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
-                                <User size={16} />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h5 className={`font-black font-noto text-xs break-words whitespace-normal leading-tight ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
-                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
-                              </div>
-                            </div>
-                            
-                            <div className="flex gap-1.5 shrink-0 ml-2">
-                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={14}/></button>
-                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={14}/></button>
-                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Late"><Clock size={14}/></button>
-                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-[10px] font-black">1/2</span></button>
-                              <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'leave'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Leave"><Briefcase size={14}/></button>
+                          <div key={teacher.id} className={`p-3 rounded-2xl border shadow-bubble group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
+                                    <User size={16} />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <h5 className={`font-black font-noto text-xs break-words whitespace-normal leading-tight ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{teacher.name}</h5>
+                                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{teacher.designation || (lang === 'bn' ? 'শিক্ষক' : 'Teacher')}</p>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex gap-1.5 shrink-0 ml-2">
+                                  <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'present'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'present' ? 'bg-emerald-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Present"><CheckCircle size={14}/></button>
+                                  <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'absent'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'absent' ? 'bg-red-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Absent"><XCircle size={14}/></button>
+                                  <button
+                                    onClick={() => {
+                                      setTeacherAttendance({...teacherAttendance, [teacher.id]: 'late'});
+                                      if (!teacherArrivalTime[teacher.id]) {
+                                        const now = new Date();
+                                        const h = now.getHours().toString().padStart(2, '0');
+                                        const m = now.getMinutes().toString().padStart(2, '0');
+                                        setTeacherArrivalTime({...teacherArrivalTime, [teacher.id]: `${h}:${m}`});
+                                      }
+                                    }}
+                                    className={`w-10 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'late' ? 'bg-amber-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`}
+                                    title="Late"
+                                  >
+                                    {status === 'late' ? (
+                                      <span className="text-[11px] font-black">{computeLateMins(arrival_time)}</span>
+                                    ) : (
+                                      <Clock size={14}/>
+                                    )}
+                                  </button>
+                                  <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'half_day'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'half_day' ? 'bg-purple-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Half Day"><span className="text-[10px] font-black">1/2</span></button>
+                                  <button onClick={() => setTeacherAttendance({...teacherAttendance, [teacher.id]: 'leave'})} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${status === 'leave' ? 'bg-indigo-500 text-white shadow-lg' : (isDark ? 'bg-slate-900 text-slate-600 border border-slate-700' : 'bg-slate-50 text-slate-300')}`} title="Leave"><Briefcase size={14}/></button>
+                                </div>
                             </div>
                           </div>
                         );
@@ -1246,7 +1304,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       let leaveCount = 0;
                       
                       Object.values(reportData).forEach(dailyRecord => {
-                        const status = dailyRecord[teacher.id];
+                        const rawStatus = dailyRecord[teacher.id];
+                        const status = typeof rawStatus === 'string' ? rawStatus : (rawStatus as any)?.status;
+                        
                         if (status === 'present') presentCount++;
                         else if (status === 'absent') absentCount++;
                         else if (status === 'late') lateCount++;
@@ -1351,7 +1411,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                    const attData = salaryMonthAttendance;
                    Object.keys(attData).forEach(dateStr => {
                        if (dateStr.startsWith(salaryMonth)) {
-                          if (attData[dateStr][teacher.id] === 'absent') absentCount++;
+                          const rawStatus = attData[dateStr][teacher.id];
+                          const status = typeof rawStatus === 'string' ? rawStatus : (rawStatus as any)?.status;
+                          if (status === 'absent') absentCount++;
                        }
                    });
                    if (absentCount > 0 && totalSalary > 0) {

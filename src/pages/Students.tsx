@@ -9,6 +9,7 @@ import { useOfflineStatus } from 'hooks/useOffline';
 import { CacheService } from 'services/cacheService';
 import { openWhatsAppChooser } from '../utils/whatsapp';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
+import { extractStudentExtraFields } from 'utils/studentExtraFields';
 
 interface StudentsProps {
   selectedClass: Class;
@@ -80,7 +81,8 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
     try {
       // 1. Prepare fields
-      const baseFields = 'id, institution_id, student_name, name_en, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, section, is_active, photo_url, notes, classes(class_name)';
+      const extraFieldsStr = 'gender, nationality, religion, father_name, father_occupation, mother_occupation, guardian_relation, permanent_address, previous_institution, previous_class, ';
+      const baseFields = `id, institution_id, student_name, name_en, guardian_phone, guardian_phone_2, roll, guardian_name, mother_name, registration_number, class_id, admission_number, date_of_birth, blood_group, address, academic_year_id, section, is_active, photo_url, notes, ${(window as any)._hasExtraCols !== false ? extraFieldsStr : ''}classes(class_name)`;
       let selectFields = (window as any)._hasMotherName === false ? baseFields.replace('mother_name, ', '') : baseFields;
       if ((window as any)._hasSection === false) selectFields = selectFields.replace('section, ', '');
       if ((window as any)._hasIsActive === false) selectFields = selectFields.replace('is_active, ', '');
@@ -117,6 +119,11 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       );
       
       if (error && isOnline) {
+        // Handle missing extra columns
+        if ((window as any)._hasExtraCols === undefined && (error.code === 'PGRST204' || error.message?.includes('gender') || error.message?.includes('father_name') || error.message?.includes('does not exist'))) {
+          (window as any)._hasExtraCols = false;
+          return fetchStudents(reset);
+        }
         // Handle missing mother_name column
         if ((window as any)._hasMotherName === undefined && (error.code === 'PGRST204' || error.message?.includes('mother_name'))) {
           (window as any)._hasMotherName = false;
@@ -152,12 +159,19 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
       if ((window as any)._hasIsActive === undefined) {
         (window as any)._hasIsActive = true;
       }
+      if ((window as any)._hasExtraCols === undefined) {
+        (window as any)._hasExtraCols = true;
+      }
 
       if (data) {
-        let formattedData = (data as any[]).map(s => ({
-          ...s,
-          classes: Array.isArray(s.classes) ? s.classes[0] : s.classes
-        })) as Student[];
+        let formattedData = (data as any[]).map(s => {
+          const extra = extractStudentExtraFields(s);
+          return {
+            ...s,
+            ...extra,
+            classes: Array.isArray(s.classes) ? s.classes[0] : s.classes
+          };
+        }) as Student[];
         
         // Ensure robust numeric sorting in case database sorting is lexicographical
         formattedData.sort((a, b) => {

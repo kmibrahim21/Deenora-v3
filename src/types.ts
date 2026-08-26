@@ -243,6 +243,16 @@ export interface Student {
   is_active?: boolean;
   created_at?: string;
   classes?: Class;
+  gender?: string;
+  nationality?: string;
+  religion?: string;
+  father_name?: string;
+  father_occupation?: string;
+  mother_occupation?: string;
+  guardian_relation?: string;
+  permanent_address?: string;
+  previous_institution?: string;
+  previous_class?: string;
 }
 
 export interface Sponsor {

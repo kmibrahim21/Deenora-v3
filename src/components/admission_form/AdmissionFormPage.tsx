@@ -10,6 +10,7 @@ import { Institution, Student } from '../../types';
 import { supabase } from 'supabase';
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
+import { extractStudentExtraFields } from '../../utils/studentExtraFields';
 
 interface Props {
   madrasah: Institution | null;
@@ -100,6 +101,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [studentsInClass, setStudentsInClass] = useState<Student[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [headlessDownloadData, setHeadlessDownloadData] = useState<AdmissionFormData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -304,12 +306,54 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
         .eq('class_id', selectedClassId)
         .order('student_name');
       if (error) throw error;
-      setStudentsInClass(data || []);
+      const formatted = (data || []).map(s => {
+        const extra = extractStudentExtraFields(s);
+        return {
+          ...s,
+          ...extra,
+          classes: Array.isArray(s.classes) ? s.classes[0] : s.classes
+        };
+      });
+      setStudentsInClass(formatted);
     } catch (err) {
       console.error('Error fetching students by class:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getMappedFormData = (student: Student | null): AdmissionFormData => {
+    if (!student) return sampleFormData;
+    const extra = extractStudentExtraFields(student);
+    return {
+      formNumber: student.admission_number || `ADM-${new Date().getFullYear()}-${student.roll || '001'}`,
+      admissionDate: student.created_at ? student.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+      academicYear: new Date().getFullYear().toString(),
+      session: '',
+      studentName: student.student_name || '',
+      studentNameEn: student.name_en || '',
+      date_of_birth: student.date_of_birth || '',
+      gender: extra.gender || (student as any).gender || '', 
+      blood_group: student.blood_group || '',
+      fatherName: extra.father_name || (student as any).father_name || student.guardian_name || '',
+      fatherOccupation: extra.father_occupation || (student as any).father_occupation || '',
+      motherName: student.mother_name || '',
+      motherOccupation: extra.mother_occupation || (student as any).mother_occupation || '',
+      guardian_name: student.guardian_name || '',
+      guardianRelation: extra.guardian_relation || (student as any).guardian_relation || '',
+      guardian_phone: student.guardian_phone || '',
+      presentAddress: student.address || '',
+      permanentAddress: extra.permanent_address || (student as any).permanent_address || student.address || '',
+      admissionClass: (student as any).classes?.class_name || student.class_id || '',
+      previousInstitution: extra.previous_institution || (student as any).previous_institution || '',
+      previousClass: extra.previous_class || (student as any).previous_class || '',
+      photoUrl: student.photo_url || '',
+      admission_number: student.admission_number || '',
+      roll: student.roll,
+      nationality: extra.nationality || (student as any).nationality || '',
+      religion: extra.religion || (student as any).religion || '',
+      documentsChecked: [],
+    };
   };
 
   const handleDownloadStudent = async (student: Student) => {
@@ -318,29 +362,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
     showToast(lang === 'bn' ? `${student.student_name}-এর ভর্তি ফরম পিডিএফ ডাউনলোড হচ্ছে...` : `Downloading form PDF for ${student.student_name}...`);
 
     // Prepare full form data representation of this student for direct PDF compilation
-    const mappedData: AdmissionFormData = {
-      formNumber: student.admission_number || `ADM-${new Date().getFullYear()}-${student.roll || '001'}`,
-      admissionDate: student.created_at ? student.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
-      academicYear: new Date().getFullYear().toString(),
-      session: '',
-      studentName: student.student_name,
-      studentNameEn: student.name_en,
-      date_of_birth: student.date_of_birth,
-      gender: 'male', 
-      blood_group: student.blood_group,
-      fatherName: student.guardian_name,
-      guardian_name: student.guardian_name,
-      guardian_phone: student.guardian_phone,
-      presentAddress: student.address,
-      permanentAddress: student.address,
-      admissionClass: (student as any).classes?.class_name || student.class_id,
-      photoUrl: student.photo_url,
-      admission_number: student.admission_number,
-      roll: student.roll,
-      nationality: 'Bangladeshi',
-      religion: 'Islam',
-      documentsChecked: [],
-    };
+    const mappedData: AdmissionFormData = getMappedFormData(student);
 
     setHeadlessDownloadData(mappedData);
   };
@@ -555,7 +577,8 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
                         (selectedClassId ? studentsInClass : students).map(student => (
                           <div
                             key={student.id}
-                            className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/60 dark:hover:bg-blue-900/20 transition-all text-left group"
+                            onClick={() => setSelectedStudent(student)}
+                            className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all text-left group cursor-pointer ${selectedStudent?.id === student.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-500' : 'border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/60 dark:hover:bg-blue-900/20'}`}
                           >
                             <div className="flex items-center gap-3 flex-1 text-left min-w-0 mr-2">
                               <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 overflow-hidden shrink-0">
@@ -572,7 +595,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
                             </div>
                             
                             <button
-                              onClick={() => handleDownloadStudent(student)}
+                              onClick={(e) => { e.stopPropagation(); handleDownloadStudent(student); }}
                               disabled={isGenerating !== null}
                               className="px-3.5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 cursor-pointer flex items-center gap-1.5 text-xs font-bold shrink-0"
                               title={lang === 'bn' ? 'পিডিএফ ডাউনলোড করুন' : 'Download PDF'}
@@ -625,7 +648,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
             </div>
 
             <AdmissionFormPreview 
-              formData={sampleFormData} 
+              formData={getMappedFormData(selectedStudent)} 
               madrasah={madrasah} 
               lang={lang} 
               config={config}

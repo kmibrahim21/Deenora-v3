@@ -1179,7 +1179,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                    </div>
                    <div className="space-y-1">
                       <h3 className="text-xl font-black text-slate-900 font-noto">কোনো পরীক্ষার ফলাফল নেই</h3>
-                      <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto leading-relaxed font-noto">এই শিক্ষার্থীর জন্য এখনো কোনো পরীক্ষার ফলাফল প্রকাশ করা হয়নি। অনুগ্রহ করে মাদ্রাসা বা স্কুল কর্তৃপক্ষের সাথে যোগাযোগ করুন।</p>
+                      <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto leading-relaxed font-noto">এই শিক্ষার্থীর জন্য এখনো কোনো পরীক্ষার ফলাফল প্রকাশ করা হয়নি। অনুগ্রহ করে {(madrasah?.institution_type === 'school' || madrasah?.institution_type === 'kindergarten' || madrasah?.institution_type === 'choching') ? 'প্রতিষ্ঠান' : 'মাদরাসা'} কর্তৃপক্ষের সাথে যোগাযোগ করুন।</p>
                    </div>
                    <button onClick={fetchData} className="bg-blue-50 text-blue-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 border border-blue-100 shadow-sm active:scale-95 transition-all outline-none">
                       <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> রিফ্রেশ করুন
@@ -2096,7 +2096,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
               <div className="flex flex-col gap-6">
                 <div className="text-center sm:text-left">
                   <h2 className="text-2xl font-black text-slate-900 font-noto tracking-tight">তথ্য ও যোগাযোগ</h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 font-noto">মাদরাসার সকল আপডেট এখানে পাবেন</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 font-noto">{(madrasah?.institution_type === 'school' || madrasah?.institution_type === 'kindergarten' || madrasah?.institution_type === 'choching') ? 'প্রতিষ্ঠানের' : 'মাদরাসার'} সকল আপডেট এখানে পাবেন</p>
                 </div>
                 
                 <div className="flex bg-slate-100/50 p-1 rounded-2xl gap-1 overflow-x-auto no-scrollbar self-center sm:self-start border border-slate-100">

@@ -394,7 +394,7 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
                   <Field label={t.studentName} value={formData.studentName} className="col-span-12" />
                   <Field label={t.studentNameEn} value={formData.studentNameEn} fieldKey="studentNameEn" className="col-span-12" />
                   <Field label={t.dateOfBirth} value={formData.date_of_birth} fieldKey="dateOfBirth" className="col-span-6" />
-                  <Field label={t.gender} value={lang === 'bn' ? (formData.gender === 'male' ? t.male : t.female) : formData.gender} fieldKey="gender" className="col-span-6" />
+                  <Field label={t.gender} value={formData.gender ? (lang === 'bn' ? (formData.gender === 'male' ? t.male : (formData.gender === 'female' ? t.female : t.other)) : formData.gender) : ''} fieldKey="gender" className="col-span-6" />
                   <Field label={t.nationality} value={formData.nationality} fieldKey="nationality" className="col-span-4" />
                   <Field label={t.religion} value={formData.religion} fieldKey="religion" className="col-span-4" />
                   <Field label={t.bloodGroup} value={formData.blood_group} fieldKey="bloodGroup" className="col-span-4" />
