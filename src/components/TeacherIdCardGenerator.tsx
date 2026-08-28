@@ -386,7 +386,9 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.id}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] uppercase">{currentRenderTeacher.id.substring(0, 8)}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] uppercase">
+                            {currentRenderTeacher.teacher_id_number || currentRenderTeacher.id.substring(0, 8)}
+                          </span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.designation}</span>
@@ -496,12 +498,12 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
               <div className="my-1 flex flex-col items-center w-full">
                 <div className="p-1.5 bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-100 inline-block mb-1">
                   <QRCode
-                    value={madrasah ? `Name: ${madrasah.name}\nTeacher: ${currentRenderTeacher.name}\nDesignation: ${currentRenderTeacher.designation || 'Teacher'}\nPhone: ${currentRenderTeacher.phone || ''}` : `ID:${currentRenderTeacher.id}`}
+                    value={madrasah ? `Name: ${madrasah.name}\nTeacher: ${currentRenderTeacher.name}\nID: ${currentRenderTeacher.teacher_id_number || currentRenderTeacher.id}\nDesignation: ${currentRenderTeacher.designation || 'Teacher'}\nPhone: ${currentRenderTeacher.phone || ''}` : `ID:${currentRenderTeacher.teacher_id_number || currentRenderTeacher.id}`}
                     size={60}
                   />
                 </div>
                 <p className="text-[8px] font-bold tracking-widest text-slate-500 uppercase mt-0.5 font-solaiman">
-                   {currentRenderTeacher.id.substring(0, 8)}
+                   {currentRenderTeacher.teacher_id_number || currentRenderTeacher.id.substring(0, 8)}
                 </p>
               </div>
 

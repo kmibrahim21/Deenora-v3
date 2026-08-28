@@ -40,7 +40,8 @@ import {
   CalendarOff,
   AlertTriangle,
   Camera,
-  ListOrdered
+  ListOrdered,
+  CreditCard
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -141,6 +142,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   // Form states
   const [formData, setFormData] = useState({
+    teacher_id_number: "",
     name: "",
     phone: "",
     pin: "",
@@ -245,6 +247,44 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     }
   };
 
+  const isTeacherActiveForReportPeriod = React.useCallback((teacher: Teacher) => {
+    // 1. Check join date
+    if (teacher.join_date) {
+      const [joinYear, joinMonth] = teacher.join_date.split('-').map(Number);
+      if (reportType === 'daily' && reportDate) {
+        if (reportDate < teacher.join_date) return false;
+      } else if (reportType === 'monthly' && attendanceMonth) {
+        const [filterYear, filterMonth] = attendanceMonth.split('-').map(Number);
+        const isJoined = (filterYear > joinYear) || (filterYear === joinYear && filterMonth >= joinMonth);
+        if (!isJoined) return false;
+      } else if (reportType === 'yearly' && reportYear) {
+        const filterYear = parseInt(reportYear, 10);
+        if (filterYear < joinYear) return false;
+      }
+    }
+
+    // 2. Check leave date (বিদায় তারিখ)
+    if (teacher.leave_date) {
+      const [leaveYear, leaveMonth] = teacher.leave_date.split('-').map(Number);
+      if (reportType === 'daily' && reportDate) {
+        if (reportDate > teacher.leave_date) return false;
+      } else if (reportType === 'monthly' && attendanceMonth) {
+        const [filterYear, filterMonth] = attendanceMonth.split('-').map(Number);
+        const isLeft = (filterYear > leaveYear) || (filterYear === leaveYear && filterMonth > leaveMonth);
+        if (isLeft) return false;
+      } else if (reportType === 'yearly' && reportYear) {
+        const filterYear = parseInt(reportYear, 10);
+        if (filterYear > leaveYear) return false;
+      }
+    }
+
+    return true;
+  }, [reportType, reportDate, attendanceMonth, reportYear]);
+
+  const activeReportTeachers = React.useMemo(() => {
+    return sortedTeachers.filter(isTeacherActiveForReportPeriod);
+  }, [sortedTeachers, isTeacherActiveForReportPeriod]);
+
   const fetchTeacherAttendance = async (forceHoliday?: boolean) => {
     try {
       const res = await fetch(`/api/teachers/attendance?institute_id=${madrasah!.id}&date=${attendanceDate}`);
@@ -262,6 +302,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       } else {
         const initial: Record<string, string> = {};
         sortedTeachers.forEach(t => {
+          if (t.leave_date && attendanceDate > t.leave_date) return;
           initial[t.id] = forceHoliday ? 'holiday' : 'present';
         });
         setTeacherAttendance(initial);
@@ -327,6 +368,10 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
     const finalAttendance: Record<string, any> = {};
     sortedTeachers.forEach(t => {
+      // Exclude teachers who have already left on or before attendanceDate
+      if (t.leave_date && attendanceDate > t.leave_date) {
+        return;
+      }
       let val = teacherAttendance[t.id];
       if (!val) val = isHoliday ? 'holiday' : 'present';
       
@@ -371,7 +416,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     else if (reportType === 'monthly') titleStr = attendanceMonth;
     else titleStr = reportYear;
 
-    const mappedData = sortedTeachers.map(teacher => {
+    const activeTeachers = sortedTeachers.filter(isTeacherActiveForReportPeriod);
+
+    const mappedData = activeTeachers.map(teacher => {
       let presentCount = 0;
       let absentCount = 0;
       let lateCount = 0;
@@ -381,6 +428,10 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       
       if (reportData) {
         Object.keys(reportData).forEach(dateStr => {
+          // If teacher joined after this date or left before this date, skip this date
+          if (teacher.join_date && dateStr < teacher.join_date) return;
+          if (teacher.leave_date && dateStr > teacher.leave_date) return;
+
           totalDays++;
           const dayData = reportData[dateStr] || {};
           const rawStatus = dayData[teacher.id];
@@ -406,7 +457,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
       };
     });
 
-    console.log("Generating PDf with mapped data:", mappedData);
+    console.log("Generating PDF with mapped data:", mappedData);
 
     try {
       if (mappedData.length === 0) {
@@ -780,6 +831,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
 
   const resetForm = () => {
     setFormData({
+      teacher_id_number: "",
       name: "",
       phone: "",
       pin: "",
@@ -798,6 +850,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const openEditModal = (teacher: Teacher) => {
     setSelectedTeacher(teacher);
     setFormData({
+      teacher_id_number: teacher.teacher_id_number || (teacher.permissions as any)?.teacher_id_number || "",
       name: teacher.name || "",
       phone: teacher.phone || "",
       pin: teacher.pin || "", 
@@ -821,7 +874,8 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
         (t.name || "")
           .toLowerCase()
           .includes((searchQuery || "").toLowerCase()) ||
-        (t.phone && t.phone.includes(searchQuery)),
+        (t.phone && t.phone.includes(searchQuery)) ||
+        (t.teacher_id_number && t.teacher_id_number.toLowerCase().includes((searchQuery || "").toLowerCase())),
     ).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   }, [teachers, searchQuery]);
 
@@ -1007,11 +1061,18 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                     )}
                   </div>
                   <div>
-                    <h3
-                      className={`text-[15px] font-black font-noto leading-tight group-hover:text-blue-500 transition-colors ${isDark ? "text-white" : "text-slate-900"}`}
-                    >
-                      {teacher.name}
-                    </h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3
+                        className={`text-[15px] font-black font-noto leading-tight group-hover:text-blue-500 transition-colors ${isDark ? "text-white" : "text-slate-900"}`}
+                      >
+                        {teacher.name}
+                      </h3>
+                      {teacher.teacher_id_number && (
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black font-mono tracking-wider ${isDark ? "bg-blue-900/40 text-blue-300 border border-blue-800/60" : "bg-blue-50 text-blue-700 border border-blue-100"}`}>
+                          ID: {teacher.teacher_id_number}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
                       <Briefcase size={12} /> {teacher.designation || (lang === "bn" ? "শিক্ষক" : "Teacher")}
                       {teacher.leave_date && (
@@ -1256,54 +1317,25 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
               </div>
 
               <div className="space-y-3 pt-2">
-                {sortedTeachers.length === 0 ? (
+                {activeReportTeachers.length === 0 ? (
                   <div className={`p-8 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center ${isDark ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                     <Users size={32} className="text-slate-400/20 mb-3" />
                     <p className="text-[13px] font-black text-slate-500 uppercase tracking-widest">{lang === 'bn' ? 'কোনো শিক্ষক পাওয়া যায়নি' : 'No teachers found'}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {sortedTeachers.map(teacher => {
-                      // Filter by join date and leave date
-                      if (teacher.join_date) {
-                        const [joinYear, joinMonth] = teacher.join_date.split('-').map(Number);
-                        let filterYear, filterMonth;
-                        
-                        if (reportType === 'daily') {
-                          if (reportDate < teacher.join_date) return null;
-                        } else if (reportType === 'monthly') {
-                          [filterYear, filterMonth] = attendanceMonth.split('-').map(Number);
-                          const isJoined = (filterYear > joinYear) || (filterYear === joinYear && filterMonth >= joinMonth);
-                          if (!isJoined) return null;
-                        } else if (reportType === 'yearly') {
-                          filterYear = parseInt(reportYear);
-                          if (filterYear < joinYear) return null;
-                        }
-                      }
-
-                      if (teacher.leave_date) {
-                        const [leaveYear, leaveMonth] = teacher.leave_date.split('-').map(Number);
-                        let filterYear, filterMonth;
-
-                        if (reportType === 'daily') {
-                          if (reportDate > teacher.leave_date) return null;
-                        } else if (reportType === 'monthly') {
-                          [filterYear, filterMonth] = attendanceMonth.split('-').map(Number);
-                          const isLeft = (filterYear > leaveYear) || (filterYear === leaveYear && filterMonth > leaveMonth);
-                          if (isLeft) return null;
-                        } else if (reportType === 'yearly') {
-                          filterYear = parseInt(reportYear);
-                          if (filterYear > leaveYear) return null;
-                        }
-                      }
-
+                    {activeReportTeachers.map(teacher => {
                       let presentCount = 0;
                       let absentCount = 0;
                       let lateCount = 0;
                       let halfDayCount = 0;
                       let leaveCount = 0;
                       
-                      Object.values(reportData).forEach(dailyRecord => {
+                      Object.keys(reportData).forEach(dateStr => {
+                        if (teacher.join_date && dateStr < teacher.join_date) return;
+                        if (teacher.leave_date && dateStr > teacher.leave_date) return;
+
+                        const dailyRecord = reportData[dateStr] || {};
                         const rawStatus = dailyRecord[teacher.id];
                         const status = typeof rawStatus === 'string' ? rawStatus : (rawStatus as any)?.status;
                         
@@ -1686,6 +1718,22 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                   </div>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                        <CreditCard size={11} className="text-[#2563EB]" /> 
+                        {lang === 'bn' ? 'আইডি নম্বর' : 'Teacher ID No'}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={lang === 'bn' ? "যেমন: T-101 বা 101" : "e.g. T-101 or 101"}
+                        className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                        value={formData.teacher_id_number || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, teacher_id_number: e.target.value })
+                        }
+                      />
+                    </div>
+
                     <div className="space-y-2">
                       <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
                         <User size={11} className="text-[#2563EB]" /> 

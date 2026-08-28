@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, User, Phone, Briefcase, Calendar, CheckCircle2, Shield, X, Lock, Edit3, Trash2, ArrowLeft, Mail, MapPin } from 'lucide-react';
+import { Camera, User, Phone, Briefcase, Calendar, CheckCircle2, Shield, X, Lock, Edit3, Trash2, ArrowLeft, Mail, MapPin, CreditCard } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Teacher, Language, Institution } from 'types';
 
@@ -193,8 +193,13 @@ export const TeacherProfile: React.FC<TeacherProfileProps> = ({ teacher, madrasa
           </div>
 
           <div className="text-center sm:text-left flex-1 pb-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2 flex-wrap">
               <h2 className="text-2xl sm:text-3xl font-black">{teacher.name}</h2>
+              {teacher.teacher_id_number && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-black font-mono uppercase tracking-widest self-center">
+                  <CreditCard size={14} /> ID: {teacher.teacher_id_number}
+                </span>
+              )}
               {teacher.is_active && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-lg text-xs font-black uppercase tracking-widest self-center">
                   <CheckCircle2 size={14} /> {lang === 'bn' ? 'সক্রিয়' : 'Active'}
@@ -209,6 +214,17 @@ export const TeacherProfile: React.FC<TeacherProfileProps> = ({ teacher, madrasa
 
         {/* Contact Strip */}
         <div className={`p-4 rounded-2xl mb-8 flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-6 flex-wrap ${isDark ? 'bg-slate-800/50 text-slate-300' : 'bg-slate-50/80 text-slate-600'}`}>
+          {teacher.teacher_id_number && (
+            <>
+              <div className="flex items-center gap-2">
+                <div className={`p-2 rounded-xl ${isDark ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}>
+                  <CreditCard size={16} />
+                </div>
+                <span className="font-bold font-mono text-sm">ID: {teacher.teacher_id_number}</span>
+              </div>
+              <div className="hidden sm:block w-px h-8 bg-slate-300 dark:bg-slate-700" />
+            </>
+          )}
           <a href={`tel:${teacher.phone}`} className="flex items-center gap-2 hover:text-blue-500 transition-colors">
             <div className={`p-2 rounded-xl ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
               <Phone size={16} />

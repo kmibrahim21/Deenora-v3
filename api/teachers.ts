@@ -134,10 +134,11 @@ export default async function handler(req, res) {
           name: t.teacher_name,
           phone: t.mobile,
           pin: parsedPermissions.raw_password,
-          address: parsedPermissions.address,
-          join_date: parsedPermissions.join_date,
-          leave_date: parsedPermissions.leave_date,
-          sort_order: parsedPermissions.sort_order,
+          address: parsedPermissions.address || t.address || "",
+          join_date: parsedPermissions.join_date || t.join_date || "",
+          leave_date: parsedPermissions.leave_date || t.leave_date || "",
+          sort_order: parsedPermissions.sort_order ?? t.sort_order ?? 0,
+          teacher_id_number: parsedPermissions.teacher_id_number || t.teacher_id_number || t.teacher_id || "",
           permissions: parsedPermissions
         };
       });
@@ -145,14 +146,14 @@ export default async function handler(req, res) {
     }
 
     if (action === 'create' && req.method === 'POST') {
-      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions, address, join_date, leave_date, sort_order } = body;
+      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions, address, join_date, leave_date, sort_order, teacher_id_number } = body;
       if (!institute_id || !name || !phone || !pin) return res.status(400).json({ error: 'Required fields missing' });
       
       console.log('Creating teacher:', { institute_id, name, phone, basic_salary });
 
       const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
 
-      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, raw_password: pin };
+      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, teacher_id_number: teacher_id_number ? String(teacher_id_number).trim() : "", raw_password: pin };
 
       const { data: teacher, error: teacherError } = await supabase.from('teachers').insert({
         institution_id: institute_id,
@@ -172,6 +173,7 @@ export default async function handler(req, res) {
         phone: teacher.mobile,
         address,
         join_date,
+        teacher_id_number: teacher_id_number ? String(teacher_id_number).trim() : "",
         permissions: finalPermissions
       }});
     }
@@ -258,10 +260,10 @@ export default async function handler(req, res) {
     }
 
     if (action === 'update' && req.method === 'PUT') {
-      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions, address, join_date, leave_date, sort_order } = body;
+      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions, address, join_date, leave_date, sort_order, teacher_id_number } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
       
-      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order };
+      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, teacher_id_number: teacher_id_number !== undefined ? String(teacher_id_number).trim() : (permissions?.teacher_id_number || "") };
       if (pin) {
         finalPermissions.raw_password = pin;
       }

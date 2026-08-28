@@ -441,10 +441,12 @@ export interface TeacherPermissions {
   can_upload_student_photos?: boolean;
   can_send_messages?: boolean;
   allowed_classes?: string[];
+  teacher_id_number?: string;
 }
 
 export interface Teacher {
   id: string;
+  teacher_id_number?: string;
   user_id?: string;
   institution_id: string;
   name: string;

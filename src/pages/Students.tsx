@@ -110,7 +110,29 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           }
 
           if (searchQuery.trim()) {
-            query = query.ilike('student_name', `%${searchQuery}%`);
+            const rawSearch = searchQuery.trim();
+            const cleanSearch = rawSearch.replace(/[,()]/g, '').trim();
+            const bengaliToEnglish: Record<string, string> = {
+              '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+              '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'
+            };
+            const englishSearch = cleanSearch.replace(/[০-৯]/g, match => bengaliToEnglish[match] || match);
+            const rollMatch = englishSearch.match(/^(?:roll|রোল|no|নং)?\s*[:#-]?\s*(\d+)$/i);
+
+            if (rollMatch) {
+              const rollNum = parseInt(rollMatch[1], 10);
+              if ((window as any)._hasNameEn !== false) {
+                query = query.or(`student_name.ilike.%${cleanSearch}%,name_en.ilike.%${cleanSearch}%,roll.eq.${rollNum}`);
+              } else {
+                query = query.or(`student_name.ilike.%${cleanSearch}%,roll.eq.${rollNum}`);
+              }
+            } else {
+              if ((window as any)._hasNameEn !== false) {
+                query = query.or(`student_name.ilike.%${cleanSearch}%,name_en.ilike.%${cleanSearch}%`);
+              } else {
+                query = query.ilike('student_name', `%${cleanSearch}%`);
+              }
+            }
           }
           return query;
         },
