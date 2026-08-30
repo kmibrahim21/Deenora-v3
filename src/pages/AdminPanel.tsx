@@ -1168,8 +1168,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
       return mList.map(m => ({
         ...m,
-        student_count: (m as any).student_count?.[0]?.count || 0,
-        class_count: (m as any).class_count?.[0]?.count || 0
+        student_count: typeof (m as any).student_count === 'number' ? (m as any).student_count : ((m as any).student_count?.[0]?.count || 0),
+        class_count: typeof (m as any).class_count === 'number' ? (m as any).class_count : ((m as any).class_count?.[0]?.count || 0)
       }));
     } catch (err) {
       console.error('Error in fetchAllMadrasahs API call:', err);
@@ -1184,18 +1184,77 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       
       return (data || []).map(m => ({
         ...m,
-        student_count: (m as any).student_count?.[0]?.count || 0,
-        class_count: (m as any).class_count?.[0]?.count || 0
+        student_count: typeof (m as any).student_count === 'number' ? (m as any).student_count : ((m as any).student_count?.[0]?.count || 0),
+        class_count: typeof (m as any).class_count === 'number' ? (m as any).class_count : ((m as any).class_count?.[0]?.count || 0)
       }));
     }
   };
 
+  const fetchRecentInstitutions = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ action: 'get_recent_institutions', limit: 5 })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.institutions) return data.institutions;
+      }
+    } catch (e) {
+      console.warn('API get_recent_institutions error:', e);
+    }
+    const { data } = await supabase.from('institutions').select('*, student_count:students(count)').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL').order('created_at', { ascending: false }).limit(5);
+    return (data || []).map(m => ({
+      ...m,
+      student_count: typeof (m as any).student_count === 'number' ? (m as any).student_count : ((m as any).student_count?.[0]?.count || 0)
+    }));
+  };
+
   const fetchPendingTransactions = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ action: 'get_pending_transactions' })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.transactions) return data.transactions;
+      }
+    } catch (e) {
+      console.warn('API get_pending_transactions error:', e);
+    }
     const { data } = await supabase.from('transactions').select('*, institutions(*)').eq('status', 'pending').order('created_at', { ascending: false });
     return data || [];
   };
 
   const fetchTransactionHistory = async (modules?: string[]) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ action: 'get_transaction_history', modules, days: 30 })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.transactions) return data.transactions;
+      }
+    } catch (e) {
+      console.warn('API get_transaction_history error:', e);
+    }
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     thirtyDaysAgo.setHours(0, 0, 0, 0);
@@ -1365,13 +1424,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         const [mList, gStats, recent, history] = await Promise.all([
           fetchAllMadrasahs(),
           fetchGlobalCounts(),
-          supabase.from('institutions').select('*, student_count:students(count)').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL').order('created_at', { ascending: false }).limit(5),
+          fetchRecentInstitutions(),
           fetchTransactionHistory(['subscription']) // Dashboard only shows subscriptions
         ]);
         if (isMounted) {
-          const mappedRecent = (recent.data || []).map(m => ({
+          const mappedRecent = (recent || []).map(m => ({
             ...m,
-            student_count: (m as any).student_count?.[0]?.count || 0
+            student_count: typeof (m as any).student_count === 'number' ? (m as any).student_count : ((m as any).student_count?.[0]?.count || 0)
           }));
 
           // Update Cache

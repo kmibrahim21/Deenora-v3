@@ -126,12 +126,11 @@ export const useAuth = () => {
           } else {
             setMadrasah(null);
           }
-        } else if (finalProfile.role === 'super_admin') {
-          // ... existing super admin fallback ...
+        } else if (finalProfile.role === 'super_admin' || finalProfile.role === 'manager') {
           const localTheme = localStorage.getItem('super_admin_theme') || 'default';
           setMadrasah({
             id: 'super_admin',
-            name: 'Super Admin',
+            name: finalProfile.role === 'super_admin' ? 'Super Admin' : 'Manager',
             institution_type: 'system',
             theme: localTheme,
             config_json: { modules: {} },
@@ -139,7 +138,7 @@ export const useAuth = () => {
             status: 'active',
             balance: 0,
             sms_balance: 0,
-            is_super_admin: true,
+            is_super_admin: finalProfile.role === 'super_admin',
             created_at: new Date().toISOString()
           } as Institution);
         }

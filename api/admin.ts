@@ -33,21 +33,23 @@ export default async function handler(req, res) {
     const { data: adminProfile } = await supabase.from('institutions').select('is_super_admin').eq('id', user.id).maybeSingle();
     const { data: userProfile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
     
-    const isSuperAdmin = isSuperAdminEmail || !!adminProfile?.is_super_admin;
-    const isManager = userProfile?.role === 'manager';
+    const roleStr = (userProfile?.role || user.user_metadata?.role || user.app_metadata?.role || '').toString().toLowerCase();
+    const isSuperAdmin = isSuperAdminEmail || !!adminProfile?.is_super_admin || roleStr === 'super_admin';
+    const isManager = roleStr === 'manager';
 
     if (!isSuperAdmin && !isManager) {
       return res.status(403).json({ error: 'Forbidden: Requires Super Admin or Manager role' });
     }
 
     if (action === 'get_global_stats') {
-      const [studentsRes, classesRes, teachersRes, transactionsRes, instsRes, stockRes] = await Promise.all([
+      const [studentsRes, classesRes, teachersRes, transactionsRes, instsRes, stockRes, pendingRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }),
         supabase.from('classes').select('*', { count: 'exact', head: true }),
         supabase.from('teachers').select('*', { count: 'exact', head: true }),
         supabase.from('transactions').select('sms_count, amount, module, description, created_at').eq('status', 'approved').order('created_at', { ascending: false }).limit(10000),
-        supabase.from('institutions').select('sms_balance, balance, is_active, institution_type, config_json').eq('is_super_admin', false),
-        supabase.from('admin_sms_stock').select('remaining_sms').single()
+        supabase.from('institutions').select('sms_balance, balance, is_active, institution_type, config_json').eq('is_super_admin', false).neq('name', 'SYSTEM_GLOBAL_INTERNAL'),
+        supabase.from('admin_sms_stock').select('remaining_sms').single(),
+        supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending').not('transaction_id', 'like', 'PENDING_%')
       ]);
 
       const totalAllocated = transactionsRes.data?.reduce((sum, t) => sum + (Number(t.sms_count) || 0), 0) || 0;
@@ -106,7 +108,7 @@ export default async function handler(req, res) {
         subscriptionRevenue: subRev,
         monthlySubscriptionRevenue,
         totalRevenue,
-        pendingApprovals: 0, // Will be fetched separately if needed or add here
+        pendingApprovals: pendingRes?.count || 0,
         totalInstitutions: instsRes.data?.length || 0,
         activeInstitutions: activeInsts,
         totalVoiceBalance,
@@ -242,6 +244,57 @@ export default async function handler(req, res) {
       }));
       
       return res.status(200).json({ institutions: flattened });
+    }
+
+    if (action === 'get_recent_institutions') {
+      const limit = Number(body.limit) || 5;
+      const { data, error } = await supabase.from('institutions')
+        .select('*, student_count:students(count)')
+        .eq('is_super_admin', false)
+        .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      
+      if (error) throw error;
+      
+      const flattened = (data || []).map(inst => ({
+        ...inst,
+        student_count: inst.student_count?.[0]?.count || 0
+      }));
+      
+      return res.status(200).json({ institutions: flattened });
+    }
+
+    if (action === 'get_pending_transactions') {
+      const { data, error } = await supabase.from('transactions')
+        .select('*, institutions(*)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return res.status(200).json({ transactions: data || [] });
+    }
+
+    if (action === 'get_transaction_history') {
+      const { modules, days = 30 } = body;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - Number(days));
+      startDate.setHours(0, 0, 0, 0);
+
+      let query = supabase.from('transactions')
+        .select('*, institutions(*)')
+        .neq('status', 'pending')
+        .gte('created_at', startDate.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(10000);
+
+      if (modules && Array.isArray(modules) && modules.length > 0) {
+        query = query.in('module', modules);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return res.status(200).json({ transactions: data || [] });
     }
 
     if (action === 'sync_all_to_sheet') {

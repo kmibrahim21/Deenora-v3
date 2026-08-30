@@ -80,10 +80,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     
     // For managers, check their specific permissions for system views
     if (isManager) {
-      if (module === 'dashboard') return !!profile?.permissions?.dashboard;
-      if (module === 'institutions') return !!profile?.permissions?.institutions;
-      if (module === 'approvals') return !!profile?.permissions?.approvals;
-      if (module === 'tutorials') return !!profile?.permissions?.tutorials;
+      if (module === 'dashboard') return profile?.permissions?.dashboard !== false;
+      if (module === 'institutions') return profile?.permissions?.institutions !== false;
+      if (module === 'approvals') return profile?.permissions?.approvals !== false;
+      if (module === 'tutorials') return profile?.permissions?.tutorials !== false;
       if (module === 'voice-service' || module === 'voice_dashboard') return true;
     }
     
