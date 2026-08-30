@@ -10,17 +10,27 @@ export default async function handler(req: Request, res: Response) {
   const path = req.path;
 
   // 1. ADMS Handshake / Get requests
-  if (path === '/cdata' && req.method === 'GET') {
+  if (path.includes('/cdata') && req.method === 'GET') {
     return res.status(200).send('OK');
   }
 
-  if (path === '/getrequest' && req.method === 'GET') {
+  if (path.includes('/getrequest') && req.method === 'GET') {
     return res.status(200).send('OK');
   }
 
   // 2. Receive ADMS Attendance push data
-  if (path === '/cdata' && req.method === 'POST') {
-    const rawData = req.body;
+  if (path.includes('/cdata') && req.method === 'POST') {
+    let rawData = req.body;
+    
+    // ZKTeco sends text/plain, but Express might not parse it correctly if no content-type is matched
+    // Sometimes it comes as an object if body-parser misidentifies it.
+    if (typeof rawData === 'object' && Object.keys(rawData).length > 0) {
+      // If it parsed as urlencoded, the keys might contain the actual data
+      rawData = Object.keys(rawData)[0] || '';
+    } else if (Buffer.isBuffer(rawData)) {
+      rawData = rawData.toString('utf-8');
+    }
+    
     if (!rawData || typeof rawData !== 'string') {
       return res.status(200).send('OK');
     }
