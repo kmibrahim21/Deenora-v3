@@ -322,41 +322,225 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [globalDeactivationMode, setGlobalDeactivationMode] = useState(false);
   const [isProcessingDeactivationToggle, setIsProcessingDeactivationToggle] = useState(false);
 
+  const getModulesForPackage = useCallback((pkgName: string, features?: string[]): { [key: string]: boolean } | null => {
+    const normName = (pkgName || '').trim().toLowerCase();
+    
+    // If Custom package is selected, keep existing permissions so admin can customize manually
+    if (normName === 'custom' || normName === 'কাস্টম') {
+      return null;
+    }
+
+    // Baseline clean template (all modules false)
+    const baseModules: { [key: string]: boolean } = {
+      attendance: false,
+      exam: false,
+      accounting: false,
+      library: false,
+      academic_year_promotion: false,
+      voice_broadcast: false,
+      sms: false,
+      messages: false,
+      class_routine: false,
+      certificates: false,
+      id_cards: false,
+      student_photo: false,
+      parent_portal: false,
+      backup_restore: false,
+      biometric_device_sync: false,
+    };
+
+    // 10. Ultimate package: Attendance, exam, Accounting, sms, voice, certificate, students photo, ID card, class routine, parent portal, messages
+    if (normName.includes('ultimate') || normName.includes('আলটিমেট')) {
+      return {
+        ...baseModules,
+        attendance: true,
+        exam: true,
+        accounting: true,
+        sms: true,
+        voice_broadcast: true,
+        certificates: true,
+        student_photo: true,
+        id_cards: true,
+        class_routine: true,
+        parent_portal: true,
+        messages: true,
+      };
+    }
+
+    // 9. Enterprise Plus: Attendance, exam, Accounting, sms, voice, certificate, class routine, students photo, ID card
+    if (
+      normName.includes('enterprise plus') || 
+      normName.includes('enterprise+') || 
+      normName.includes('এন্টারপ্রাইজ প্লাস') || 
+      normName.includes('এন্টারপ্রাইজ+')
+    ) {
+      return {
+        ...baseModules,
+        attendance: true,
+        exam: true,
+        accounting: true,
+        sms: true,
+        voice_broadcast: true,
+        certificates: true,
+        class_routine: true,
+        student_photo: true,
+        id_cards: true,
+      };
+    }
+
+    // 8. Enterprise: Attendance, exam, Accounting, sms, voice, certificate, class routine
+    if (normName.includes('enterprise') || normName.includes('এন্টারপ্রাইজ')) {
+      return {
+        ...baseModules,
+        attendance: true,
+        exam: true,
+        accounting: true,
+        sms: true,
+        voice_broadcast: true,
+        certificates: true,
+        class_routine: true,
+      };
+    }
+
+    // 7. Professional: Attendance, Accounting, sms, voice, certificate, class routine
+    if (normName.includes('professional') || normName.includes('প্রফেশনাল')) {
+      return {
+        ...baseModules,
+        attendance: true,
+        accounting: true,
+        sms: true,
+        voice_broadcast: true,
+        certificates: true,
+        class_routine: true,
+      };
+    }
+
+    // 6. Finance: Accounting, sms, voice, certificate, class routine
+    if (normName.includes('finance') || normName.includes('ফিনান্স') || normName.includes('ফিন্যান্স')) {
+      return {
+        ...baseModules,
+        accounting: true,
+        sms: true,
+        voice_broadcast: true,
+        certificates: true,
+        class_routine: true,
+      };
+    }
+
+    // 5. Standards / Standard: attendance, exam, sms, voice, certificate, class routine
+    if (normName.includes('standard') || normName.includes('স্ট্যান্ডার্ড')) {
+      return {
+        ...baseModules,
+        attendance: true,
+        exam: true,
+        sms: true,
+        voice_broadcast: true,
+        certificates: true,
+        class_routine: true,
+      };
+    }
+
+    // 4. Academic: exam, sms, voice
+    if (normName.includes('academic') || normName.includes('একাডেমিক')) {
+      return {
+        ...baseModules,
+        exam: true,
+        sms: true,
+        voice_broadcast: true,
+      };
+    }
+
+    // 3. Smart: attendance, sms, voice
+    if (normName.includes('smart') || normName.includes('স্মার্ট')) {
+      return {
+        ...baseModules,
+        attendance: true,
+        sms: true,
+        voice_broadcast: true,
+      };
+    }
+
+    // 2. Basic: sms, voice
+    if (normName.includes('basic') || normName.includes('বেসিক')) {
+      return {
+        ...baseModules,
+        sms: true,
+        voice_broadcast: true,
+      };
+    }
+
+    // 1. Starter: sms
+    if (normName.includes('starter') || normName.includes('স্টার্টার')) {
+      return {
+        ...baseModules,
+        sms: true,
+      };
+    }
+
+    // Dynamic feature matching if custom features array provided from DB
+    if (Array.isArray(features) && features.length > 0) {
+      const dynamicModules = { ...baseModules };
+      const fStr = features.join(' ').toLowerCase();
+      if (fStr.includes('হাজিরা') || fStr.includes('attendance')) dynamicModules.attendance = true;
+      if (fStr.includes('পরীক্ষা') || fStr.includes('exam') || fStr.includes('ফলাফল') || fStr.includes('result')) dynamicModules.exam = true;
+      if (fStr.includes('হিসাব') || fStr.includes('ফি') || fStr.includes('accounting') || fStr.includes('finance')) dynamicModules.accounting = true;
+      if (fStr.includes('এসএমএস') || fStr.includes('sms')) dynamicModules.sms = true;
+      if (fStr.includes('ভয়েস') || fStr.includes('voice')) dynamicModules.voice_broadcast = true;
+      if (fStr.includes('লাইব্রেরি') || fStr.includes('library')) dynamicModules.library = true;
+      if (fStr.includes('ক্যালেন্ডার') || fStr.includes('প্রমোশন') || fStr.includes('academic')) dynamicModules.academic_year_promotion = true;
+      if (fStr.includes('প্রত্যয়নপত্র') || fStr.includes('সার্টিফিকেট') || fStr.includes('certificate')) dynamicModules.certificates = true;
+      if (fStr.includes('আইডি') || fStr.includes('id_card') || fStr.includes('id card') || fStr.includes('id_cards')) dynamicModules.id_cards = true;
+      if (fStr.includes('ছবি') || fStr.includes('photo')) dynamicModules.student_photo = true;
+      if (fStr.includes('অভিভাবক') || fStr.includes('parent')) dynamicModules.parent_portal = true;
+      if (fStr.includes('রুটিন') || fStr.includes('routine')) dynamicModules.class_routine = true;
+      if (fStr.includes('বার্তা') || fStr.includes('মেসেজ') || fStr.includes('message')) dynamicModules.messages = true;
+      if (fStr.includes('বায়োমেট্রিক') || fStr.includes('biometric')) dynamicModules.biometric_device_sync = true;
+      if (fStr.includes('ব্যাকআপ') || fStr.includes('backup')) dynamicModules.backup_restore = true;
+      return dynamicModules;
+    }
+
+    return baseModules;
+  }, []);
+
   const fetchPackages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('subscription_packages')
-        .select('name, rate, sort_order')
+        .select('id, name, rate, features, sort_order')
         .order('sort_order', { ascending: true });
       
       if (error) throw error;
       if (data && data.length > 0) {
-        setPackages([...data, { name: 'Custom', rate: 0 }]);
+        setPackages([...data, { name: 'Custom', rate: 0, features: [] }]);
       } else {
         const defaults = [
-          { name: 'STARTER', rate: 0.50, sort_order: 1 },
-          { name: 'BASIC', rate: 0.75, sort_order: 2 },
-          { name: 'SMART', rate: 1.00, sort_order: 3 },
-          { name: 'ACADEMIC', rate: 1.00, sort_order: 4 },
-          { name: 'STANDARD', rate: 1.50, sort_order: 5 },
-          { name: 'FINANCE', rate: 1.50, sort_order: 6 },
-          { name: 'PROFESSIONAL', rate: 1.75, sort_order: 7 },
-          { name: 'ENTERPRISE', rate: 2.50, sort_order: 8 },
-          { name: 'Custom', rate: 0, sort_order: 99 }
+          { name: 'STARTER', rate: 0.50, features: ['এসএমএস'], sort_order: 1 },
+          { name: 'BASIC', rate: 0.75, features: ['এসএমএস', 'ভয়েস কল'], sort_order: 2 },
+          { name: 'SMART', rate: 1.00, features: ['হাজিরা', 'এসএমএস', 'ভয়েস কল'], sort_order: 3 },
+          { name: 'ACADEMIC', rate: 1.00, features: ['পরীক্ষা', 'এসএমএস', 'ভয়েস কল'], sort_order: 4 },
+          { name: 'STANDARDS', rate: 1.50, features: ['হাজিরা', 'পরীক্ষা', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 5 },
+          { name: 'FINANCE', rate: 1.50, features: ['হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 6 },
+          { name: 'PROFESSIONAL', rate: 1.75, features: ['হাজিরা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 7 },
+          { name: 'ENTERPRISE', rate: 2.00, features: ['হাজিরা', 'পরীক্ষা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 8 },
+          { name: 'ENTERPRISE PLUS', rate: 2.50, features: ['হাজিরা', 'পরীক্ষা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন', 'শিক্ষার্থীর ছবি', 'আইডি কার্ড'], sort_order: 9 },
+          { name: 'ULTIMATE', rate: 3.00, features: ['হাজিরা', 'পরীক্ষা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'শিক্ষার্থীর ছবি', 'আইডি কার্ড', 'ক্লাস রুটিন', 'অভিভাবক পোর্টাল', 'মেসেজ'], sort_order: 10 },
+          { name: 'Custom', rate: 0, features: [], sort_order: 99 }
         ];
         setPackages(defaults);
       }
     } catch (err) {
       const defaults = [
-        { name: 'স্টার্টার', rate: 0.50, sort_order: 1 },
-        { name: 'বেসিক', rate: 0.75, sort_order: 2 },
-        { name: 'স্মার্ট', rate: 1.00, sort_order: 3 },
-        { name: 'একাডেমিক', rate: 1.00, sort_order: 4 },
-        { name: 'স্ট্যান্ডার্ড', rate: 1.50, sort_order: 5 },
-        { name: 'ফিনান্স', rate: 1.50, sort_order: 6 },
-        { name: 'প্রফেশনাল', rate: 1.75, sort_order: 7 },
-        { name: 'এন্টারপ্রাইজ', rate: 2.50, sort_order: 8 },
-        { name: 'Custom', rate: 0, sort_order: 99 }
+        { name: 'স্টার্টার', rate: 0.50, features: ['এসএমএস'], sort_order: 1 },
+        { name: 'বেসিক', rate: 0.75, features: ['এসএমএস', 'ভয়েস কল'], sort_order: 2 },
+        { name: 'স্মার্ট', rate: 1.00, features: ['হাজিরা', 'এসএমএস', 'ভয়েস কল'], sort_order: 3 },
+        { name: 'একাডেমিক', rate: 1.00, features: ['পরীক্ষা', 'এসএমএস', 'ভয়েস কল'], sort_order: 4 },
+        { name: 'স্ট্যান্ডার্ড', rate: 1.50, features: ['হাজিরা', 'পরীক্ষা', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 5 },
+        { name: 'ফিনান্স', rate: 1.50, features: ['হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 6 },
+        { name: 'প্রফেশনাল', rate: 1.75, features: ['হাজিরা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 7 },
+        { name: 'এন্টারপ্রাইজ', rate: 2.00, features: ['হাজিরা', 'পরীক্ষা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন'], sort_order: 8 },
+        { name: 'এন্টারপ্রাইজ প্লাস', rate: 2.50, features: ['হাজিরা', 'পরীক্ষা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'ক্লাস রুটিন', 'শিক্ষার্থীর ছবি', 'আইডি কার্ড'], sort_order: 9 },
+        { name: 'আলটিমেট', rate: 3.00, features: ['হাজিরা', 'পরীক্ষা', 'হিসাব ও ফি', 'এসএমএস', 'ভয়েস কল', 'প্রত্যয়নপত্র', 'শিক্ষার্থীর ছবি', 'আইডি কার্ড', 'ক্লাস রুটিন', 'অভিভাবক পোর্টাল', 'মেসেজ'], sort_order: 10 },
+        { name: 'Custom', rate: 0, features: [], sort_order: 99 }
       ];
       setPackages(defaults);
     }
@@ -1579,24 +1763,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       userConfig?.modules?.exam_routine ?? 
       true;
 
-    setEditModules({
-      attendance: true,
-      exam: isExamActive,
-      accounting: true,
-      library: false,
-      academic_year_promotion: false,
-      voice_broadcast: true,
-      sms: true,
-      messages: false,
-      class_routine: false,
-      certificates: true,
-      id_cards: false,
-      student_photo: false,
-      parent_portal: false,
-      backup_restore: false,
-      biometric_device_sync: false,
-      ...userModules
-    });
+    const hasExistingModules = userConfig?.modules && typeof userConfig.modules === 'object' && Object.keys(userConfig.modules).length > 0;
+
+    if (hasExistingModules) {
+      setEditModules({
+        attendance: userModules.attendance ?? false,
+        exam: userModules.exam ?? isExamActive,
+        accounting: userModules.accounting ?? false,
+        library: userModules.library ?? false,
+        academic_year_promotion: userModules.academic_year_promotion ?? false,
+        voice_broadcast: userModules.voice_broadcast ?? false,
+        sms: userModules.sms ?? false,
+        messages: userModules.messages ?? false,
+        class_routine: userModules.class_routine ?? false,
+        certificates: userModules.certificates ?? false,
+        id_cards: userModules.id_cards ?? false,
+        student_photo: userModules.student_photo ?? false,
+        parent_portal: userModules.parent_portal ?? false,
+        backup_restore: userModules.backup_restore ?? false,
+        biometric_device_sync: userModules.biometric_device_sync ?? false,
+        ...userModules
+      });
+    } else {
+      setEditModules({
+        attendance: true,
+        exam: isExamActive,
+        accounting: true,
+        library: false,
+        academic_year_promotion: false,
+        voice_broadcast: true,
+        sms: true,
+        messages: false,
+        class_routine: false,
+        certificates: true,
+        id_cards: false,
+        student_photo: false,
+        parent_portal: false,
+        backup_restore: false,
+        biometric_device_sync: false,
+      });
+    }
 
     const createdAtDate = new Date(user.created_at);
     const oneYearLater = new Date(createdAtDate);
@@ -3749,6 +3955,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                            if (canWrite('payment')) {
                                              setEditPackageName(pkg.name);
                                              setEditPackageRate(pkg.rate);
+                                             const pkgModules = getModulesForPackage(pkg.name, pkg.features);
+                                             if (pkgModules) {
+                                               setEditModules(pkgModules);
+                                             }
                                            } else {
                                              setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
                                            }
