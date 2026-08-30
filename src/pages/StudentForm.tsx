@@ -28,6 +28,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [name, setName] = useState(student?.student_name || '');
   const [nameEn, setNameEn] = useState(student?.name_en || '');
   const [registrationNumber, setRegistrationNumber] = useState(student?.registration_number || '');
+  const [biometricId, setBiometricId] = useState(student?.biometric_id || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
   const [motherName, setMotherName] = useState(student?.mother_name || '');
   const [section, setSection] = useState(student?.section || '');
@@ -162,6 +163,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         student_name: name.trim(),
         name_en: nameEn.trim() || null,
         registration_number: registrationNumber.trim() || null,
+        biometric_id: biometricId.trim() || null,
         guardian_name: guardianName.trim(),
         mother_name: motherName.trim() || null,
         roll: englishRoll ? parseInt(englishRoll) : null,
@@ -348,6 +350,22 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
                   onChange={(e) => setRegistrationNumber(e.target.value)} 
                 />
               </div>
+
+              {(madrasah?.config_json as any)?.modules?.biometric_device_sync && (
+                <div className="space-y-2">
+                  <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                    <UserCheck size={11} className="text-[#2563EB]" /> 
+                    {lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Biometric ID'}
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder={lang === 'bn' ? "মেশিনের আইডি (যেমন: 101)" : "Machine ID (e.g., 101)"}
+                    className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`} 
+                    value={biometricId} 
+                    onChange={(e) => setBiometricId(e.target.value)} 
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>

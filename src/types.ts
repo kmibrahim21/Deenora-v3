@@ -221,6 +221,7 @@ export interface Student {
   id: string;
   institution_id: string;
   class_id: string;
+  biometric_id?: string;
   student_name: string;
   name_en?: string;
   admission_number?: string;
@@ -447,6 +448,7 @@ export interface TeacherPermissions {
 export interface Teacher {
   id: string;
   teacher_id_number?: string;
+  biometric_id?: string;
   user_id?: string;
   institution_id: string;
   name: string;

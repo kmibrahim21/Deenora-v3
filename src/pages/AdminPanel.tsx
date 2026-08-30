@@ -234,7 +234,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     student_photo: false,
     id_cards: false,
     parent_portal: false,
-    backup_restore: false
+    backup_restore: false,
+    biometric_device_sync: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -1593,6 +1594,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       student_photo: false,
       parent_portal: false,
       backup_restore: false,
+      biometric_device_sync: false,
       ...userModules
     });
 

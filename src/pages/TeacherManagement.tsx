@@ -143,6 +143,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   // Form states
   const [formData, setFormData] = useState({
     teacher_id_number: "",
+    biometric_id: "",
     name: "",
     phone: "",
     pin: "",
@@ -832,6 +833,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
   const resetForm = () => {
     setFormData({
       teacher_id_number: "",
+      biometric_id: "",
       name: "",
       phone: "",
       pin: "",
@@ -851,6 +853,7 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
     setSelectedTeacher(teacher);
     setFormData({
       teacher_id_number: teacher.teacher_id_number || (teacher.permissions as any)?.teacher_id_number || "",
+      biometric_id: teacher.biometric_id || "",
       name: teacher.name || "",
       phone: teacher.phone || "",
       pin: teacher.pin || "", 
@@ -1733,6 +1736,24 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                         }
                       />
                     </div>
+
+                    {(madrasah?.config_json as any)?.modules?.biometric_device_sync && (
+                      <div className="space-y-2">
+                        <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>
+                          <CreditCard size={11} className="text-[#2563EB]" /> 
+                          {lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Biometric ID'}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={lang === 'bn' ? "মেশিনের আইডি (যেমন: 101)" : "Machine ID (e.g. 101)"}
+                          className={`w-full h-[54px] px-5 ${isDark ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500' : 'bg-slate-50 border-slate-100 text-[#1E293B] focus:border-[#2563EB]'} border-2 rounded-[1.2rem] outline-none font-black text-sm focus:bg-transparent focus:ring-4 focus:ring-[#2563EB]/5 transition-all shadow-sm`}
+                          value={formData.biometric_id || ""}
+                          onChange={(e) =>
+                            setFormData({ ...formData, biometric_id: e.target.value })
+                          }
+                        />
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <label className={`flex items-center gap-2 text-[9px] font-black ${isDark ? 'text-blue-400' : 'text-[#1E40AF]'} uppercase tracking-wider px-2`}>

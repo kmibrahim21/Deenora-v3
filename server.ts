@@ -45,9 +45,10 @@ async function startServer() {
     }
   };
 
-  // Use body-parser for JSON and URL-encoded
+  // Use body-parser for JSON, URL-encoded, and Text (for Biometric ADMS)
   app.use(express.json({ limit: '20mb' }));
   app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+  app.use(express.text({ limit: '20mb' }));
 
   // Helper to run Vercel-style handlers
   const runHandler = async (filePath: string, req: express.Request, res: express.Response) => {
@@ -169,6 +170,11 @@ async function startServer() {
   // Voice Refund Route (Mapping from vercel.json)
   app.all('/api/voice-refund', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
+  });
+
+  // ZKTeco ADMS Route (Biometric Machine Sync)
+  app.all('/iclock/*all', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'iclock.ts'), req, res);
   });
 
   // API Wildcard

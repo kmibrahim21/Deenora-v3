@@ -146,14 +146,14 @@ export default async function handler(req, res) {
     }
 
     if (action === 'create' && req.method === 'POST') {
-      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions, address, join_date, leave_date, sort_order, teacher_id_number } = body;
+      const { institute_id, name, phone, pin, designation, basic_salary, photo_url, permissions, address, join_date, leave_date, sort_order, teacher_id_number, biometric_id } = body;
       if (!institute_id || !name || !phone || !pin) return res.status(400).json({ error: 'Required fields missing' });
       
       console.log('Creating teacher:', { institute_id, name, phone, basic_salary });
 
       const passwordHash = crypto.createHash('sha256').update(pin).digest('hex');
 
-      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, teacher_id_number: teacher_id_number ? String(teacher_id_number).trim() : "", raw_password: pin };
+      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, teacher_id_number: teacher_id_number ? String(teacher_id_number).trim() : "", biometric_id: biometric_id ? String(biometric_id).trim() : "", raw_password: pin };
 
       const { data: teacher, error: teacherError } = await supabase.from('teachers').insert({
         institution_id: institute_id,
@@ -260,10 +260,10 @@ export default async function handler(req, res) {
     }
 
     if (action === 'update' && req.method === 'PUT') {
-      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions, address, join_date, leave_date, sort_order, teacher_id_number } = body;
+      const { id, name, phone, pin, designation, basic_salary, photo_url, is_active, permissions, address, join_date, leave_date, sort_order, teacher_id_number, biometric_id } = body;
       if (!id) return res.status(400).json({ error: 'Teacher ID is required' });
       
-      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, teacher_id_number: teacher_id_number !== undefined ? String(teacher_id_number).trim() : (permissions?.teacher_id_number || "") };
+      const finalPermissions = { ...permissions, address, join_date, leave_date, sort_order, teacher_id_number: teacher_id_number !== undefined ? String(teacher_id_number).trim() : (permissions?.teacher_id_number || ""), biometric_id: biometric_id !== undefined ? String(biometric_id).trim() : (permissions?.biometric_id || "") };
       if (pin) {
         finalPermissions.raw_password = pin;
       }

@@ -45,6 +45,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [signatureUrl, setSignatureUrl] = useState(madrasah?.config_json?.signature_url || '');
   const [signatureHeight, setSignatureHeight] = useState(madrasah?.config_json?.signature_height || 30);
   const [nameEnglish, setNameEnglish] = useState((madrasah?.config_json as any)?.name_english || '');
+  const [biometricDevicesStr, setBiometricDevicesStr] = useState(((madrasah?.config_json as any)?.biometric_devices || []).map((d: any) => d.sn).join(', '));
 
   const [featureStudentAttSms, setFeatureStudentAttSms] = useState((madrasah?.config_json as any)?.features?.student_attendance_sms ?? false);
   const [featureFeeSms, setFeatureFeeSms] = useState((madrasah?.config_json as any)?.features?.fee_collection_sms ?? false);
@@ -130,6 +131,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         arabic_calligraphy_url: arabicCalligraphyUrl,
         arabic_calligraphy_width: arabicCalligraphyWidth,
         name_english: nameEnglish.trim(),
+        biometric_devices: biometricDevicesStr.split(',').map(s => s.trim()).filter(Boolean).map(sn => ({ sn, name: "Device " + sn })),
         features: {
           ...((madrasah.config_json as any)?.features || {}),
           student_attendance_sms: featureStudentAttSms,
@@ -494,6 +496,27 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                       </div>
                     </div>
                   </>
+                )}
+
+                {modules?.biometric_device_sync && (
+                  <div className="space-y-1.5 mt-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1 flex justify-between items-center">
+                      <span>{lang === 'bn' ? 'হাজিরা মেশিনের সিরিয়াল নাম্বার' : 'Biometric Machine SNs'}</span>
+                      <span className="text-[9px] font-normal lowercase bg-blue-100 text-blue-600 px-1.5 rounded">Optional</span>
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="text" 
+                        className={`w-full h-12 border-2 rounded-2xl px-4 font-black text-[13px] outline-none transition-all duration-300 ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500/30 text-white' : 'bg-slate-50 border-slate-100 focus:border-[#2563EB]/40 text-slate-900 group-hover:bg-white focus:bg-white shadow-inner'}`} 
+                        value={biometricDevicesStr} 
+                        onChange={(e) => setBiometricDevicesStr(e.target.value)} 
+                        placeholder={lang === 'bn' ? 'যেমন: ABCD12345, XYZ987' : 'e.g. ABCD12345, XYZ987'}
+                      />
+                    </div>
+                    <p className={`text-[10px] mt-1 ml-1 leading-snug ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {lang === 'bn' ? 'একাধিক মেশিন থাকলে কমা (,) দিয়ে সিরিয়াল নাম্বারগুলো লিখুন। মেশিনের Cloud/ADMS সেটিংসে সার্ভার লিংক হিসেবে আপনার বর্তমান ডোমেইনের সাথে /iclock/cdata যুক্ত করে ব্যবহার করুন।' : 'Comma separated machine Serial Numbers. Use your current domain with /iclock/cdata as ADMS Server URL.'}
+                    </p>
+                  </div>
                 )}
               </div>
             </motion.div>
