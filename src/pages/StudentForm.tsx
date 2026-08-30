@@ -28,7 +28,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
   const [name, setName] = useState(student?.student_name || '');
   const [nameEn, setNameEn] = useState(student?.name_en || '');
   const [registrationNumber, setRegistrationNumber] = useState(student?.registration_number || '');
-  const [biometricId, setBiometricId] = useState(student?.biometric_id || '');
+  const [biometricId, setBiometricId] = useState(student?.biometric_id || initialExtra?.biometric_id || '');
   const [guardianName, setGuardianName] = useState(student?.guardian_name || '');
   const [motherName, setMotherName] = useState(student?.mother_name || '');
   const [section, setSection] = useState(student?.section || '');
@@ -152,7 +152,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
         guardian_relation: (guardianRelation || '').trim() || null,
         permanent_address: (permanentAddress || '').trim() || null,
         previous_institution: (previousInstitution || '').trim() || null,
-        previous_class: (previousClass || '').trim() || null
+        previous_class: (previousClass || '').trim() || null,
+        biometric_id: biometricId.trim() || null
       };
 
       // Pack extra admission fields into notes as fallback so data is NEVER lost regardless of DB schema state
@@ -185,7 +186,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
       const extraFieldKeys = [
         'gender', 'nationality', 'religion', 'father_name', 'father_occupation',
         'mother_occupation', 'guardian_relation', 'permanent_address',
-        'previous_institution', 'previous_class'
+        'previous_institution', 'previous_class', 'biometric_id'
       ];
 
       // Robust retry loop (handles missing columns or foreign key violations gracefully)
@@ -237,6 +238,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, madrasah, defaultCla
       // Cache Invalidation
       if (madrasah) {
         requestManager.invalidatePattern('fetch:students:');
+        requestManager.invalidatePattern('v6_students:');
+        requestManager.invalidatePattern('students');
         requestManager.invalidatePattern(`stats:${madrasah.id}`);
         requestManager.invalidatePattern(`fees:${madrasah.id}`);
         requestManager.invalidatePattern(`dashboard_`);

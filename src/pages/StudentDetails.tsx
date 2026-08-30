@@ -563,6 +563,11 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 <span className="text-xs font-black text-emerald-600 uppercase tracking-[0.15em]">{t('section', lang)}: {student.section}</span>
               </div>
             )}
+            {student.biometric_id && (
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[0.7rem] border-2 shadow-inner ${isDark ? 'bg-purple-900/20 border-purple-500/20' : 'bg-purple-50 border-purple-500/10'}`}>
+                <span className="text-xs font-black text-purple-600 uppercase tracking-[0.15em]">{lang === 'bn' ? 'বায়োমেট্রিক আইডি' : 'Bio ID'}: {student.biometric_id}</span>
+              </div>
+            )}
             {!isActive && (
               <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[0.7rem] border-2 shadow-inner ${isDark ? 'bg-red-900/20 border-red-500/20' : 'bg-red-50 border-red-500/10'}`}>
                 <span className="text-xs font-black text-red-600 uppercase tracking-[0.15em]">{lang === 'bn' ? 'ইন-অ্যাক্টিভ' : 'Inactive'}</span>

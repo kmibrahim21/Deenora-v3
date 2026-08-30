@@ -69,13 +69,23 @@ export default async function handler(req: Request, res: Response) {
           if (!userId || !checkTime) continue;
           const date = checkTime.substring(0, 10);
           
-          // Look up student by biometric_id
-          const { data: student } = await supabase
+          // Look up student by biometric_id (checking direct field, notes tag, roll, or registration number)
+          let student: any = null;
+
+          // 1. Try finding by notes containing biometric_id or registration number
+          const { data: studentsList } = await supabase
             .from('students')
-            .select('id, class_id')
-            .eq('institution_id', matchedInstitutionId)
-            .eq('biometric_id', userId)
-            .single();
+            .select('id, class_id, notes, registration_number, roll')
+            .eq('institution_id', matchedInstitutionId);
+
+          if (studentsList && studentsList.length > 0) {
+            student = studentsList.find((s: any) => {
+              if (s.notes && s.notes.includes(`"biometric_id":"${userId}"`)) return true;
+              if (s.registration_number && s.registration_number.toString().trim() === userId) return true;
+              if (s.roll && s.roll.toString().trim() === userId) return true;
+              return false;
+            });
+          }
 
           if (student) {
             const { data: existing } = await supabase
@@ -84,7 +94,7 @@ export default async function handler(req: Request, res: Response) {
                .eq('institution_id', matchedInstitutionId)
                .eq('student_id', student.id)
                .eq('event_date', date)
-               .single();
+               .maybeSingle();
             
             if (!existing) {
               await supabase.from('attendance').insert({
@@ -98,12 +108,17 @@ export default async function handler(req: Request, res: Response) {
             }
           } else {
              // Look up teacher if not found in students
-             const { data: teacher } = await supabase
+             const { data: teachersList } = await supabase
                .from('teachers')
-               .select('id')
-               .eq('institution_id', matchedInstitutionId)
-               .eq('permissions->>biometric_id', userId)
-               .single();
+               .select('id, permissions, teacher_name')
+               .eq('institution_id', matchedInstitutionId);
+
+             const teacher = teachersList?.find((t: any) => {
+               const perms = t.permissions || {};
+               const bioId = typeof perms === 'object' ? perms.biometric_id : '';
+               const teachId = typeof perms === 'object' ? perms.teacher_id_number : '';
+               return (bioId && bioId.toString().trim() === userId) || (teachId && teachId.toString().trim() === userId);
+             });
 
              if (teacher) {
                 const { data: existingT } = await supabase
@@ -112,7 +127,7 @@ export default async function handler(req: Request, res: Response) {
                    .eq('institution_id', matchedInstitutionId)
                    .eq('teacher_id', teacher.id)
                    .eq('date', date)
-                   .single();
+                   .maybeSingle();
 
                 if (!existingT) {
                   await supabase.from('teacher_attendance').insert({

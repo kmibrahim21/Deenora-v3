@@ -11,6 +11,7 @@ export interface StudentExtraFields {
   permanent_address?: string | null;
   previous_institution?: string | null;
   previous_class?: string | null;
+  biometric_id?: string | null;
 }
 
 const ADM_TAG_PREFIX = '[ADM_EXTRA:';
@@ -47,6 +48,7 @@ export function extractStudentExtraFields(student?: Student | null): StudentExtr
     permanent_address: (student.permanent_address ?? parsedFromNotes.permanent_address) || '',
     previous_institution: (student.previous_institution ?? parsedFromNotes.previous_institution) || '',
     previous_class: (student.previous_class ?? parsedFromNotes.previous_class) || '',
+    biometric_id: (student.biometric_id ?? parsedFromNotes.biometric_id) || '',
   };
 }
 
