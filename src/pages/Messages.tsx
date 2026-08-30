@@ -97,13 +97,14 @@ export default function Messages({
   const [editingItem, setEditingItem] = useState<any>(null);
   
   // Tabs
-  const [activeTab, setActiveTab] = useState<'messages' | 'notices' | 'syllabus'>('messages');
+  const [activeTab, setActiveTab] = useState<'messages' | 'notices' | 'syllabus' | 'suggestion'>('messages');
 
   // Modals
   const [showMsgModal, setShowMsgModal] = useState(false);
   const [showNoticeModal, setShowNoticeModal] = useState(false);
   const [showRoutineModal, setShowRoutineModal] = useState(false);
   const [showSyllabusModal, setShowSyllabusModal] = useState(false);
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
@@ -156,6 +157,13 @@ export default function Messages({
   const [syllabusClass, setSyllabusClass] = useState('');
   const [syllabusExam, setSyllabusExam] = useState('');
   const [syllabusSession, setSyllabusSession] = useState('2025-26');
+  const [suggestionTitle, setSuggestionTitle] = useState('');
+  const [suggestionClass, setSuggestionClass] = useState('');
+  const [suggestionExam, setSuggestionExam] = useState('');
+  const [suggestionSession, setSuggestionSession] = useState('2025-26');
+  const [suggestionSubjectList, setSuggestionSubjectList] = useState([
+    { subject: 'বাংলা', details: '' }
+  ]);
   const [syllabusSubjectList, setSyllabusSubjectList] = useState([
     { subject: 'বাংলা', details: '' }
   ]);
@@ -204,7 +212,15 @@ export default function Messages({
       setSyllabusExam(item.parsedMessage?.exam || '');
       setSyllabusSubjectList(item.parsedMessage?.subjects || []);
       setShowSyllabusModal(true);
-    } else if (['APP_NOTICE', 'APP_HOLIDAY', 'APP_PTM', 'APP_DIARY', 'all'].includes(item.class_name)) {
+    
+    } else if (item.class_name.startsWith('APP_SUGGESTION_')) {
+      setSuggestionTitle(item.title);
+      setSuggestionClass(item.class_name.replace('APP_SUGGESTION_', ''));
+      setSuggestionSession(item.parsedMessage?.session || '2025-26');
+      setSuggestionExam(item.parsedMessage?.exam || '');
+      setSuggestionSubjectList(item.parsedMessage?.subjects || []);
+      setShowSuggestionModal(true);
+} else if (['APP_NOTICE', 'APP_HOLIDAY', 'APP_PTM', 'APP_DIARY', 'all'].includes(item.class_name)) {
       setNoticeTitle(item.title);
       setNoticeDate(item.parsedMessage?.date || getTodayDateString());
       setNoticeDesc(item.parsedMessage?.desc || '');
@@ -386,6 +402,51 @@ export default function Messages({
     } finally { setIsSubmitting(false); }
   };
 
+  
+  const submitSuggestion = async (e: React.FormEvent, isDraft = false) => {
+    e.preventDefault();
+    if (!suggestionClass) return alert('সব তথ্য দিন');
+    setIsSubmitting(true);
+    try {
+      const payload = { 
+        subjects: suggestionSubjectList, 
+        session: suggestionSession, 
+        exam: suggestionExam,
+        status: isDraft ? 'draft' : 'published' 
+      };
+      if (editingItem) {
+        const res = await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editingItem.id,
+            title: suggestionTitle || `Suggestion ${suggestionSession}`,
+            class_name: `APP_SUGGESTION_${suggestionClass}`,
+            message: payload,
+            sender_name: profile?.name || 'Admin'
+          })
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) {
+          throw new Error(result.message || 'সাজেশন আপডেট করতে সমস্যা হয়েছে।');
+        }
+      } else {
+        const { error } = await supabase.from('messages').insert({
+          institution_id: madrasah?.id,
+          class_name: `APP_SUGGESTION_${suggestionClass}`,
+          title: suggestionTitle || `Suggestion ${suggestionSession}`,
+          message: JSON.stringify(payload),
+          sender_name: profile?.name || 'Admin'
+        });
+        if (error) throw error;
+      }
+      sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);
+      setShowSuggestionModal(false);
+      setEditingItem(null);
+      await fetchData();
+    } finally { setIsSubmitting(false); }
+  };
+
   const submitSyllabus = async (e: React.FormEvent, isDraft = false) => {
     e.preventDefault();
     if (!syllabusClass) return alert('সব তথ্য দিন');
@@ -492,11 +553,12 @@ export default function Messages({
     m.class_name === 'all'
   );
   const syllabusList = parsedMessages.filter(m => m.class_name?.startsWith('APP_SYLLABUS_'));
+  const suggestionList = parsedMessages.filter(m => m.class_name?.startsWith('APP_SUGGESTION_'));
 
   if (!madrasah) return null;
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-500 pb-24 max-w-7xl mx-auto px-4 md:px-8 pt-6">
+    <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-500 pb-24 max-w-7xl mx-auto px-2 sm:px-4 md:px-8 pt-6">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 rounded-2xl text-white shadow-lg">
@@ -522,6 +584,9 @@ export default function Messages({
         </button>
         <button onClick={() => setActiveTab('syllabus')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'syllabus' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'text-slate-500 hover:bg-slate-50'}`}>
            <BookOpen size={18} /><span>{lang === 'bn' ? 'সিলেবাস' : 'Syllabus'}</span>
+        </button>
+        <button onClick={() => setActiveTab('suggestion')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'suggestion' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:bg-slate-50'}`}>
+           <BookOpen size={18} /><span>{lang === 'bn' ? 'সাজেশন' : 'Suggestion'}</span>
         </button>
       </div>
 
@@ -764,11 +829,77 @@ export default function Messages({
                   )}
                 </div>
               )}
+           
+              {/* === TAB 4: SUGGESTION === */}
+              {activeTab === 'suggestion' && (
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
+                       <BookOpen size={18} className="text-emerald-500" />
+                       {lang === 'bn' ? 'সাজেশন' : 'Suggestion'}
+                    </h2>
+                    <button onClick={() => { 
+                       setEditingItem(null); 
+                       setSuggestionTitle('');
+                      setSuggestionClass('');
+                      setSuggestionExam('');
+                      setSuggestionSession('2025-26');
+                      setSuggestionSubjectList([
+                        { subject: 'বাংলা', details: '' }
+                      ]);
+                      setShowSuggestionModal(true); 
+                     }} className="bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all">
+                       <Plus size={14} /> {lang === 'bn' ? 'সাজেশন যোগ করুন' : 'Add Suggestion'}
+                    </button>
+                  </div>
+
+                  {suggestionList.length > 0 ? (
+                    <div className="space-y-6">
+                      {classes.map(cls => {
+                         const clsSyllabus = suggestionList.filter(m => m.class_name === `APP_SUGGESTION_${cls.class_name}`);
+                         if(clsSyllabus.length === 0) return null;
+                         return (
+                           <div key={cls.id} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                             <div className="bg-emerald-50/50 px-4 py-3 border-b border-slate-200 font-black text-emerald-900 flex items-center gap-2">
+                               {cls.class_name}
+                             </div>
+                             <div className="divide-y divide-slate-100">
+                              {clsSyllabus.map(s => (
+                                 <SyllabusItem key={s.id} item={s} onDelete={handleDelete} onEdit={startEdit} onDownload={handleDownload} isDownloading={isDownloading === s.id} />
+                               ))}
+                             </div>
+                           </div>
+                         );
+                      })}
+                      {(() => {
+                        const matchedClassNames = classes.map(c => `APP_SUGGESTION_${c.class_name}`);
+                        const unmatched = suggestionList.filter(s => !matchedClassNames.includes(s.class_name));
+                        if (unmatched.length === 0) return null;
+                        return (
+                          <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                            <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 font-black text-slate-800 flex items-center gap-2">
+                              Other / Unknown Classes
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                              {unmatched.map(s => (
+                                 <SyllabusItem key={s.id} item={s} onDelete={handleDelete} onEdit={startEdit} onDownload={handleDownload} isDownloading={isDownloading === s.id} />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="text-center py-16 text-slate-400 font-bold">{lang === 'bn' ? 'কোনো সাজেশন নেই' : 'No suggestions found'}</div>
+                  )}
+                </div>
+              )}
            </>
          )}
       </div>
 
       {/* --- MODALS --- */}
+
       {/* 1. Message Modal (Diary) */}
       {showMsgModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] overflow-y-auto">
@@ -1440,6 +1571,206 @@ export default function Messages({
         </div>
       )}
 
+      {/* 5. Suggestion Modal */}
+      {showSuggestionModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] overflow-y-auto">
+          <div className="min-h-screen px-4 md:px-8 pt-10 pb-36 md:py-10 flex items-center justify-center">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200">
+              
+              {/* Premium Header Accent */}
+              <div className="h-2 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500"></div>
+
+              <div className="p-6 md:p-8">
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 pb-6 border-b border-slate-100">
+                  <div className="flex items-center gap-4">
+                     <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shadow-inner">
+                        <BookOpen size={28} />
+                     </div>
+                     <div>
+                        <h3 className="text-2xl font-black text-slate-800 tracking-tight">সাজেশন যোগ করুন</h3>
+                        <p className="text-slate-500 text-sm font-medium">বিভিন্ন শ্রেণীর জন্য নতুন সাজেশন তৈরি অথবা আপডেট করুন</p>
+                     </div>
+                  </div>
+                  <button onClick={() => setShowSuggestionModal(false)} className="px-5 h-11 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl text-xs font-extrabold flex items-center gap-2 border border-slate-200/60 transition-all active:scale-95">
+                     ← ফিরে যান
+                  </button>
+                </div>
+
+                <form className="space-y-6">
+                  {/* Selectors */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-3xl border border-slate-100">
+                    <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 font-bold">শ্রেণী (Class) <span className="text-red-500">*</span></label>
+                      <select 
+                        required 
+                        value={suggestionClass} 
+                        onChange={e=>setSuggestionClass(e.target.value)} 
+                        className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all font-bold text-slate-700"
+                      >
+                        <option value="">শ্রেণী নির্বাচন করুন...</option>
+                        {classes.map(c=><option key={c.id} value={c.class_name}>{c.class_name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 font-bold">পরীক্ষা (Exam) <span className="text-slate-400 font-normal">(ঐচ্ছিক)</span></label>
+                      <input 
+                        type="text"
+                        value={suggestionExam}
+                        onChange={e=>setSuggestionExam(e.target.value)}
+                        placeholder="যেমন: অর্ধবার্ষিক পরীক্ষা"
+                        className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all font-bold text-slate-700 placeholder-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2.5 font-bold">শিক্ষাবর্ষ / সেশন (Session) <span className="text-red-500">*</span></label>
+                      <select 
+                        required 
+                        value={suggestionSession} 
+                        onChange={e=>setSuggestionSession(e.target.value)} 
+                        className="w-full h-12 bg-white border border-slate-200 rounded-2xl px-4 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all font-bold text-slate-700"
+                      >
+                        <option value="2025-26">২০২৫-২৬ (2025-26)</option>
+                        <option value="2026-27">২০২৬-২৭ (2026-27)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Subject List Grid Design */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">সিলেবাসের বিষয়সমূহ এবং বিবরণ</label>
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">{suggestionSubjectList.length}টি বিষয়</span>
+                    </div>
+
+                    <div className="space-y-3.5 max-h-[360px] overflow-y-auto pr-2 custom-scrollbar">
+                      {suggestionSubjectList.map((item, idx) => {
+                        // Dynamic icons or tag themes based on subject input
+                        const subLower = item.subject.toLowerCase();
+                        let badgeStyle = "bg-emerald-50 text-emerald-600 border-emerald-100";
+                        if (subLower.includes("quran") || subLower.includes("কুরআন") || subLower.includes("কোরআন")) {
+                          badgeStyle = "bg-emerald-50 text-emerald-600 border-emerald-100";
+                        } else if (subLower.includes("arabic") || subLower.includes("আরবি")) {
+                          badgeStyle = "bg-red-50 text-red-600 border-red-100";
+                        } else if (subLower.includes("hadith") || subLower.includes("হাদিস")) {
+                          badgeStyle = "bg-blue-50 text-blue-600 border-blue-100";
+                        } else if (subLower.includes("bangla") || subLower.includes("বাংলা")) {
+                          badgeStyle = "bg-teal-50 text-teal-600 border-teal-100";
+                        } else if (subLower.includes("english") || subLower.includes("अंग्रेजी")) {
+                          badgeStyle = "bg-purple-50 text-purple-600 border-purple-100";
+                        }
+
+                        return (
+                          <div 
+                            key={idx} 
+                            className="group flex flex-col md:flex-row items-stretch gap-4 p-4 bg-white border border-slate-200 rounded-2xl hover:border-slate-300 hover:shadow-md hover:shadow-slate-100/50 transition-all duration-200"
+                          >
+                            {/* Subject Field Column */}
+                            <div className="flex-1 min-w-[200px] flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-xl border shrink-0 flex items-center justify-center transition-all ${badgeStyle}`}>
+                                <BookOpen size={18} />
+                              </div>
+                              <div className="flex-1">
+                                <label className="block text-[10px] font-bold text-slate-400 mb-1">বিষয় (Subject)</label>
+                                <input 
+                                  type="text" 
+                                  value={item.subject} 
+                                  onChange={(e) => {
+                                    const arr = [...suggestionSubjectList];
+                                    arr[idx].subject = e.target.value;
+                                    setSuggestionSubjectList(arr);
+                                  }} 
+                                  className="w-full bg-white border border-slate-100 hover:border-slate-200 focus:border-emerald-500 rounded-xl h-10 px-3 outline-none transition-all font-bold text-slate-700 text-sm" 
+                                  placeholder="যেমন: বাংলা, ইংরেজি, গণিত"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Details text input column */}
+                            <div className="flex-[2] flex flex-col justify-center">
+                              <label className="block text-[10px] font-bold text-slate-400 mb-1">পরীক্ষার সিলেবাসের বিবরণ (Syllabus Details)</label>
+                              <textarea 
+                                value={item.details} 
+                                onChange={(e) => {
+                                  const arr = [...suggestionSubjectList];
+                                  arr[idx].details = e.target.value;
+                                  setSuggestionSubjectList(arr);
+                                }} 
+                                className="w-full bg-white border border-slate-100 hover:border-slate-200 focus:border-emerald-500 rounded-xl py-2 px-3 outline-none transition-all font-semibold text-slate-600 text-sm min-h-[60px] resize-none" 
+                                placeholder="পরীক্ষার অধ্যায়, পৃষ্ঠা বা নির্দিষ্ট অংশ বিস্তারিত লিখুন..."
+                              />
+                            </div>
+
+                            {/* Delete Column */}
+                            <div className="flex items-center justify-end md:justify-center px-1">
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  if(suggestionSubjectList.length > 1) {
+                                    const arr = [...suggestionSubjectList];
+                                    arr.splice(idx, 1);
+                                    setSuggestionSubjectList(arr);
+                                  }
+                                }} 
+                                disabled={suggestionSubjectList.length <= 1}
+                                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent rounded-xl transition-all"
+                                title="Remove Subject"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setSuggestionSubjectList([...suggestionSubjectList, { subject: '', details: '' }]);
+                      }} 
+                      className="w-full mt-4 py-3.5 border-2 border-dashed border-slate-200 text-emerald-600 hover:text-emerald-700 hover:border-emerald-300 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-emerald-50/30 transition-all active:scale-99"
+                    >
+                      <Plus size={18} className="stroke-[3]" /> আরো বিষয় যোগ করুন (Add Subject)
+                    </button>
+                  </div>
+
+                  {/* Form Footer Actions */}
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-6 border-t border-slate-100 mt-8">
+                    <button 
+                      type="button" 
+                      onClick={() => setShowSuggestionModal(false)} 
+                      className="w-full sm:w-auto px-6 h-12 bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-2xl font-bold transition-all active:scale-95"
+                    >
+                      বাতিল
+                    </button>
+                    <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-3">
+                      <button 
+                        type="button" 
+                        onClick={(e) => submitSuggestion(e, true)} 
+                        disabled={isSubmitting} 
+                        className="w-full sm:w-auto px-6 h-12 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-2xl font-bold disabled:opacity-50 transition-all active:scale-95"
+                      >
+                        ড্রাফট হিসেবে সংরক্ষণ
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={(e) => submitSuggestion(e, false)} 
+                        disabled={isSubmitting} 
+                        className="w-full sm:w-auto px-8 h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black disabled:opacity-50 transition-all shadow-lg hover:shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <Send size={16} /> সাজেশন প্রকাশ করুন
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {showDeleteModal && (

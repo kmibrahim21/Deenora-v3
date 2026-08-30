@@ -273,10 +273,14 @@ export default async function handler(req, res) {
             return isForStudentClass(targetClassGroup);
           }
 
-          // 2. Syllabus type (APP_SYLLABUS_...)
+                    // 2. Syllabus type (APP_SYLLABUS_...)
           if (msgClass.startsWith('APP_SYLLABUS_')) {
             const syllabusClass = msgClass.replace('APP_SYLLABUS_', '').trim();
             return isForStudentClass(syllabusClass);
+          }
+          if (msgClass.startsWith('APP_SUGGESTION_')) {
+            const suggestionClass = msgClass.replace('APP_SUGGESTION_', '').trim();
+            return isForStudentClass(suggestionClass);
           }
 
           // 3. Routine type (APP_ROUTINE_...)

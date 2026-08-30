@@ -41,9 +41,13 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
     return s.replace(/[0-9]/g, d => bnDigits[d] || d);
   };
 
-  const rawClass = (syllabus.class_name || '').replace(/^APP_SYLLABUS_/i, '').trim();
+  const isSuggestion = (syllabus.class_name || '').toLowerCase().includes('suggestion');
+  const rawClass = (syllabus.class_name || '')
+      .replace(/^APP_SYLLABUS_/i, '')
+      .replace(/^APP_SUGGESTION_/i, '')
+      .trim();
   const className = parsed?.classGroup || parsed?.class || rawClass || 'নির্দিষ্ট শ্রেণি';
-  const examName = parsed?.exam || 'পরীক্ষার সিলেবাস ও পাঠ্যসূচি';
+  const examName = parsed?.exam || (isSuggestion ? 'পরীক্ষার সাজেশন' : 'পরীক্ষার সিলেবাস ও পাঠ্যসূচি');
   const session = parsed?.session || '২০২৫-২৬';
   const subjects: Array<{ subject: string; details: string; marks?: string; book?: string }> = Array.isArray(parsed?.subjects)
     ? parsed.subjects
@@ -113,7 +117,7 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
           <div className="w-18 shrink-0 text-right">
             <div className="inline-block p-1.5 border border-orange-300 rounded-lg bg-orange-50 text-[9px] font-black text-orange-800 text-center leading-tight">
               <span>একাডেমিক</span><br />
-              <span className="text-orange-950 font-black">সিলেবাস</span>
+              <span className="text-orange-950 font-black">{isSuggestion ? 'সাজেশন' : 'সিলেবাস'}</span>
             </div>
           </div>
         </div>
@@ -122,7 +126,7 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
         <div className="my-3 text-center">
           <div className="inline-block px-8 py-1.5 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 text-white rounded-lg shadow-sm border border-orange-700">
             <h2 className="text-sm font-black tracking-wider uppercase font-noto">
-              পাঠ্যক্রম ও পরীক্ষার সিলেবাস (SYLLABUS)
+              {isSuggestion ? 'পরীক্ষার সাজেশন (SUGGESTION)' : 'পাঠ্যক্রম ও পরীক্ষার সিলেবাস (SYLLABUS)'}
             </h2>
           </div>
         </div>
@@ -156,7 +160,7 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
               <tr className="bg-slate-900 text-white">
                 <th className="py-2.5 px-3 font-black text-center w-12 border-r border-slate-700">নং</th>
                 <th className="py-2.5 px-4 font-black w-44 border-r border-slate-700">বিষয় (Subject)</th>
-                <th className="py-2.5 px-4 font-black">নির্ধারিত পরীক্ষার সিলেবাস ও পাঠ্যক্রম</th>
+                <th className="py-2.5 px-4 font-black">{isSuggestion ? "নির্ধারিত পরীক্ষার সাজেশন" : "নির্ধারিত পরীক্ষার সিলেবাস ও পাঠ্যক্রম"}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -179,7 +183,7 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
                     </td>
                     <td className="py-2.5 px-4 text-slate-800 font-medium leading-relaxed align-top">
                       <div className="whitespace-pre-wrap leading-5 text-[11px]">
-                        {sub.details || 'সিলেবাস অন্তর্ভুক্ত করা হয়নি।'}
+                        {sub.details || (isSuggestion ? 'সাজেশন অন্তর্ভুক্ত করা হয়নি।' : 'সিলেবাস অন্তর্ভুক্ত করা হয়নি।')}
                       </div>
                     </td>
                   </tr>
@@ -203,7 +207,7 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
           </p>
           <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-700 font-medium">
             <li>পরীক্ষার সময়সূচি অনুযায়ী নির্ধারিত সময়ের ১৫ মিনিট পূর্বে পরীক্ষা কক্ষে উপস্থিত হতে হবে।</li>
-            <li>সকল শিক্ষার্থীকে নিজ নিজ সিলেবাস অনুযায়ী পড়ালেখা সম্পন্ন করার জন্য নির্দেশ দেওয়া হচ্ছে।</li>
+            <li>সকল শিক্ষার্থীকে নিজ নিজ {isSuggestion ? 'সাজেশন' : 'সিলেবাস'} অনুযায়ী পড়ালেখা সম্পন্ন করার জন্য নির্দেশ দেওয়া হচ্ছে।</li>
             <li>পরীক্ষায় সকল প্রয়োজনীয় উপকরণ (কলম, পেন্সিল, জ্যামিতি বক্স ইত্যাদি) সাথে রাখা আবশ্যক।</li>
           </ul>
         </div>
@@ -225,7 +229,7 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
           {/* Academic Incharge */}
           <div className="flex flex-col items-center justify-center">
             <div className="w-18 h-18 rounded-full border-2 border-dashed border-orange-300 flex items-center justify-center text-orange-700 text-[9px] font-bold text-center p-1 leading-tight">
-              সিলেবাস শাখা<br />অনুমোদিত সিল
+              {isSuggestion ? 'সাজেশন' : 'সিলেবাস'} শাখা<br />অনুমোদিত সিল
             </div>
           </div>
 

@@ -1798,7 +1798,7 @@ export const generateMessagePDF = async (
                 const msgClass = (messageData.class_name || '').toLowerCase();
                 let TemplateComponent = <NoticePDFTemplate madrasah={madrasah} notice={messageData} lang={lang} />;
                 
-                if (msgClass.includes('syllabus')) {
+                if (msgClass.includes('syllabus') || msgClass.includes('suggestion')) {
                     TemplateComponent = <SyllabusPDFTemplate madrasah={madrasah} syllabus={messageData} lang={lang} />;
                 } else if (msgClass.includes('diary')) {
                     TemplateComponent = <DiaryPDFTemplate madrasah={madrasah} diary={messageData} lang={lang} />;
@@ -1856,7 +1856,7 @@ export const generateMessagePDF = async (
         }
         
         onProgress?.(98);
-        const fileName = (messageData.class_name || '').toLowerCase().includes('syllabus') ? 'Syllabus' : 
+        const fileName = (messageData.class_name || '').toLowerCase().includes('suggestion') ? 'Suggestion' : (messageData.class_name || '').toLowerCase().includes('syllabus') ? 'Syllabus' : 
                          (messageData.class_name || '').toLowerCase().includes('diary') ? 'Diary' : 'Notice';
         doc.save(`${fileName}_${new Date().getTime()}.pdf`);
     } catch (error: any) {
