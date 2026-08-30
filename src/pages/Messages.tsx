@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Pencil,
   Copy,
+  Download,
   AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,11 +26,12 @@ import { Institution, Language } from '../types';
 import { OfflineService } from '../services/OfflineService';
 import { getTodayDateString } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
+import { generateMessagePDF } from '../utils/pdfGenerator';
 
 import { requestManager } from 'services/RequestManager';
 
 // Sub-components
-const SyllabusItem = ({ item, onDelete, onEdit }: { item: any, onDelete: (id: string) => void, onEdit: (item: any) => void }) => {
+const SyllabusItem = ({ item, onDelete, onEdit, onDownload, isDownloading }: { item: any, onDelete: (id: string) => void, onEdit: (item: any) => void, onDownload: (item: any) => void, isDownloading: boolean }) => {
   const subjects = item.parsedMessage?.subjects || [];
   return (
     <div className="p-3 group hover:bg-slate-50 transition-colors">
@@ -46,6 +48,9 @@ const SyllabusItem = ({ item, onDelete, onEdit }: { item: any, onDelete: (id: st
         <div className="flex items-center gap-2 shrink-0">
           {item.parsedMessage?.status === 'draft' && <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold shrink-0">ড্রাফট</span>}
           <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => onDownload(item)} disabled={isDownloading} className="p-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-lg shadow-sm transition-all shrink-0 disabled:opacity-50" title="Download">
+              {isDownloading ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+            </button>
             <button onClick={() => onEdit(item)} className="p-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-lg shadow-sm transition-all shrink-0" title="Edit">
               <Pencil size={12} />
             </button>
@@ -103,6 +108,19 @@ export default function Messages({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
+
+  const handleDownload = async (msg: any) => {
+    setIsDownloading(msg.id);
+    try {
+      await generateMessagePDF(madrasah, msg, lang);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert(lang === 'bn' ? 'পিডিএফ তৈরি করতে সমস্যা হয়েছে' : 'Failed to generate PDF');
+    } finally {
+      setIsDownloading(null);
+    }
+  };
 
   // Form states - Message
   const [selectedClass, setSelectedClass] = useState('');
@@ -564,6 +582,9 @@ export default function Messages({
                                 </div>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                <button onClick={() => handleDownload(msg)} disabled={isDownloading === msg.id} className="p-1.5 sm:p-2 bg-purple-50 text-purple-600 border border-purple-100 hover:bg-purple-600 hover:text-white rounded-xl transition-all shadow-sm shrink-0 disabled:opacity-50" title="Download">
+                                  {isDownloading === msg.id ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                                </button>
                                 <button onClick={() => handleDuplicateDiary(msg)} className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm shrink-0" title="Duplicate Diary">
                                   <Copy size={12} />
                                 </button>
@@ -651,6 +672,9 @@ export default function Messages({
                                  )}
                                </div>
                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => handleDownload(msg)} disabled={isDownloading === msg.id} className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-xl shadow-sm transition-all shrink-0 disabled:opacity-50" title="Download">
+                                     {isDownloading === msg.id ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                                  </button>
                                   <button onClick={() => startEdit(msg)} className="p-1.5 sm:p-2 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white rounded-xl shadow-sm transition-all shrink-0" title="Edit">
                                      <Pencil size={12} />
                                   </button>
@@ -709,7 +733,7 @@ export default function Messages({
                              </div>
                              <div className="divide-y divide-slate-100">
                               {clsSyllabus.map(s => (
-                                 <SyllabusItem key={s.id} item={s} onDelete={handleDelete} onEdit={startEdit} />
+                                 <SyllabusItem key={s.id} item={s} onDelete={handleDelete} onEdit={startEdit} onDownload={handleDownload} isDownloading={isDownloading === s.id} />
                                ))}
                              </div>
                            </div>
@@ -728,7 +752,7 @@ export default function Messages({
                             </div>
                             <div className="divide-y divide-slate-100">
                               {unmatched.map(s => (
-                                 <SyllabusItem key={s.id} item={s} onDelete={handleDelete} onEdit={startEdit} />
+                                 <SyllabusItem key={s.id} item={s} onDelete={handleDelete} onEdit={startEdit} onDownload={handleDownload} isDownloading={isDownloading === s.id} />
                               ))}
                             </div>
                           </div>

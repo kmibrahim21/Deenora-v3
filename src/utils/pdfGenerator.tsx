@@ -19,6 +19,9 @@ import { ExamRoutinePDFTemplate } from '../components/pdf/ExamRoutinePDFTemplate
 import { StudentListTemplate } from '../components/pdf/StudentListTemplate';
 import { SystemPaymentReportTemplate } from '../components/pdf/SystemPaymentReportTemplate';
 import { SubscriptionMatrixTemplate } from '../components/pdf/SubscriptionMatrixTemplate';
+import { NoticePDFTemplate } from '../components/pdf/NoticePDFTemplate';
+import { SyllabusPDFTemplate } from '../components/pdf/SyllabusPDFTemplate';
+import { DiaryPDFTemplate } from '../components/pdf/DiaryPDFTemplate';
 import { solaimanLipiBase64 } from './fonts';
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
@@ -1759,6 +1762,105 @@ export const generateSubscriptionMatrixPDF = async (
         doc.save(`Deenora_Subscription_Matrix_${year}.pdf`);
     } catch (error: any) {
         console.error("Error in generateSubscriptionMatrixPDF:", error);
+        throw error;
+    } finally {
+        try {
+            root.unmount();
+        } catch (unmountErr) {
+            console.error("Root unmount failed:", unmountErr);
+        }
+        if (container.parentNode) {
+            document.body.removeChild(container);
+        }
+        onProgress?.(100);
+    }
+};
+
+export const generateMessagePDF = async (
+  madrasah: Institution | null,
+  messageData: any,
+  lang: 'en' | 'bn' = 'bn',
+  onProgress?: (progress: number) => void
+) => {
+    onProgress?.(10);
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.top = '-9999px';
+    container.style.left = '-9999px';
+    container.style.width = '794px'; 
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    
+    try {
+        await new Promise<void>((resolve, reject) => {
+            try {
+                // Determine template based on class_name
+                const msgClass = (messageData.class_name || '').toLowerCase();
+                let TemplateComponent = <NoticePDFTemplate madrasah={madrasah} notice={messageData} lang={lang} />;
+                
+                if (msgClass.includes('syllabus')) {
+                    TemplateComponent = <SyllabusPDFTemplate madrasah={madrasah} syllabus={messageData} lang={lang} />;
+                } else if (msgClass.includes('diary')) {
+                    TemplateComponent = <DiaryPDFTemplate madrasah={madrasah} diary={messageData} lang={lang} />;
+                }
+
+                root.render(
+                    <div id="pdf-wrapper">
+                        {TemplateComponent}
+                    </div>
+                );
+                setTimeout(resolve, 1000); 
+            } catch (e) {
+                reject(e);
+            }
+        });
+        onProgress?.(40);
+
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        
+        const wrapper = container.querySelector('#pdf-wrapper');
+        if (wrapper && wrapper.children.length > 0) {
+            const pages = Array.from(wrapper.children);
+            for (let i = 0; i < pages.length; i++) {
+                try {
+                    const imgData = await toPng(pages[i] as HTMLElement, {
+                        pixelRatio: 1.5,
+                        backgroundColor: '#ffffff',
+                        width: 794,
+                        height: 1123,
+                        skipFonts: true,
+                        fontEmbedCSS: '',
+                    });
+                    if (i > 0) doc.addPage();
+                    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                    onProgress?.(40 + Math.floor(((i + 1) / pages.length) * 50));
+                } catch (pngErr) {
+                    console.error(`toPng failed on page ${i}:`, pngErr);
+                    // Fallback using toJpeg
+                    const imgData = await toJpeg(pages[i] as HTMLElement, {
+                        pixelRatio: 1.5,
+                        backgroundColor: '#ffffff',
+                        width: 794,
+                        height: 1123,
+                        skipFonts: true,
+                        fontEmbedCSS: '',
+                    });
+                    if (i > 0) doc.addPage();
+                    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                }
+            }
+        } else {
+            throw new Error("Render wrapper not found or has no child pages.");
+        }
+        
+        onProgress?.(98);
+        const fileName = (messageData.class_name || '').toLowerCase().includes('syllabus') ? 'Syllabus' : 
+                         (messageData.class_name || '').toLowerCase().includes('diary') ? 'Diary' : 'Notice';
+        doc.save(`${fileName}_${new Date().getTime()}.pdf`);
+    } catch (error: any) {
+        console.error("Error in generateMessagePDF:", error);
         throw error;
     } finally {
         try {
