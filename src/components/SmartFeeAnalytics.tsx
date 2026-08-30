@@ -136,6 +136,9 @@ const parseMonthsFromDesc = (desc: string, transactionDate: string, defaultYear:
 };
 
 const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, lang, month: initialMonth, refreshKey, classes = [], madrasah, role, profile, activeYear }) => {
+  const isTeacher = role === 'teacher';
+  const canViewReports = !isTeacher || !!profile?.permissions?.can_view_reports;
+
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [breakdown, setBreakdown] = useState<BreakdownEntry[]>([]);
@@ -835,6 +838,22 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       setStatusModal({ show: true, type: 'error', title: lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Error', message: lang === 'bn' ? 'পিডিএফ তৈরি করতে সমস্যা হয়েছে' : 'Failed to generate PDF' });
     }
   };
+
+  if (!canViewReports) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        <AlertCircle size={44} className="text-amber-500 mb-3" />
+        <h3 className="text-base font-bold text-slate-800 dark:text-white">
+          {lang === 'bn' ? 'রিপোর্ট দেখার অনুমতি নেই' : 'No Permission to View Reports'}
+        </h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          {lang === 'bn' 
+            ? 'আপনার অ্যাকাউন্টে হিসাব রিপোর্ট দেখার অনুমতি দেওয়া নেই। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।' 
+            : 'You do not have permission to view accounting reports. Please contact the administrator.'}
+        </p>
+      </div>
+    );
+  }
 
   if (loading) return (
     <div className="flex justify-center py-10">

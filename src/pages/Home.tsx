@@ -42,6 +42,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
   const canManageAttendance = isAdmin || !!profile?.permissions?.can_manage_attendance;
   const canManageAccounting = isAdmin || !!profile?.permissions?.can_manage_accounting;
   const canManageExams = isAdmin || !!profile?.permissions?.can_manage_exams || !!profile?.permissions?.can_manage_results;
+  const canViewReports = isAdmin || role === 'accountant' || !!profile?.permissions?.can_view_reports;
   
   const [stats, setStats] = useState({
     totalStudents: 0,
@@ -341,14 +342,14 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
              <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'আজকের হাজিরা' : "Today's Attendance"}</p>
           </button>
         )}
-        {canManageAccounting && modules.modules.accounting && (
+        {canManageAccounting && canViewReports && modules.modules.accounting && (
           <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-225 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-emerald-600'}`}>{loadingStats ? '...' : stats.totalIncome.toLocaleString()}</h4>
              <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'চলতি মাসের আয়' : 'Current Month Income'}</p>
           </button>
         )}
-        {canManageAccounting && modules.modules.accounting && (
+        {canManageAccounting && canViewReports && modules.modules.accounting && (
           <button onClick={onNavigateToAccounting} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-250 active:scale-95 transition-all border`}>
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" style={{ transform: 'rotate(180deg)' }} /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-red-600'}`}>{loadingStats ? '...' : stats.totalExpense.toLocaleString()}</h4>
@@ -360,7 +361,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
       {institutionId && (
         <div className="space-y-10 lg:space-y-12">
           {/* Accounting Section */}
-          {canManageAccounting && modules.modules.accounting && (
+          {canManageAccounting && canViewReports && modules.modules.accounting && (
             <div className="px-1 space-y-4">
                <div className="flex items-center gap-3 px-3">
                   <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>

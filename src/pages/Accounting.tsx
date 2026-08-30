@@ -25,7 +25,14 @@ interface AccountingProps {
 }
 
 const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, profile, activeYear, triggerRefresh }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'automation' | 'fees' | 'sms' | 'summary' | 'structures' | 'add-ledger'>(() => (localStorage.getItem('accounting_activeTab') as any) || 'fees');
+  const isTeacher = role === 'teacher';
+  const canViewReports = !isTeacher || !!profile?.permissions?.can_view_reports;
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'automation' | 'fees' | 'sms' | 'summary' | 'structures' | 'add-ledger'>(() => {
+    const saved = localStorage.getItem('accounting_activeTab');
+    if (saved === 'summary' && !canViewReports) return 'fees';
+    return (saved as any) || 'fees';
+  });
   const [isAdding, setIsAdding] = useState(false);
   const [entryType, setEntryType] = useState<'income' | 'expense'>('income');
   const [amount, setAmount] = useState('');
@@ -98,6 +105,12 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
       return `${enMonths[monthIdx]} ${year}`;
     }
   };
+
+  useEffect(() => {
+    if (!canViewReports && activeTab === 'summary') {
+      setActiveTab('fees');
+    }
+  }, [canViewReports, activeTab]);
 
   useEffect(() => {
     localStorage.setItem('accounting_activeTab', activeTab);
@@ -617,13 +630,15 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
             >
               <RefreshCw size={16}/>
             </button>
-            <button 
-              onClick={() => setActiveTab('summary')} 
-              className={`px-4 h-10 rounded-2xl shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all text-xs font-black uppercase tracking-widest border ${activeTab === 'summary' ? (isDark ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-blue-100') : (isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-600 border-slate-200')}`}
-            >
-              <BarChart3 size={18}/>
-              <span className="hidden sm:inline">{lang === 'bn' ? 'ড্যাশবোর্ড' : 'Dashboard'}</span>
-            </button>
+            {canViewReports && (
+              <button 
+                onClick={() => setActiveTab('summary')} 
+                className={`px-4 h-10 rounded-2xl shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-all text-xs font-black uppercase tracking-widest border ${activeTab === 'summary' ? (isDark ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-[#2563EB] border-blue-100') : (isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-600 border-slate-200')}`}
+              >
+                <BarChart3 size={18}/>
+                <span className="hidden sm:inline">{lang === 'bn' ? 'ড্যাশবোর্ড' : 'Dashboard'}</span>
+              </button>
+            )}
         </div>
       </div>
 
@@ -689,7 +704,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
           </div>
 
           
-          <div className={activeTab === 'summary' ? 'block' : 'hidden'}>
+          <div className={activeTab === 'summary' && canViewReports ? 'block' : 'hidden'}>
         <div className="space-y-6 animate-in slide-in-from-bottom-5">
           <div className={`rounded-[2.5rem] p-1 border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white/40 border-white/20'}`}>
             {madrasah && (

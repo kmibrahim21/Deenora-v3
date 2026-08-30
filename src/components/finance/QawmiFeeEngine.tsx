@@ -31,6 +31,8 @@ export const clearGlobalQawmiFeeCache = () => {
 };
 
 export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey, triggerRefresh }) => {
+  const isTeacher = role === 'teacher';
+  const canViewReports = !isTeacher || !!profile?.permissions?.can_view_reports;
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
 
   const activeYearId = React.useMemo(() => {
@@ -888,17 +890,19 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
                </div>
 
                {/* Download Report Button */}
-               <button 
-                  onClick={() => {
-                      setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadClassReport(l));
-                      setShowDownloadLangModal(true);
-                  }}
-                  disabled={feesReport.length === 0}
-                  className={`h-11 px-6 rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none ${madrasah.theme === 'dark' ? 'bg-emerald-600 text-white shadow-emerald-900/20' : 'bg-emerald-500 text-white shadow-emerald-200'}`}
-               >
-                  <Download size={16} />
-                  রিপোর্ট ডাউনলোড
-               </button>
+               {canViewReports && (
+                 <button 
+                    onClick={() => {
+                        setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadClassReport(l));
+                        setShowDownloadLangModal(true);
+                    }}
+                    disabled={feesReport.length === 0}
+                    className={`h-11 px-6 rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none ${madrasah.theme === 'dark' ? 'bg-emerald-600 text-white shadow-emerald-900/20' : 'bg-emerald-500 text-white shadow-emerald-200'}`}
+                 >
+                    <Download size={16} />
+                    {lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report'}
+                 </button>
+               )}
             </div>
          </div>
 

@@ -2019,8 +2019,9 @@ const TeacherManagement: React.FC<TeacherManagementProps> = ({
                       },
                       {
                         key: "can_view_reports",
-                        label: lang === "bn" ? "রিপোর্ট দেখা" : "View Reports",
+                        label: lang === "bn" ? "হিসাব রিপোর্ট দেখা" : "View Financial Reports",
                         icon: <TrendingUp size={14} />,
+                        module: "accounting",
                       },
                     ].filter((perm: any) => {
                       if (role === 'super_admin') return true;

@@ -32,6 +32,8 @@ export const clearGlobalSchoolFeeCache = () => {
 
 export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, madrasah, lang, classes: initialClasses, onStudentClick, role, profile, activeYear, refreshKey, triggerRefresh }) => {
   const isDark = madrasah.theme === 'dark';
+  const isTeacher = role === 'teacher';
+  const canViewReports = !isTeacher || !!profile?.permissions?.can_view_reports;
   const [classes, setClasses] = useState<Class[]>(initialClasses || []);
 
   const institutionPossessiveBn = React.useMemo(() => {
@@ -885,17 +887,19 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
                </div>
 
                {/* Download Report Button */}
-               <button 
-                  onClick={() => {
-                      setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadClassReport(l));
-                      setShowDownloadLangModal(true);
-                  }}
-                  disabled={feesReport.length === 0}
-                  className={`h-11 px-6 rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none ${isDark ? 'bg-emerald-500/20 text-emerald-400 shadow-emerald-900/20' : 'bg-emerald-500 text-white shadow-emerald-200'}`}
-               >
-                  <Download size={16} />
-                  রিপোর্ট ডাউনলোড
-               </button>
+               {canViewReports && (
+                 <button 
+                    onClick={() => {
+                        setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadClassReport(l));
+                        setShowDownloadLangModal(true);
+                    }}
+                    disabled={feesReport.length === 0}
+                    className={`h-11 px-6 rounded-xl text-[11px] font-black uppercase flex items-center gap-2 active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:shadow-none ${isDark ? 'bg-emerald-500/20 text-emerald-400 shadow-emerald-900/20' : 'bg-emerald-500 text-white shadow-emerald-200'}`}
+                 >
+                    <Download size={16} />
+                    {lang === 'bn' ? 'রিপোর্ট ডাউনলোড' : 'Download Report'}
+                 </button>
+               )}
             </div>
          </div>
 
