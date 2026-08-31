@@ -143,7 +143,8 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
               </div>
               <span className="text-[10px] font-black text-[#8D30F4] uppercase tracking-widest">
                 {(() => {
-                  const info = getSmsLengthInfo(message);
+                  const previewMsg = madrasah ? ShortcodeService.getPreviewMessage(message, madrasah.name) : message;
+                  const info = getSmsLengthInfo(previewMsg);
                   return `${info.isBangla ? 'BN' : 'EN'} | ${info.length}/${info.maxAllowed} (${info.parts} SMS)`;
                 })()}
               </span>
@@ -189,7 +190,7 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
           </div>
 
           {status === 'error' && <div className="bg-red-50 p-3 rounded-xl flex items-center gap-2 text-red-500 text-[10px] font-black border border-red-100 animate-in slide-in-from-top-2"><AlertCircle size={14} className="shrink-0" /> {errorMsg}</div>}
-          <button onClick={handleSend} disabled={sending || !message.trim() || getSmsLengthInfo(message).parts > 7} className="w-full py-4 premium-btn text-white font-black rounded-2xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3 text-sm uppercase tracking-widest">{sending ? <Loader2 className="animate-spin" size={20} /> : 'বার্তা পাঠান'}</button>
+          <button onClick={handleSend} disabled={sending || !message.trim() || (madrasah ? getSmsLengthInfo(ShortcodeService.getPreviewMessage(message, madrasah.name)) : getSmsLengthInfo(message)).parts > 7} className="w-full py-4 premium-btn text-white font-black rounded-2xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3 text-sm uppercase tracking-widest">{sending ? <Loader2 className="animate-spin" size={20} /> : 'বার্তা পাঠান'}</button>
         </div>
       </div>
     </div>

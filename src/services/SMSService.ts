@@ -126,14 +126,15 @@ export const SMSService = {
       personalizedMessages = students.map(s => {
         const fetchedData = shortcodeData.find(d => d.id === s.id) || { student_name: s.student_name, guardian_phone: s.guardian_phone };
         const data = { ...fetchedData, ...s };
-        const text = ShortcodeService.replaceShortcodes(message, data);
+        const text = ShortcodeService.replaceShortcodes(message, data).trim();
         const { parts } = getSmsLengthInfo(text);
         return { studentId: s.id, phone: s.guardian_phone, text, parts };
       });
 
       totalSmsNeeded = personalizedMessages.reduce((sum, m) => sum + m.parts, 0);
     } else {
-      const { parts } = getSmsLengthInfo(message);
+      const cleanMessage = (message || '').trim();
+      const { parts } = getSmsLengthInfo(cleanMessage);
       if (parts > 7) throw new Error("SMS length exceeds the maximum limit of 7 parts.");
       totalSmsNeeded = students.length * parts;
     }
@@ -150,7 +151,8 @@ export const SMSService = {
         for (let i = 0; i < m.parts; i++) studentIdsForRpc.push(m.studentId);
       });
     } else {
-      const { parts } = getSmsLengthInfo(message);
+      const cleanMessage = (message || '').trim();
+      const { parts } = getSmsLengthInfo(cleanMessage);
       for (let i = 0; i < parts; i++) {
         studentIdsForRpc.push(...students.map(s => s.id));
       }
@@ -159,7 +161,7 @@ export const SMSService = {
     const { data: rpcData, error: rpcError } = await supabase.rpc('send_bulk_sms_rpc', {
       p_institution_id: institutionId,
       p_student_ids: studentIdsForRpc,
-      p_message: message
+      p_message: (message || '').trim()
     });
 
     if (rpcError) {

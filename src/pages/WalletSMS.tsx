@@ -7,6 +7,7 @@ import { SMSTemplate, Language, Institution, Class, Student, Transaction, Profil
 import { t } from 'translations';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { getSmsLengthInfo } from 'utils/smsUtils';
+import { ShortcodeService } from 'services/ShortcodeService';
 import { useOfflineStatus } from 'hooks/useOffline';
 import VoiceBroadcast from './VoiceBroadcast';
 import PaymentCheckout from '../components/PaymentCheckout';
@@ -340,11 +341,14 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         throw new Error('Permission denied for this institution');
       }
 
+      // Normalize line endings to avoid double-char issues from CRLF in different browsers/OS
+      const cleanBody = tempBody.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
       if (editingId) {
-        const { error } = await supabase.from('sms_templates').update({ title: tempTitle, body: tempBody }).eq('id', editingId);
+        const { error } = await supabase.from('sms_templates').update({ title: tempTitle, body: cleanBody }).eq('id', editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('sms_templates').insert({ institution_id: madrasah.id, title: tempTitle, body: tempBody });
+        const { error } = await supabase.from('sms_templates').insert({ institution_id: madrasah.id, title: tempTitle, body: cleanBody });
         if (error) throw error;
       }
       
@@ -357,7 +361,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
              ...((madrasah.config_json as any)?.features || {}),
              sms_templates: {
                ...((madrasah.config_json as any)?.features?.sms_templates || {}),
-               [tempSystemEvent]: tempBody
+               [tempSystemEvent]: cleanBody
              }
            }
          };
@@ -870,7 +874,8 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       }} />
                       <div className="absolute bottom-4 right-5 bg-white px-2 py-0.5 rounded-lg border border-slate-100 shadow-sm flex gap-2">
                          {(() => {
-                            const info = getSmsLengthInfo(bulkMessage);
+                            const previewMsg = madrasah ? ShortcodeService.getPreviewMessage(bulkMessage, madrasah.name) : bulkMessage;
+                            const info = getSmsLengthInfo(previewMsg);
                             return (
                               <>
                                 <span className="text-[10px] font-black text-slate-400">{info.isBangla ? 'Bangla' : 'English'}</span>
@@ -885,7 +890,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                   <div className="grid grid-cols-1 gap-3 mt-auto">
                     <button 
                       onClick={handleSendBulk} 
-                      disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && (!selectedClassId || classStudents.length === 0)) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'all_institutions' && allInstitutions.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || getSmsLengthInfo(bulkMessage).parts > 7} 
+                      disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && (!selectedClassId || classStudents.length === 0)) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'all_institutions' && allInstitutions.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || (madrasah ? getSmsLengthInfo(ShortcodeService.getPreviewMessage(bulkMessage, madrasah.name)) : getSmsLengthInfo(bulkMessage)).parts > 7} 
                       className="w-full h-[64px] bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg disabled:opacity-40 active:scale-95 transition-all"
                     >
                       {sendingBulk ? <Loader2 className="animate-spin" size={24} /> : bulkSuccess ? (lang === 'bn' ? 'সফল!' : 'Success!') : (
@@ -898,7 +903,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       )}
                     </button>
                     
-                    <button onClick={handleSendFreeBulk} disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && classStudents.length === 0) || (targetType === 'teachers' && teachers.length === 0) || getSmsLengthInfo(bulkMessage).parts > 7} className="w-full h-[54px] bg-slate-800 text-white font-black rounded-full shadow-lg flex items-center justify-center gap-3 text-sm disabled:opacity-40 active:scale-95 transition-all">
+                    <button onClick={handleSendFreeBulk} disabled={sendingBulk || !bulkMessage.trim() || (targetType === 'class' && classStudents.length === 0) || (targetType === 'teachers' && teachers.length === 0) || (madrasah ? getSmsLengthInfo(ShortcodeService.getPreviewMessage(bulkMessage, madrasah.name)) : getSmsLengthInfo(bulkMessage)).parts > 7} className="w-full h-[54px] bg-slate-800 text-white font-black rounded-full shadow-lg flex items-center justify-center gap-3 text-sm disabled:opacity-40 active:scale-95 transition-all">
                       <Smartphone size={20} /> {t('free_sms_sim', lang)}
                     </button>
                   </div>
@@ -1186,7 +1191,8 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                     <textarea className="w-full h-32 bg-slate-50 border-2 border-slate-100 rounded-[1.8rem] px-6 py-4 font-bold text-slate-600 font-noto outline-none focus:border-[#8D30F4]/30 resize-none" placeholder={t('sms', lang) + "..."} value={tempBody} onChange={(e) => setTempBody(e.target.value)} />
                     <div className="absolute bottom-4 right-5 bg-white px-2 py-0.5 rounded-lg border border-slate-100 shadow-sm flex gap-2">
                        {(() => {
-                          const info = getSmsLengthInfo(tempBody);
+                          const previewMsg = madrasah ? ShortcodeService.getPreviewMessage(tempBody, madrasah.name) : tempBody;
+                          const info = getSmsLengthInfo(previewMsg);
                           return (
                             <>
                               <span className="text-[10px] font-black text-slate-400">{info.isBangla ? 'Bangla' : 'English'}</span>
@@ -1196,7 +1202,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                        })()}
                     </div>
                  </div>
-                 <button onClick={handleSaveTemplate} disabled={isSaving || !tempTitle || !tempBody || getSmsLengthInfo(tempBody).parts > 7} className="w-full h-16 premium-btn text-white font-black rounded-full shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all text-lg">
+                 <button onClick={handleSaveTemplate} disabled={isSaving || !tempTitle || !tempBody || (madrasah ? getSmsLengthInfo(ShortcodeService.getPreviewMessage(tempBody, madrasah.name)) : getSmsLengthInfo(tempBody)).parts > 7} className="w-full h-16 premium-btn text-white font-black rounded-full shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all text-lg">
                     {isSaving ? <Loader2 className="animate-spin" size={24} /> : <><Save size={24} /> {editingId ? t('edit', lang) : t('save', lang)}</>}
                  </button>
               </div>

@@ -39,6 +39,27 @@ export const ShortcodeService = {
   /**
    * Replaces shortcodes in a message with student-specific data.
    */
+  getPreviewMessage: (message: string, madrasahName: string): string => {
+    if (!message) return '';
+    const dummyData = {
+      student_name: 'মোহাম্মদ আব্দুল্লাহ',
+      teacher_name: 'আব্দুর রহমান',
+      guardian_name: 'আব্দুল করিম',
+      class_name: 'প্রথম শ্রেণি',
+      roll: '১২',
+      due_amount: 500,
+      paid_amount: 500,
+      result_grade: 'A+',
+      result_gpa: '5.00',
+      merit_position: '১ম',
+      exam_name: 'প্রথম সাময়িক',
+      exam_subject: 'বাংলা',
+      attendance_percentage: 95,
+      institution_name: madrasahName
+    };
+    return ShortcodeService.replaceShortcodes(message, dummyData);
+  },
+
   replaceShortcodes: (message: string, data: any): string => {
     if (!message) return '';
 

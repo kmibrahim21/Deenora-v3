@@ -7,8 +7,10 @@ export const normalizePhone = (phone: string | undefined | null): string => {
 };
 
 export const getSmsLengthInfo = (message: string) => {
-  const isBangla = /[^\x00-\x7F]/.test(message);
-  const len = message.length;
+  // Normalize CRLF (\r\n) and CR (\r) to standard LF (\n) line endings
+  const normalized = (message || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const isBangla = /[^\x00-\x7F]/.test(normalized);
+  const len = normalized.length;
   
   if (len === 0) return { parts: 0, length: 0, maxAllowed: isBangla ? 70 : 160, isBangla };
 
