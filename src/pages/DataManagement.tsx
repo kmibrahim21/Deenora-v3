@@ -27,6 +27,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
+  const [skippedDetails, setSkippedDetails] = useState<Array<{ row: number; name: string; class: string; reason: string }>>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -312,6 +313,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
     setLoading(true);
     setStatus({ type: 'idle', message: '' });
     setProgress(0);
+    setSkippedDetails([]);
 
     try {
       const reader = new FileReader();
@@ -357,6 +359,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
 
           let successCount = 0;
           let skippedCount = 0;
+          const localSkipped: Array<{ row: number; name: string; class: string; reason: string }> = [];
 
           for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -373,8 +376,27 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
             const dob = excelDateToISO(row.J);
             const nameEn = String(row.K || '').trim();
 
+            // Skip entirely empty row without counting or reporting as a skip
+            if (!studentName && !phone && !className) {
+              setProgress(Math.round(((i + 1) / total) * 100));
+              continue;
+            }
+
             if (!studentName || !phone || !className) {
               skippedCount++;
+              const missing = [];
+              if (!className) missing.push(lang === 'bn' ? 'ক্লাস' : 'Class');
+              if (!studentName) missing.push(lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name');
+              if (!phone) missing.push(lang === 'bn' ? 'মোবাইল নম্বর' : 'Mobile Number');
+              localSkipped.push({
+                row: i + 2,
+                name: studentName || (lang === 'bn' ? 'অজানা শিক্ষার্থী' : 'Unknown Student'),
+                class: className || (lang === 'bn' ? 'অজানা' : 'Unknown'),
+                reason: lang === 'bn' 
+                  ? `প্রয়োজনীয় তথ্য (${missing.join(', ')}) পাওয়া যায়নি` 
+                  : `Required info (${missing.join(', ')}) is missing`
+              });
+              setProgress(Math.round(((i + 1) / total) * 100));
               continue;
             }
 
@@ -396,6 +418,13 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 .single();
               if (classError) {
                 skippedCount++;
+                localSkipped.push({
+                  row: i + 2,
+                  name: studentName,
+                  class: className,
+                  reason: lang === 'bn' ? 'শ্রেণি তৈরি করতে ব্যর্থ হয়েছে' : 'Failed to create class'
+                });
+                setProgress(Math.round(((i + 1) / total) * 100));
                 continue;
               }
               classId = newClass.id;
@@ -419,6 +448,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
 
             if (existingStudent) {
               skippedCount++;
+              localSkipped.push({
+                row: i + 2,
+                name: studentName,
+                class: className,
+                reason: lang === 'bn' ? 'এই শ্রেণিতে একই নাম ও রোলের শিক্ষার্থী ইতিমধ্যে আছে' : 'Student with same name and roll already exists in this class'
+              });
               setProgress(Math.round(((i + 1) / total) * 100));
               continue;
             }
@@ -449,13 +484,21 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
               successCount++;
             } else {
               skippedCount++;
+              localSkipped.push({
+                row: i + 2,
+                name: studentName,
+                class: className,
+                reason: lang === 'bn' ? `ডাটাবেজ ত্রুটি: ${studentError.message}` : `Database error: ${studentError.message}`
+              });
             }
             setProgress(Math.round(((i + 1) / total) * 100));
           }
 
+          setSkippedDetails(localSkipped);
+
           const msg = lang === 'bn' 
-            ? `${successCount} জন শিক্ষার্থী আপলোড হয়েছে, ${skippedCount} জন ইতিমধ্যে ছিল বা ত্রুটির কারণে বাদ পড়েছে।` 
-            : `${successCount} students imported, ${skippedCount} skipped (already exists or error).`;
+            ? `${successCount} জন শিক্ষার্থী আপলোড হয়েছে, ${skippedCount} জন বাদ পড়েছে।` 
+            : `${successCount} students imported, ${skippedCount} skipped.`;
 
           setStatus({ 
             type: 'success', 
@@ -538,6 +581,64 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
         <div className={`p-6 rounded-3xl border-2 flex items-center gap-4 animate-in slide-in-from-top-4 ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
            {status.type === 'success' ? <CheckCircle2 size={30} /> : <AlertTriangle size={30} />}
            <p className="font-black text-sm">{status.message}</p>
+        </div>
+      )}
+
+      {skippedDetails.length > 0 && (
+        <div className={`p-6 md:p-8 rounded-3xl border-2 animate-in slide-in-from-top-4 ${isDark ? 'bg-slate-800 border-amber-500/20 text-slate-100' : 'bg-amber-50/50 border-amber-200 text-slate-800'} space-y-4`}>
+          <div className="flex items-start gap-4">
+            <AlertTriangle className="text-amber-500 flex-shrink-0 mt-1" size={28} />
+            <div>
+              <h4 className="font-black text-lg font-noto">
+                {lang === 'bn' ? 'বাদ পড়া শিক্ষার্থীদের তালিকা ও কারণ' : 'Skipped Students List & Reasons'}
+              </h4>
+              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
+                {lang === 'bn' 
+                  ? 'নিচের শিক্ষার্থীদের ডাটাবেজে যুক্ত করা যায়নি। অনুগ্রহ করে কারণগুলো দেখে এক্সেল ফাইলটি সংশোধন করুন এবং পুনরায় আপলোড করুন।' 
+                  : 'The following students could not be added. Please review the reasons, correct your Excel file, and upload again.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50">
+            <table className="w-full text-left border-collapse font-noto min-w-[500px]">
+              <thead>
+                <tr className={`${isDark ? 'bg-slate-900/40' : 'bg-slate-100/50'} border-b border-slate-200 dark:border-slate-700`}>
+                  <th className="py-3 px-4 text-xs font-black uppercase tracking-wider text-center w-24">
+                    {lang === 'bn' ? 'এক্সেল রো' : 'Excel Row'}
+                  </th>
+                  <th className="py-3 px-4 text-xs font-black uppercase tracking-wider">
+                    {lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name'}
+                  </th>
+                  <th className="py-3 px-4 text-xs font-black uppercase tracking-wider">
+                    {lang === 'bn' ? 'শ্রেণি' : 'Class'}
+                  </th>
+                  <th className="py-3 px-4 text-xs font-black uppercase tracking-wider text-red-500 dark:text-red-400">
+                    {lang === 'bn' ? 'বাদ পড়ার কারণ' : 'Reason for Skipping'}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {skippedDetails.map((student, idx) => (
+                  <tr key={idx} className="hover:bg-slate-500/5 transition-colors">
+                    <td className="py-3 px-4 font-black text-center text-slate-400">
+                      {lang === 'bn' ? `রো ${student.row}` : `Row ${student.row}`}
+                    </td>
+                    <td className="py-3 px-4 font-bold">
+                      {student.name}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-slate-500 dark:text-slate-400">
+                      {student.class}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                      {student.reason}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
