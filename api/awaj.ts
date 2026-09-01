@@ -347,8 +347,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // BROADCAST
     if (action === 'broadcast' || action === 'broadcasts') {
       if (req.method === 'POST') {
-        const endpoint = subAction === 'direct' ? '/broadcasts/direct' : '/broadcasts';
-        const response = await fetch(`${AWAJ_BASE_URL}${endpoint}`, { 
+        const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { 
           method: 'POST', 
           headers: headers, 
           body: JSON.stringify(req.body) 
