@@ -32,6 +32,21 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
   const [apiError, setApiError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [audioDurations, setAudioDurations] = useState<Record<string, number>>({});
+  const [uploadFileDuration, setUploadFileDuration] = useState<number | null>(null);
+
+  const getProxiedAudioUrl = useCallback((url?: string) => {
+    if (!url || typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('data:') || trimmed.startsWith('blob:') || trimmed.startsWith('/api/proxy-audio')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return `/api/proxy-audio?url=${encodeURIComponent(trimmed)}`;
+    }
+    return trimmed;
+  }, []);
 
   // Filters
   const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
@@ -506,6 +521,31 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const allVoices = [...voices, ...assignedVoices];
+    allVoices.forEach((v) => {
+      if (!v) return;
+      const key = v.id || v.provider_voice_id;
+      if (!key) return;
+      const rawDur = v.duration || v.duration_seconds || v.length || v.audio_duration;
+      if (rawDur && !isNaN(Number(rawDur)) && Number(rawDur) > 0) {
+        const secs = Math.round(Number(rawDur));
+        setAudioDurations(prev => (prev[key] === secs ? prev : { ...prev, [key]: secs }));
+      } else {
+        const url = getProxiedAudioUrl(v.previewUrl || v.preview_url || v.file_url || v.url);
+        if (url && !audioDurations[key]) {
+          const audio = new Audio(url);
+          audio.onloadedmetadata = () => {
+            if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+              const secs = Math.round(audio.duration);
+              setAudioDurations(prev => ({ ...prev, [key]: secs }));
+            }
+          };
+        }
+      }
+    });
+  }, [voices, assignedVoices, getProxiedAudioUrl]);
+
   const fetchBroadcastResult = async (id: string) => {
     setLoadingResult(true);
     try {
@@ -975,18 +1015,40 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                         </div>
 
                         {/* Middle: Audio Player */}
-                        {(voice.previewUrl || voice.preview_url || voice.file_url) ? (
+                        {(voice.previewUrl || voice.preview_url || voice.file_url || voice.url) ? (
                           <div className={`p-2.5 rounded-2xl border ${
                             isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200/70'
                           }`}>
-                            <div className="flex items-center gap-2 mb-1">
-                              <Volume2 size={12} className="text-blue-500" />
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Audio Preview</span>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <Volume2 size={13} className="text-blue-500 shrink-0" />
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">অডিও প্লেয়ার</span>
+                              </div>
+                              {(() => {
+                                const rawDur = voice.duration || voice.duration_seconds || voice.length || audioDurations[voice.id];
+                                const secs = (rawDur && !isNaN(Number(rawDur)) && Number(rawDur) > 0) ? Math.round(Number(rawDur)) : (audioDurations[voice.id] || 0);
+                                return secs > 0 ? (
+                                  <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full border border-blue-200/60 dark:border-blue-800/60 flex items-center gap-1 shrink-0">
+                                    <Clock size={10} /> {secs} সেকেন্ড
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                    <Clock size={10} /> হিসাব হচ্ছে...
+                                  </span>
+                                );
+                              })()}
                             </div>
                             <audio 
                               controls 
-                              src={voice.previewUrl || voice.preview_url || voice.file_url} 
+                              preload="metadata"
+                              src={getProxiedAudioUrl(voice.previewUrl || voice.preview_url || voice.file_url || voice.url)} 
                               className="w-full h-8 outline-none" 
+                              onLoadedMetadata={(e) => {
+                                const secs = Math.round(e.currentTarget.duration);
+                                if (secs > 0 && !isNaN(secs) && isFinite(secs)) {
+                                  setAudioDurations(prev => ({ ...prev, [voice.id]: secs }));
+                                }
+                              }}
                             />
                           </div>
                         ) : (
@@ -1119,11 +1181,41 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                         </div>
 
                         {/* Audio preview */}
-                        {voice.file_url && (
+                        {(voice.file_url || voice.preview_url || voice.url) && (
                           <div className={`p-2.5 rounded-2xl border ${
                             isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200/70'
                           }`}>
-                            <audio controls src={voice.file_url} className="w-full h-8 outline-none" />
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <Volume2 size={13} className="text-emerald-500 shrink-0" />
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">অডিও প্লেয়ার</span>
+                              </div>
+                              {(() => {
+                                const rawDur = voice.duration || voice.duration_seconds || voice.length || audioDurations[voice.id];
+                                const secs = (rawDur && !isNaN(Number(rawDur)) && Number(rawDur) > 0) ? Math.round(Number(rawDur)) : (audioDurations[voice.id] || 0);
+                                return secs > 0 ? (
+                                  <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1 shrink-0">
+                                    <Clock size={10} /> {secs} সেকেন্ড
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                    <Clock size={10} /> হিসাব হচ্ছে...
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <audio 
+                              controls 
+                              preload="metadata"
+                              src={getProxiedAudioUrl(voice.file_url || voice.preview_url || voice.url)} 
+                              className="w-full h-8 outline-none" 
+                              onLoadedMetadata={(e) => {
+                                const secs = Math.round(e.currentTarget.duration);
+                                if (secs > 0 && !isNaN(secs) && isFinite(secs)) {
+                                  setAudioDurations(prev => ({ ...prev, [voice.id]: secs }));
+                                }
+                              }}
+                            />
                           </div>
                         )}
 
