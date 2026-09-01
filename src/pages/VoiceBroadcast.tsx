@@ -149,6 +149,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   // Audio state
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentRequestIdRef = useRef<string | null>(null);
 
   const togglePlay = (id: string, url: string) => {
     if (!audioRef.current) return;
@@ -919,20 +920,24 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         return;
       }
 
-      const requestId = crypto.randomUUID();
+      if (!currentRequestIdRef.current) {
+        currentRequestIdRef.current = crypto.randomUUID();
+      }
+      const requestId = currentRequestIdRef.current;
+
       const payload = {
         request_id: requestId,
-        voice: voiceName, 
         sender: sNumber,
         phone_numbers: uniqueNormalizedPhoneNumbers,
-        retry: 1,
-        retry_count: 1,
-        retries: 1
+        voices: [voice.file_url],
+        metadata: {
+          campaign_id: "direct_broadcast"
+        }
       };
 
       console.log('Sending retry payload:', payload);
 
-      const response = await fetch('/api/awaj/broadcast', {
+      const response = await fetch('/api/awaj/broadcast/direct', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -946,6 +951,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       const result = await response.json();
+      currentRequestIdRef.current = null;
       const campaignId = result.broadcast?.id || result.campaign_id || result.id || result.data?.id || result.data?.campaign_id || result.request_id || requestId;
 
       // Save to Supabase (update existing record to include new retry campaign and add cost/numbers)
@@ -1314,7 +1320,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       // 1. Send to Awaj Digital API
-      const requestId = crypto.randomUUID();
+      if (!currentRequestIdRef.current) {
+        currentRequestIdRef.current = crypto.randomUUID();
+      }
+      const requestId = currentRequestIdRef.current;
       
       // Find the actual sender object to get the calling number
       const senderObj = senders.find(s => 
@@ -1336,31 +1345,24 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         sNumber = '880' + digits;
       }
       
-      // Documentation says 'voice' must be the Name of your approved voice
-      // We prefer provider_voice_name (synced from API) over local title
-      const voiceName = voice.provider_voice_name || voice.title;
-
       const payload = {
         request_id: requestId,
-        voice: voiceName, 
         sender: sNumber,
-        phone_numbers: phoneNumbers,
-        retry: 1,
-        retry_count: 1,
-        retries: 1
+        phone_numbers: uniqueNormalizedPhoneNumbers,
+        voices: [voice.file_url],
+        metadata: {
+          campaign_id: "direct_broadcast"
+        }
       };
 
       console.log('Sending broadcast payload (strictly following docs):', { ...payload, phone_numbers: `[${uniqueNormalizedPhoneNumbers.length} numbers]` });
 
-      const response = await fetch('/api/awaj/broadcast', {
+      const response = await fetch('/api/awaj/broadcast/direct', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...payload,
-          phone_numbers: uniqueNormalizedPhoneNumbers
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -1421,6 +1423,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       });
       setSelectedClassId('');
       setSelectedVoiceId('');
+      currentRequestIdRef.current = null;
       fetchWalletBalance();
       triggerRefresh();
       fetchHistory(); // Refresh history
