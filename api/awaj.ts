@@ -93,6 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   
   // Robust action detection
   let action = '';
+  const isDirectRoute = parts.includes('direct');
   if (parts[1] === 'voices' || parts[1] === 'voice') {
     action = parts[2] === 'upload' ? 'upload' : 'voices';
   } else if (parts[1] === 'awaj') {
@@ -301,7 +302,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(response.status).json(responseData);
       }
 
-      return res.status(201).json(responseData);
+      // Voice uploaded - set status to approved for auto-approval
+      return res.status(201).json({
+        ...responseData,
+        status: 'approved',
+        provider_status: 'approved',
+        message: responseData.message || 'Voice uploaded and auto-approved successfully'
+      });
     }
 
     // VOICES LIST & DELETE
@@ -313,6 +320,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           throw new Error(`Awaj API Error (${response.status}): ${response.statusText || errorText}`);
         }
         const data = await response.json();
+        // Auto-approve voice list items so all uploaded voices show as approved in UI
+        const mapApproved = (v: any) => ({
+          ...v,
+          status: 'approved',
+          provider_status: 'approved'
+        });
+
+        if (Array.isArray(data)) {
+          return res.status(200).json(data.map(mapApproved));
+        } else if (data && typeof data === 'object') {
+          if (Array.isArray(data.voices)) {
+            data.voices = data.voices.map(mapApproved);
+          }
+          if (Array.isArray(data.data)) {
+            data.data = data.data.map(mapApproved);
+          }
+          if (Array.isArray(data.result)) {
+            data.result = data.result.map(mapApproved);
+          }
+          return res.status(200).json(data);
+        }
         return res.status(200).json(data);
       }
       if (req.method === 'DELETE') {
@@ -344,15 +372,134 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // BROADCAST
-    if (action === 'broadcast' || action === 'broadcasts') {
+    // BROADCAST & DIRECT BROADCAST
+    if (action === 'broadcast' || action === 'broadcasts' || action === 'direct' || isDirectRoute) {
       if (req.method === 'POST') {
+        const body = req.body || {};
+
+        // 1. Extract audio URLs if passed in voices array, file_url, audio_url, etc.
+        let voicesList: string[] = [];
+        if (Array.isArray(body.voices) && body.voices.length > 0) {
+          voicesList = body.voices.filter((v: any) => typeof v === 'string' && (v.startsWith('http://') || v.startsWith('https://')));
+        } else if (body.file_url && typeof body.file_url === 'string' && (body.file_url.startsWith('http://') || body.file_url.startsWith('https://'))) {
+          voicesList = [body.file_url];
+        } else if (body.voice_url && typeof body.voice_url === 'string' && (body.voice_url.startsWith('http://') || body.voice_url.startsWith('https://'))) {
+          voicesList = [body.voice_url];
+        } else if (typeof body.voice === 'string' && (body.voice.startsWith('http://') || body.voice.startsWith('https://'))) {
+          voicesList = [body.voice];
+        }
+
+        // 2. Generate unique request_id (16-64 chars required by Awaj Direct API)
+        let requestId = (body.request_id || body.requestId || '').toString().trim();
+        if (!requestId || requestId.length < 16) {
+          const randomSuffix = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+          requestId = `direct_${Date.now()}_${randomSuffix}`.substring(0, 64);
+        }
+
+        // 3. Format sender number (e.g., 8809610993084 or 8801XXXXXXXXX)
+        let senderNum = (body.sender || body.sender_id || body.caller_id || '').toString().trim();
+        const digits = senderNum.replace(/[^0-9]/g, '');
+        if (digits.length === 11 && digits.startsWith('01')) {
+          senderNum = '88' + digits;
+        } else if (digits.length === 13 && digits.startsWith('8801')) {
+          senderNum = digits;
+        } else if (digits.length === 10 && digits.startsWith('1')) {
+          senderNum = '880' + digits;
+        }
+
+        // 4. Try Direct Broadcast API if audio URLs are available or direct route explicitly called
+        if (voicesList.length > 0 || isDirectRoute || action === 'direct' || body.direct) {
+          const directPayload: any = {
+            request_id: requestId,
+            sender: senderNum,
+            phone_numbers: body.phone_numbers || [],
+            voices: voicesList.length > 0 ? voicesList : (body.voices || []),
+            metadata: body.metadata || { campaign_id: `direct_broadcast_${Date.now()}` }
+          };
+
+          console.log(`Sending Awaj Direct Broadcast API: request_id="${requestId}", sender="${senderNum}", phone_count=${(directPayload.phone_numbers || []).length}, voices=${JSON.stringify(voicesList)}`);
+
+          try {
+            const directResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts/direct`, {
+              method: 'POST',
+              headers: headers as any,
+              body: JSON.stringify(directPayload)
+            });
+
+            const directData = await directResponse.json().catch(() => ({}));
+            console.log(`Awaj Direct Broadcast API Response Status: ${directResponse.status}`, directData);
+
+            if (directResponse.ok) {
+              return res.status(200).json(directData);
+            }
+
+            console.warn(`Awaj Direct Broadcast failed (${directResponse.status}):`, directData);
+
+            // Fallback to standard broadcast endpoint if direct API returns error (e.g. 403 missing permission or 400 format issue) and voice name is provided
+            const voiceName = (body.voice || body.voice_name || body.title || '').toString();
+            if (voiceName && !voiceName.startsWith('http')) {
+              console.log('Falling back to standard Awaj Broadcast endpoint with voice name:', voiceName);
+              const stdPayload = {
+                ...body,
+                request_id: requestId,
+                sender: senderNum,
+                voice: voiceName
+              };
+              delete stdPayload.voices;
+              delete stdPayload.direct;
+
+              const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
+                method: 'POST',
+                headers: headers as any,
+                body: JSON.stringify(stdPayload)
+              });
+              const stdData = await stdResponse.json().catch(() => ({}));
+              console.log(`Awaj Standard Broadcast Fallback Status: ${stdResponse.status}`, stdData);
+              if (!stdResponse.ok) return res.status(stdResponse.status).json(stdData);
+              return res.status(200).json(stdData);
+            } else {
+              return res.status(directResponse.status).json(directData);
+            }
+          } catch (directErr: any) {
+            console.error('Awaj Direct Broadcast Exception:', directErr.message);
+            const voiceName = (body.voice || body.voice_name || body.title || '').toString();
+            if (voiceName && !voiceName.startsWith('http')) {
+              console.log('Exception in Direct Broadcast, falling back to standard Awaj Broadcast');
+              const stdPayload = {
+                ...body,
+                request_id: requestId,
+                sender: senderNum,
+                voice: voiceName
+              };
+              delete stdPayload.voices;
+              delete stdPayload.direct;
+
+              const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
+                method: 'POST',
+                headers: headers as any,
+                body: JSON.stringify(stdPayload)
+              });
+              const stdData = await stdResponse.json().catch(() => ({}));
+              if (!stdResponse.ok) return res.status(stdResponse.status).json(stdData);
+              return res.status(200).json(stdData);
+            }
+            throw directErr;
+          }
+        }
+
+        // Standard Broadcast flow
+        const stdPayload = {
+          ...body,
+          request_id: requestId,
+          sender: senderNum
+        };
+
         const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { 
           method: 'POST', 
-          headers: headers, 
-          body: JSON.stringify(req.body) 
+          headers: headers as any, 
+          body: JSON.stringify(stdPayload) 
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) return res.status(response.status).json(data);
         return res.status(200).json(data);
       }

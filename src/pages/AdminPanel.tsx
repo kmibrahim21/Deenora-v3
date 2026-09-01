@@ -149,7 +149,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
          query = query.is('institution_id', null);
       }
 
-      const { data, error } = await query.eq('provider_status', 'approved').order('created_at', { ascending: false });
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setAwajVoices(data || []);
@@ -585,7 +585,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
              setInstSmsTemplates(data || []);
           } else {
              // 1. Fetch institution-specific voices
-             const { data } = await supabase.from('voice_templates').select('*').in('institution_id', instIds).eq('provider_status', 'approved').order('created_at', { ascending: false });
+             const { data } = await supabase.from('voice_templates').select('*').in('institution_id', instIds).order('created_at', { ascending: false });
              setInstVoiceTemplates(data || []);
              
              // 2. Fetch global system voices

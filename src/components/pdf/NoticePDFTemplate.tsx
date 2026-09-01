@@ -91,7 +91,8 @@ export const NoticePDFTemplate: React.FC<NoticePDFTemplateProps> = ({
   const noticeDate = parsed?.date ? formatDate(parsed.date) : formatDate(notice.created_at || new Date().toISOString());
   const refNo = parsed?.ref_no || `স্মারক নং: ${madrasah?.id?.substring(0, 4) || 'NOT'}/${new Date().getFullYear()}/${(notice.id || '101').substring(0, 4)}`;
 
-  const isIslamic = madrasah?.institution_type === 'madrasah' || madrasah?.institution_type === 'qawmi' || !madrasah?.institution_type;
+  const instType = (madrasah?.institution_type as string);
+  const isIslamic = instType === 'madrasah' || instType === 'qawmi' || !instType;
 
   return (
     <div className="pdf-page-container w-[794px] min-h-[1123px] p-12 bg-white text-slate-900 font-noto relative flex flex-col justify-between box-border border border-slate-200 shadow-sm mx-auto my-0">
@@ -147,7 +148,7 @@ export const NoticePDFTemplate: React.FC<NoticePDFTemplateProps> = ({
             <div className="flex items-center justify-center gap-4 text-[11px] font-bold text-slate-500 mt-1">
               {madrasah?.phone && <span>মোবাইল: {getBanglaNumber(madrasah.phone)}</span>}
               {madrasah?.email && <span>ইমেইল: {madrasah.email}</span>}
-              {madrasah?.code && <span>EIIN / কোড: {getBanglaNumber(madrasah.code)}</span>}
+              {(madrasah as any)?.code && <span>EIIN / কোড: {getBanglaNumber((madrasah as any).code)}</span>}
             </div>
           </div>
 

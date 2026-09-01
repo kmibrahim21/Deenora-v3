@@ -55,7 +55,8 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
     ? [{ subject: 'সাধারণ পাঠ্যক্রম', details: parsed.desc }]
     : [];
 
-  const isIslamic = madrasah?.institution_type === 'madrasah' || madrasah?.institution_type === 'qawmi' || !madrasah?.institution_type;
+  const instType = (madrasah?.institution_type as string);
+  const isIslamic = instType === 'madrasah' || instType === 'qawmi' || !instType;
 
   return (
     <div className="pdf-page-container w-[794px] min-h-[1123px] p-10 bg-white text-slate-900 font-noto relative flex flex-col justify-between box-border border border-slate-200 shadow-sm mx-auto my-0">
@@ -110,7 +111,7 @@ export const SyllabusPDFTemplate: React.FC<SyllabusPDFTemplateProps> = ({
             <div className="flex items-center justify-center gap-3 text-[10px] font-bold text-slate-500 mt-1">
               {madrasah?.phone && <span>মোবাইল: {getBanglaNumber(madrasah.phone)}</span>}
               {madrasah?.email && <span>ইমেইল: {madrasah.email}</span>}
-              {madrasah?.code && <span>EIIN/কোড: {getBanglaNumber(madrasah.code)}</span>}
+              {(madrasah as any)?.code && <span>EIIN/কোড: {getBanglaNumber((madrasah as any).code)}</span>}
             </div>
           </div>
 

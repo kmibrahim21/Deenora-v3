@@ -72,7 +72,8 @@ export const DiaryPDFTemplate: React.FC<DiaryPDFTemplateProps> = ({
     ? [{ subject: 'দৈনিক পড়া', details: parsed.desc }]
     : [];
 
-  const isIslamic = madrasah?.institution_type === 'madrasah' || madrasah?.institution_type === 'qawmi' || !madrasah?.institution_type;
+  const instType = (madrasah?.institution_type as string);
+  const isIslamic = instType === 'madrasah' || instType === 'qawmi' || !instType;
 
   return (
     <div className="pdf-page-container w-[794px] min-h-[1123px] p-10 bg-white text-slate-900 font-noto relative flex flex-col justify-between box-border border border-slate-200 shadow-sm mx-auto my-0">

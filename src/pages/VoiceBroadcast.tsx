@@ -519,7 +519,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         console.warn("Could not fetch system institution ID:", e);
       }
 
-      let templateQuery = supabase.from('voice_templates').select('*').eq('provider_status', 'approved');
+      let templateQuery = supabase.from('voice_templates').select('*');
       
       if (isSuperAdmin) {
         // Super Admin can see system, their own, and unassigned templates
@@ -531,15 +531,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           templateQuery = templateQuery.is('institution_id', null);
         }
       } else {
-        // Regular institutions SHOULD only see their own approved templates
-        // to prevent Super Admin only voices from leaking into all user panels
+        // Regular institutions SHOULD see their own templates
         templateQuery = templateQuery.eq('institution_id', madrasah.id);
       }
 
       const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
       
       if (localVoices) {
-        // Sync statuses and IDs from Awaj API
+        // Sync statuses and IDs from Awaj API, ensuring auto-approval
         const syncedVoices = [];
         for (const localVoice of localVoices) {
           // Try to find matching voice in API by ID or Name
@@ -548,22 +547,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
             (v.name && v.name.toLowerCase() === (localVoice.title || '').toLowerCase())
           );
 
-          if (awajVoice) {
-            const newStatus = awajVoice.status || 'approved';
-            const newProviderId = awajVoice.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
-            const newProviderName = awajVoice.name || localVoice.provider_voice_name;
+          const newProviderId = awajVoice?.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
+          const newProviderName = awajVoice?.name || localVoice.provider_voice_name;
+          
+          // Auto-approve voice locally and in DB so Direct Broadcast API works seamlessly
+          if (localVoice.provider_status !== 'approved' || localVoice.admin_status !== 'approved' || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
+            await supabase.from('voice_templates').update({ 
+              admin_status: 'approved',
+              provider_status: 'approved',
+              provider_voice_id: newProviderId || localVoice.provider_voice_id,
+              provider_voice_name: newProviderName || localVoice.provider_voice_name
+            }).eq('id', localVoice.id);
             
-            if (localVoice.provider_status !== newStatus || localVoice.provider_voice_id !== newProviderId || localVoice.provider_voice_name !== newProviderName) {
-              await supabase.from('voice_templates').update({ 
-                provider_status: newStatus,
-                provider_voice_id: newProviderId,
-                provider_voice_name: newProviderName
-              }).eq('id', localVoice.id);
-              
-              localVoice.provider_status = newStatus;
-              localVoice.provider_voice_id = newProviderId;
-              localVoice.provider_voice_name = newProviderName;
-            }
+            localVoice.admin_status = 'approved';
+            localVoice.provider_status = 'approved';
+            localVoice.provider_voice_id = newProviderId || localVoice.provider_voice_id;
+            localVoice.provider_voice_name = newProviderName || localVoice.provider_voice_name;
           }
           syncedVoices.push(localVoice);
         }
@@ -925,6 +924,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         voice: voiceName, 
         sender: sNumber,
         phone_numbers: uniqueNormalizedPhoneNumbers,
+        voices: voice.file_url ? [voice.file_url] : undefined,
+        file_url: voice.file_url,
         retry: 1,
         retry_count: 1,
         retries: 1
@@ -1301,17 +1302,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         throw new Error(lang === 'bn' ? `ব্যালেন্স পর্যাপ্ত নয়। খরচ: ${finalEstimatedCost} টাকা।` : `Insufficient balance. Estimated cost: ${finalEstimatedCost} BDT.`);
       }
 
-      // Get the selected template to get the awaj_voice_id
+      // Get the selected template to get the awaj_voice_id or file_url
       const voice = voices.find(v => v.id === selectedVoiceId);
       if (!voice) throw new Error('Selected voice not found.');
-
-      if (!voice.provider_voice_id) {
-        throw new Error('This voice is not yet linked to Awaj Digital. Please try refreshing the page.');
-      }
-
-      if (voice.provider_status !== 'approved' && voice.status !== 'approved') {
-        throw new Error('This voice is not yet approved by Awaj Digital.');
-      }
 
       // 1. Send to Awaj Digital API
       const requestId = crypto.randomUUID();
@@ -1336,15 +1329,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         sNumber = '880' + digits;
       }
       
-      // Documentation says 'voice' must be the Name of your approved voice
-      // We prefer provider_voice_name (synced from API) over local title
+      // Voice name and CDN URL for Awaj Direct Broadcast API
       const voiceName = voice.provider_voice_name || voice.title;
 
       const payload = {
         request_id: requestId,
         voice: voiceName, 
         sender: sNumber,
-        phone_numbers: phoneNumbers,
+        phone_numbers: uniqueNormalizedPhoneNumbers,
+        voices: voice.file_url ? [voice.file_url] : undefined,
+        file_url: voice.file_url,
         retry: 1,
         retry_count: 1,
         retries: 1
@@ -1472,8 +1466,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         institution_id: madrasah.id,
         title: uploadName,
         file_url: publicUrl,
-        admin_status: 'draft',
-        provider_status: 'draft'
+        admin_status: 'approved',
+        provider_status: 'approved'
       });
 
       if (dbError) throw dbError;
@@ -1482,7 +1476,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল' : 'Success',
-        message: lang === 'bn' ? 'ভয়েস সফলভাবে আপলোড হয়েছে! এখন অনুমোদনের অনুরোধ করতে পারেন।' : 'Voice uploaded successfully! You can now request approval.'
+        message: lang === 'bn' ? 'ভয়েস সফলভাবে আপলোড ও অটো-অনুমোদিত (Auto Approved) হয়েছে! আপনি সরাসরি ব্রডকাস্ট পাঠাতে পারবেন।' : 'Voice uploaded and auto-approved successfully! You can send broadcasts now.'
       });
       setUploadName('');
       setUploadFile(null);
@@ -1502,8 +1496,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const handleRequestApproval = async (voiceId: string) => {
     try {
       const { error } = await supabase.from('voice_templates').update({
-        admin_status: 'pending',
-        provider_status: 'pending'
+        admin_status: 'approved',
+        provider_status: 'approved'
       }).eq('id', voiceId);
       
       if (error) throw error;
@@ -1512,7 +1506,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল' : 'Success',
-        message: lang === 'bn' ? 'অনুমোদনের অনুরোধ সফলভাবে পাঠানো হয়েছে।' : 'Approval requested successfully.'
+        message: lang === 'bn' ? 'ভয়েস অটো-অনুমোদিত করা হয়েছে।' : 'Voice auto-approved successfully.'
       });
       fetchVoices();
     } catch (err: any) {

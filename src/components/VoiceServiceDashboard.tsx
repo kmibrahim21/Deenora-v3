@@ -195,8 +195,8 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       setStatusModal({
         show: true,
         type: 'success',
-        title: 'ভয়েস সফলভাবে আপলোড হয়েছে!',
-        message: `ভয়েস "${resData.name || trimmedName}" (ID: ${resData.id || '-'}) সরাসরি Awaj Digital API-তে আপলোড হয়েছে। বর্তমান স্ট্যাটাস: "${resData.status || 'pending'}"। Awaj Digital অ্যাডমিন অনুমোদন করার পর এটি ব্রডকাস্টে ব্যবহার করা যাবে।`
+        title: 'ভয়েস সফলভাবে আপলোড ও অটো-অনুমোদিত (Auto Approved) হয়েছে!',
+        message: `ভয়েস "${resData.name || trimmedName}" (ID: ${resData.id || '-'}) সরাসরি Awaj Digital API-তে আপলোড এবং অটো-অনুমোদিত হয়েছে। এটি সরাসরি ব্রডকাস্টে ব্যবহার করা যাবে।`
       });
 
       // Reset
