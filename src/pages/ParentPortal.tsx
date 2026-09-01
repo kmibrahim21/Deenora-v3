@@ -1422,10 +1422,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           remarks: currentExam.remarks
                         };
                         const totalAttendanceRate = (() => {
-                          const validRecords = attendance.filter(a => a.status === 'present' || a.status === 'absent' || a.status === 'late');
+                          const validRecords = attendance.filter(a => a.status === 'present' || a.status === 'absent' || a.status === 'late' || a.status === 'half_day');
                           if (validRecords.length === 0) return 'N/A';
-                          const presentCount = validRecords.filter(a => a.status === 'present' || a.status === 'late').length;
-                          return Math.round((presentCount / validRecords.length) * 100).toString();
+                          let presentCount = 0;
+                          validRecords.forEach(a => {
+                            if (a.status === 'present' || a.status === 'late') presentCount += 1;
+                            else if (a.status === 'half_day') presentCount += 0.5;
+                          });
+                          return Math.round((presentCount / validRecords.length) * 100).toString() + '%';
                         })();
 
                         setDownloadingReport(true);

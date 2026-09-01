@@ -130,33 +130,66 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [userZoom, setUserZoom] = useState<number>(1);
 
   const fetchClassAttendanceStats = async (classId: string) => {
-    if (!madrasah || !activeYear) return {};
+    if (!madrasah) return {};
     try {
-      const { data, error } = await supabase
+      const startDate = activeYear?.start_date;
+      const endDate = activeYear?.end_date;
+
+      const studentIds = (students || []).map((s: any) => s.id).filter(Boolean);
+
+      let query = supabase
         .from('attendance')
-        .select('student_id, status')
-        .eq('institution_id', madrasah.id)
-        .eq('class_id', classId)
-        .gte('date', activeYear.start_date || '')
-        .lte('date', activeYear.end_date || '');
-      
-      if (error) throw error;
+        .select('student_id, status, date')
+        .eq('institution_id', madrasah.id);
+
+      if (studentIds.length > 0) {
+        query = query.in('student_id', studentIds);
+      } else if (classId) {
+        query = query.eq('class_id', classId);
+      }
+
+      if (startDate && endDate && String(startDate).trim() !== '' && String(endDate).trim() !== '') {
+        query = query.gte('date', String(startDate).trim()).lte('date', String(endDate).trim());
+      }
+
+      const { data, error } = await query;
+      let records = data;
+
+      if (error || !records || records.length === 0) {
+        let fallbackQuery = supabase
+          .from('attendance')
+          .select('student_id, status, date')
+          .eq('institution_id', madrasah.id);
+
+        if (studentIds.length > 0) {
+          fallbackQuery = fallbackQuery.in('student_id', studentIds);
+        } else if (classId) {
+          fallbackQuery = fallbackQuery.eq('class_id', classId);
+        }
+
+        const { data: fallbackData } = await fallbackQuery;
+        if (fallbackData && fallbackData.length > 0) {
+          records = fallbackData;
+        }
+      }
       
       const stats: Record<string, { present: number, total: number }> = {};
-      data?.forEach((record: any) => {
+      (records || []).forEach((record: any) => {
+        if (!record.student_id) return;
         if (!stats[record.student_id]) {
           stats[record.student_id] = { present: 0, total: 0 };
         }
         stats[record.student_id].total += 1;
-        if (record.status === 'present' || record.status === 'late') {
-          stats[record.student_id].present += 1;
+        const st = String(record.status || '').toLowerCase();
+        if (st === 'present' || st === 'late' || st === 'half_day') {
+          stats[record.student_id].present += (st === 'half_day' ? 0.5 : 1);
         }
       });
       
       const percentages: Record<string, string> = {};
       for (const [studentId, stat] of Object.entries(stats)) {
         if (stat.total > 0) {
-          percentages[studentId] = Math.round((stat.present / stat.total) * 100).toString();
+          percentages[studentId] = Math.round((stat.present / stat.total) * 100).toString() + '%';
         }
       }
       return percentages;
