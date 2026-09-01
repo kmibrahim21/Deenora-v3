@@ -78,8 +78,27 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   }, []);
 
   const getAuthToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token;
+    try {
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        session = refreshData?.session || session;
+      }
+      if (session?.access_token) {
+        return session.access_token;
+      }
+    } catch (e) {
+      console.warn('Error getting session:', e);
+    }
+    try {
+      const stored = localStorage.getItem('madrasah_auth_token') || localStorage.getItem('sb-wafcgdcgqkmsngwqhded-auth-token');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.access_token) return parsed.access_token;
+        if (parsed?.currentSession?.access_token) return parsed.currentSession.access_token;
+      }
+    } catch (e) {}
+    return '';
   };
 
   const copyToClipboard = (text: string, id: string) => {

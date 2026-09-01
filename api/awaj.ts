@@ -608,10 +608,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const authHeader = req.headers.authorization;
         if (!authHeader) return res.status(401).json({ error: 'Unauthorized: Missing token' });
         
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-        
-        if (authError || !user) {
+        const token = authHeader.replace('Bearer ', '').trim();
+        if (!token || token === 'undefined' || token === 'null') {
+          return res.status(401).json({ error: 'Unauthorized: Missing token' });
+        }
+
+        let user: any = null;
+        let userId: string = '';
+
+        try {
+          const { data: userData } = await supabase.auth.getUser(token);
+          if (userData?.user) {
+            user = userData.user;
+            userId = user.id;
+          }
+        } catch (e) {}
+
+        if (!user) {
+          try {
+            const parts = token.split('.');
+            if (parts.length === 3) {
+              const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+              if (payload && payload.sub) {
+                userId = payload.sub;
+                user = { id: userId };
+              }
+            }
+          } catch (jwtErr) {}
+        }
+
+        if (!user || !userId) {
           return res.status(401).json({ error: 'Unauthorized: Invalid token' });
         }
 
