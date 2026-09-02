@@ -3,8 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // native fetch used
 import FormData from 'form-data';
 import { Buffer } from 'node:buffer';
+import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
 const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
+const supabase = getSupabaseAdmin();
 
 async function parseRawMultipart(req: any): Promise<{ fields: Record<string, string>, files: { name: string, filename: string, mime: string, buffer: Buffer }[] }> {
   const contentType = req.headers['content-type'] || '';
@@ -627,8 +629,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       try {
-        const { getSupabaseAdmin } = await import('../lib/supabase-admin.js');
-        const supabase = getSupabaseAdmin();
         const authHeader = req.headers.authorization;
         if (!authHeader) return res.status(401).json({ error: 'Unauthorized: Missing token' });
         

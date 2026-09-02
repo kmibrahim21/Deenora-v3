@@ -531,11 +531,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           templateQuery = templateQuery.is('institution_id', null);
         }
       } else {
-        // Regular institutions see their own templates, global system templates, and unassigned templates
-        if (systemId && madrasah?.id) {
-          templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.eq.${systemId},institution_id.is.null`);
-        } else if (madrasah?.id) {
-          templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.is.null`);
+        // Regular institutions see ONLY their own templates
+        if (madrasah?.id) {
+          templateQuery = templateQuery.eq('institution_id', madrasah.id);
         }
       }
 
@@ -553,18 +551,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
           const newProviderId = awajVoice?.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
           const newProviderName = awajVoice?.name || localVoice.provider_voice_name;
+          const awajStatus = awajVoice ? (awajVoice.status === 'approved' || awajVoice.status === 'active' || awajVoice.is_approved ? 'approved' : 'pending') : localVoice.provider_status;
           
-          // Auto-approve voice locally and in DB so Direct Broadcast API works seamlessly
-          if (localVoice.provider_status !== 'approved' || localVoice.admin_status !== 'approved' || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
+          // Sync voice locally and in DB
+          if (localVoice.provider_status !== awajStatus || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
             await supabase.from('voice_templates').update({ 
-              admin_status: 'approved',
-              provider_status: 'approved',
+              provider_status: awajStatus,
               provider_voice_id: newProviderId || localVoice.provider_voice_id,
               provider_voice_name: newProviderName || localVoice.provider_voice_name
             }).eq('id', localVoice.id);
             
-            localVoice.admin_status = 'approved';
-            localVoice.provider_status = 'approved';
+            localVoice.provider_status = awajStatus;
             localVoice.provider_voice_id = newProviderId || localVoice.provider_voice_id;
             localVoice.provider_voice_name = newProviderName || localVoice.provider_voice_name;
           }
@@ -1309,6 +1306,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // Get the selected template to get the awaj_voice_id or file_url
       const voice = voices.find(v => v.id === selectedVoiceId);
       if (!voice) throw new Error('Selected voice not found.');
+      if (voice.admin_status !== 'approved' || voice.provider_status !== 'approved') {
+        throw new Error(lang === 'bn' ? 'এই ভয়েসটি এখনো অনুমোদিত হয়নি। দয়া করে অপেক্ষা করুন।' : 'This voice is not approved yet. Please wait.');
+      }
 
       // 1. Send to Awaj Digital API
       const requestId = crypto.randomUUID();

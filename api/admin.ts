@@ -821,7 +821,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'assign_voice') {
-      const { institution_id, voice_id, voice_name, preview_url, file_url } = body;
+      const { institution_id, voice_id, voice_name, preview_url, file_url, provider_status } = body;
       
       let insertInstId = institution_id;
       if (institution_id === 'system') {
@@ -850,7 +850,7 @@ export default async function handler(req, res) {
         title: voice_name,
         file_url: finalFileUrl,
         admin_status: 'approved',
-        provider_status: 'approved',
+        provider_status: provider_status || 'approved',
         provider_voice_id: voice_id ? voice_id.toString() : null,
         provider_voice_name: voice_name
       }).select().single();

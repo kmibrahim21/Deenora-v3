@@ -831,7 +831,7 @@ export const generateClassResultPDF = async (
     }
 
     // Chunk students for multi-page support in classic template
-    const STUDENTS_PER_PAGE = 12; 
+    const STUDENTS_PER_PAGE = 18; 
     const chunks = [];
     for (let i = 0; i < calculatedStudents.length; i += STUDENTS_PER_PAGE) {
         chunks.push(calculatedStudents.slice(i, i + STUDENTS_PER_PAGE));
