@@ -39,7 +39,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   const nameLen = instName.length;
   const addressLen = instAddress.length;
   
-  const nameSizeClass = nameLen > 65 ? "text-[8px] leading-snug" : nameLen > 45 ? "text-[9.5px] leading-snug" : nameLen > 30 ? "text-[11px] leading-snug" : nameLen > 20 ? "text-[12.5px] leading-snug" : "text-[14px] leading-snug";
+  const nameSizeClass = nameLen > 65 ? "text-[11px] leading-snug" : nameLen > 45 ? "text-[12.5px] leading-snug" : nameLen > 30 ? "text-[14.5px] leading-snug" : nameLen > 20 ? "text-[16.5px] leading-snug" : "text-[18.5px] leading-snug";
   const addressSizeClass = addressLen > 60 ? "text-[6.5px] leading-snug" : addressLen > 40 ? "text-[7.5px] leading-snug" : "text-[8px] leading-snug";
 
   React.useEffect(() => {
@@ -524,7 +524,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             {/* Back Header Content */}
             <div className="w-full pt-3 pb-0.5 px-3 text-center z-10 relative">
                <div className="flex items-center justify-center px-1">
-                  <h3 className={`font-bold font-solaiman w-full leading-snug py-0.5 ${nameLen > 65 ? 'text-[8px]' : nameLen > 45 ? 'text-[9.5px]' : nameLen > 30 ? 'text-[11px]' : nameLen > 20 ? 'text-[12.5px]' : 'text-[13px]'}`} style={{ color: themeColor }}>
+                  <h3 className={`font-bold font-solaiman w-full leading-snug py-0.5 ${nameLen > 65 ? 'text-[10.5px]' : nameLen > 45 ? 'text-[12px]' : nameLen > 30 ? 'text-[14px]' : nameLen > 20 ? 'text-[15.5px]' : 'text-[17px]'}`} style={{ color: themeColor }}>
                     {madrasah?.name || instName}
                   </h3>
                </div>
