@@ -227,43 +227,13 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
       const providerVoiceName = resData.name || resData.title || trimmedName;
-      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
-
-      // 2. Get or create SYSTEM_GLOBAL_INTERNAL institution ID
-      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
-      let sysId = sysInst && sysInst[0]?.id;
-      if (!sysId) {
-        const { data: newSys } = await supabase.from('institutions').insert({
-          name: 'SYSTEM_GLOBAL_INTERNAL',
-          address: 'System',
-          phone: '00000000000',
-          institution_type: 'system',
-          is_active: true,
-          is_super_admin: false,
-          theme: 'default'
-        }).select('id').single();
-        sysId = newSys?.id;
-      }
-
-      // 3. Save Awaj Voice metadata to Supabase voice_templates database table (no audio file in Supabase Storage!)
-      const { error: dbError } = await supabase.from('voice_templates').insert({
-        institution_id: sysId || null,
-        title: trimmedName,
-        file_url: audioUrl,
-        admin_status: 'approved',
-        provider_status: 'approved',
-        provider_voice_name: providerVoiceName,
-        provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
-      });
-
-      if (dbError) console.warn('Warning: Could not save local template entry:', dbError.message);
 
       // Success
       setStatusModal({
         show: true,
         type: 'success',
-        title: 'ভয়েস Awaj Digital সার্ভারে সফলভাবে আপলোড ও অটো-অনুমোদিত হয়েছে!',
-        message: `ভয়েস "${providerVoiceName}" (ID: ${providerVoiceId || '-'}) সরাসরি Awaj Digital সার্ভারে আপলোড এবং অনুমোদিত হয়েছে। এটি দিয়ে সরাসরি ব্রডকাস্ট পাঠানো ও বিভিন্ন প্রতিষ্ঠানে অ্যাসাইন করা যাবে।`
+        title: 'ভয়েস Awaj Digital সার্ভারে সফলভাবে আপলোড হয়েছে!',
+        message: `ভয়েস "${providerVoiceName}" (ID: ${providerVoiceId || '-'}) সরাসরি Awaj Digital সার্ভারে আপলোড এবং অনুমোদিত হয়েছে। প্রয়োজন অনুযায়ী এটি যেকোনো প্রতিষ্ঠানে অ্যাসাইন করতে পারবেন।`
       });
 
       // Reset
@@ -520,29 +490,6 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
       if (!assignedError && assignedData) {
         setAssignedVoices(assignedData);
-
-        const localSysVoices = assignedData.map((vt: any) => ({
-          id: vt.provider_voice_id || vt.id,
-          db_id: vt.id,
-          name: vt.title || vt.provider_voice_name || 'System Voice',
-          title: vt.title || vt.provider_voice_name || 'System Voice',
-          file_url: vt.file_url,
-          preview_url: vt.file_url,
-          previewUrl: vt.file_url,
-          url: vt.file_url,
-          status: vt.provider_status || 'approved',
-          createdAt: vt.created_at,
-          created_at: vt.created_at,
-          is_local: true
-        }));
-
-        const combinedVoices = [...localSysVoices];
-        for (const av of apiVoices) {
-          if (!combinedVoices.some(cv => (cv.name && av.name && cv.name.toLowerCase() === av.name.toLowerCase()) || (cv.id && av.id && cv.id.toString() === av.id.toString()))) {
-            combinedVoices.push(av);
-          }
-        }
-        setVoices(combinedVoices);
       }
 
       // Sync pending voices in Supabase
