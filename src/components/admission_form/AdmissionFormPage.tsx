@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ADMISSION_T } from './constants';
 import { AdmissionFormData, AdmissionFormLang, AdmissionFormConfig } from './types';
@@ -8,9 +8,8 @@ import DesignCustomizer from './DesignCustomizer';
 import { Globe, Download, ArrowLeft, Search, User, Settings2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Institution, Student } from '../../types';
 import { supabase } from 'supabase';
-import html2canvas from 'html2canvas-pro';
-import { jsPDF } from 'jspdf';
 import { extractStudentExtraFields } from '../../utils/studentExtraFields';
+import { exportAdmissionFormHeadless } from '../../utils/admissionFormPdf';
 
 interface Props {
   madrasah: Institution | null;
@@ -103,11 +102,9 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
   const [studentsInClass, setStudentsInClass] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
-  const [headlessDownloadData, setHeadlessDownloadData] = useState<AdmissionFormData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const headlessPrintRef = useRef<HTMLDivElement>(null);
 
   const [config, setConfig] = useState<AdmissionFormConfig>(() => loadSavedConfig(lang, madrasah));
 
@@ -189,83 +186,6 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
     
     showToast(lang === 'bn' ? 'ডিজাইন ডিফল্ট অবস্থায় ফিরিয়ে আনা হয়েছে' : 'Design reset to default');
   };
-
-  useEffect(() => {
-    if (!headlessDownloadData) return;
-
-    const generatePDF = async () => {
-      try {
-        // Ensure all fonts are loaded before starting capture
-        if (document.fonts) {
-          await document.fonts.ready;
-        }
-
-        // Wait a small delay to ensure rendering is fully complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const element = headlessPrintRef.current;
-        if (!element) return;
-
-        // Query the actual A4 container inside the preview
-        const printArea = element.querySelector('#print-area') as HTMLElement || element;
-
-        let canvas;
-        let imgData;
-        try {
-          canvas = await html2canvas(printArea, {
-            scale: 2.5, // 2.5x is optimal for high quality without crashing mobile browsers
-            useCORS: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-            windowWidth: 794, // Fixed A4 width in pixels at 96 DPI
-            windowHeight: 1123,
-            onclone: (clonedDoc) => {
-              const clonedEl = clonedDoc.getElementById('print-area');
-              if (clonedEl) {
-                clonedEl.style.transform = 'none';
-                clonedEl.style.position = 'relative';
-                clonedEl.style.top = '0';
-                clonedEl.style.left = '0';
-                clonedEl.style.margin = '0';
-                clonedEl.style.padding = '12mm 15mm 12mm 15mm';
-              }
-            }
-          });
-          imgData = canvas.toDataURL('image/jpeg', 0.95);
-        } catch (err1) {
-          console.warn("Headless render failed, attempting fallback...", err1);
-          canvas = await html2canvas(printArea, {
-            scale: 1.5,
-            useCORS: false,
-            allowTaint: true,
-            logging: false,
-            backgroundColor: '#ffffff'
-          });
-          imgData = canvas.toDataURL('image/jpeg', 0.9);
-        }
-
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
-
-        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-        
-        const safeStudentName = (headlessDownloadData.studentNameEn || headlessDownloadData.studentName || 'Form')
-          .replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')
-          .replace(/\s+/g, '_');
-        pdf.save(`Admission_Form_${safeStudentName}.pdf`);
-      } catch (error) {
-        console.error('Headless PDF Generation Error:', error);
-      } finally {
-        setHeadlessDownloadData(null);
-        setIsGenerating(null);
-      }
-    };
-
-    generatePDF();
-  }, [headlessDownloadData]);
 
   useEffect(() => {
     if (madrasah) {
@@ -359,12 +279,30 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
   const handleDownloadStudent = async (student: Student) => {
     if (isGenerating) return;
     setIsGenerating(student.id);
-    showToast(lang === 'bn' ? `${student.student_name}-এর ভর্তি ফরম পিডিএফ ডাউনলোড হচ্ছে...` : `Downloading form PDF for ${student.student_name}...`);
+    showToast(lang === 'bn' ? `${student.student_name}-এর ভর্তি ফরম পিডিএফ তৈরি হচ্ছে...` : `Generating form PDF for ${student.student_name}...`);
 
-    // Prepare full form data representation of this student for direct PDF compilation
-    const mappedData: AdmissionFormData = getMappedFormData(student);
+    try {
+      const mappedData: AdmissionFormData = getMappedFormData(student);
+      const safeStudentName = (mappedData.studentNameEn || mappedData.studentName || 'Student')
+        .replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')
+        .replace(/\s+/g, '_');
 
-    setHeadlessDownloadData(mappedData);
+      await exportAdmissionFormHeadless({
+        formData: mappedData,
+        madrasah,
+        lang,
+        config,
+        isBlank: false,
+        fileName: `Admission_Form_${safeStudentName}.pdf`
+      });
+
+      showToast(lang === 'bn' ? `${student.student_name}-এর ভর্তি ফরম সফলভাবে ডাউনলোড হয়েছে!` : `Form PDF downloaded successfully!`);
+    } catch (err) {
+      console.error('Download error:', err);
+      showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড ব্যর্থ হয়েছে' : 'Failed to download PDF');
+    } finally {
+      setIsGenerating(null);
+    }
   };
 
   const searchStudents = async () => {
@@ -657,20 +595,6 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
           </div>
         </div>
       </div>
-      {/* Hidden container for background headless PDF generation */}
-      {headlessDownloadData && (
-        <div style={{ position: 'fixed', left: '0', top: '0', opacity: 0.01, pointerEvents: 'none', zIndex: -9999, width: '210mm', height: '297mm', overflow: 'hidden' }}>
-          <div ref={headlessPrintRef}>
-            <AdmissionFormPreview
-              formData={headlessDownloadData}
-              madrasah={madrasah}
-              lang={lang}
-              config={config}
-              isPrint={true}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

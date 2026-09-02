@@ -1,0 +1,244 @@
+import { toJpeg, toPng } from 'html-to-image';
+import html2canvas from 'html2canvas-pro';
+import { jsPDF } from 'jspdf';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { AdmissionFormData, AdmissionFormConfig, AdmissionFormLang } from '../components/admission_form/types';
+import { Institution } from '../types';
+import AdmissionFormPreview from '../components/admission_form/AdmissionFormPreview';
+
+/**
+ * Converts an external image URL to base64 via the local image proxy.
+ * Prevents CORS taint issues on mobile and desktop browsers.
+ */
+export const getBase64Image = async (url: string): Promise<string | null> => {
+  try {
+    if (!url) return null;
+    if (url.startsWith('data:')) return url;
+
+    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl);
+    if (!response.ok) {
+      // Fallback: try direct fetch if proxy fails
+      const directRes = await fetch(url).catch(() => null);
+      if (directRes && directRes.ok) {
+        const blob = await directRes.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      }
+      return null;
+    }
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.warn('Image to base64 conversion error:', error);
+    return null;
+  }
+};
+
+/**
+ * Converts an HTML element to a high-quality JPEG/PNG image data URL using html-to-image,
+ * with automatic fallback to html2canvas-pro.
+ */
+export const elementToImageDataUrl = async (element: HTMLElement): Promise<string> => {
+  // Ensure document fonts are loaded
+  if (document.fonts) {
+    try {
+      await document.fonts.ready;
+    } catch (e) {}
+  }
+
+  // Small delay to ensure all CSS styles & layout calculations have settled
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  // Method 1: html-to-image toJpeg (Native SVG foreignObject rendering - perfect Unicode/Bengali font fidelity)
+  try {
+    const dataUrl = await toJpeg(element, {
+      quality: 0.96,
+      pixelRatio: 2.5,
+      backgroundColor: '#ffffff',
+      width: 794,
+      height: 1123,
+      style: {
+        transform: 'none',
+        transformOrigin: 'none',
+        margin: '0',
+        padding: '12mm 15mm 12mm 15mm',
+        boxSizing: 'border-box',
+        width: '210mm',
+        height: '297mm',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        position: 'static',
+        display: 'flex',
+        flexDirection: 'column',
+      },
+    });
+
+    if (dataUrl && dataUrl.length > 1000) {
+      return dataUrl;
+    }
+  } catch (err1) {
+    console.warn('html-to-image toJpeg failed, trying toPng fallback:', err1);
+  }
+
+  // Method 2: html-to-image toPng
+  try {
+    const dataUrl = await toPng(element, {
+      pixelRatio: 2.0,
+      backgroundColor: '#ffffff',
+      width: 794,
+      height: 1123,
+      style: {
+        transform: 'none',
+        transformOrigin: 'none',
+        margin: '0',
+        padding: '12mm 15mm 12mm 15mm',
+        boxSizing: 'border-box',
+        width: '210mm',
+        height: '297mm',
+      },
+    });
+
+    if (dataUrl && dataUrl.length > 1000) {
+      return dataUrl;
+    }
+  } catch (err2) {
+    console.warn('html-to-image toPng failed, trying html2canvas-pro fallback:', err2);
+  }
+
+  // Method 3: html2canvas-pro fallback
+  const canvas = await html2canvas(element, {
+    scale: 2.5,
+    useCORS: true,
+    allowTaint: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+    windowWidth: 794,
+    windowHeight: 1123,
+    onclone: (clonedDoc) => {
+      const el = clonedDoc.getElementById('print-area') || clonedDoc.body.firstElementChild;
+      if (el && el instanceof HTMLElement) {
+        el.style.transform = 'none';
+        el.style.position = 'relative';
+        el.style.top = '0';
+        el.style.left = '0';
+        el.style.margin = '0';
+        el.style.padding = '12mm 15mm 12mm 15mm';
+      }
+    },
+  });
+
+  return canvas.toDataURL('image/jpeg', 0.95);
+};
+
+/**
+ * Generates an A4 PDF from an Image Data URL.
+ */
+export const saveImageAsA4Pdf = (imgDataUrl: string, fileName: string): void => {
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  // Standard A4 dimensions: 210mm x 297mm
+  pdf.addImage(imgDataUrl, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+  pdf.save(fileName);
+};
+
+/**
+ * Headless direct Admission Form Image-to-PDF Generator.
+ * Creates an isolated unscaled DOM container, renders the form, converts it to an Image,
+ * and compiles it into an A4 PDF without modifying the user's screen or triggering UI bugs.
+ */
+export const exportAdmissionFormHeadless = async ({
+  formData,
+  madrasah,
+  lang,
+  config,
+  isBlank = false,
+  fileName,
+}: {
+  formData: AdmissionFormData;
+  madrasah: Institution | null;
+  lang: AdmissionFormLang;
+  config: AdmissionFormConfig;
+  isBlank?: boolean;
+  fileName?: string;
+}): Promise<void> => {
+  // Pre-fetch images to base64 to avoid cross-origin issues
+  let safeLogoUrl = madrasah?.logo_url || null;
+  let safePhotoUrl = formData.photoUrl || null;
+
+  if (safeLogoUrl) {
+    const base64Logo = await getBase64Image(safeLogoUrl);
+    if (base64Logo) safeLogoUrl = base64Logo;
+  }
+
+  if (safePhotoUrl && !isBlank) {
+    const base64Photo = await getBase64Image(safePhotoUrl);
+    if (base64Photo) safePhotoUrl = base64Photo;
+  }
+
+  const preparedMadrasah = madrasah ? { ...madrasah, logo_url: safeLogoUrl } : null;
+  const preparedFormData = { ...formData, photoUrl: isBlank ? '' : (safePhotoUrl || '') };
+
+  // Create isolated off-screen container
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '-9999px';
+  container.style.width = '794px'; // Fixed 96 DPI A4 width
+  container.style.height = '1123px'; // Fixed 96 DPI A4 height
+  container.style.overflow = 'hidden';
+  container.style.zIndex = '-9999';
+  container.style.backgroundColor = '#ffffff';
+  document.body.appendChild(container);
+
+  const root = createRoot(container);
+
+  try {
+    await new Promise<void>((resolve) => {
+      root.render(
+        <div style={{ width: '794px', height: '1123px', backgroundColor: '#ffffff' }}>
+          <AdmissionFormPreview
+            formData={preparedFormData}
+            madrasah={preparedMadrasah}
+            lang={lang}
+            config={config}
+            isPrint={true}
+            hideButtons={true}
+          />
+        </div>
+      );
+      // Allow react rendering and font/image settling
+      setTimeout(resolve, 600);
+    });
+
+    const targetElement = (container.querySelector('#print-area') as HTMLElement) || (container.firstElementChild as HTMLElement);
+    const imgDataUrl = await elementToImageDataUrl(targetElement);
+
+    const defaultFileName = isBlank
+      ? 'Admission_Form_Blank.pdf'
+      : `Admission_Form_${(formData.studentNameEn || formData.studentName || 'Student').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+
+    saveImageAsA4Pdf(imgDataUrl, fileName || defaultFileName);
+  } finally {
+    try {
+      root.unmount();
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
+    } catch (e) {}
+  }
+};
