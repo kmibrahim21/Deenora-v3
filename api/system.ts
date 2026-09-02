@@ -1,6 +1,68 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Buffer } from 'node:buffer';
 
+function upsample8kTo16k(wavBuffer: Buffer): Buffer {
+  if (wavBuffer.length < 44) return wavBuffer;
+  const isRIFF = wavBuffer.toString('ascii', 0, 4) === 'RIFF';
+  const isWAVE = wavBuffer.toString('ascii', 8, 12) === 'WAVE';
+  if (!isRIFF || !isWAVE) return wavBuffer;
+
+  const audioFormat = wavBuffer.readUInt16LE(20);
+  const numChannels = wavBuffer.readUInt16LE(22);
+  const sampleRate = wavBuffer.readUInt32LE(24);
+  const bitsPerSample = wavBuffer.readUInt16LE(34);
+
+  // If already >= 16000 or not 16-bit PCM mono, return original
+  if (sampleRate >= 16000 || audioFormat !== 1 || bitsPerSample !== 16 || numChannels !== 1) {
+    return wavBuffer;
+  }
+
+  // Find data chunk offset
+  let dataOffset = 12;
+  while (dataOffset < wavBuffer.length - 8) {
+    const chunkId = wavBuffer.toString('ascii', dataOffset, dataOffset + 4);
+    const chunkSize = wavBuffer.readUInt32LE(dataOffset + 4);
+    if (chunkId === 'data') {
+      dataOffset += 8;
+      break;
+    }
+    dataOffset += 8 + chunkSize;
+  }
+
+  if (dataOffset >= wavBuffer.length) return wavBuffer;
+
+  const pcmBytes = wavBuffer.subarray(dataOffset);
+  const numSamples = Math.floor(pcmBytes.length / 2);
+  const upsampledPcm = Buffer.alloc(numSamples * 4); // 2x samples for 16kHz
+
+  for (let i = 0; i < numSamples; i++) {
+    const sample = pcmBytes.readInt16LE(i * 2);
+    const nextSample = i < numSamples - 1 ? pcmBytes.readInt16LE((i + 1) * 2) : sample;
+    const midSample = Math.round((sample + nextSample) / 2);
+
+    upsampledPcm.writeInt16LE(sample, i * 4);
+    upsampledPcm.writeInt16LE(midSample, i * 4 + 2);
+  }
+
+  // Build compliant 16kHz WAV header
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + upsampledPcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
+  header.writeUInt16LE(1, 20); // AudioFormat (1 = PCM)
+  header.writeUInt16LE(1, 22); // NumChannels (1 = Mono)
+  header.writeUInt32LE(16000, 24); // SampleRate (16000)
+  header.writeUInt32LE(32000, 28); // ByteRate (16000 * 1 * 2)
+  header.writeUInt16LE(2, 32); // BlockAlign (1 * 2)
+  header.writeUInt16LE(16, 34); // BitsPerSample (16)
+  header.write('data', 36);
+  header.writeUInt32LE(upsampledPcm.length, 40);
+
+  return Buffer.concat([header, upsampledPcm]);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
@@ -36,10 +98,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Accept': '*/*'
         }
       };
-      
-      if (req.headers.range) {
-        fetchOptions.headers.range = req.headers.range;
-      }
 
       const response = await fetch(audioUrl, fetchOptions);
       
@@ -48,27 +106,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      const rawBuffer = Buffer.from(arrayBuffer);
 
       let contentType = response.headers.get('content-type') || 'audio/mpeg';
-      // Fix CDN wrong content types
       if (contentType.includes('octet-stream') || contentType.includes('text/') || contentType.includes('text/html')) {
-        contentType = audioUrl.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg';
+        contentType = audioUrl.toLowerCase().includes('.wav') ? 'audio/wav' : 'audio/mpeg';
       }
 
+      // Upsample 8kHz telephony WAV to 16kHz for universal mobile/desktop browser compatibility
+      let finalBuffer: any = rawBuffer;
+      if (contentType.includes('wav') || audioUrl.toLowerCase().includes('.wav') || rawBuffer.toString('ascii', 0, 4) === 'RIFF') {
+        contentType = 'audio/wav';
+        try {
+          finalBuffer = upsample8kTo16k(rawBuffer);
+        } catch (convErr) {
+          console.warn('WAV upsample error (using raw buffer):', convErr);
+        }
+      }
+
+      const totalSize = finalBuffer.length;
       res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Length', buffer.length.toString());
+      res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=86400');
-      
-      if (response.headers.has('content-range')) {
-        res.setHeader('Content-Range', response.headers.get('content-range')!);
-      }
-      if (response.headers.has('accept-ranges')) {
-        res.setHeader('Accept-Ranges', response.headers.get('accept-ranges')!);
-      }
 
-      return res.status(response.status || 200).send(buffer);
+      const rangeHeader = req.headers.range;
+      if (rangeHeader) {
+        const parts = rangeHeader.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10) || 0;
+        const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+
+        if (start >= totalSize || end >= totalSize) {
+          res.setHeader('Content-Range', `bytes */${totalSize}`);
+          return res.status(416).end();
+        }
+
+        const chunk = finalBuffer.subarray(start, end + 1);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+        res.setHeader('Content-Length', chunk.length.toString());
+        return res.status(206).send(chunk);
+      } else {
+        res.setHeader('Content-Length', totalSize.toString());
+        return res.status(200).send(finalBuffer);
+      }
     } catch (error: any) {
       console.error('Audio Proxy Error:', error);
       return res.status(500).json({ error: error.message });

@@ -38,6 +38,7 @@ import PaymentCheckout from '../components/PaymentCheckout';
 
 import { requestManager } from 'services/RequestManager';
 import { isValidUUID } from 'utils/validation';
+import { globalAudioPlayer } from '../utils/audioPlayer';
 
 interface VoiceBroadcastProps {
   lang: Language;
@@ -148,93 +149,43 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   // Audio state
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const togglePlay = (id: string, url: string) => {
-    if (!audioRef.current) return;
-    
-    // Stop current playback
-    audioRef.current.pause();
-    
-    if (playingId === id) {
-      setPlayingId(null);
-    } else {
-      // Small delay to ensure previous state is cleared
-      setPlayingId(null);
-      
-      try {
-        if (!url) {
-          throw new Error('Audio URL is empty');
-        }
+    if (!url) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'অডিও পাওয়া যায়নি' : 'Audio Not Found',
+        message: lang === 'bn' ? 'এই টেমপ্লেটের অডিও ফাইল পাওয়া যায়নি।' : 'No audio file found for this template.'
+      });
+      return;
+    }
 
-        const isExternal = url.startsWith('http') && !url.includes(window.location.hostname) && !url.includes('supabase.co');
-        const finalUrl = isExternal ? `/api/proxy-audio?url=${encodeURIComponent(url)}` : url;
-
-        audioRef.current.src = finalUrl;
-        audioRef.current.load();
-        
-        const playPromise = audioRef.current.play();
-        
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setPlayingId(id);
-            })
-            .catch(err => {
-              console.error('Playback Error details:', {
-                error: err,
-                url: url,
-                id: id
-              });
-              
-              setPlayingId(null);
-              
-              let errorMsg = err.message || 'Unknown playback error';
-              if (err.name === 'NotSupportedError') {
-                errorMsg = lang === 'bn' ? 'এই অডিও ফরম্যাটটি আপনার ব্রাউজারে সাপোর্ট করছে না।' : 'This audio format is not supported by your browser.';
-              } else if (err.name === 'NotAllowedError') {
-                errorMsg = lang === 'bn' ? 'ব্রাউজার অডিও প্লে করার অনুমতি দিচ্ছে না। দয়া করে পেজটি রিফ্রেশ করুন।' : 'Playback was blocked by the browser. Please refresh and try again.';
-              }
-              
-              setStatusModal({
-                show: true,
-                type: 'error',
-                title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
-                message: lang === 'bn' 
-                  ? `অডিও প্লে করতে সমস্যা হচ্ছে: ${errorMsg} (URL: ${url.substring(0, 30)}...)` 
-                  : `Failed to play audio: ${errorMsg} (URL: ${url.substring(0, 30)}...)`
-              });
-            });
-        }
-      } catch (err: any) {
-        console.error('Audio initialization error:', err);
+    globalAudioPlayer.toggle(
+      id,
+      url,
+      (isPlaying) => {
+        setPlayingId(isPlaying ? id : null);
+      },
+      (err) => {
+        console.error('Audio playback error:', err);
+        setPlayingId(null);
         setStatusModal({
           show: true,
           type: 'error',
-          title: 'Error',
-          message: err.message
+          title: lang === 'bn' ? 'প্লেব্যাক এরর' : 'Playback Error',
+          message: lang === 'bn' 
+            ? 'অডিও প্লে করতে সমস্যা হচ্ছে। দয়া করে ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন।' 
+            : 'Failed to play audio. Please check your internet connection and try again.'
         });
       }
-    }
+    );
   };
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      const handleEnded = () => setPlayingId(null);
-      const handlePause = () => setPlayingId(null);
-      const handlePlay = () => {
-        // Find which ID is currently playing by matching src if needed, 
-        // but togglePlay handles this.
-      };
-
-      audio.addEventListener('ended', handleEnded);
-      audio.addEventListener('pause', handlePause);
-      return () => {
-        audio.removeEventListener('ended', handleEnded);
-        audio.removeEventListener('pause', handlePause);
-      };
-    }
+    return () => {
+      globalAudioPlayer.stop();
+    };
   }, []);
 
   // History state
@@ -2494,9 +2445,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         </div>,
         document.body
       )}
-
-      {/* Hidden audio element for custom player */}
-      <audio ref={audioRef} className="hidden" preload="metadata" />
     </>
   );
 };
