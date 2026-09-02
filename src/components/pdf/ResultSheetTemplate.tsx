@@ -163,18 +163,18 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
             {/* School Name & Transcript Title */}
             <div className="flex-1 text-center px-3 min-w-0">
-              <h1 className="text-[21px] font-black text-[#1E3A8A] font-noto-serif leading-normal mb-1 uppercase drop-shadow-sm">
+              <h1 className="text-[28px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1 uppercase drop-shadow-sm">
                 {madrasah.name}
               </h1>
-              <p className="text-[10px] font-bold text-slate-600 mb-1.5 leading-tight max-w-[450px] mx-auto">
+              <p className="text-[13.5px] font-bold text-slate-600 mb-1.5 leading-tight max-w-[520px] mx-auto">
                 {madrasah.address}
               </p>
               {madrasah.institute_code && (
-                <p className="text-[10px] font-black text-[#1E3A8A]/70 uppercase tracking-[0.25em] mb-1.5">
+                <p className="text-[13px] font-black text-[#1E3A8A]/80 uppercase tracking-[0.2em] mb-1.5">
                   {t.eiin}: {madrasah.institute_code}
                 </p>
               )}
-              <div className={`inline-flex items-center justify-center h-8 px-7 border-2 border-[#1E3A8A] bg-blue-50/90 text-[#1E3A8A] rounded-full text-[14px] font-black uppercase ${isBangla ? 'tracking-normal min-w-[280px]' : 'tracking-[0.2em]'} shadow-sm text-center whitespace-nowrap`}>
+              <div className={`inline-flex items-center justify-center h-10 px-8 border-2 border-[#1E3A8A] bg-blue-50/90 text-[#1E3A8A] rounded-full text-[17.5px] font-black uppercase ${isBangla ? 'tracking-normal min-w-[320px]' : 'tracking-[0.2em]'} shadow-sm text-center whitespace-nowrap`}>
                 {t.marksheet}
               </div>
             </div>
@@ -197,34 +197,34 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                   )}
                  </div>
               </div>
-              <p className="mt-1 text-[8px] font-black uppercase text-slate-500 tracking-wider leading-none">{isBangla ? 'রোল' : 'ROLL'}: {toBnNum(student.roll)}</p>
+              <p className="mt-1 text-[11.5px] font-black uppercase text-slate-700 tracking-wider leading-none">{isBangla ? 'রোল' : 'ROLL'}: {toBnNum(student.roll)}</p>
             </div>
           </div>
 
           {/* Student Information */}
-          <div className="bg-slate-50/80 px-4 py-2.5 rounded-xl border border-slate-200 mb-2.5 grid grid-cols-12 gap-x-4 text-[12px] shadow-sm">
+          <div className="bg-slate-50/90 px-4 py-3 rounded-xl border border-slate-200 mb-3 grid grid-cols-12 gap-x-4 text-[14px] shadow-sm">
             {/* First Column: Personal Info */}
             <div className="space-y-1.5 border-r border-slate-200 pr-3 col-span-5">
-              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-normal shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] tracking-tight line-clamp-1 leading-normal">: {student.student_name}</span></div>
-              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-normal shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-normal">: {student.guardian_name || '-'}</span></div>
-              <div className="flex items-start"><span className="w-[95px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-normal shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-800 tracking-tight line-clamp-1 leading-normal">: {student.mother_name || '-'}</span></div>
+              <div className="flex items-start"><span className="w-[105px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] text-[15px] tracking-tight line-clamp-1 leading-normal">: {student.student_name}</span></div>
+              <div className="flex items-start"><span className="w-[105px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight line-clamp-1 leading-normal">: {student.guardian_name || '-'}</span></div>
+              <div className="flex items-start"><span className="w-[105px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight line-clamp-1 leading-normal">: {student.mother_name || '-'}</span></div>
             </div>
             {/* Middle Column: Academic Info */}
-            <div className="space-y-1 border-r border-slate-200 pr-3 col-span-4">
-              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-800 tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-800">: {toBnNum(student.roll)}</span></div>
-              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-800">: {isBangla ? toBnNum(student.date_of_birth || '-') : (student.date_of_birth || '-')}</span></div>
+            <div className="space-y-1.5 border-r border-slate-200 pr-3 col-span-4">
+              <div className="flex items-center"><span className="w-[95px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
+              <div className="flex items-center"><span className="w-[95px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.roll)}</span></div>
+              <div className="flex items-center"><span className="w-[95px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {isBangla ? toBnNum(student.date_of_birth || '-') : (student.date_of_birth || '-')}</span></div>
             </div>
             {/* Last Column: Other Info */}
-            <div className="space-y-1 pl-1 col-span-3">
-              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-800">: {toBnNum(student.academic_year || new Date().getFullYear())}</span></div>
-              <div className="flex items-center"><span className="w-[100px] whitespace-nowrap text-slate-500 font-bold uppercase text-[10px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-800">: {toBnNum(student.registration_number || '-')}</span></div>
+            <div className="space-y-1.5 pl-1 col-span-3">
+              <div className="flex items-center"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.academic_year || new Date().getFullYear())}</span></div>
+              <div className="flex items-center"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.registration_number || '-')}</span></div>
             </div>
           </div>
 
           {/* Exam Title */}
-          <div className="mb-2 text-center">
-              <h4 className="text-[15px] font-black text-[#1E3A8A] uppercase tracking-[0.25em] font-noto-serif italic">
+          <div className="mb-2.5 text-center">
+              <h4 className="text-[19px] font-black text-[#1E3A8A] uppercase tracking-[0.2em] font-noto-serif italic">
                   {exam.exam_name}
               </h4>
           </div>
@@ -233,25 +233,25 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
           <div className="mb-2">
             <table className="w-full border-collapse border-2 border-slate-800">
               <thead>
-                <tr className="bg-[#1E3A8A] text-white text-[10px] font-black uppercase text-center">
-                  <th className="border border-slate-700 py-2.5 px-1 w-8">{t.sno}</th>
+                <tr className="bg-[#1E3A8A] text-white text-[13.5px] font-black uppercase text-center">
+                  <th className="border border-slate-700 py-2.5 px-1 w-10">{t.sno}</th>
                   <th className="border border-slate-700 py-2.5 px-3 text-left">{t.subject}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[55px]">{t.fullMarks}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[55px]">{t.passMarks}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[60px]">{t.classHighest}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[65px]">{t.fullMarks}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[65px]">{t.passMarks}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[70px]">{t.classHighest}</th>
                   {isHighSchool && (
                     <>
-                      <th className="border border-slate-700 py-2.5 px-1 w-[45px]">CQ</th>
-                      <th className="border border-slate-700 py-2.5 px-1 w-[45px]">MCQ</th>
-                      <th className="border border-slate-700 py-2.5 px-1 w-[45px]">Prac.</th>
+                      <th className="border border-slate-700 py-2.5 px-1 w-[55px]">CQ</th>
+                      <th className="border border-slate-700 py-2.5 px-1 w-[55px]">MCQ</th>
+                      <th className="border border-slate-700 py-2.5 px-1 w-[55px]">Prac.</th>
                     </>
                   )}
-                  <th className="border border-slate-700 py-2.5 px-1 w-[60px] bg-blue-900">{t.obtainedMarks}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[50px]">{t.grade}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[50px]">{t.gp}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[70px] bg-blue-900">{t.obtainedMarks}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[60px]">{t.grade}</th>
+                  <th className="border border-slate-700 py-2.5 px-1 w-[60px]">{t.gp}</th>
                 </tr>
               </thead>
-              <tbody className="text-[12px]">
+              <tbody className="text-[14.5px]">
                 {(() => {
                   const rows: any[] = [];
                   let rowCount = 1;
@@ -335,39 +335,39 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
                   return rows.map((row, i) => (
                     <tr key={i} className={`${row.isParentRow ? "bg-blue-50/60 font-black" : (i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}`}>
-                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[13px]">{toBnNum(row.sl)}</td>
-                      <td className={`border border-slate-300 py-2 px-3 font-bold font-tiro text-slate-950 leading-normal ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
-                        {row.name} {row.is_optional ? <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.sl)}</td>
+                      <td className={`border border-slate-300 py-2 px-3 font-bold font-tiro text-slate-950 text-[15.5px] leading-normal ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
+                        {row.name} {row.is_optional ? <span className="text-[12px] font-black text-blue-600 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
                       </td>
-                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.full)}</td>
-                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pass)}</td>
-                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.highest)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[16px]">{toBnNum(row.full)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[16px]">{toBnNum(row.pass)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[16px]">{toBnNum(row.highest)}</td>
                       {isHighSchool && (
                         <>
-                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.cq ?? '-')}</td>
-                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.mcq ?? '-')}</td>
-                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.pr ?? '-')}</td>
+                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[16px]">{toBnNum(row.cq ?? '-')}</td>
+                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[16px]">{toBnNum(row.mcq ?? '-')}</td>
+                          <td className="border border-slate-300 py-2 px-1 text-center font-bold text-slate-950 text-[16px]">{toBnNum(row.pr ?? '-')}</td>
                         </>
                       )}
-                      <td className="border border-slate-300 py-2 px-1 text-center font-black text-slate-950 bg-blue-50/40 text-[16px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? toBnNum(row.obtained) : ''}</td>
-                      <td className={`border border-slate-300 py-2 px-1 text-center font-black text-[16px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
-                      <td className={`border border-slate-300 py-2 px-1 text-center font-bold text-[14px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{toBnNum(row.gp)}</td>
+                      <td className="border border-slate-300 py-2 px-1 text-center font-black text-slate-950 bg-blue-50/40 text-[18.5px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? toBnNum(row.obtained) : ''}</td>
+                      <td className={`border border-slate-300 py-2 px-1 text-center font-black text-[18.5px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
+                      <td className={`border border-slate-300 py-2 px-1 text-center font-bold text-[16.5px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{toBnNum(row.gp)}</td>
                     </tr>
                   ));
                 })()}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-100 text-[12px] font-black border-t-2 border-slate-800">
-                  <td colSpan={2} className="border border-slate-300 py-1.5 px-3 text-right uppercase tracking-wider text-[10px] text-slate-600">{t.totalMarks}:</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]">{toBnNum(totalFull)}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]">-</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]">-</td>
+                <tr className="bg-slate-100 text-[14px] font-black border-t-2 border-slate-800">
+                  <td colSpan={2} className="border border-slate-300 py-2 px-3 text-right uppercase tracking-wider text-[13.5px] text-slate-700">{t.totalMarks}:</td>
+                  <td className="border border-slate-300 py-2 px-1 text-center font-bold text-[16.5px]">{toBnNum(totalFull)}</td>
+                  <td className="border border-slate-300 py-2 px-1 text-center font-bold text-[16.5px]">-</td>
+                  <td className="border border-slate-300 py-2 px-1 text-center font-bold text-[16.5px]">-</td>
                   {isHighSchool && (
-                    <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[13px]" colSpan={3}>-</td>
+                    <td className="border border-slate-300 py-2 px-1 text-center font-bold text-[16.5px]" colSpan={3}>-</td>
                   )}
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[#1E3A8A] text-[15px] bg-blue-100/60">{toBnNum(totalObtained)}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15px] bg-blue-100/60 text-[#1E3A8A]">{finalGrade}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15px] bg-blue-100/60 text-[#1E3A8A]">{toBnNum(averageGpa)}</td>
+                  <td className="border border-slate-300 py-2 px-1 text-center font-bold text-[#1E3A8A] text-[18.5px] bg-blue-100/60">{toBnNum(totalObtained)}</td>
+                  <td className="border border-slate-300 py-2 px-1 text-center font-bold text-[18.5px] bg-blue-100/60 text-[#1E3A8A]">{finalGrade}</td>
+                  <td className="border border-slate-300 py-2 px-1 text-center font-bold text-[18.5px] bg-blue-100/60 text-[#1E3A8A]">{toBnNum(averageGpa)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -381,59 +381,59 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             <div className="col-span-8 bg-slate-50/90 rounded-xl p-3 border border-slate-200/90 flex flex-col justify-between shadow-sm">
               <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-1.5">
                 <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
-                  <span className="text-base">🏆</span>
-                  <span className="text-[13px] font-black text-[#1E3A8A] uppercase whitespace-nowrap">
-                    {t.rank}: <span className="text-[#1E3A8A] font-bold text-[15px] ml-1">{hasAnyMark && student.merit_position && student.merit_position !== "null" && student.merit_position !== "-" ? toBnNum(student.merit_position) : '-'}</span>
+                  <span className="text-xl">🏆</span>
+                  <span className="text-[15.5px] font-black text-[#1E3A8A] uppercase whitespace-nowrap">
+                    {t.rank}: <span className="text-[#1E3A8A] font-black text-[19px] ml-1">{hasAnyMark && student.merit_position && student.merit_position !== "null" && student.merit_position !== "-" ? toBnNum(student.merit_position) : '-'}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                  <span className={`text-base ${hasAnyMark ? (isPassed ? 'text-emerald-600' : 'text-red-600') : 'text-slate-400'}`}>{hasAnyMark ? (isPassed ? '✓' : '✗') : '-'}</span>
-                  <span className={`text-[13px] font-black ${hasAnyMark ? (isPassed ? 'text-emerald-700' : 'text-red-700') : 'text-slate-400'} uppercase whitespace-nowrap`}>{hasAnyMark ? (isPassed ? t.passed : t.failed) : '-'}</span>
+                  <span className={`text-xl ${hasAnyMark ? (isPassed ? 'text-emerald-600' : 'text-red-600') : 'text-slate-400'}`}>{hasAnyMark ? (isPassed ? '✓' : '✗') : '-'}</span>
+                  <span className={`text-[16.5px] font-black ${hasAnyMark ? (isPassed ? 'text-emerald-700' : 'text-red-700') : 'text-slate-400'} uppercase whitespace-nowrap`}>{hasAnyMark ? (isPassed ? t.passed : t.failed) : '-'}</span>
                 </div>
               </div>
-              <div className="flex justify-between items-center text-[11px] font-bold text-slate-600 px-0.5 gap-2">
-                <span className="whitespace-nowrap shrink-0">{isBangla ? 'উপস্থিতি' : 'Attendance'}: <strong className="text-slate-900 font-bold text-[12px] ml-1">{toBnNum(formattedAttendance)}</strong></span>
-                <span className="whitespace-nowrap shrink-0">{isBangla ? 'মূল্যায়ন' : 'Assessment'}: <strong className="text-[#1E3A8A] font-black ml-1">{assessmentText}</strong></span>
+              <div className="flex justify-between items-center text-[13.5px] font-bold text-slate-600 px-0.5 gap-2">
+                <span className="whitespace-nowrap shrink-0">{isBangla ? 'উপস্থিতি' : 'Attendance'}: <strong className="text-slate-900 font-bold text-[15px] ml-1">{toBnNum(formattedAttendance)}</strong></span>
+                <span className="whitespace-nowrap shrink-0">{isBangla ? 'মূল্যায়ন' : 'Assessment'}: <strong className="text-[#1E3A8A] font-black text-[15px] ml-1">{assessmentText}</strong></span>
               </div>
             </div>
 
-            <div className="col-span-4 bg-[#1E3A8A] text-white rounded-xl p-2.5 flex flex-col items-center justify-center text-center shadow-sm">
-              <p className="text-[9px] font-black uppercase tracking-wider text-blue-100 mb-1 whitespace-nowrap">{isBangla ? 'সর্বমোট ফলাফল' : 'Final Grade & GPA'}</p>
+            <div className="col-span-4 bg-[#1E3A8A] text-white rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-sm">
+              <p className="text-[12.5px] font-black uppercase tracking-wider text-blue-100 mb-1 whitespace-nowrap">{isBangla ? 'সর্বমোট ফলাফল' : 'Final Grade & GPA'}</p>
               <div className="flex items-baseline gap-2 whitespace-nowrap">
-                <h2 className="text-[28px] font-black text-white leading-none">{hasAnyMark ? finalGrade : '-'}</h2>
-                {hasAnyMark && averageGpa ? <span className="text-[15px] font-black text-blue-200">({toBnNum(averageGpa)})</span> : null}
+                <h2 className="text-[36px] font-black text-white leading-none">{hasAnyMark ? finalGrade : '-'}</h2>
+                {hasAnyMark && averageGpa ? <span className="text-[20px] font-black text-blue-200">({toBnNum(averageGpa)})</span> : null}
               </div>
             </div>
           </div>
 
           <div className="pt-2 pb-2 flex justify-between items-end gap-x-4">
             {/* Issue Date - Left Side */}
-            <div className="w-32 shrink-0 border-l-4 border-[#1E3A8A]/30 pl-3 py-0.5">
-                <p className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">{t.issueDate}</p>
-                <p className="text-[11px] font-black text-[#1E3A8A]">{isBangla ? toBnNum(new Date().toLocaleDateString('en-GB')) : new Date().toLocaleDateString('en-GB')}</p>
+            <div className="w-36 shrink-0 border-l-4 border-[#1E3A8A]/30 pl-3 py-0.5">
+                <p className="text-[11.5px] font-black text-slate-500 uppercase leading-none mb-1">{t.issueDate}</p>
+                <p className="text-[14.5px] font-black text-[#1E3A8A]">{isBangla ? toBnNum(new Date().toLocaleDateString('en-GB')) : new Date().toLocaleDateString('en-GB')}</p>
             </div>
 
             {/* Signatures - Right Side */}
             <div className="flex-1 flex justify-end items-end gap-x-6">
-              <div className="text-center w-32">
+              <div className="text-center w-36">
                 <div className="mb-1 flex items-center justify-center" style={{ height: `${config.signature_height || 28}px` }}>
-                    <span className="text-[11px] font-noto opacity-10 select-none uppercase font-black text-slate-400">Guardian</span>
+                    <span className="text-[13px] font-noto opacity-10 select-none uppercase font-black text-slate-400">Guardian</span>
                 </div>
                 <div className="border-t-[1.5px] border-slate-800 pt-1">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-800">{t.guardianSign}</p>
+                  <p className="text-[12.5px] font-black uppercase tracking-wider text-slate-800">{t.guardianSign}</p>
                 </div>
               </div>
 
-              <div className="text-center w-32">
+              <div className="text-center w-36">
                 <div className="mb-1 flex items-center justify-center" style={{ height: `${config.signature_height || 28}px` }}>
-                    <span className="text-[11px] font-noto opacity-10 select-none uppercase font-black text-[#1E3A8A]">Academic</span>
+                    <span className="text-[13px] font-noto opacity-10 select-none uppercase font-black text-[#1E3A8A]">Academic</span>
                 </div>
                 <div className="border-t-[1.5px] border-[#1E3A8A] pt-1">
-                  <p className="text-[9px] font-black text-[#1E3A8A] uppercase tracking-wider">{t.controllerSign}</p>
+                  <p className="text-[12.5px] font-black text-[#1E3A8A] uppercase tracking-wider">{t.controllerSign}</p>
                 </div>
               </div>
 
-              <div className="text-center w-32 relative">
+              <div className="text-center w-36 relative">
                 <div className="mb-1 flex items-center justify-center relative" style={{ height: `${config.signature_height || 28}px` }}>
                   {config.signature_url ? (
                       <img src={config.signature_url} style={{ height: `${config.signature_height || 28}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" />
@@ -446,7 +446,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                   )}
                 </div>
                 <div className="border-t-[1.5px] border-[#1E3A8A] pt-1">
-                  <p className="text-[9px] font-black text-[#1E3A8A] uppercase tracking-wider">{t.principalSign}</p>
+                  <p className="text-[12.5px] font-black text-[#1E3A8A] uppercase tracking-wider">{t.principalSign}</p>
                 </div>
               </div>
             </div>

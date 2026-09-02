@@ -86,20 +86,20 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
             
             {/* Table */}
             <div className="overflow-hidden rounded-sm border border-slate-200 shadow-sm relative z-10 bg-white min-h-[450px]">
-              <table className="w-full border-collapse text-[9px] table-fixed">
+              <table className="w-full border-collapse text-[11px] table-fixed">
                 <thead>
                   <tr className="bg-[#1E3A8A] text-white">
-                    <th className="px-1 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-10">{t.roll}</th>
-                    <th className="px-2 py-2 text-left font-black uppercase tracking-widest border-r border-white/10 w-32">{t.name}</th>
+                    <th className="px-1 py-2.5 text-left font-black uppercase tracking-widest border-r border-white/10 w-11 text-[11px]">{t.roll}</th>
+                    <th className="px-2 py-2.5 text-left font-black uppercase tracking-widest border-r border-white/10 w-36 text-[11px]">{t.name}</th>
                     {subjects.filter(s => {
                       return !isHighSchool || !s.pair_with_id;
                     }).map(s => {
                       return (
-                        <th key={s.id} className="px-0.5 py-1 text-center border-r border-white/10">
-                          <div className="mx-auto font-black uppercase tracking-widest text-[7px] max-w-[70px] leading-tight break-words whitespace-normal text-center">
+                        <th key={s.id} className="px-0.5 py-1.5 text-center border-r border-white/10">
+                          <div className="mx-auto font-black uppercase tracking-widest text-[9px] max-w-[80px] leading-tight break-words whitespace-normal text-center">
                             {s.subject_name}
                             {isHighSchool && (
-                              <div className="flex justify-center gap-0.5 mt-0.5 opacity-60 text-[5px]">
+                              <div className="flex justify-center gap-0.5 mt-0.5 opacity-70 text-[6px]">
                                 <span>C</span>
                                 <span>M</span>
                                 <span>P</span>
@@ -109,14 +109,14 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         </th>
                       );
                     })}
-                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-11">{t.total}</th>
-                    <th className="px-0.5 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12">{t.avg}</th>
-                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-10">{t.grade}</th>
-                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-11">{t.gpa}</th>
-                    <th className="px-1 py-2 text-center font-black uppercase tracking-widest bg-blue-900 w-11">{t.rank}</th>
+                    <th className="px-1 py-2.5 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12 text-[11px]">{t.total}</th>
+                    <th className="px-0.5 py-2.5 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-14 text-[11px]">{t.avg}</th>
+                    <th className="px-1 py-2.5 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-11 text-[11px]">{t.grade}</th>
+                    <th className="px-1 py-2.5 text-center font-black uppercase tracking-widest border-r border-white/10 bg-blue-900 w-12 text-[11px]">{t.gpa}</th>
+                    <th className="px-1 py-2.5 text-center font-black uppercase tracking-widest bg-blue-900 w-12 text-[11px]">{t.rank}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {pageData.map((student, idx) => {
                     const studentMarks = marksData[student.id] || {};
                     const hasAnyMark = subjects.some(s => {
@@ -131,9 +131,9 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                     const rank = hasAnyMark ? (student._rank && student._rank !== '-' ? student._rank : '') : '';
 
                     return (
-                      <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
-                        <td className="px-1 py-2 font-black text-slate-900 border-r border-slate-100 text-[11px]">{toBnNum(student.roll)}</td>
-                        <td className="px-2 py-2 font-black text-slate-900 border-r border-slate-100 uppercase tracking-tight break-words max-w-[200px] text-[10px] leading-normal">{student.student_name}</td>
+                      <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
+                        <td className="px-1 py-2 font-black text-slate-900 border-r border-slate-200 text-[12px]">{toBnNum(student.roll)}</td>
+                        <td className="px-2 py-2 font-black text-slate-900 border-r border-slate-200 uppercase tracking-tight break-words max-w-[200px] text-[11.5px] leading-normal">{student.student_name}</td>
                         {subjects.filter(sub => {
                           return !isHighSchool || !sub.pair_with_id;
                         }).map(s => {
@@ -155,11 +155,11 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                           }
 
                           return (
-                            <td key={s.id} className="px-0.5 py-2 text-center font-bold text-slate-900 border-r border-slate-100 text-[10px]">
+                            <td key={s.id} className="px-0.5 py-2 text-center font-bold text-slate-900 border-r border-slate-200 text-[12px]">
                               {isHighSchool ? (
                                 <div className="flex flex-col leading-normal">
                                   <span>{toBnNum(totalVal)}</span>
-                                  <div className="flex justify-center gap-0.5 text-[5px] opacity-40 font-normal">
+                                  <div className="flex justify-center gap-0.5 text-[6px] opacity-60 font-normal">
                                     <span>{cqVal !== undefined && cqVal !== '' ? toBnNum(cqVal) : ''}</span>
                                     <span>{mcqVal !== undefined && mcqVal !== '' ? toBnNum(mcqVal) : ''}</span>
                                     <span>{prVal !== undefined && prVal !== '' ? toBnNum(prVal) : ''}</span>
@@ -169,17 +169,17 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                             </td>
                           );
                         })}
-                        <td className="px-1 py-1 text-center font-black text-blue-900 border-r border-slate-100 bg-blue-50/30 text-[11px]">{toBnNum(total)}</td>
-                        <td className="px-0.5 py-1 text-center font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[11px]">{toBnNum(avg)}</td>
-                        <td className={`px-1 py-1 text-center font-black border-r border-white/10 bg-slate-50/30 text-[11px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
+                        <td className="px-1 py-1.5 text-center font-black text-blue-900 border-r border-slate-200 bg-blue-50/40 text-[12.5px]">{toBnNum(total)}</td>
+                        <td className="px-0.5 py-1.5 text-center font-black text-slate-900 border-r border-slate-200 bg-slate-50/40 text-[12.5px]">{toBnNum(avg)}</td>
+                        <td className={`px-1 py-1.5 text-center font-black border-r border-slate-200 bg-slate-50/40 text-[12.5px] ${grade === 'F' ? 'text-red-800' : 'text-emerald-800'}`}>
                           {grade ? (
-                            <span className="inline-flex items-center justify-center w-7 h-5 rounded bg-white border border-slate-100 shadow-sm">
+                            <span className="inline-flex items-center justify-center w-7 h-5 rounded bg-white border border-slate-200 shadow-sm">
                               {grade}
                             </span>
                           ) : ''}
                         </td>
-                        <td className="px-1 py-1 text-center font-black text-slate-900 border-r border-slate-100 bg-slate-50/30 text-[11px]">{toBnNum(gpa)}</td>
-                        <td className="px-1 py-1 text-center font-black text-[#2563EB] bg-blue-50/20 text-[11px]">{toBnNum(rank)}</td>
+                        <td className="px-1 py-1.5 text-center font-black text-slate-900 border-r border-slate-200 bg-slate-50/40 text-[12.5px]">{toBnNum(gpa)}</td>
+                        <td className="px-1 py-1.5 text-center font-black text-[#2563EB] bg-blue-50/30 text-[12.5px]">{toBnNum(rank)}</td>
                       </tr>
                     );
                   })}
