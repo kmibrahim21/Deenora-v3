@@ -147,7 +147,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
         )}
       </div>
 
-      <div className="relative z-10 px-8 py-5 h-full flex flex-col justify-between">
+      <div className="relative z-10 px-8 py-3 h-full flex flex-col justify-between">
         {/* Top Header & Student Info Area */}
         <div>
           {/* Header Section */}
@@ -234,21 +234,21 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             <table className="w-full border-collapse border-2 border-slate-800">
               <thead>
                 <tr className="bg-[#1E3A8A] text-white text-[13.5px] font-black uppercase text-center">
-                  <th className="border border-slate-700 py-2.5 px-1 w-10">{t.sno}</th>
-                  <th className="border border-slate-700 py-2.5 px-3 text-left">{t.subject}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[65px]">{t.fullMarks}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[65px]">{t.passMarks}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[70px]">{t.classHighest}</th>
+                  <th className="border border-slate-700 py-2 px-1 w-10">{t.sno}</th>
+                  <th className="border border-slate-700 py-2 px-3 text-left">{t.subject}</th>
+                  <th className="border border-slate-700 py-2 px-1 w-[65px]">{t.fullMarks}</th>
+                  <th className="border border-slate-700 py-2 px-1 w-[65px]">{t.passMarks}</th>
+                  <th className="border border-slate-700 py-2 px-1 w-[70px]">{t.classHighest}</th>
                   {isHighSchool && (
                     <>
-                      <th className="border border-slate-700 py-2.5 px-1 w-[55px]">CQ</th>
-                      <th className="border border-slate-700 py-2.5 px-1 w-[55px]">MCQ</th>
-                      <th className="border border-slate-700 py-2.5 px-1 w-[55px]">Prac.</th>
+                      <th className="border border-slate-700 py-2 px-1 w-[55px]">CQ</th>
+                      <th className="border border-slate-700 py-2 px-1 w-[55px]">MCQ</th>
+                      <th className="border border-slate-700 py-2 px-1 w-[55px]">Prac.</th>
                     </>
                   )}
-                  <th className="border border-slate-700 py-2.5 px-1 w-[70px] bg-blue-900">{t.obtainedMarks}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[60px]">{t.grade}</th>
-                  <th className="border border-slate-700 py-2.5 px-1 w-[60px]">{t.gp}</th>
+                  <th className="border border-slate-700 py-2 px-1 w-[70px] bg-blue-900">{t.obtainedMarks}</th>
+                  <th className="border border-slate-700 py-2 px-1 w-[60px]">{t.grade}</th>
+                  <th className="border border-slate-700 py-2 px-1 w-[60px]">{t.gp}</th>
                 </tr>
               </thead>
               <tbody className="text-[14.5px]">
@@ -335,39 +335,39 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
                   return rows.map((row, i) => (
                     <tr key={i} className={`${row.isParentRow ? "bg-blue-50/60 font-black" : (i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}`}>
-                      <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.sl)}</td>
-                      <td className={`border border-slate-300 py-1.5 px-2.5 font-bold font-tiro text-slate-950 text-[14.5px] leading-normal ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[14px]">{toBnNum(row.sl)}</td>
+                      <td className={`border border-slate-300 py-1 px-2.5 font-bold font-tiro text-slate-950 text-[14.5px] leading-normal ${row.isParentRow ? 'text-[#1E3A8A]' : ''}`}>
                         {row.name} {row.is_optional ? <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-1 rounded-sm ml-1 uppercase leading-none border border-blue-200">Optional</span> : ''}
                       </td>
-                      <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.full)}</td>
-                      <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.pass)}</td>
-                      <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.highest)}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.full)}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.pass)}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.highest)}</td>
                       {isHighSchool && (
                         <>
-                          <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.cq ?? '-')}</td>
-                          <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.mcq ?? '-')}</td>
-                          <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.pr ?? '-')}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.cq ?? '-')}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.mcq ?? '-')}</td>
+                          <td className="border border-slate-300 py-1 px-1 text-center font-bold text-slate-950 text-[15px]">{toBnNum(row.pr ?? '-')}</td>
                         </>
                       )}
-                      <td className="border border-slate-300 py-1.5 px-1 text-center font-black text-slate-950 bg-blue-50/40 text-[17px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? toBnNum(row.obtained) : ''}</td>
-                      <td className={`border border-slate-300 py-1.5 px-1 text-center font-black text-[17px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
-                      <td className={`border border-slate-300 py-1.5 px-1 text-center font-bold text-[15.5px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{toBnNum(row.gp)}</td>
+                      <td className="border border-slate-300 py-1 px-1 text-center font-black text-slate-950 bg-blue-50/40 text-[17px]">{row.obtained !== '' && row.obtained !== undefined && row.obtained !== null ? toBnNum(row.obtained) : ''}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-black text-[17px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{row.grade}</td>
+                      <td className={`border border-slate-300 py-1 px-1 text-center font-bold text-[15.5px] ${row.grade === 'F' ? 'text-red-700 bg-red-50/50' : 'text-slate-950'}`}>{toBnNum(row.gp)}</td>
                     </tr>
                   ));
                 })()}
               </tbody>
               <tfoot>
                 <tr className="bg-slate-100 text-[13.5px] font-black border-t-2 border-slate-800">
-                  <td colSpan={2} className="border border-slate-300 py-1.5 px-2.5 text-right uppercase tracking-wider text-[13px] text-slate-700">{t.totalMarks}:</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15.5px]">{toBnNum(totalFull)}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15.5px]">-</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15.5px]">-</td>
+                  <td colSpan={2} className="border border-slate-300 py-1 px-2.5 text-right uppercase tracking-wider text-[13px] text-slate-700">{t.totalMarks}:</td>
+                  <td className="border border-slate-300 py-1 px-1 text-center font-bold text-[15.5px]">{toBnNum(totalFull)}</td>
+                  <td className="border border-slate-300 py-1 px-1 text-center font-bold text-[15.5px]">-</td>
+                  <td className="border border-slate-300 py-1 px-1 text-center font-bold text-[15.5px]">-</td>
                   {isHighSchool && (
-                    <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[15.5px]" colSpan={3}>-</td>
+                    <td className="border border-slate-300 py-1 px-1 text-center font-bold text-[15.5px]" colSpan={3}>-</td>
                   )}
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[#1E3A8A] text-[17.5px] bg-blue-100/60">{toBnNum(totalObtained)}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[17.5px] bg-blue-100/60 text-[#1E3A8A]">{finalGrade}</td>
-                  <td className="border border-slate-300 py-1.5 px-1 text-center font-bold text-[17.5px] bg-blue-100/60 text-[#1E3A8A]">{toBnNum(averageGpa)}</td>
+                  <td className="border border-slate-300 py-1 px-1 text-center font-bold text-[#1E3A8A] text-[17.5px] bg-blue-100/60">{toBnNum(totalObtained)}</td>
+                  <td className="border border-slate-300 py-1 px-1 text-center font-bold text-[17.5px] bg-blue-100/60 text-[#1E3A8A]">{finalGrade}</td>
+                  <td className="border border-slate-300 py-1 px-1 text-center font-bold text-[17.5px] bg-blue-100/60 text-[#1E3A8A]">{toBnNum(averageGpa)}</td>
                 </tr>
               </tfoot>
             </table>

@@ -254,8 +254,8 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
   // Total possible marks across all subjects
   const totalSubjectFullMarks = subjects.reduce((sum, s) => sum + Number(s.full_marks || 100), 0);
 
-  // Paginate if > 28 students
-  const STUDENTS_PER_PAGE = 28;
+  // Paginate if > 22 students
+  const STUDENTS_PER_PAGE = 22;
   const totalPages = Math.ceil(studentList.length / STUDENTS_PER_PAGE) || 1;
 
   // Grade scale reference table
@@ -306,9 +306,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                   numStudentsOnPage > 22 ? 'pb-2 mb-2' : 'pb-3 mb-3'
                 }`}>
                   {/* Left: Institution Logo */}
-                  <div className={`${
-                    numStudentsOnPage > 22 ? 'w-16 h-16 rounded-xl' : 'w-20 h-20 rounded-2xl'
-                  } shrink-0 flex items-center justify-center border-2 border-[#1E3A8A]/20 bg-gradient-to-b from-white to-blue-50/50 p-1 shadow-md overflow-hidden`}>
+                  <div className="w-24 h-24 rounded-2xl shrink-0 flex items-center justify-center border-2 border-[#1E3A8A]/20 bg-gradient-to-b from-white to-blue-50/50 p-1 shadow-md overflow-hidden">
                     {madrasah?.logo_url ? (
                       <img src={madrasah.logo_url} className="max-w-full max-h-full object-contain" crossOrigin="anonymous" alt="Logo" />
                     ) : (
@@ -322,19 +320,13 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
                   {/* Center: Institution Details */}
                   <div className="text-center flex-1 px-3">
-                    <h1 className={`${
-                      numStudentsOnPage > 22 ? 'text-xl' : 'text-2.5xl'
-                    } font-black text-[#1E3A8A] uppercase tracking-tight font-serif drop-shadow-sm leading-normal`}>
+                    <h1 className="text-3xl font-black text-[#1E3A8A] uppercase tracking-tight font-serif drop-shadow-sm leading-normal">
                       {madrasah?.name || 'AL HIKMAH ISLAMIC ACADEMY'}
                     </h1>
-                    <p className={`${
-                      numStudentsOnPage > 22 ? 'text-[9.5px]' : 'text-[11px]'
-                    } font-bold text-slate-600 mt-0.5 leading-tight`}>
+                    <p className="text-[12px] font-bold text-slate-600 mt-1 leading-tight">
                       {madrasah?.address || 'Madrasa Road, Dhanmondi, Dhaka-1205, Bangladesh'}
                     </p>
-                    <div className={`flex justify-center items-center gap-3 ${
-                      numStudentsOnPage > 22 ? 'text-[9px] mt-0.5' : 'text-[10px] mt-1'
-                    } font-semibold text-slate-700`}>
+                    <div className="flex justify-center items-center gap-3 text-[11px] mt-1.5 font-semibold text-slate-700">
                       {madrasah?.phone && (
                         <span className="flex items-center gap-1">
                           📞 {madrasah.phone}

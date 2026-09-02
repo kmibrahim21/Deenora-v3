@@ -26,7 +26,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
     page: isBangla ? 'পৃষ্ঠা' : 'Page'
   };
 
-  const ROWS_PER_PAGE = 20;
+  const ROWS_PER_PAGE = 12;
   const totalPages = Math.ceil(students.length / ROWS_PER_PAGE) || 1;
 
   return (
@@ -35,7 +35,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
         const pageData = students.slice(pageIndex * ROWS_PER_PAGE, (pageIndex + 1) * ROWS_PER_PAGE);
         
         return (
-          <div key={pageIndex} className="page-container" style={{ width: '1123px', height: '794px', padding: '40px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden', border: '8px solid #f1f5f9' }}>
+          <div key={pageIndex} className="page-container relative" style={{ width: '1123px', height: '794px', padding: '40px 40px 90px 40px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden', border: '8px solid #f1f5f9' }}>
             {/* Header */}
             <div className="text-center mb-6 border-b-2 border-slate-900 pb-4">
               <h1 className="text-4xl font-black text-slate-900 mb-1 uppercase tracking-tight leading-normal">{madrasah.name}</h1>

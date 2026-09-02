@@ -830,21 +830,11 @@ export const generateClassResultPDF = async (
         return;
     }
 
-    // Chunk students for multi-page support in classic template
-    const STUDENTS_PER_PAGE = 18; 
-    const chunks = [];
-    for (let i = 0; i < calculatedStudents.length; i += STUDENTS_PER_PAGE) {
-        chunks.push(calculatedStudents.slice(i, i + STUDENTS_PER_PAGE));
-    }
-
+    // Classic template handles its own multi-page support
     await new Promise<void>((resolve) => {
         root.render(
             <div id="pdf-wrapper">
-                {chunks.map((chunk, idx) => (
-                    <div key={idx} className="pdf-page-break">
-                        <ClassResultTemplate exam={exam} subjects={subjects} students={chunk} marksData={marksData} madrasah={madrasah} lang={lang} />
-                    </div>
-                ))}
+                <ClassResultTemplate exam={exam} subjects={subjects} students={calculatedStudents} marksData={marksData} madrasah={madrasah} lang={lang} />
             </div>
         );
         setTimeout(resolve, 800);
@@ -1171,21 +1161,11 @@ export const generateFinalResultPDF = async (
     document.body.appendChild(container);
     const root = createRoot(container);
     
-    // Chunk students for multi-page support
-    const STUDENTS_PER_PAGE = 12; 
-    const chunks = [];
-    for (let i = 0; i < students.length; i += STUDENTS_PER_PAGE) {
-        chunks.push(students.slice(i, i + STUDENTS_PER_PAGE));
-    }
-
+    // Final result template handles its own multi-page support
     await new Promise<void>((resolve) => {
         root.render(
             <div id="pdf-wrapper">
-                {chunks.map((chunk, idx) => (
-                    <div key={idx}>
-                        <FinalResultTemplate title={title} className={className} subjects={subjects} students={chunk} madrasah={madrasah} lang={lang} />
-                    </div>
-                ))}
+                <FinalResultTemplate title={title} className={className} subjects={subjects} students={students} madrasah={madrasah} lang={lang} />
             </div>
         );
         setTimeout(resolve, 800);
