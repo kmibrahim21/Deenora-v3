@@ -178,7 +178,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
     setIsUploading(true);
     try {
-      // Read audio file as base64 for reliable Vercel serverless execution
+      // 1. Read audio file as base64 string
       const base64Audio = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -225,12 +225,45 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         throw new Error(msg);
       }
 
+      const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
+      const providerVoiceName = resData.name || resData.title || trimmedName;
+      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
+
+      // 2. Get or create SYSTEM_GLOBAL_INTERNAL institution ID
+      const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
+      let sysId = sysInst && sysInst[0]?.id;
+      if (!sysId) {
+        const { data: newSys } = await supabase.from('institutions').insert({
+          name: 'SYSTEM_GLOBAL_INTERNAL',
+          address: 'System',
+          phone: '00000000000',
+          institution_type: 'system',
+          is_active: true,
+          is_super_admin: false,
+          theme: 'default'
+        }).select('id').single();
+        sysId = newSys?.id;
+      }
+
+      // 3. Save Awaj Voice metadata to Supabase voice_templates database table (no audio file in Supabase Storage!)
+      const { error: dbError } = await supabase.from('voice_templates').insert({
+        institution_id: sysId || null,
+        title: trimmedName,
+        file_url: audioUrl,
+        admin_status: 'approved',
+        provider_status: 'approved',
+        provider_voice_name: providerVoiceName,
+        provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
+      });
+
+      if (dbError) console.warn('Warning: Could not save local template entry:', dbError.message);
+
       // Success
       setStatusModal({
         show: true,
         type: 'success',
-        title: 'ভয়েস সফলভাবে আপলোড ও অটো-অনুমোদিত (Auto Approved) হয়েছে!',
-        message: `ভয়েস "${resData.name || trimmedName}" (ID: ${resData.id || '-'}) সরাসরি Awaj Digital API-তে আপলোড এবং অটো-অনুমোদিত হয়েছে। এটি সরাসরি ব্রডকাস্টে ব্যবহার করা যাবে।`
+        title: 'ভয়েস Awaj Digital সার্ভারে সফলভাবে আপলোড ও অটো-অনুমোদিত হয়েছে!',
+        message: `ভয়েস "${providerVoiceName}" (ID: ${providerVoiceId || '-'}) সরাসরি Awaj Digital সার্ভারে আপলোড এবং অনুমোদিত হয়েছে। এটি দিয়ে সরাসরি ব্রডকাস্ট পাঠানো ও বিভিন্ন প্রতিষ্ঠানে অ্যাসাইন করা যাবে।`
       });
 
       // Reset
@@ -248,7 +281,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       // Refresh voice list
       fetchData();
     } catch (err: any) {
-      console.error('Awaj Voice Upload Error:', err);
+      console.error('Voice Upload Error:', err);
       setUploadError(err.message || 'ভয়েস আপলোড ব্যর্থ হয়েছে।');
     } finally {
       setIsUploading(false);
@@ -275,6 +308,8 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     setIsAssigning(true);
     try {
       const token = await getAuthToken();
+      const vName = assigningVoice.title || assigningVoice.name || assigningVoice.provider_voice_name || 'Assigned Voice';
+      const vUrl = assigningVoice.file_url || assigningVoice.previewUrl || assigningVoice.preview_url || assigningVoice.url || '';
       const response = await fetch('/api/admin', {
         method: 'POST',
         headers: {
@@ -284,9 +319,10 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
         body: JSON.stringify({
           action: 'assign_voice',
           institution_id: assignInstitutionId,
-          voice_id: assigningVoice.id,
-          voice_name: assigningVoice.name,
-          preview_url: assigningVoice.previewUrl || assigningVoice.preview_url || assigningVoice.file_url
+          voice_id: assigningVoice.id || assigningVoice.provider_voice_id || `v_${Date.now()}`,
+          voice_name: vName,
+          preview_url: vUrl,
+          file_url: vUrl
         })
       });
 
@@ -484,6 +520,29 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
       if (!assignedError && assignedData) {
         setAssignedVoices(assignedData);
+
+        const localSysVoices = assignedData.map((vt: any) => ({
+          id: vt.provider_voice_id || vt.id,
+          db_id: vt.id,
+          name: vt.title || vt.provider_voice_name || 'System Voice',
+          title: vt.title || vt.provider_voice_name || 'System Voice',
+          file_url: vt.file_url,
+          preview_url: vt.file_url,
+          previewUrl: vt.file_url,
+          url: vt.file_url,
+          status: vt.provider_status || 'approved',
+          createdAt: vt.created_at,
+          created_at: vt.created_at,
+          is_local: true
+        }));
+
+        const combinedVoices = [...localSysVoices];
+        for (const av of apiVoices) {
+          if (!combinedVoices.some(cv => (cv.name && av.name && cv.name.toLowerCase() === av.name.toLowerCase()) || (cv.id && av.id && cv.id.toString() === av.id.toString()))) {
+            combinedVoices.push(av);
+          }
+        }
+        setVoices(combinedVoices);
       }
 
       // Sync pending voices in Supabase

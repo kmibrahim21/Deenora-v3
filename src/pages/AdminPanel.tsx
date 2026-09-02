@@ -1691,15 +1691,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       } else {
         // Voice Broadcast for multiple institutions
         let voiceName = '';
+        let voiceObj: any = null;
         if (selectedCommVoiceId.startsWith('inst_')) {
           const instVoiceId = selectedCommVoiceId.replace('inst_', '');
-          const voice = instVoiceTemplates.find(v => v.id === instVoiceId);
-          if (!voice) throw new Error('Selected institution voice not found.');
-          voiceName = voice.provider_voice_name || voice.title;
+          voiceObj = instVoiceTemplates.find(v => v.id === instVoiceId);
+          if (!voiceObj) throw new Error('Selected institution voice not found.');
+          voiceName = voiceObj.provider_voice_name || voiceObj.title;
         } else {
-          const voice = awajVoices.find(v => v.id.toString() === selectedCommVoiceId);
-          if (!voice) throw new Error('Selected system voice not found.');
-          voiceName = voice.provider_voice_name || voice.title;
+          voiceObj = awajVoices.find(v => v.id.toString() === selectedCommVoiceId);
+          if (!voiceObj) throw new Error('Selected system voice not found.');
+          voiceName = voiceObj.provider_voice_name || voiceObj.title;
         }
 
         const targetPhones = [...new Set(targets.map(inst => {
@@ -1710,9 +1711,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           return digits;
         }).filter(p => p.length === 11))];
 
+        const audioUrl = voiceObj?.file_url || voiceObj?.preview_url || voiceObj?.previewUrl;
+
         const payload = {
           request_id: crypto.randomUUID(),
           voice: voiceName,
+          voice_id: voiceObj?.id,
+          voice_template_id: voiceObj?.id,
+          file_url: audioUrl,
+          voices: audioUrl ? [audioUrl] : undefined,
           sender: '8804445629106', // Default sender for admin
           phone_numbers: targetPhones
         };

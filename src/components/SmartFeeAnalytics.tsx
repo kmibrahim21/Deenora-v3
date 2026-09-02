@@ -694,6 +694,10 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       const payload = {
         request_id: requestId,
         voice: voiceName, 
+        voice_id: voice.id,
+        voice_template_id: voice.id,
+        file_url: voice.file_url,
+        voices: voice.file_url ? [voice.file_url] : undefined,
         sender: sNumber,
         phone_numbers: uniqueNormalizedPhoneNumbers,
         retry: 1,

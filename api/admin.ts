@@ -821,7 +821,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'assign_voice') {
-      const { institution_id, voice_id, voice_name, preview_url } = body;
+      const { institution_id, voice_id, voice_name, preview_url, file_url } = body;
       
       let insertInstId = institution_id;
       if (institution_id === 'system') {
@@ -843,13 +843,15 @@ export default async function handler(req, res) {
         insertInstId = sysId;
       }
 
+      const finalFileUrl = file_url || preview_url || '';
+
       const { data, error } = await supabase.from('voice_templates').insert({
         institution_id: insertInstId,
         title: voice_name,
-        file_url: preview_url || '',
+        file_url: finalFileUrl,
         admin_status: 'approved',
         provider_status: 'approved',
-        provider_voice_id: voice_id.toString(),
+        provider_voice_id: voice_id ? voice_id.toString() : null,
         provider_voice_name: voice_name
       }).select().single();
 

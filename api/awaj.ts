@@ -389,6 +389,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           voicesList = [body.voice];
         }
 
+        // Auto-lookup file_url from Supabase voice_templates if voicesList is empty
+        if (voicesList.length === 0) {
+          const vKey = body.voice_id || body.voice_template_id || body.voice;
+          if (vKey) {
+            const vKeyStr = String(vKey).trim();
+            try {
+              const { data: dbVoices } = await supabase
+                .from('voice_templates')
+                .select('file_url, title, provider_voice_name')
+                .or(`id.eq.${vKeyStr},provider_voice_id.eq.${vKeyStr},title.eq.${vKeyStr},provider_voice_name.eq.${vKeyStr}`)
+                .limit(1);
+              if (dbVoices && dbVoices[0] && dbVoices[0].file_url) {
+                const url = dbVoices[0].file_url.trim();
+                if (url.startsWith('http://') || url.startsWith('https://')) {
+                  voicesList = [url];
+                  console.log('Auto-resolved voice audio URL from database:', url);
+                }
+              }
+            } catch (err: any) {
+              console.warn('Error resolving voice URL from database:', err.message);
+            }
+          }
+        }
+
         // 2. Generate unique request_id (16-64 chars required by Awaj Direct API)
         let requestId = (body.request_id || body.requestId || '').toString().trim();
         if (!requestId || requestId.length < 16) {

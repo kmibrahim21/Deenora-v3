@@ -531,8 +531,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           templateQuery = templateQuery.is('institution_id', null);
         }
       } else {
-        // Regular institutions SHOULD see their own templates
-        templateQuery = templateQuery.eq('institution_id', madrasah.id);
+        // Regular institutions see their own templates, global system templates, and unassigned templates
+        if (systemId && madrasah?.id) {
+          templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.eq.${systemId},institution_id.is.null`);
+        } else if (madrasah?.id) {
+          templateQuery = templateQuery.or(`institution_id.eq.${madrasah.id},institution_id.is.null`);
+        }
       }
 
       const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
@@ -1449,34 +1453,56 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
     setIsUploading(true);
     try {
-      const fileExt = uploadFile.name.split('.').pop();
-      const fileName = `${madrasah.id}_${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('voice-templates')
-        .upload(`voices/${fileName}`, uploadFile);
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('অডিও ফাইল পড়তে সমস্যা হয়েছে'));
+        reader.readAsDataURL(uploadFile);
+      });
 
-      if (uploadError) throw uploadError;
+      const encodedName = encodeURIComponent(uploadName);
+      const response = await fetch(`/api/voices/upload?name=${encodedName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Voice-Name': encodedName
+        },
+        body: JSON.stringify({
+          name: uploadName,
+          voice_name: uploadName,
+          title: uploadName,
+          audio_base64: base64Audio,
+          filename: uploadFile.name
+        })
+      });
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('voice-templates')
-        .getPublicUrl(`voices/${fileName}`);
+      const resData = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(resData.message || resData.error || 'Failed to upload voice to Awaj Digital server.');
+      }
+
+      const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
+      const providerVoiceName = resData.name || resData.title || uploadName;
+      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
 
       const { error: dbError } = await supabase.from('voice_templates').insert({
         institution_id: madrasah.id,
         title: uploadName,
-        file_url: publicUrl,
+        file_url: audioUrl,
         admin_status: 'approved',
-        provider_status: 'approved'
+        provider_status: 'approved',
+        provider_voice_name: providerVoiceName,
+        provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
       });
 
-      if (dbError) throw dbError;
+      if (dbError) console.warn('Warning saving template metadata:', dbError.message);
 
       setStatusModal({
         show: true,
         type: 'success',
         title: lang === 'bn' ? 'সফল' : 'Success',
-        message: lang === 'bn' ? 'ভয়েস সফলভাবে আপলোড ও অটো-অনুমোদিত (Auto Approved) হয়েছে! আপনি সরাসরি ব্রডকাস্ট পাঠাতে পারবেন।' : 'Voice uploaded and auto-approved successfully! You can send broadcasts now.'
+        message: lang === 'bn' ? 'ভয়েস Awaj Digital সার্ভারে সফলভাবে আপলোড ও অনুমোদন হয়েছে! আপনি সরাসরি ব্রডকাস্ট পাঠাতে পারবেন।' : 'Voice uploaded to Awaj Digital server and approved successfully! You can send broadcasts now.'
       });
       setUploadName('');
       setUploadFile(null);
@@ -1841,7 +1867,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       </button>
                       {showVoiceDropdown && (
                         <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                          {voices.filter(v => v.admin_status === 'approved' && v.provider_status === 'approved').map(v => (
+                          {voices.filter(v => (v.admin_status === 'approved' || v.provider_status === 'approved' || !!v.file_url)).map(v => (
                             <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
                               <span className="font-black font-noto">{v.title}</span>
                             </button>
