@@ -264,17 +264,20 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
         const providerConfig = (systemSettings.sms_provider_config as any) || {};
         const defaultType = providerConfig.default_type || 'non_masking';
         
-        // Calculate rate: Prefer institution rate, then institution type-based rate (detected by reve_client_id), then global default
-        let rate = Number(madrasah.sms_rate);
+        // Calculate rate: Prefer specific masking/non-masking rate from provider config, then institution-specific sms_rate, then global system default
         const isMaskingAccount = !!madrasah.reve_client_id;
         const instSmsType = isMaskingAccount ? 'masking' : ((madrasah as any).sms_type || defaultType);
         
+        let rate = 0;
+        if (instSmsType === 'masking' && providerConfig.masking_rate) {
+          rate = Number(providerConfig.masking_rate);
+        } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+          rate = Number(providerConfig.non_masking_rate);
+        }
+        
         if (!rate || rate <= 0) {
-          if (instSmsType === 'masking' && providerConfig.masking_rate) {
-            rate = Number(providerConfig.masking_rate);
-          } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
-            rate = Number(providerConfig.non_masking_rate);
-          } else {
+          rate = Number(madrasah.sms_rate);
+          if (!rate || rate <= 0) {
             // Ultimate fallback
             rate = Number(systemSettings.sms_rate || 0.5);
           }

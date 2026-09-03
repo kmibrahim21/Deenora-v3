@@ -275,20 +275,23 @@ serve(async (req) => {
       const defaultType = providerConfig.default_type || 'non_masking'
       
       // Calculate rate: 
-      // 1. Prefer institution.sms_rate if set (> 0)
-      // 2. Then check if it's a masking account (has reve_client_id) and use corresponding global rate
-      // 3. Fallback to global default_type rate
-      let smsRate = Number(institution.sms_rate)
+      // 1. Check if specific masking/non-masking rate exists in provider config
+      // 2. Fallback to institution-specific sms_rate
+      // 3. Fallback to global system sms_rate
+      let smsRate = 0
       const isMaskingAccount = !!institution.reve_client_id
       const instSmsType = isMaskingAccount ? 'masking' : (institution.sms_type || defaultType)
       
+      if (instSmsType === 'masking' && providerConfig.masking_rate) {
+        smsRate = Number(providerConfig.masking_rate)
+      } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+        smsRate = Number(providerConfig.non_masking_rate)
+      }
+
+      // If no specific rate found, use institution rate or system default
       if (!smsRate || smsRate <= 0) {
-        if (instSmsType === 'masking' && providerConfig.masking_rate) {
-          smsRate = Number(providerConfig.masking_rate)
-        } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
-          smsRate = Number(providerConfig.non_masking_rate)
-        } else {
-          // Ultimate fallback
+        smsRate = Number(institution.sms_rate)
+        if (!smsRate || smsRate <= 0) {
           smsRate = Number(settings?.sms_rate || 0.5)
         }
       }

@@ -552,13 +552,6 @@ export default async function handler(req, res) {
       
       if (error) throw error;
 
-      if (updates.voice_rate !== undefined) {
-        await supabase.from('institutions').update({ voice_rate: updates.voice_rate }).not('id', 'is', null);
-      }
-      if (updates.sms_rate !== undefined) {
-        await supabase.from('institutions').update({ sms_rate: updates.sms_rate }).not('id', 'is', null);
-      }
-
       return res.status(200).json({ success: true, data });
     }
 
@@ -594,17 +587,44 @@ export default async function handler(req, res) {
     if (action === 'quick_recharge') {
       const { id, type, amount } = body;
       
-      // Fetch current balance
+      // Fetch current balance and rates
       const { data: inst, error: fetchError } = await supabase
         .from('institutions')
-        .select('balance, sms_balance')
+        .select('balance, sms_balance, sms_rate, voice_rate, reve_client_id, sms_type')
         .eq('id', id)
         .single();
       
       if (fetchError) throw fetchError;
 
+      let creditAmount = Number(amount);
+      
+      if (type === 'sms') {
+        // Calculate SMS count based on rate
+        const { data: settings } = await supabase.from('system_settings').select('sms_rate, sms_provider_config').eq('id', '00000000-0000-0000-0000-000000000001').single();
+        const providerConfig = (settings?.sms_provider_config as any) || {};
+        const defaultType = providerConfig.default_type || 'non_masking';
+        
+        const isMaskingAccount = !!inst.reve_client_id;
+        const instSmsType = isMaskingAccount ? 'masking' : (inst.sms_type || defaultType);
+        
+        let smsRate = 0;
+        if (instSmsType === 'masking' && providerConfig.masking_rate) {
+          smsRate = Number(providerConfig.masking_rate);
+        } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+          smsRate = Number(providerConfig.non_masking_rate);
+        }
+
+        if (!smsRate || smsRate <= 0) {
+          smsRate = Number(inst.sms_rate);
+          if (!smsRate || smsRate <= 0) {
+            smsRate = Number(settings?.sms_rate || 0.5);
+          }
+        }
+        creditAmount = Math.ceil(Number(amount) / smsRate);
+      }
+
       const currentBalance = type === 'voice' ? (inst.balance || 0) : (inst.sms_balance || 0);
-      const newBalance = currentBalance + Number(amount);
+      const newBalance = currentBalance + creditAmount;
       
       const updateData = type === 'voice' ? { balance: newBalance } : { sms_balance: newBalance };
       
@@ -619,7 +639,8 @@ export default async function handler(req, res) {
       await supabase.from('transactions').insert({
         transaction_id: `ADMIN_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         institution_id: id,
-        amount: type === 'voice' ? Number(amount) : 0,
+        amount: Number(amount),
+        sms_count: type === 'sms' ? creditAmount : null,
         sender_phone: 'Admin',
         description: `Admin Quick ${type.toUpperCase()} Credit`,
         module: type,
@@ -671,11 +692,35 @@ export default async function handler(req, res) {
           const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', targetInstId);
           if (balanceError) throw balanceError;
         } else if (targetModule === 'sms') {
-          const { data: instData, error: instError } = await supabase.from('institutions').select('sms_balance').eq('id', targetInstId).single();
+          const { data: instData, error: instError } = await supabase.from('institutions').select('sms_balance, sms_rate, sms_type, reve_client_id').eq('id', targetInstId).single();
           if (instError) throw instError;
           
-          // Use sms_count for balance update
-          const creditAmount = Number(targetSmsCount || targetAmount || 0);
+          // Calculate SMS count if missing
+          let creditAmount = Number(targetSmsCount);
+          if (isNaN(creditAmount) || creditAmount <= 0) {
+            const { data: settings } = await supabase.from('system_settings').select('sms_rate, sms_provider_config').eq('id', '00000000-0000-0000-0000-000000000001').single();
+            const providerConfig = (settings?.sms_provider_config as any) || {};
+            const defaultType = providerConfig.default_type || 'non_masking';
+            
+            const isMaskingAccount = !!instData.reve_client_id;
+            const instSmsType = isMaskingAccount ? 'masking' : (instData.sms_type || defaultType);
+            
+            let smsRate = 0;
+            if (instSmsType === 'masking' && providerConfig.masking_rate) {
+              smsRate = Number(providerConfig.masking_rate);
+            } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+              smsRate = Number(providerConfig.non_masking_rate);
+            }
+
+            if (!smsRate || smsRate <= 0) {
+              smsRate = Number(instData.sms_rate);
+              if (!smsRate || smsRate <= 0) {
+                smsRate = Number(settings?.sms_rate || 0.5);
+              }
+            }
+            creditAmount = Math.ceil(Number(targetAmount || 0) / smsRate);
+          }
+
           const newBalance = Number(instData.sms_balance || 0) + creditAmount;
           
           const { error: balanceError } = await supabase.from('institutions').update({ sms_balance: newBalance }).eq('id', targetInstId);

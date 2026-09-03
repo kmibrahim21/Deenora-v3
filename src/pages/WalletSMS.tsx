@@ -170,13 +170,19 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         const providerConfig = (data?.sms_provider_config as any) || {};
         const defaultType = providerConfig.default_type || 'non_masking';
         
-        // Prioritize institution-specific rate, then provider-config rate, then system default
-        if (!sRate) {
-          if (defaultType === 'masking' && providerConfig.masking_rate) {
-            sRate = providerConfig.masking_rate;
-          } else if (defaultType === 'non_masking' && providerConfig.non_masking_rate) {
-            sRate = providerConfig.non_masking_rate;
-          } else {
+        // Prioritize specific masking/non-masking rate from provider config, then institution-specific rate, then system default
+        const isMaskingAccount = !!madrasah?.reve_client_id;
+        const instSmsType = isMaskingAccount ? 'masking' : ((madrasah as any)?.sms_type || defaultType);
+        
+        if (instSmsType === 'masking' && providerConfig.masking_rate) {
+          sRate = providerConfig.masking_rate;
+        } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+          sRate = providerConfig.non_masking_rate;
+        }
+        
+        if (!sRate || sRate <= 0) {
+          sRate = madrasah?.sms_rate;
+          if (!sRate || sRate <= 0) {
             sRate = data?.sms_rate || 0.50;
           }
         }
@@ -228,15 +234,18 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     const providerConfig = (settings.sms_provider_config as any) || {};
     const defaultType = providerConfig.default_type || 'non_masking';
     const isMaskingAccount = !!madrasah?.reve_client_id;
-    const instSmsType = isMaskingAccount ? 'masking' : (defaultType);
-    let activeSmsRate = madrasah?.sms_rate;
+    const instSmsType = isMaskingAccount ? 'masking' : ((madrasah as any)?.sms_type || defaultType);
+    let activeSmsRate = 0;
+
+    if (instSmsType === 'masking' && providerConfig.masking_rate) {
+      activeSmsRate = providerConfig.masking_rate;
+    } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
+      activeSmsRate = providerConfig.non_masking_rate;
+    }
 
     if (!activeSmsRate || activeSmsRate <= 0) {
-      if (instSmsType === 'masking' && providerConfig.masking_rate) {
-        activeSmsRate = providerConfig.masking_rate;
-      } else if (instSmsType === 'non_masking' && providerConfig.non_masking_rate) {
-        activeSmsRate = providerConfig.non_masking_rate;
-      } else {
+      activeSmsRate = madrasah?.sms_rate;
+      if (!activeSmsRate || activeSmsRate <= 0) {
         activeSmsRate = settings.sms_rate || 0.50;
       }
     }
