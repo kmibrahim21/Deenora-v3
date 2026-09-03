@@ -617,7 +617,7 @@ export default async function handler(req, res) {
         if (!smsRate || smsRate <= 0) {
           smsRate = Number(inst.sms_rate);
           if (!smsRate || smsRate <= 0) {
-            smsRate = Number(settings?.sms_rate || 0.5);
+            smsRate = Number(settings?.sms_rate || 0.55);
           }
         }
         creditAmount = Math.ceil(Number(amount) / smsRate);
@@ -715,7 +715,7 @@ export default async function handler(req, res) {
             if (!smsRate || smsRate <= 0) {
               smsRate = Number(instData.sms_rate);
               if (!smsRate || smsRate <= 0) {
-                smsRate = Number(settings?.sms_rate || 0.5);
+                smsRate = Number(settings?.sms_rate || 0.55);
               }
             }
             creditAmount = Math.ceil(Number(targetAmount || 0) / smsRate);

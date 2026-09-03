@@ -43,7 +43,7 @@ export const SMSService = {
           masking_rate: 0.55,
           non_masking_rate: 0.35
         },
-        sms_rate: 0.50,
+        sms_rate: 0.55,
         voice_rate: 1.00,
         manager_permissions: {} as any
       };
@@ -91,7 +91,7 @@ export const SMSService = {
           masking_rate: 0.55,
           non_masking_rate: 0.35
         },
-        sms_rate: 0.50,
+        sms_rate: 0.55,
         voice_rate: 1.00,
         manager_permissions: {},
         global_update_active: false,

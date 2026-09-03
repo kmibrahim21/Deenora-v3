@@ -292,7 +292,7 @@ serve(async (req) => {
       if (!smsRate || smsRate <= 0) {
         smsRate = Number(institution.sms_rate)
         if (!smsRate || smsRate <= 0) {
-          smsRate = Number(settings?.sms_rate || 0.5)
+          smsRate = Number(settings?.sms_rate || 0.55)
         }
       }
 

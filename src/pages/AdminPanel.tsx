@@ -3920,7 +3920,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">SMS Rate (BDT)</label>
-                                    <input type="number" step="0.01" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editSmsRate} onChange={(e) => setEditSmsRate(Number(e.target.value))} placeholder="0.50" />
+                                    <input type="number" step="0.01" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editSmsRate} onChange={(e) => setEditSmsRate(Number(e.target.value))} placeholder="0.55" />
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Voice Rate (BDT)</label>

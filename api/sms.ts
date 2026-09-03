@@ -64,7 +64,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sms_provider_config: {
           reve: { masking_enabled: true, non_masking_enabled: true },
           automas: { masking_enabled: false, non_masking_enabled: false },
-          primary: { masking: 'reve', non_masking: 'reve' }
+          primary: { masking: 'reve', non_masking: 'reve' },
+          masking_rate: 0.55,
+          non_masking_rate: 0.35
         }
       };
 

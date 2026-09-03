@@ -123,9 +123,9 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad'>('bkash');
   const [isWaitingPayment, setIsWaitingPayment] = useState(false);
   const [pendingTrxId, setPendingTrxId] = useState<string | null>(null);
-  const [smsRate, setSmsRate] = useState<number>(madrasah?.sms_rate || 0.50);
+  const [smsRate, setSmsRate] = useState<number>(madrasah?.sms_rate || 0.55);
 
-  const [voiceRate, setVoiceRate] = useState<number>(madrasah?.voice_rate || 0.50);
+  const [voiceRate, setVoiceRate] = useState<number>(madrasah?.voice_rate || 1.00);
   const [smsBalance, setSmsBalance] = useState<number>(0);
 
   const fetchWalletBalance = async () => {
@@ -183,14 +183,14 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         if (!sRate || sRate <= 0) {
           sRate = madrasah?.sms_rate;
           if (!sRate || sRate <= 0) {
-            sRate = data?.sms_rate || 0.50;
+            sRate = data?.sms_rate || 0.55;
           }
         }
         
-        if (!vRate) vRate = data?.voice_rate || 0.50;
+        if (!vRate) vRate = data?.voice_rate || 1.00;
       } catch(e) {
-        if (!vRate) vRate = 0.50;
-        if (!sRate) sRate = 0.50;
+        if (!vRate) vRate = 1.00;
+        if (!sRate) sRate = 0.55;
       }
 
       setVoiceRate(vRate);
@@ -246,7 +246,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     if (!activeSmsRate || activeSmsRate <= 0) {
       activeSmsRate = madrasah?.sms_rate;
       if (!activeSmsRate || activeSmsRate <= 0) {
-        activeSmsRate = settings.sms_rate || 0.50;
+        activeSmsRate = settings.sms_rate || 0.55;
       }
     }
 

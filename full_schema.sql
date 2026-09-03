@@ -721,6 +721,16 @@ CREATE POLICY "Enable read for everyone" ON system_settings FOR SELECT USING (tr
 DROP POLICY IF EXISTS "Enable all for super admins" ON system_settings;
 CREATE POLICY "Enable all for super admins" ON system_settings FOR ALL USING (check_is_super_admin());
 
+INSERT INTO system_settings (id, sms_rate, voice_rate, sms_provider_config)
+VALUES (
+  '00000000-0000-0000-0000-000000000001', 
+  0.55, 
+  1.00, 
+  '{"reve": {"masking_enabled": true, "non_masking_enabled": true}, "automas": {"masking_enabled": false, "non_masking_enabled": false}, "primary": {"masking": "reve", "non_masking": "reve"}, "masking_rate": 0.55, "non_masking_rate": 0.35}'
+) ON CONFLICT (id) DO UPDATE SET 
+  sms_rate = EXCLUDED.sms_rate,
+  sms_provider_config = system_settings.sms_provider_config || EXCLUDED.sms_provider_config;
+
 -- Fees RLS
 ALTER TABLE fees ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enable read access for authenticated users" ON fees;
