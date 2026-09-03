@@ -218,7 +218,19 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             {/* Last Column: Other Info */}
             <div className="space-y-1.5 pl-1 col-span-3">
               <div className="flex items-center"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.academic_year || new Date().getFullYear())}</span></div>
-              <div className="flex items-center"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.registration_number || '-')}</span></div>
+              <div className="flex items-start"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] leading-tight">{(() => {
+                const reg = String(student.registration_number || '-');
+                if (reg.length > 5 && reg !== '-') {
+                  return (
+                    <>
+                      : {toBnNum(reg.slice(0, 5))}
+                      <br />
+                      <span className="pl-[7.5px]">{toBnNum(reg.slice(5))}</span>
+                    </>
+                  );
+                }
+                return `: ${toBnNum(reg)}`;
+              })()}</span></div>
             </div>
           </div>
 
