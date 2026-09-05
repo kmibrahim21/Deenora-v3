@@ -376,10 +376,10 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                           )}
                        </div>
                        <div className="flex-1 text-center flex flex-col justify-center min-w-0 px-0.5">
-                           <h3 className={`font-bold text-white font-solaiman drop-shadow-sm w-full mx-auto text-center py-0.5 ${nameSizeClass}`}>
+                           <h3 className={`font-bold text-white font-solaiman drop-shadow-sm w-full mx-auto text-center ${nameSizeClass}`}>
                             {instName}
                           </h3>
-                          <p className={`text-white/95 font-medium mt-[1px] w-full mx-auto text-center py-0.5 ${addressSizeClass}`}>
+                          <p className={`text-white/95 font-medium -mt-0.5 w-full mx-auto text-center ${addressSizeClass}`}>
                             {instAddress}
                           </p>
                        </div>
@@ -616,7 +616,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                     >
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg>
-                    <span className="leading-tight flex-1 font-solaiman line-clamp-1 py-0.5 text-[8px]">
+                    <span className="leading-tight flex-1 font-solaiman line-clamp-2 py-0.5 text-[7.5px]">
                       {madrasah?.address || "Institution Address Here"}
                     </span>
                   </div>

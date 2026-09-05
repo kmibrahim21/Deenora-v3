@@ -266,7 +266,13 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         if (hasMorning || hasAfternoon) {
           classDays.push({
             id: dayObj.id || Math.random().toString(),
-            date: dayObj.date || dayObj.isoDate || '',
+            date: (() => {
+              const dVal = dayObj.date || dayObj.isoDate;
+              if (!dVal) return '';
+              const dObj = new Date(dVal);
+              if (isNaN(dObj.getTime())) return dVal;
+              return dObj.toLocaleDateString('en-GB'); // DD/MM/YYYY
+            })(),
             day: dayObj.day || '',
             morningSubject: hasMorning ? morningSubject : '—',
             morningTime: dayObj.morning?.time || r.routineMorningTime || (r.routineMorningStart ? `${r.routineMorningStart} - ${r.routineMorningEnd}` : ''),
