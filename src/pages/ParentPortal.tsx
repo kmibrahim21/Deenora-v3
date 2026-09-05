@@ -355,6 +355,11 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       : monthAttendance.filter(a => a.status === attendanceFilter);
   }, [attendanceFilter, monthAttendance]);
 
+  const cleanStudentNotes = (notes: string) => {
+    if (!notes) return "";
+    return notes.replace(/\[[A-Z0-9_]+:.*?\]/g, "").trim();
+  };
+
   const accStartDate = useMemo(() => {
     if (student?.notes) {
       const match = student.notes.match(/\[ACC_START:(.*?)\]/);
@@ -1669,7 +1674,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                               <h4 className="text-sm font-black text-amber-900 font-noto">শিক্ষক নোট / মন্তব্য</h4>
                             </div>
                             <p className="text-xs md:text-sm font-medium text-amber-800 leading-relaxed bg-white/60 p-4 rounded-xl border border-amber-200/50 italic text-left font-noto">
-                              "{student.notes}"
+                              "{cleanStudentNotes(student.notes)}"
                             </p>
                           </div>
                        )}
