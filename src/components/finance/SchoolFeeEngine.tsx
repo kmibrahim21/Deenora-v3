@@ -620,7 +620,7 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           feeItems: feeCategories,
         }
       });
-      setShowThermalModal(true);
+      // setShowThermalModal(true);
       
       await requestManager.invalidatePattern(`fees:${madrasah.id}`);
       await requestManager.invalidatePattern(`all_fees:${madrasah.id}`);

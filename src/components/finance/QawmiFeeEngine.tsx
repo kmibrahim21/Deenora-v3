@@ -616,7 +616,7 @@ export const QawmiFeeEngine: React.FC<QawmiFeeEngineProps> = ({ activeTab, madra
             feeItems: feeCategories,
           }
         });
-        setShowThermalModal(true);
+        // setShowThermalModal(true);
       }
       
       await requestManager.invalidatePattern(`fees:${madrasah.id}`);

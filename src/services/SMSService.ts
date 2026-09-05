@@ -3,9 +3,9 @@ import { Student, SystemSettings, SmsProviderConfig } from 'types';
 import { getSmsLengthInfo } from 'utils/smsUtils';
 import { ShortcodeService } from './ShortcodeService';
 
-const normalizePhone = (phone?: string | null): string | null => {
+const normalizePhone = (phone?: string | null | number): string | null => {
   if (!phone) return null;
-  let p = phone.replace(/\D/g, ''); 
+  let p = String(phone).replace(/\D/g, ''); 
   if (p.length === 13 && p.startsWith('880')) return p;
   if (p.startsWith('0') && p.length === 11) return `88${p}`;
   if (p.startsWith('1') && p.length === 10) return `880${p}`;

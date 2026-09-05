@@ -369,7 +369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
 
         for (const item of messages) {
-          let normPhone = item.recipient.replace(/\D/g, '');
+          let normPhone = String(item.recipient || '').replace(/\D/g, '');
           if (normPhone.length === 10 && normPhone.startsWith('1')) {
             normPhone = `0${normPhone}`;
           }
