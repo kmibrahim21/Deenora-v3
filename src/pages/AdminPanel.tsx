@@ -4138,6 +4138,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       onClick={() => {
                                         if (canWrite('payment')) {
                                           setSelectedMonthsForPayment([]);
+                                          setEditPaidMonths([]);
                                         } else {
                                           setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার পেমেন্ট করার অনুমতি নেই।' });
                                         }
@@ -4173,6 +4174,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                           onClick={() => {
                                             if (isSelectedNow) {
                                               setSelectedMonthsForPayment(selectedMonthsForPayment.filter(m => m !== yearMonth));
+                                            } else if (isPaidHistory) {
+                                              // If it's already paid, allow removing it from history for corrections
+                                              if (canWrite('payment')) {
+                                                setEditPaidMonths(editPaidMonths.filter(m => m !== yearMonth));
+                                              }
                                             } else {
                                               setSelectedMonthsForPayment([...selectedMonthsForPayment, yearMonth]);
                                             }

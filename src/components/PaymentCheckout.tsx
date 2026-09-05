@@ -57,14 +57,12 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
 
   const storageKey = `pending_payment_${madrasah?.id}_${module}`;
 
-  // Remove the useEffect that re-sets amount on step change to allow manual editing
-  /* 
+  // Keep amount in sync with fixedAmount if provided, especially for subscription
   useEffect(() => {
-    if (fixedAmount && fixedAmount > 0 && step !== 'pay' && step !== 'verify' && !pendingTrx) {
+    if (fixedAmount && fixedAmount > 0 && step === 'amount' && !pendingTrx) {
       setAmount(fixedAmount.toString());
     }
   }, [fixedAmount, step, pendingTrx]);
-  */
 
   // Restore pending payment on mount
   useEffect(() => {
@@ -419,29 +417,36 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
                   <span className="absolute left-6 top-1/2 -translate-y-1/2 text-3xl font-black text-slate-300">৳</span>
                   <input 
                     type="number" 
-                    className="w-full h-24 pl-14 pr-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-5xl text-center text-[#2563EB] focus:border-[#2563EB] focus:bg-white transition-all outline-none" 
+                    className={`w-full h-24 pl-14 pr-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-5xl text-center text-[#2563EB] focus:border-[#2563EB] focus:bg-white transition-all outline-none ${module === 'subscription' ? 'cursor-not-allowed opacity-90' : ''}`} 
                     value={amount} 
-                    onChange={(e) => setAmount(e.target.value)} 
+                    onChange={(e) => module !== 'subscription' && setAmount(e.target.value)} 
+                    readOnly={module === 'subscription'}
                     placeholder="0" 
                     autoFocus
                   />
                 </div>
-                {module !== 'subscription' && (
-                  <p className={`text-xs font-bold transition-colors ${(!amount || parseInt(amount) < 50) ? 'text-rose-500' : 'text-emerald-600'}`}>
-                    {lang === 'bn' ? '* সর্বনিম্ন রিচার্জ ৫০ টাকা' : '* Minimum recharge 50 Taka'}
+                {module !== 'subscription' ? (
+                  <>
+                    <p className={`text-xs font-bold transition-colors ${(!amount || parseInt(amount) < 50) ? 'text-rose-500' : 'text-emerald-600'}`}>
+                      {lang === 'bn' ? '* সর্বনিম্ন রিচার্জ ৫০ টাকা' : '* Minimum recharge 50 Taka'}
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[100, 200, 500, 1000].map(val => (
+                        <button 
+                          key={val}
+                          onClick={() => setAmount(val.toString())}
+                          className="py-2 rounded-xl border border-slate-100 bg-slate-50 text-[10px] font-black text-slate-600 hover:border-[#2563EB] hover:text-[#2563EB] transition-all"
+                        >
+                          +{val}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {lang === 'bn' ? '* সাবস্ক্রিপশন ফি পরিবর্তনযোগ্য নয়' : '* Subscription fee is not editable'}
                   </p>
                 )}
-                <div className="grid grid-cols-4 gap-2">
-                  {[100, 200, 500, 1000].map(val => (
-                    <button 
-                      key={val}
-                      onClick={() => setAmount(val.toString())}
-                      className="py-2 rounded-xl border border-slate-100 bg-slate-50 text-[10px] font-black text-slate-600 hover:border-[#2563EB] hover:text-[#2563EB] transition-all"
-                    >
-                      +{val}
-                    </button>
-                  ))}
-                </div>
               </div>
               <div className="mt-auto pt-8">
                 <button 

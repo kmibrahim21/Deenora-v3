@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink, FileText } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink, FileText, Clock } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -1012,43 +1012,53 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               <div className="absolute -top-12 -left-12 w-28 h-28 bg-[#2563EB]/5 rounded-full"></div>
               
               <div className="z-10 w-full animate-in fade-in slide-in-from-bottom-6 duration-700">
-                <PaymentCheckout 
-                  lang={lang}
-                  madrasah={madrasah!}
-                  module="subscription"
-                  onSuccess={(trx) => {
-                    setShowSuccessModal({ 
-                      show: true, 
-                      title: lang === 'bn' ? 'পেমেন্ট সফল' : 'Payment Successful', 
-                      message: lang === 'bn' ? 'আপনার পেমেন্ট সফলভাবে যাচাই করা হয়েছে এবং আপনার সাবস্ক্রিপশন আপডেট করা হয়েছে।' : 'Your payment has been successfully verified and your subscription has been updated.' 
-                    });
-                    if (madrasah?.id) requestManager.invalidatePattern(`institution:${madrasah.id}`);
-                    if (onProfileUpdate) onProfileUpdate();
-                    fetchPaymentHistory();
-                  }}
-                  onCancel={() => setPaymentStep(1)}
-                  metadata={{
-                    months: (() => {
-                      const monthsForPayment = selectedMonths.length > 0 ? [...selectedMonths] : [];
-                      if (monthsForPayment.length === 0) {
-                        const duration = subscriptionType === 'monthly' ? 1 : subscriptionType === 'quarterly' ? 3 : 12;
-                        const today = new Date();
-                        const currentYear = today.getFullYear();
-                        const currentMonth = today.getMonth();
-                        for (let i = 0; i < duration; i++) {
-                          const d = new Date(currentYear, currentMonth + i, 1);
-                          monthsForPayment.push(`${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`);
-                        }
-                      }
-                      return monthsForPayment;
-                    })(),
-                    package_name: selectedPackage?.name,
-                    subscription_type: subscriptionType,
-                    source: 'account_subscription_page',
-                    expected_amount: calculatedFee
-                  }}
-                  fixedAmount={calculatedFee > 0 ? calculatedFee : undefined}
-                />
+                {selectedMonths.length > 0 ? (
+                  <PaymentCheckout 
+                    lang={lang}
+                    madrasah={madrasah!}
+                    module="subscription"
+                    onSuccess={(trx) => {
+                      setShowSuccessModal({ 
+                        show: true, 
+                        title: lang === 'bn' ? 'পেমেন্ট সফল' : 'Payment Successful', 
+                        message: lang === 'bn' ? 'আপনার পেমেন্ট সফলভাবে যাচাই করা হয়েছে এবং আপনার সাবস্ক্রিপশন আপডেট করা হয়েছে।' : 'Your payment has been successfully verified and your subscription has been updated.' 
+                      });
+                      if (madrasah?.id) requestManager.invalidatePattern(`institution:${madrasah.id}`);
+                      if (onProfileUpdate) onProfileUpdate();
+                      fetchPaymentHistory();
+                    }}
+                    onCancel={() => setPaymentStep(1)}
+                    metadata={{
+                      months: selectedMonths,
+                      package_name: selectedPackage?.name,
+                      subscription_type: subscriptionType,
+                      source: 'account_subscription_page',
+                      expected_amount: calculatedFee
+                    }}
+                    fixedAmount={calculatedFee > 0 ? calculatedFee : undefined}
+                  />
+                ) : (
+                  <div className="py-10 px-6 space-y-4">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Clock className="text-blue-500 animate-pulse" size={32} />
+                    </div>
+                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>
+                      {lang === 'bn' ? 'মাস নির্বাচন করুন' : 'Select Months'}
+                    </h3>
+                    <p className="text-xs font-bold text-slate-400 leading-relaxed max-w-[200px] mx-auto">
+                      {lang === 'bn' 
+                        ? 'পেমেন্ট করার জন্য উপরে ২ নম্বর ধাপে অন্তত একটি মাস সিলেক্ট করুন।' 
+                        : 'Please select at least one month from step 2 above to proceed with payment.'}
+                    </p>
+                    <div className="pt-4 flex justify-center">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 rounded-full bg-blue-500/20"></div>
+                        <div className="w-2 h-2 rounded-full bg-blue-500/40"></div>
+                        <div className="w-2 h-2 rounded-full bg-blue-500/60"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
