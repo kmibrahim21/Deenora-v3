@@ -34,6 +34,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   const isDark = madrasah?.theme === "dark";
   const isBangla = lang === "bn";
 
+  const isPhotoModuleEnabled = madrasah?.config_json?.modules?.student_photo === true;
   const instName = madrasah?.name || "Institution Name";
   const instAddress = madrasah?.address || "Dhaka, Bangladesh";
   const nameLen = instName.length;
@@ -388,7 +389,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                   {/* Photo & Title Section */}
                   <div className="flex flex-col items-center mt-1 w-full relative z-10 px-5">
                       <div className="w-[75px] h-[85px] bg-white border-[2px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0">
-                         {currentRenderStudent.photo_url ? (
+                         {(isPhotoModuleEnabled && currentRenderStudent.photo_url) ? (
                              <img src={currentRenderStudent.photo_url} alt="Photo" className="w-full h-full object-cover" crossOrigin="anonymous"onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                          ) : (
                              <svg className="text-slate-200 w-[36px] h-[36px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>

@@ -183,7 +183,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             <div className="w-20 shrink-0 flex flex-col items-center">
               <div className="w-20 h-24 border-2 border-[#1E3A8A] bg-white overflow-hidden shadow-sm rounded-lg p-0.5">
                  <div className="w-full h-full bg-slate-50 overflow-hidden rounded-md border border-slate-100 flex items-center justify-center">
-                  {student.photo_url ? (
+                  {((madrasah?.config_json?.modules?.student_photo === true) && student.photo_url) ? (
                     <img 
                       src={student.photo_url} 
                       className="w-full h-full object-cover" 

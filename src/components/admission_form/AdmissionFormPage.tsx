@@ -520,7 +520,7 @@ const AdmissionFormPage: React.FC<Props> = ({ madrasah, onBack, lang: appLang })
                           >
                             <div className="flex items-center gap-3 flex-1 text-left min-w-0 mr-2">
                               <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 overflow-hidden shrink-0">
-                                {student.photo_url ? (
+                                {((madrasah?.config_json?.modules?.student_photo === true) && student.photo_url) ? (
                                   <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
                                 ) : <User size={20} />}
                               </div>

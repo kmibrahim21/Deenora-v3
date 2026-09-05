@@ -759,7 +759,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           <div className="bg-white border border-slate-100 p-5 rounded-[2.5rem] flex items-center justify-between shadow-premium animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-4 text-left">
               <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center border border-blue-100 overflow-hidden">
-                {student?.photo_url ? (
+                {((madrasah?.config_json?.modules?.student_photo === true) && student?.photo_url) ? (
                   <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <User size={28} className="text-blue-500" />
@@ -1489,7 +1489,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                     {/* Avatar with smaller size */}
                     <div className="relative flex-shrink-0">
                       <div className="w-16 h-16 md:w-24 md:h-24 bg-white rounded-2xl p-1 shadow-md border border-slate-100">
-                        {student?.photo_url ? (
+                        {((madrasah?.config_json?.modules?.student_photo === true) && student?.photo_url) ? (
                            <img src={student.photo_url} alt="" className="w-full h-full object-cover rounded-xl" />
                         ) : (
                            <div className="w-full h-full bg-slate-50 flex items-center justify-center rounded-xl">

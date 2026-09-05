@@ -509,7 +509,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                   <Loader2 className="animate-spin text-blue-500 mb-1" size={24} />
                   <span className="text-[8px] font-black uppercase tracking-widest">{lang === 'bn' ? 'আপলোড...' : 'Uploading'}</span>
                 </div>
-              ) : currentPhotoUrl ? (
+              ) : (isPhotoModuleEnabled && currentPhotoUrl) ? (
                 <img src={currentPhotoUrl} className="w-full h-full object-cover" alt={student.student_name} referrerPolicy="no-referrer" />
               ) : (
                 <UserIcon size={48} strokeWidth={2.5} />

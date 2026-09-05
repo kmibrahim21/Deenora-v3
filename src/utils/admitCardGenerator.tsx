@@ -245,7 +245,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
           {/* Far Right: Candidate Photo & Signature Box */}
           <div className="w-[34mm] border-l border-[#0c4a7e]/15 pl-4 flex flex-col items-center justify-between h-full flex-shrink-0">
             <div className="w-[24mm] h-[25mm] border-[1.2px] border-[#0c4a7e]/50 p-0.5 rounded bg-white overflow-hidden shadow-3xs flex-shrink-0">
-              {student.photo_url ? (
+              {((madrasah?.config_json?.modules?.student_photo === true) && student.photo_url) ? (
                 <img src={student.photo_url} className="w-full h-full object-cover rounded-3xs" crossOrigin="anonymous" />
               ) : (
                 <div className="w-full h-full bg-slate-50 flex items-center justify-center text-[11px] text-slate-400 font-bold leading-normal pt-[2px]">
