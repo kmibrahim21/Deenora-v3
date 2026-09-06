@@ -12,11 +12,27 @@
   ],
   "rewrites": [
     {
+      "source": "/api/fcm/:path*",
+      "destination": "/api/fcm.ts"
+    },
+    {
+      "source": "/api/fcm",
+      "destination": "/api/fcm.ts"
+    },
+    {
       "source": "/api/teachers/:path*",
       "destination": "/api/teachers.ts"
     },
     {
+      "source": "/api/teachers",
+      "destination": "/api/teachers.ts"
+    },
+    {
       "source": "/api/parents/:path*",
+      "destination": "/api/parents.ts"
+    },
+    {
+      "source": "/api/parents",
       "destination": "/api/parents.ts"
     },
     {
@@ -46,6 +62,78 @@
     {
       "source": "/api/voice-refund",
       "destination": "/api/awaj.ts?action=voice-refund"
+    },
+    {
+      "source": "/api/attendance/:path*",
+      "destination": "/api/attendance.ts"
+    },
+    {
+      "source": "/api/attendance",
+      "destination": "/api/attendance.ts"
+    },
+    {
+      "source": "/api/fees/:path*",
+      "destination": "/api/fees.ts"
+    },
+    {
+      "source": "/api/fees",
+      "destination": "/api/fees.ts"
+    },
+    {
+      "source": "/api/messages/:path*",
+      "destination": "/api/messages.ts"
+    },
+    {
+      "source": "/api/messages",
+      "destination": "/api/messages.ts"
+    },
+    {
+      "source": "/api/results/:path*",
+      "destination": "/api/results.ts"
+    },
+    {
+      "source": "/api/results",
+      "destination": "/api/results.ts"
+    },
+    {
+      "source": "/api/sms/:path*",
+      "destination": "/api/sms.ts"
+    },
+    {
+      "source": "/api/sms",
+      "destination": "/api/sms.ts"
+    },
+    {
+      "source": "/api/admin/:path*",
+      "destination": "/api/admin.ts"
+    },
+    {
+      "source": "/api/admin",
+      "destination": "/api/admin.ts"
+    },
+    {
+      "source": "/api/student/:path*",
+      "destination": "/api/student.ts"
+    },
+    {
+      "source": "/api/student",
+      "destination": "/api/student.ts"
+    },
+    {
+      "source": "/api/iclock/:path*",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/api/iclock",
+      "destination": "/api/iclock.ts"
+    },
+    {
+      "source": "/api/system/:path*",
+      "destination": "/api/system.ts"
+    },
+    {
+      "source": "/api/system",
+      "destination": "/api/system.ts"
     },
     {
       "source": "/api/(.*)",

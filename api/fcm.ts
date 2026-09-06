@@ -1,28 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 
 let appInitialized = false;
 
-function getFirebaseAdmin() {
-  try {
-    const { initializeApp, cert, getApps, getApp } = require('firebase-admin/app');
-    const { getMessaging } = require('firebase-admin/messaging');
-    return { initializeApp, cert, getApps, getApp, getMessaging };
-  } catch (err: any) {
-    console.error('[FCM] Failed to load firebase-admin modules:', err.message);
-    return null;
-  }
-}
-
 function initFirebase() {
-  const fb = getFirebaseAdmin();
-  if (!fb) return false;
-
-  const { initializeApp, cert, getApps } = fb;
-
   if (appInitialized && getApps().length > 0) return true;
   if (getApps().length > 0) {
     appInitialized = true;
@@ -84,7 +67,6 @@ export default async function handler(req: any, res: any) {
   }
 
   const isConfigured = initFirebase();
-  const fb = getFirebaseAdmin();
 
   // Support GET request for diagnostics & connection check
   if (req.method === 'GET') {
@@ -127,7 +109,7 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'At least one topic or token is required' });
     }
 
-    if (!isConfigured || !fb) {
+    if (!isConfigured) {
       console.log(`[FCM Notification Simulated] Title: "${title}", Topics: [${topics.join(', ')}], Body: "${notificationBody}"`);
       return res.status(200).json({
         success: true,
@@ -140,7 +122,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const messaging = fb.getMessaging();
+    const messaging = getMessaging();
     const promises: Promise<any>[] = [];
 
     // Stringify any non-string values in data payload as FCM requires string values in data
