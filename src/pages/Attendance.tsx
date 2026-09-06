@@ -13,7 +13,6 @@ import { SupabaseWrapper } from 'services/supabaseWrapper';
 import { SyncEngine } from 'services/syncEngine';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { generateAttendanceReportPDF } from '../utils/pdfGenerator';
-import { FCMService } from '../services/FCMService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -1117,27 +1116,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
         }
       }
 
-      // Send Push Notifications via FCM for recorded attendance
-      try {
-        students.forEach(student => {
-          const st = attendance[student.id];
-          if (st) {
-            FCMService.sendAttendanceNotification({
-              studentId: student.id,
-              studentName: student.student_name,
-              guardianPhone: student.guardian_phone,
-              status: st,
-              date: date,
-              institutionId: madrasah.id,
-              arrivalTime: arrivalTime[student.id] || null,
-              institutionName: madrasah.name
-            }).catch(e => console.warn('[Attendance] FCM notification error:', e));
-          }
-        });
-      } catch (fcmErr) {
-        console.warn('[Attendance] FCM dispatch error:', fcmErr);
-      }
-
       setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
       setSuccessMessage(lang === 'bn' ? 'হাজিরা সফলভাবে ডাটাবেসে সংরক্ষিত হয়েছে।' : 'Attendance has been successfully saved to the database.');
       setShowSuccessModal(true);
@@ -1185,23 +1163,6 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           }
 
           await smsApi.sendBulk(madrasah.id, absents, message);
-
-          // Also trigger FCM push alerts for absents
-          try {
-            absents.forEach(student => {
-              FCMService.sendAttendanceNotification({
-                studentId: student.id,
-                studentName: student.student_name,
-                guardianPhone: student.guardian_phone,
-                status: 'absent',
-                date: date,
-                institutionId: madrasah.id,
-                institutionName: madrasah.name
-              }).catch(e => console.warn('[Absent Alert] FCM error:', e));
-            });
-          } catch (fcmErr) {
-            console.warn('[Absent Alert] FCM dispatch error:', fcmErr);
-          }
           
           setSuccessTitle(lang === 'bn' ? 'সফল হয়েছে!' : 'Success!');
           setSuccessMessage(lang === 'bn' ? `${absents.length} জন অভিভাবককে এসএমএস পাঠানো হয়েছে।` : `SMS alerts sent to ${absents.length} guardians.`);

@@ -6,7 +6,6 @@ import { sortMadrasahClasses } from 'pages/Classes';
 import { generateClassFeeReportPDF, generateFeeReceiptPDF } from '../../utils/pdfGenerator';
 import { requestManager, CACHE_TTLS } from '../../services/RequestManager';
 import { OfflineService } from '../../services/OfflineService';
-import { FCMService } from '../../services/FCMService';
 import { ThermalReceiptPreviewModal } from './ThermalReceiptPreviewModal';
 
 interface SchoolFeeEngineProps {
@@ -671,25 +670,6 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           console.error("Fee SMS error: ", smsError);
           alert(lang === 'bn' ? `অটো এসএমএস পাঠানো সম্ভব হয়নি: ${smsError.message}` : `Auto SMS failed: ${smsError.message}`);
         }
-      }
-
-      // Send FCM Push Notification for Fee Collection
-      try {
-        const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
-        const dateObj = new Date(selectedMonth + '-01');
-        const formattedMonthStr = lang === 'bn' ? bnMonths[dateObj.getMonth()] : dateObj.toLocaleString('en-US', { month: 'long' });
-        FCMService.sendFeeNotification({
-          studentId: currentStudent.id,
-          studentName: currentStudent.student_name || '',
-          guardianPhone: currentStudent.guardian_phone,
-          amount: totalAmt,
-          month: formattedMonthStr,
-          type: 'payment_received',
-          institutionId: madrasah.id,
-          institutionName: madrasah.name
-        }).catch(e => console.warn('[School Fee Engine] FCM error:', e));
-      } catch (fcmErr) {
-        console.warn('[School Fee Engine] FCM dispatch error:', fcmErr);
       }
       
       if (triggerRefresh) triggerRefresh();

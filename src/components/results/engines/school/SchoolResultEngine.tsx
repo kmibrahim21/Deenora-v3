@@ -10,7 +10,6 @@ import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import FinalResults from './FinalResults';
 import { generateSeatPlanPDF, generateResultPDF, generateClassResultPDF, generateExamRoutinePDF, generateMassMarksheetPDF } from '../../../../utils/pdfGenerator';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
-import { FCMService } from '../../../../services/FCMService';
 
 interface SchoolResultEngineProps {
   lang: Language;
@@ -1624,24 +1623,6 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           // Also invalidate routine data as it depends on exams
           requestManager.invalidatePattern(`exam_subjects:`);
         }
-
-        // Trigger FCM Push Notification if exam is published
-        if (isPublished && madrasah?.id) {
-          try {
-            const cls = classes.find(c => c.id === classId);
-            FCMService.sendExamResultNotification({
-              examName: examName,
-              institutionId: madrasah.id,
-              classId: classId || undefined,
-              className: cls?.class_name,
-              institutionName: madrasah.name,
-              type: 'result_published'
-            }).catch(e => console.warn('[Exam Publish] FCM error:', e));
-          } catch (fcmErr) {
-            console.warn('[Exam Publish] FCM dispatch error:', fcmErr);
-          }
-        }
-
         setShowAddExam(false);
         setEditingExam(null);
         setExamName('');

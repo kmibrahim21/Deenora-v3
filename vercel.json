@@ -12,12 +12,44 @@
   ],
   "rewrites": [
     {
+      "source": "/api/teachers/:path*",
+      "destination": "/api/teachers.ts"
+    },
+    {
+      "source": "/api/parents/:path*",
+      "destination": "/api/parents.ts"
+    },
+    {
+      "source": "/api/awaj/:path*",
+      "destination": "/api/awaj.ts"
+    },
+    {
       "source": "/api/balance",
-      "destination": "/api/awaj?action=balance"
+      "destination": "/api/awaj.ts?action=balance"
+    },
+    {
+      "source": "/api/voices/:path*",
+      "destination": "/api/awaj.ts"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/system.ts"
+    },
+    {
+      "source": "/api/proxy-audio",
+      "destination": "/api/system.ts"
+    },
+    {
+      "source": "/api/proxy-image",
+      "destination": "/api/system.ts"
     },
     {
       "source": "/api/voice-refund",
-      "destination": "/api/awaj?action=voice-refund"
+      "destination": "/api/awaj.ts?action=voice-refund"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
       "source": "/((?!api/).*)",
