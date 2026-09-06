@@ -27,6 +27,7 @@ import { OfflineService } from '../services/OfflineService';
 import { getTodayDateString } from '../utils/calendarUtils';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { generateMessagePDF } from '../utils/pdfGenerator';
+import { FCMService } from '../services/FCMService';
 
 import { requestManager } from 'services/RequestManager';
 
@@ -315,6 +316,23 @@ export default function Messages({
         if (error) throw error;
       }
 
+      // Send FCM push notification for Diary
+      if (madrasah?.id) {
+        try {
+          const diarySummary = diarySubjects.filter(s => s.details).map(s => `${s.subject}: ${s.details}`).join(', ');
+          FCMService.sendNoticeNotification({
+            title: `দৈনিক ডায়েরি: ${title || selectedClass}`,
+            description: diarySummary || diaryNote || 'নতুন ডায়েরি দেওয়া হয়েছে।',
+            institutionId: madrasah.id,
+            className: selectedClass,
+            category: 'diary',
+            institutionName: madrasah.name
+          }).catch(e => console.warn('[Diary] FCM error:', e));
+        } catch (fcmErr) {
+          console.warn('[Diary] FCM dispatch error:', fcmErr);
+        }
+      }
+
       sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);
       setShowMsgModal(false);
       setEditingItem(null);
@@ -372,6 +390,28 @@ export default function Messages({
         if (error) throw error;
       }
 
+      // Send FCM push notification for Notice / Announcement / Holiday / PTM
+      if (madrasah?.id && !isDraft) {
+        try {
+          let category = 'notice';
+          if (noticeType?.includes('HOLIDAY') || noticeTitle?.toLowerCase().includes('ছুটি') || noticeTitle?.toLowerCase().includes('holiday')) category = 'holiday';
+          else if (noticeType?.includes('PTM') || noticeTitle?.toLowerCase().includes('অভিভাবক') || noticeTitle?.toLowerCase().includes('meeting')) category = 'ptm';
+          else if (noticeType?.includes('EVENT') || noticeTitle?.toLowerCase().includes('মাহফিল') || noticeTitle?.toLowerCase().includes('প্রতিযোগিতা')) category = 'event';
+          else if (noticeType?.includes('ANNOUNCEMENT') || noticeTitle?.toLowerCase().includes('জরুরি') || noticeTitle?.toLowerCase().includes('ঘোষণা')) category = 'announcement';
+
+          FCMService.sendNoticeNotification({
+            title: noticeTitle,
+            description: noticeDesc,
+            institutionId: madrasah.id,
+            className: noticeClass !== 'ALL' ? noticeClass : undefined,
+            category,
+            institutionName: madrasah.name
+          }).catch(e => console.warn('[Notice] FCM error:', e));
+        } catch (fcmErr) {
+          console.warn('[Notice] FCM dispatch error:', fcmErr);
+        }
+      }
+
       sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);
       setShowNoticeModal(false);
       setEditingItem(null);
@@ -397,6 +437,21 @@ export default function Messages({
         }),
         sender_name: profile?.name || 'Admin'
       });
+
+      if (madrasah?.id && !isDraft) {
+        try {
+          FCMService.sendExamResultNotification({
+            examName: `ক্লাস রুটিন (${routineClass})`,
+            institutionId: madrasah.id,
+            className: routineClass,
+            institutionName: madrasah.name,
+            type: 'routine_published'
+          }).catch(e => console.warn('[Routine] FCM error:', e));
+        } catch (fcmErr) {
+          console.warn('[Routine] FCM dispatch error:', fcmErr);
+        }
+      }
+
       setShowRoutineModal(false);
       fetchData();
     } finally { setIsSubmitting(false); }

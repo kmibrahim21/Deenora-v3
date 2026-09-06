@@ -7,6 +7,7 @@ import { ShortcodeService } from 'services/ShortcodeService';
 import { TrendingUp, DollarSign, BarChart3, AlertCircle, Send, Loader2, CheckCircle2, MessageSquare, Smartphone, PieChart, Users, Filter, Calendar, Wallet, BookOpen, ChevronDown, Info, PhoneCall, Download, X } from 'lucide-react';
 import { isValidUUID } from 'utils/validation';
 import { generateAccountingReportPDF } from 'utils/pdfGenerator';
+import { FCMService } from '../services/FCMService';
 
 import { createPortal } from 'react-dom';
 
@@ -812,6 +813,25 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
                    .replace(/\[name\]/g, '{student_name}');
 
         await smsApi.sendBulk(institutionId, pseudoStudents, body);
+
+        // Also send FCM push notifications for fee reminders
+        try {
+          pseudoStudents.forEach(st => {
+            FCMService.sendFeeNotification({
+              studentId: st.id,
+              studentName: st.student_name,
+              guardianPhone: st.guardian_phone,
+              month: formattedMonth,
+              dueAmount: st.due_amount,
+              type: 'reminder',
+              institutionId: institutionId,
+              institutionName: madrasah?.name
+            }).catch(e => console.warn('[Fee Reminder] FCM error:', e));
+          });
+        } catch (fcmErr) {
+          console.warn('[Fee Reminder] FCM dispatch error:', fcmErr);
+        }
+
         setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'সফল হয়েছে' : 'Success', message: lang === 'bn' ? 'রিমাইন্ডার সফলভাবে পাঠানো হয়েছে' : 'Reminders sent successfully' });
       } catch (err: any) {
         setStatusModal({ show: true, type: 'error', title: lang === 'bn' ? 'ব্যর্থ হয়েছে' : 'Error', message: err.message || 'Failed to send SMS' });
