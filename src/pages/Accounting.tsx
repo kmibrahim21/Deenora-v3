@@ -149,7 +149,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
         unsubscribeClasses();
       };
     }
-  }, [madrasah?.id, activeTab]);
+  }, [madrasah, activeTab]);
 
   const fetchClasses = async () => {
     if (!madrasah?.id) return;
@@ -1011,7 +1011,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   }
                 }
                 const isStudent = 
-                  category === 'Student Fee' || 
+                  (category === 'Student Fee' || 
                   category.includes('Fee') || 
                   category.includes('ফি') || 
                   category.includes('ভর্তি') || 
@@ -1019,7 +1019,8 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                   description.includes('FEE_ID:') ||
                   (description.includes('(') && description.includes('|') && description.includes(')')) ||
                   (description.includes('Roll:') || description.includes('রোল:')) ||
-                  (description.includes('Month:') || description.includes('মাস:'));
+                  (description.includes('Month:') || description.includes('মাস:'))) &&
+                  category !== 'donation' && category !== 'donations';
                 if (historyTab === 'student_history') {
                    if (!isStudent) return false;
                    if (selectedHistoryClass !== 'all') {
@@ -1041,18 +1042,32 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                 let displayName = entry.category;
                 let details = '';
                 let feeType = '';
-                const cleanDescription = (entry.description || '').split(' || FEE_ID: ')[0];
+                const rawDescription = (entry.description || '').split(' || FEE_ID: ')[0];
+                const cleanDescription = rawDescription.split(' {')[0];
 
                 const isStudentDisplay = 
-                  entry.category === 'Student Fee' || 
+                  (entry.category === 'Student Fee' || 
                   entry.category?.includes('Fee') || 
                   entry.category?.includes('ফি') || 
                   entry.category?.includes('ভর্তি') || 
                   entry.category?.includes('Admission') ||
                   entry.description?.includes('FEE_ID:') ||
-                  (entry.description?.includes('(') && entry.description?.includes('|') && entry.description?.includes(')'));
+                  (entry.description?.includes('(') && entry.description?.includes('|') && entry.description?.includes(')'))) &&
+                  entry.category !== 'donation' && entry.category !== 'donations';
 
-                if (isStudentDisplay) {
+                if (entry.category === 'donation' || entry.category === 'donations') {
+                  const donationParts = cleanDescription.split(' {');
+                  const mainDesc = donationParts[0];
+                  // Extract donor name and receipt from "[DONATION:XXX] Donor Name - Fund"
+                  const donorMatch = mainDesc.match(/\[DONATION:(.*?)\]\s*(.*)/);
+                  if (donorMatch) {
+                    feeType = lang === 'bn' ? `রশিদ: ${donorMatch[1]}` : `Receipt: ${donorMatch[1]}`;
+                    displayName = donorMatch[2];
+                  } else {
+                    displayName = mainDesc;
+                  }
+                  details = lang === 'bn' ? 'অনুদান' : 'Donation';
+                } else if (isStudentDisplay) {
                   // Try to find Fee Type and Details in description
                   // Expected format often: "Monthly Fee - Student Name (Details)" or similar
                   const parts = cleanDescription.split(' - ');
@@ -1122,7 +1137,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                           </h5>
                           
                           <div className="flex flex-wrap items-center gap-2">
-                            {entry.category === 'Student Fee' ? (
+                            {(entry.category === 'Student Fee' || entry.category === 'donation' || entry.category === 'donations') ? (
                               <>
                                 <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
                                   {feeType}
@@ -1136,7 +1151,7 @@ const Accounting: React.FC<AccountingProps> = ({ lang, madrasah, onBack, role, p
                             )}
                           </div>
 
-                          {cleanDescription && cleanDescription !== entry.category && entry.category !== 'Student Fee' && (
+                          {cleanDescription && cleanDescription !== entry.category && entry.category !== 'Student Fee' && entry.category !== 'donation' && entry.category !== 'donations' && (
                             <p className="text-[10px] text-slate-400 font-medium font-noto leading-tight mt-1 break-words italic">
                               {cleanDescription}
                             </p>

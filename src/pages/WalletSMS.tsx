@@ -87,12 +87,15 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
+    { code: '{donor_name}', label: lang === 'bn' ? 'দাতার নাম' : 'Donor Name' },
     { code: '{teacher_name}', label: lang === 'bn' ? 'শিক্ষকের নাম' : 'Teacher Name' },
     { code: '{father_name}', label: lang === 'bn' ? 'পিতার নাম' : 'Father Name' },
     { code: '{class}', label: lang === 'bn' ? 'শ্রেণী' : 'Class' },
     { code: '{roll}', label: lang === 'bn' ? 'রোল' : 'Roll' },
     { code: '{due_amount}', label: lang === 'bn' ? 'বকেয়া টাকা' : 'Due Amount' },
-    { code: '{paid_amount}', label: lang === 'bn' ? 'পরিশোধিত টাকা' : 'Paid Amount' },
+    { code: '{paid_amount}', label: lang === 'bn' ? 'পরিশোধিত/অনুদানের টাকা' : 'Paid/Donation Amount' },
+    { code: '{receipt_no}', label: lang === 'bn' ? 'রসিদ নং' : 'Receipt No' },
+    { code: '{fund_name}', label: lang === 'bn' ? 'তহবিলের নাম' : 'Fund Name' },
     { code: '{month}', label: lang === 'bn' ? 'মাস' : 'Month' },
     { code: '{result_grade}', label: lang === 'bn' ? 'রেজাল্ট গ্রেড' : 'Result Grade' },
     { code: '{gpa}', label: lang === 'bn' ? 'জিপিএ' : 'GPA' },
@@ -1165,6 +1168,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                       <option value="attendance_absent">{lang === 'bn' ? 'অনুপস্থিত SMS' : 'Attendance Absent SMS'}</option>
                       <option value="attendance_late">{lang === 'bn' ? 'বিলম্ব SMS' : 'Attendance Late SMS'}</option>
                       <option value="fee_collection">{lang === 'bn' ? 'বেতন আদায় SMS' : 'Fee Collection SMS'}</option>
+                      <option value="donation_collection">{lang === 'bn' ? 'দান আদায় SMS' : 'Donation Collection SMS'}</option>
                       <option value="teacher_salary">{lang === 'bn' ? 'শিক্ষক বেতন SMS' : 'Teacher Salary SMS'}</option>
                     </select>
                  </div>

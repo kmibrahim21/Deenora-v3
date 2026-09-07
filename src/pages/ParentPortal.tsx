@@ -2531,8 +2531,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       </main>
 
       {/* Modern Bottom Navigation */}
-      <div className="fixed md:hidden bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[200]">
-        <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble flex justify-around items-center px-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+      <div className="fixed md:hidden bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[200]">
+        <nav className={`backdrop-blur-[25px] border py-2.5 rounded-[2.5rem] shadow-2xl flex justify-around items-end px-2 overflow-visible relative gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
           {[
             { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড' },
             { id: 'attendance', icon: Calendar, label: 'হাজিরা' },
@@ -2540,32 +2540,39 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             { id: 'fees', icon: CreditCard, label: 'ফি' },
             { id: 'notices', icon: Bell, label: 'নোটিশ' },
             { id: 'profile', icon: User, label: 'প্রোফাইল' }
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
-              className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${
-                isTabActive(item.id) 
-                  ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') 
-                  : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')
-              }`}
-            >
-              <item.icon 
-                size={22} 
-                strokeWidth={isTabActive(item.id) ? 3 : 2} 
-                className="transition-all duration-300"
-              />
-              <span className="text-[9px] font-black font-noto opacity-80 whitespace-nowrap">
-                {item.label}
-              </span>
-              {isTabActive(item.id) && (
-                <motion.div 
-                  layoutId="nav-indicator"
-                  className="absolute -bottom-1 w-1 h-1 bg-current rounded-full"
-                />
-              )}
-            </button>
-          ))}
+          ].map((item) => {
+            const active = isTabActive(item.id);
+            const IconComponent = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id as any)}
+                className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+              >
+                {active ? (
+                  <div className="flex flex-col items-center">
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                      madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    }`}>
+                      <IconComponent size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                    </div>
+                    <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      {item.label}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <IconComponent size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    </div>
+                    <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {item.label}
+                    </span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
       </div>

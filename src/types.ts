@@ -32,6 +32,8 @@ export interface Institution {
   phone?: string;
   institute_code?: string;
   logo_url?: string;
+  signature_url?: string;
+  seal_url?: string;
   institution_type: 'madrasah' | 'school' | 'kindergarten' | 'choching' | 'system';
   config_json: {
     modules: {
@@ -51,6 +53,7 @@ export interface Institution {
       id_cards?: boolean;
       exam_routine?: boolean;
       parent_portal?: boolean;
+      donations?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
     result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional' | 'high_school';
@@ -205,6 +208,7 @@ export interface Profile {
     can_view_reports?: boolean;
     can_send_messages?: boolean;
     voice_dashboard?: boolean;
+    donations?: boolean;
     allowed_classes?: string[];
   };
 }
@@ -520,7 +524,44 @@ export type View =
   | 'teacheraccount'
   | 'admission-form'
   | 'academic-documents'
-  | 'profile-settings';
+  | 'profile-settings'
+  | 'donations';
+
+export interface Donation {
+  id: string;
+  institution_id: string;
+  donor_id?: string;
+  donor_name: string;
+  donor_phone?: string;
+  donor_address?: string;
+  amount: number;
+  fund_category: 'general' | 'zakat' | 'lillah' | 'development' | 'orphan' | 'ramadan' | 'sadaqah' | 'other' | string;
+  payment_method: 'cash' | 'bkash' | 'nagad' | 'rocket' | 'bank' | 'other';
+  receipt_no: string;
+  donation_date: string;
+  note?: string;
+  prayer_request?: string;
+  is_monthly_pledge?: boolean;
+  ledger_synced?: boolean;
+  ledger_id?: string;
+  collected_by?: string;
+  created_at: string;
+}
+
+export interface Donor {
+  id: string;
+  institution_id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  donor_type: 'general' | 'monthly' | 'permanent' | 'corporate';
+  monthly_pledge_amount?: number;
+  total_donated?: number;
+  notes?: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+}
 
 export interface Tutorial {
   id: string;

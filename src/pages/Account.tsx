@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink, FileText, Clock } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -787,7 +787,8 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const displayName = madrasah?.name || 'User';
   const isTeacher = profile?.role === 'teacher';
   const role = profile?.role || 'teacher';
-  const isAdmin = role === 'madrasah_admin' || role === 'super_admin';
+  const isSuperAdmin = role === 'super_admin';
+  const isAdmin = role === 'madrasah_admin' || isSuperAdmin;
   const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
   const canSendMessages = isAdmin || !!profile?.permissions?.can_send_messages;
 
@@ -1683,6 +1684,18 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
               onClick={() => setView('academic-year')}
               dark={madrasah?.theme === 'dark'}
             />
+
+            {/* Donations Card */}
+            {((madrasah?.config_json as any)?.modules?.donations === true || isSuperAdmin) && (
+              <ActionCard
+                icon={Heart}
+                title={lang === 'bn' ? 'দান ও অনুদান' : 'Donations'}
+                subtitle={lang === 'bn' ? 'তহবিল ও রসিদ' : 'Funds & Receipts'}
+                colorClass="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+                onClick={() => setView('donations')}
+                dark={madrasah?.theme === 'dark'}
+              />
+            )}
 
             {/* Subscription Card */}
             <ActionCard

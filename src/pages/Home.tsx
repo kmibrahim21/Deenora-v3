@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Clock, User as UserIcon, PhoneCall, X, MessageCircle, Phone, Trash2, AlertTriangle, Loader2, Users, BookOpen, GraduationCap, Wallet, TrendingUp, DollarSign, CheckCircle2, Banknote, ClipboardList, ChevronRight, Trophy, Zap, Mic } from 'lucide-react';
+import { Search, Clock, User as UserIcon, PhoneCall, X, MessageCircle, Phone, Trash2, AlertTriangle, Loader2, Users, BookOpen, GraduationCap, Wallet, TrendingUp, DollarSign, CheckCircle2, Banknote, ClipboardList, ChevronRight, Trophy, Zap, Mic, Heart } from 'lucide-react';
 import { supabase, offlineApi } from 'supabase';
 import { Student, Language, Institution } from 'types';
 import { t } from 'translations';
@@ -31,9 +31,10 @@ interface HomeProps {
   onNavigateToVoiceBroadcast?: () => void;
   onNavigateToMessages?: () => void;
   onNavigateToCertificates?: () => void;
+  onNavigateToDonations?: () => void;
 }
 
-const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast, onNavigateToMessages, onNavigateToCertificates }) => {
+const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast, onNavigateToMessages, onNavigateToCertificates, onNavigateToDonations }) => {
   const role = profile?.role || 'teacher';
   const isAdmin = role === 'madrasah_admin' || role === 'super_admin' || role === 'manager';
   const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
@@ -84,6 +85,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
         sms: configObj.modules?.sms ?? true,
         messages: configObj.modules?.messages ?? true,
         class_routine: configObj.modules?.class_routine ?? false,
+        donations: configObj.modules?.donations === true,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',
@@ -354,6 +356,13 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><TrendingUp size={20} className="lg:w-6 lg:h-6" style={{ transform: 'rotate(180deg)' }} /></div>
              <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-red-600'}`}>{loadingStats ? '...' : stats.totalExpense.toLocaleString()}</h4>
              <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'চলতি মাসের ব্যয়' : 'Current Month Expense'}</p>
+          </button>
+        )}
+        {canManageAccounting && onNavigateToDonations && modules.modules.donations && (
+          <button onClick={onNavigateToDonations} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-100 hover:bg-slate-50'} p-5 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col items-center text-center animate-in zoom-in duration-300 delay-275 active:scale-95 transition-all border`}>
+             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-2 lg:mb-4 shadow-inner"><Heart size={20} className="lg:w-6 lg:h-6" /></div>
+             <h4 className={`text-xl lg:text-3xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-emerald-700'}`}>দান</h4>
+             <p className={`text-[10px] lg:text-[12px] font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-400'} uppercase tracking-widest mt-1 lg:mt-2`}>{lang === 'bn' ? 'দান ও অনুদান' : 'Donations'}</p>
           </button>
         )}
       </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, Library, LayoutDashboard, FileText, Radio } from 'lucide-react';
+import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, Library, LayoutDashboard, FileText, Radio, Heart } from 'lucide-react';
 import { View, Language, Institution, Transaction, Profile } from 'types';
 import { t } from 'translations';
 import { supabase } from 'supabase';
@@ -64,6 +64,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         certificates: configObj.modules?.certificates ?? true,
         id_cards: configObj.modules?.id_cards ?? false,
         exam_routine: configObj.modules?.exam_routine ?? true,
+        donations: configObj.modules?.donations === true,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',
@@ -101,7 +102,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
       'settings': true,
       'academic-year': true,
       'class-routine': modules.modules.class_routine,
-      'certificates': modules.modules.certificates
+      'certificates': modules.modules.certificates,
+      'donations': modules.modules.donations
     };
 
     return moduleMap[module] ?? true;
@@ -132,6 +134,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     if (tab === 'dashboard' && currentView === 'admin-dashboard') return true;
     if (tab === 'approvals' && currentView === 'admin-approvals') return true;
     if (tab === 'accounting' && currentView === 'accounting') return true;
+    if (tab === 'donations' && currentView === 'donations') return true;
     if (tab === 'attendance' && currentView === 'attendance') return true;
     if (tab === 'exams' && currentView === 'exams') return true;
     if (tab === 'wallet' && currentView === 'wallet-sms') return true;
@@ -141,6 +144,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     if (tab === 'classes' && (currentView === 'classes' || currentView === 'students' || currentView === 'student-details' || currentView === 'student-form')) return true;
     if (tab === 'certificates' && currentView === 'certificates') return true;
     if (tab === 'admission-form' && currentView === 'admission-form') return true;
+    if (tab === 'library' && currentView === 'library') return true;
+    if (tab === 'class-routine' && currentView === 'class-routine') return true;
+    if (tab === 'id-cards' && currentView === 'id-cards') return true;
+    if (tab === 'messages' && currentView === 'messages') return true;
+    if (tab === 'data-management' && currentView === 'data-management') return true;
+    if (tab === 'academic-year' && currentView === 'academic-year') return true;
     return false;
   };
 
@@ -253,6 +262,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-sm font-bold font-noto">{t('menu_accounting', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
+              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_accounting')) && modules.modules.donations && (
+                <button onClick={() => setView('donations')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('donations') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <Heart size={22} strokeWidth={isTabActive('donations') ? 2.5 : 2} />
+                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'দান ও অনুদান' : 'Donations'}</span>
+                </button>
+              )}
               {(isSuperAdmin || role === 'madrasah_admin') && modules.modules.library && (
                 <button onClick={() => setView('library')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('library') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <Library size={22} strokeWidth={isTabActive('library') ? 2.5 : 2} />
@@ -345,39 +360,153 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
         {/* Mobile Bottom Nav */}
         {role !== 'parent' && (
-          <div className="fixed md:hidden bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-md w-full z-[200]">
-            <nav className={`backdrop-blur-[25px] border py-4 rounded-[2.5rem] shadow-bubble flex justify-around items-center px-2 ${madrasah?.theme === 'dark' ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-slate-200'}`}>
+          <div className="fixed md:hidden bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-lg z-[200]">
+            <nav className={`backdrop-blur-[25px] border py-2.5 rounded-[2.5rem] shadow-2xl flex justify-around items-end px-2 overflow-visible relative gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
 
           {isSystemStaff ? (
             <>
               {canAccess('dashboard') && (
-                <button onClick={() => setView('admin-dashboard')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('dashboard') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                  <BarChart3 size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{t('dashboard', lang, madrasah?.institution_type)}</span>
+                <button 
+                  onClick={() => setView('admin-dashboard')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('dashboard') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <BarChart3 size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {t('dashboard', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <BarChart3 size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {t('dashboard', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )}
+
               {canAccess('institutions') && (
-                <button onClick={() => setView('admin-panel')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('list') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                  <Users size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'প্রতিষ্ঠান' : 'Institutions'}</span>
+                <button 
+                  onClick={() => setView('admin-panel')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('list') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <Users size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {lang === 'bn' ? 'প্রতিষ্ঠান' : 'Institutions'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <Users size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {lang === 'bn' ? 'প্রতিষ্ঠান' : 'Institutions'}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )}
+
               {canAccess('approvals') && (
-                <button onClick={() => setView('admin-approvals')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('approvals') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                  <CreditCard size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{t('approvals', lang, madrasah?.institution_type)}</span>
+                <button 
+                  onClick={() => setView('admin-approvals')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('approvals') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <CreditCard size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {t('approvals', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <CreditCard size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {t('approvals', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )}
+
               {isSystemStaff && (
                 <>
-                  <button onClick={() => setView('sms-voice-menu')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                    <MessageSquare size={20} />
-                    <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'এসএমএস' : 'SMS'}</span>
+                  <button 
+                    onClick={() => setView('sms-voice-menu')} 
+                    className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  >
+                    {isTabActive('sms-voice-menu') ? (
+                      <div className="flex flex-col items-center">
+                        <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                          madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                        }`}>
+                          <MessageSquare size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        </div>
+                        <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                          {lang === 'bn' ? 'এসএমএস' : 'SMS'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <div className="w-8 h-8 flex items-center justify-center">
+                          <MessageSquare size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                        </div>
+                        <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                          {lang === 'bn' ? 'এসএমএস' : 'SMS'}
+                        </span>
+                      </div>
+                    )}
                   </button>
+
                   {(isSuperAdmin || canAccess('voice-service')) && (
-                    <button onClick={() => setView('admin-voice-service')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('voice-service') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                      <Radio size={20} />
-                      <span className="text-[9px] font-black font-noto opacity-80 whitespace-nowrap">{lang === 'bn' ? 'ভয়েস' : 'Voice'}</span>
+                    <button 
+                      onClick={() => setView('admin-voice-service')} 
+                      className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                    >
+                      {isTabActive('voice-service') ? (
+                        <div className="flex flex-col items-center">
+                          <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                            madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                          }`}>
+                            <Radio size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                          </div>
+                          <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                            {lang === 'bn' ? 'ভয়েস' : 'Voice'}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div className="w-8 h-8 flex items-center justify-center">
+                            <Radio size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                          </div>
+                          <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {lang === 'bn' ? 'ভয়েস' : 'Voice'}
+                          </span>
+                        </div>
+                      )}
                     </button>
                   )}
                 </>
@@ -385,67 +514,250 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
             </>
           ) : (
             <>
-              <button onClick={() => setView('home')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('home') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-                <Home size={20} strokeWidth={isTabActive('home') ? 3 : 2} />
-                <span className="text-[9px] font-black font-noto opacity-80">{t('home', lang, madrasah?.institution_type)}</span>
-              </button>
-              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && (
-                <button onClick={() => setView('classes')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('classes') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
-                  <BookOpen size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{t('menu_students', lang, madrasah?.institution_type)}</span>
-                </button>
-              )}
-              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_send_sms') || hasPermission('can_use_voice_call')) && (modules.modules.sms !== false || modules.modules.voice_broadcast) && (
-                <div className={`relative flex justify-center flex-1`}>
-                  <button 
-                    onClick={() => {
-                      if (modules.modules.sms !== false && modules.modules.voice_broadcast) {
-                        setView('sms-voice-menu');
-                      } else if (modules.modules.sms !== false) {
-                        setView('wallet-sms');
-                      } else if (modules.modules.voice_broadcast) {
-                        setView('voice-broadcast');
-                      }
-                    }} 
-                    className={`relative flex flex-col items-center gap-1 transition-all w-full ${isTabActive('wallet') || isTabActive('voice-broadcast') || isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}
-                  >
-                    <MessageSquare size={20} />
-                    <span className="text-[9px] font-black font-noto opacity-80 whitespace-nowrap">
-                      {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
+              {/* Home */}
+              <button 
+                onClick={() => setView('home')} 
+                className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+              >
+                {isTabActive('home') ? (
+                  <div className="flex flex-col items-center">
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                      madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    }`}>
+                      <Home size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                    </div>
+                    <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      {t('home', lang, madrasah?.institution_type)}
                     </span>
-                  </button>
-                </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <Home size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    </div>
+                    <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {t('home', lang, madrasah?.institution_type)}
+                    </span>
+                  </div>
+                )}
+              </button>
+
+              {/* Students / Classes */}
+              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && (
+                <button 
+                  onClick={() => setView('classes')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('classes') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <BookOpen size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {t('menu_students', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <BookOpen size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {t('menu_students', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  )}
+                </button>
               )}
+
+              {/* SMS & Voice */}
+              {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_send_sms') || hasPermission('can_use_voice_call')) && (modules.modules.sms !== false || modules.modules.voice_broadcast) && (
+                <button 
+                  onClick={() => {
+                    if (modules.modules.sms !== false && modules.modules.voice_broadcast) {
+                      setView('sms-voice-menu');
+                    } else if (modules.modules.sms !== false) {
+                      setView('wallet-sms');
+                    } else if (modules.modules.voice_broadcast) {
+                      setView('voice-broadcast');
+                    }
+                  }} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('wallet') || isTabActive('voice-broadcast') || isTabActive('sms-voice-menu') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <MessageSquare size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <MessageSquare size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              )}
+
+              {/* Attendance */}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_attendance')) && modules.modules.attendance && (
-                <button onClick={() => setView('attendance')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('attendance') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
-                  <ClipboardList size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{t('menu_attendance', lang, madrasah?.institution_type)}</span>
+                <button 
+                  onClick={() => setView('attendance')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('attendance') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <ClipboardList size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {t('menu_attendance', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <ClipboardList size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {t('menu_attendance', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )}
+
+              {/* Accounting */}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_accounting')) && modules.modules.accounting && (role === 'madrasah_admin' || role === 'accountant' || hasPermission('can_manage_accounting')) && (
-                <button onClick={() => setView('accounting')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('accounting') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
-                  <Banknote size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{t('menu_accounting', lang, madrasah?.institution_type)}</span>
+                <button 
+                  onClick={() => setView('accounting')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('accounting') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <Banknote size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {t('menu_accounting', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <Banknote size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {t('menu_accounting', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )}
+
+              {/* Library */}
               {(isSuperAdmin || role === 'madrasah_admin') && modules.modules.library && (
-                <button onClick={() => setView('library')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('library') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
-                  <Library size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{lang === 'bn' ? 'লাইব্রেরী' : 'Library'}</span>
+                <button 
+                  onClick={() => setView('library')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('library') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <Library size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {lang === 'bn' ? 'লাইব্রেরী' : 'Library'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <Library size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {lang === 'bn' ? 'লাইব্রেরী' : 'Library'}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )}
+
+              {/* Exams */}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_results') || hasPermission('can_manage_exams')) && modules.modules.results && (
-                <button onClick={() => setView('exams')} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('exams') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-white' : 'text-[#94A3B8]')}`}>
-                  <GraduationCap size={20} />
-                  <span className="text-[9px] font-black font-noto opacity-80">{t('menu_exams', lang, madrasah?.institution_type)}</span>
+                <button 
+                  onClick={() => setView('exams')} 
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                >
+                  {isTabActive('exams') ? (
+                    <div className="flex flex-col items-center">
+                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      }`}>
+                        <GraduationCap size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      </div>
+                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        {t('menu_exams', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <GraduationCap size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {t('menu_exams', lang, madrasah?.institution_type)}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )}
             </>
           )}
           
-          <button onClick={() => setView(isSystemStaff ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))} className={`relative flex flex-col items-center gap-1 transition-all flex-1 ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]') : (madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-[#94A3B8]')}`}>
-            <User size={20} />
-            <span className="text-[9px] font-black font-noto opacity-80">{t('account', lang, madrasah?.institution_type)}</span>
+          {/* Account */}
+          <button 
+            onClick={() => setView(isSystemStaff ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))} 
+            className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+          >
+            {isTabActive('account') ? (
+              <div className="flex flex-col items-center">
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                  madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                }`}>
+                  <User size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                </div>
+                <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                  {t('account', lang, madrasah?.institution_type)}
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-0.5">
+                <div className="w-8 h-8 flex items-center justify-center">
+                  <User size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                </div>
+                <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                  {t('account', lang, madrasah?.institution_type)}
+                </span>
+              </div>
+            )}
           </button>
 
         </nav>

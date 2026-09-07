@@ -234,6 +234,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     student_photo: false,
     id_cards: false,
     parent_portal: false,
+    donations: false,
     backup_restore: false,
     biometric_device_sync: false
   });
@@ -345,6 +346,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       id_cards: false,
       student_photo: false,
       parent_portal: false,
+      donations: false,
       backup_restore: false,
       biometric_device_sync: false,
     };
@@ -1153,40 +1155,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const fetchAllMadrasahs = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch('/api/admin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ action: 'get_all_institutions' })
-      });
+      if (session?.access_token) {
+        const response = await fetch('/api/admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ action: 'get_all_institutions' })
+        });
 
-      if (!response.ok) throw new Error('Failed to fetch institutions from API');
-      const data = await response.json();
-      const mList = data.institutions || [];
-
-      return mList.map(m => ({
-        ...m,
-        student_count: typeof (m as any).student_count === 'number' ? (m as any).student_count : ((m as any).student_count?.[0]?.count || 0),
-        class_count: typeof (m as any).class_count === 'number' ? (m as any).class_count : ((m as any).class_count?.[0]?.count || 0)
-      }));
+        if (response.ok) {
+          const data = await response.json();
+          const mList = data.institutions || [];
+          return mList.map((m: any) => ({
+            ...m,
+            student_count: typeof m.student_count === 'number' ? m.student_count : (m.student_count?.[0]?.count || 0),
+            class_count: typeof m.class_count === 'number' ? m.class_count : (m.class_count?.[0]?.count || 0)
+          }));
+        }
+      }
     } catch (err) {
-      console.error('Error in fetchAllMadrasahs API call:', err);
-      // Fallback
+      console.warn('Note: API endpoint /api/admin not reachable, falling back to Supabase client directly:', err);
+    }
+
+    // Direct Supabase Fallback
+    try {
       const { data, error } = await supabase.from('institutions')
         .select('*, student_count:students(count), class_count:classes(count)')
         .eq('is_super_admin', false)
         .neq('name', 'SYSTEM_GLOBAL_INTERNAL')
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase fallback error in fetchAllMadrasahs:', error);
+        return [];
+      }
       
       return (data || []).map(m => ({
         ...m,
         student_count: typeof (m as any).student_count === 'number' ? (m as any).student_count : ((m as any).student_count?.[0]?.count || 0),
         class_count: typeof (m as any).class_count === 'number' ? (m as any).class_count : ((m as any).class_count?.[0]?.count || 0)
       }));
+    } catch (fallbackErr) {
+      console.error('Fatal error in fetchAllMadrasahs:', fallbackErr);
+      return [];
     }
   };
 
@@ -1846,6 +1859,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         id_cards: userModules.id_cards ?? false,
         student_photo: userModules.student_photo ?? false,
         parent_portal: userModules.parent_portal ?? false,
+        donations: userModules.donations ?? false,
         backup_restore: userModules.backup_restore ?? false,
         biometric_device_sync: userModules.biometric_device_sync ?? false,
         ...userModules
@@ -1865,6 +1879,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         id_cards: false,
         student_photo: false,
         parent_portal: false,
+        donations: false,
         backup_restore: false,
         biometric_device_sync: false,
       });
@@ -3941,23 +3956,44 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                 {Object.entries(editModules)
                                   .filter(([key]) => key !== 'sensitive')
-                                  .map(([key, value]) => (
-                                  <div key={key} className={`flex items-center justify-between p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100'}`}>
-                                    <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{key.replace(/_/g, ' ')}</span>
-                                    <button 
-                                      onClick={() => {
-                                        if (canWrite('permissions')) {
-                                          setEditModules({...editModules, [key]: !value});
-                                        } else {
-                                          setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার মডিউল পারমিশন পরিবর্তন করার অনুমতি নেই।' });
-                                        }
-                                      }}
-                                      className={`w-12 h-6 rounded-full transition-all relative ${value ? 'bg-emerald-500' : (madrasah?.theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200')} ${!canWrite('permissions') ? 'cursor-not-allowed opacity-80' : ''}`}
-                                    >
-                                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${value ? 'left-7' : 'left-1'}`} />
-                                    </button>
-                                  </div>
-                                ))}
+                                  .map(([key, value]) => {
+                                    const labels: { [key: string]: string } = {
+                                      attendance: 'Attendance',
+                                      exam: 'Exam & Results',
+                                      accounting: 'Accounting',
+                                      library: 'Library',
+                                      academic_year_promotion: 'Class Promotion',
+                                      voice_broadcast: 'Voice Broadcast',
+                                      sms: 'SMS',
+                                      messages: 'Messages',
+                                      class_routine: 'Class Routine',
+                                      certificates: 'Certificates',
+                                      id_cards: 'ID Cards',
+                                      student_photo: 'Student Photo',
+                                      parent_portal: 'Parent Portal',
+                                      donations: 'Donations',
+                                      backup_restore: 'Backup & Restore',
+                                      biometric_device_sync: 'Biometric Device',
+                                    };
+
+                                    return (
+                                      <div key={key} className={`flex items-center justify-between p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100'}`}>
+                                        <span className={`text-[11px] font-black uppercase tracking-widest ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{labels[key] || key.replace(/_/g, ' ')}</span>
+                                        <button 
+                                          onClick={() => {
+                                            if (canWrite('permissions')) {
+                                              setEditModules({...editModules, [key]: !value});
+                                            } else {
+                                              setStatusModal({ show: true, type: 'error', title: 'অনুমতি নেই', message: 'আপনার মডিউল পারমিশন পরিবর্তন করার অনুমতি নেই।' });
+                                            }
+                                          }}
+                                          className={`w-12 h-6 rounded-full transition-all relative ${value ? 'bg-emerald-500' : (madrasah?.theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200')} ${!canWrite('permissions') ? 'cursor-not-allowed opacity-80' : ''}`}
+                                        >
+                                          <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${value ? 'left-7' : 'left-1'}`} />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
                               </div>
                            </div>
                         </div>

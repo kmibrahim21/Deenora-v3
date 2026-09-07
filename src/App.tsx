@@ -50,6 +50,7 @@ const AcademicCalendarPage = React.lazy(
   () => import("pages/AcademicCalendarPage"),
 );
 const AcademicDocuments = React.lazy(() => import("pages/AcademicDocuments"));
+const Donations = React.lazy(() => import("pages/Donations"));
 const Tutorials = React.lazy(() => import("pages/Tutorials"));
 const ClassRoutine = React.lazy(() => import("pages/ClassRoutine"));
 const Certificates = React.lazy(() => import("pages/Certificates"));
@@ -795,6 +796,22 @@ const App: React.FC = () => {
             triggerRefresh={triggerRefresh}
           />
         );
+      case "donations":
+        if (role !== "super_admin" && (madrasah?.config_json as any)?.modules?.donations !== true) {
+          setView("home");
+          return null;
+        }
+        return (
+          <Donations
+            lang={lang}
+            madrasah={madrasah}
+            onBack={() => handleBack("home")}
+            role={role}
+            profile={profile}
+            activeYear={activeYear}
+            triggerRefresh={triggerRefresh}
+          />
+        );
       case "attendance":
         return (
           <Attendance
@@ -937,6 +954,7 @@ const App: React.FC = () => {
             }}
             onNavigateToMessages={() => setView("messages")}
             onNavigateToCertificates={() => setView("certificates")}
+            onNavigateToDonations={() => setView("donations")}
           />
         );
     }
