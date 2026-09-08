@@ -103,7 +103,8 @@ export interface Institution {
   is_active: boolean;
   is_super_admin: boolean;
   created_at: string;
-  email?: string;
+  email?: string; // Login email (read-only in settings)
+  contact_email?: string; // Contact email used for PDFs
   balance: number;
   sms_balance: number;
   subscription_end?: string;

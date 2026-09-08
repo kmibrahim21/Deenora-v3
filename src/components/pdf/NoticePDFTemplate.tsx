@@ -147,7 +147,7 @@ export const NoticePDFTemplate: React.FC<NoticePDFTemplateProps> = ({
             )}
             <div className="flex items-center justify-center gap-4 text-[11px] font-bold text-slate-500 mt-1">
               {madrasah?.phone && <span>মোবাইল: {getBanglaNumber(madrasah.phone)}</span>}
-              {madrasah?.email && <span>ইমেইল: {madrasah.email}</span>}
+              {madrasah?.contact_email && <span>ইমেইল: {madrasah.contact_email}</span>}
               {(madrasah as any)?.code && <span>EIIN / কোড: {getBanglaNumber((madrasah as any).code)}</span>}
             </div>
           </div>

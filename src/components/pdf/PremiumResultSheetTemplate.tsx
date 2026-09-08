@@ -332,9 +332,9 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                           📞 {madrasah.phone}
                         </span>
                       )}
-                      {madrasah?.email && (
+                      {madrasah?.contact_email && (
                         <span className="flex items-center gap-1">
-                          ✉️ {madrasah.email}
+                          ✉️ {madrasah.contact_email}
                         </span>
                       )}
                       {(madrasah?.website || madrasah?.domain) && (

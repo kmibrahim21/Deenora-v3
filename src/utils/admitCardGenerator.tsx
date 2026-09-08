@@ -155,7 +155,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
             <div className={headerStyles.infoClass}>
               <span className="flex items-center gap-1">
                 <span>{isBangla ? 'ইমেইল : ' : 'Email: '}</span>
-                <span>{madrasah.email || 'info@madrasah.com'}</span>
+                <span>{madrasah.contact_email || 'info@madrasah.com'}</span>
               </span>
               <span className="opacity-40">|</span>
               <span className="flex items-center gap-1">
@@ -473,7 +473,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
             <p className="text-[14px] mt-2.5 text-blue-50 drop-shadow flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-medium">
               <span>{madrasah.address || ''}</span>
               <div className="flex items-center gap-4">
-                {madrasah.email && <span>Email: {madrasah.email}</span>}
+                {madrasah.contact_email && <span>Email: {madrasah.contact_email}</span>}
                 {madrasah.phone && <span>Mobile: {madrasah.phone}</span>}
               </div>
             </p>

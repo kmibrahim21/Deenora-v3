@@ -159,6 +159,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   const [newName, setNewName] = useState(initialMadrasah?.name || '');
   const [newAddress, setNewAddress] = useState(initialMadrasah?.address || '');
   const [newPhone, setNewPhone] = useState(initialMadrasah?.phone || '');
+  const [newContactEmail, setNewContactEmail] = useState(initialMadrasah?.contact_email || '');
   const [voiceSenderId, setVoiceSenderId] = useState(initialMadrasah?.voice_sender_id || '');
   const [newPin, setNewPin] = useState((initialMadrasah?.config_json as any)?.user_pin || '');
   const [logoUrl, setLogoUrl] = useState(initialMadrasah?.logo_url || '');
@@ -357,6 +358,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       setNewName(initialMadrasah.name || '');
       setNewAddress(initialMadrasah.address || '');
       setNewPhone(initialMadrasah.phone || '');
+      setNewContactEmail(initialMadrasah.contact_email || '');
       setVoiceSenderId(initialMadrasah.voice_sender_id || '');
       setNewPin((initialMadrasah.config_json as any)?.user_pin || '');
       setLogoUrl(initialMadrasah.logo_url || '');
@@ -681,6 +683,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         name: newName.trim(), 
         address: newAddress.trim() || null,
         phone: newPhone.trim(), 
+        contact_email: newContactEmail.trim() || null,
         voice_sender_id: voiceSenderId.trim() || null,
         logo_url: logoUrl,
         config_json: updatedConfig
@@ -688,7 +691,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       if (error) throw error;
       if (onProfileUpdate) onProfileUpdate();
       setIsEditingProfile(false);
-      setMadrasah(prev => prev ? { ...prev, name: newName, address: newAddress, phone: newPhone, voice_sender_id: voiceSenderId, config_json: updatedConfig } : null);
+      setMadrasah(prev => prev ? { ...prev, name: newName, address: newAddress, phone: newPhone, contact_email: newContactEmail, voice_sender_id: voiceSenderId, config_json: updatedConfig } : null);
       setShowSuccessModal({ show: true, title: t('success', lang), message: 'Profile updated successfully' });
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
   };
@@ -1966,6 +1969,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
                  <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t('madrasah_name', lang)}</label><input type="text" className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={newName || ''} onChange={(e) => setNewName(e.target.value)} /></div>
                  <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'ঠিকানা' : 'Address'}</label><input type="text" className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={newAddress || ''} onChange={(e) => setNewAddress(e.target.value)} /></div>
                  <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t('madrasah_phone', lang)}</label><input type="tel" className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={newPhone || ''} onChange={(e) => setNewPhone(e.target.value)} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{lang === 'bn' ? 'অফিসিয়াল ইমেইল (PDF-এর জন্য)' : 'Official Email (For PDFs)'}</label><input type="email" className={`w-full h-11 border rounded-xl px-4 font-black text-sm outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500/30' : 'bg-slate-50 border-slate-100 text-[#1E3A8A] focus:border-[#2563EB]/30'}`} value={newContactEmail || ''} onChange={(e) => setNewContactEmail(e.target.value)} placeholder={lang === 'bn' ? 'যেমন: info@madrasah.com' : 'e.g. info@madrasah.com'} /></div>
                  
 
 

@@ -108,7 +108,7 @@ export const useAuth = () => {
         if (isValidUUID(finalProfile.institution_id)) {
           const { data: institutionData, error: mError } = await requestManager.cachedFetch(
             'institutions',
-            (q) => q.select('id, name, address, phone, logo_url, institution_type, config_json, theme, status, is_active, is_super_admin, created_at, email, balance, sms_balance, subscription_end, voice_sender_id, sms_rate, voice_rate').eq('id', finalProfile.institution_id),
+            (q) => q.select('id, name, address, phone, contact_email, logo_url, institution_type, config_json, theme, status, is_active, is_super_admin, created_at, email, balance, sms_balance, subscription_end, voice_sender_id, sms_rate, voice_rate').eq('id', finalProfile.institution_id),
             `institution:${finalProfile.institution_id}`
           );
 

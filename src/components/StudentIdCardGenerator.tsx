@@ -587,7 +587,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                       {madrasah?.phone || "০১৭XX-XXXXXX"}
                     </span>
                   </div>
-                  {madrasah?.email && (
+                  {madrasah?.contact_email && (
                      <div className="flex items-center gap-1.5 overflow-hidden">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -600,11 +600,11 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                         <span 
                           className="font-bold tracking-tight whitespace-nowrap"
                           style={{
-                            fontSize: `${(madrasah.email.length || 0) > 30 ? 6.5 : (madrasah.email.length || 0) > 24 ? 7 : (madrasah.email.length || 0) > 18 ? 7.5 : 8}px`,
+                            fontSize: `${(madrasah.contact_email?.length || 0) > 30 ? 6.5 : (madrasah.contact_email?.length || 0) > 24 ? 7 : (madrasah.contact_email?.length || 0) > 18 ? 7.5 : 8}px`,
                             lineHeight: '1.2'
                           }}
                         >
-                          {madrasah.email}
+                          {madrasah.contact_email}
                         </span>
                      </div>
                   )}

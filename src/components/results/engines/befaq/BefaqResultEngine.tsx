@@ -862,7 +862,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         await generateAdmitCardPDF(
             examForAdmitCard,
             stds,
-            { name: madrasah.name, logo_url: madrasah.logo_url, config_json: madrasah.config_json, institution_type: madrasah.institution_type, address: madrasah.address, phone: madrasah.phone, email: madrasah.email },
+            { name: madrasah.name, logo_url: madrasah.logo_url, config_json: madrasah.config_json, institution_type: madrasah.institution_type, address: madrasah.address, phone: madrasah.phone, contact_email: madrasah.contact_email },
             selectedAdmitCardTemplate,
             downloadLang,
             (p) => setDownloadProgress(p)

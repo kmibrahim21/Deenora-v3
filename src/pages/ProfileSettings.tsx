@@ -36,6 +36,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
   const [newName, setNewName] = useState(madrasah?.name || '');
   const [newAddress, setNewAddress] = useState(madrasah?.address || '');
   const [newPhone, setNewPhone] = useState(madrasah?.phone || '');
+  const [newContactEmail, setNewContactEmail] = useState(madrasah?.contact_email || '');
   const [logoUrl, setLogoUrl] = useState(madrasah?.logo_url || '');
   const [arabicCalligraphyUrl, setArabicCalligraphyUrl] = useState(madrasah?.config_json?.arabic_calligraphy_url || '');
   const [arabicCalligraphyWidth, setArabicCalligraphyWidth] = useState((madrasah?.config_json as any)?.arabic_calligraphy_width || 100);
@@ -151,6 +152,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
         name: newName.trim(), 
         address: newAddress.trim() || null,
         phone: newPhone.trim(), 
+        contact_email: newContactEmail.trim() || null,
         voice_sender_id: voiceSenderId.trim() || null,
         logo_url: logoUrl,
         config_json: updatedConfig
@@ -163,7 +165,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
          const { OfflineService } = await import('../services/OfflineService');
          const cachedMadrasah = OfflineService.getCache('profile');
          if (cachedMadrasah && cachedMadrasah.id === madrasah.id) {
-           OfflineService.setCache('profile', { ...cachedMadrasah, name: newName.trim(), address: newAddress.trim(), phone: newPhone.trim(), config_json: updatedConfig });
+           OfflineService.setCache('profile', { ...cachedMadrasah, name: newName.trim(), address: newAddress.trim(), phone: newPhone.trim(), contact_email: newContactEmail.trim(), config_json: updatedConfig });
          }
       } catch(e) {}
 
@@ -394,6 +396,7 @@ const ProfileSettings: React.FC<Props> = ({ madrasah, lang, onBack, onProfileUpd
                   { label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name', value: newName, setter: setNewName, icon: Building2, type: 'text' },
                   { label: lang === 'bn' ? 'ঠিকানা' : 'Address', value: newAddress, setter: setNewAddress, icon: MapPin, type: 'text' },
                   { label: lang === 'bn' ? 'মোবাইল নাম্বার' : 'Phone Number', value: newPhone, setter: setNewPhone, icon: Phone, type: 'tel' },
+                  { label: lang === 'bn' ? 'অফিসিয়াল ইমেইল (PDF-এর জন্য)' : 'Official Email (For PDFs)', value: newContactEmail, setter: setNewContactEmail, icon: Mail, type: 'email' },
                 ].map((field, idx) => (
                   <div key={idx} className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 ml-1">{field.label}</label>

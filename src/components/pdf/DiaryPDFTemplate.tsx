@@ -119,7 +119,7 @@ export const DiaryPDFTemplate: React.FC<DiaryPDFTemplateProps> = ({
             )}
             <div className="flex items-center justify-center gap-3 text-[10px] font-bold text-slate-500 mt-1">
               {madrasah?.phone && <span>মোবাইল: {getBanglaNumber(madrasah.phone)}</span>}
-              {madrasah?.email && <span>ইমেইল: {madrasah.email}</span>}
+              {madrasah?.contact_email && <span>ইমেইল: {madrasah.contact_email}</span>}
             </div>
           </div>
 
