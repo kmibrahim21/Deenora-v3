@@ -37,39 +37,53 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
   const getNameStyles = (name: string) => {
     const len = name ? name.length : 0;
-    // Scaled sizes so institution name never gets cut off or overflows the header area
-    if (len > 45) {
+    // Force single line, scale text down as length increases to prevent overflow without using ellipsis (....)
+    if (len > 60) {
       return {
-        h1Class: 'text-[18px] sm:text-[19px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
-        addrClass: 'text-[11px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[10px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[12px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[9px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[8.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
-    if (len > 35) {
+    if (len > 50) {
       return {
-        h1Class: 'text-[20px] sm:text-[21px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
-        addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[14px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[9.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[9px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
-    if (len > 25) {
+    if (len > 40) {
       return {
-        h1Class: 'text-[22px] sm:text-[23px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
-        addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[16px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[10px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[9.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+      };
+    }
+    if (len > 30) {
+      return {
+        h1Class: 'text-[19px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[10.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[10px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+      };
+    }
+    if (len > 22) { 
+      return {
+        h1Class: 'text-[22px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[11px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     if (len > 15) {
       return {
-        h1Class: 'text-[24px] sm:text-[25px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
-        addrClass: 'text-[12.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[25px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     return {
-      h1Class: 'text-[25px] sm:text-[26px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
-      addrClass: 'text-[13px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
-      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[12px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+      h1Class: 'text-[28px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+      addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
+      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
     };
   };
   
