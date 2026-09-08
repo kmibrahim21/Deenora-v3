@@ -360,33 +360,33 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
         {/* Mobile Bottom Nav */}
         {role !== 'parent' && (
-          <div className="fixed md:hidden bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-lg z-[200]">
-            <nav className={`backdrop-blur-[25px] border py-2.5 rounded-[2.5rem] shadow-2xl flex justify-around items-end px-2 overflow-visible relative gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
+          <div className="fixed md:hidden bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[98%] sm:w-[95%] max-w-lg z-[200]">
+            <nav className={`backdrop-blur-[25px] border py-2 sm:py-2.5 rounded-[2.5rem] shadow-2xl flex justify-between items-end px-1 sm:px-2 overflow-visible relative gap-0.5 sm:gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
 
           {isSystemStaff ? (
             <>
               {canAccess('dashboard') && (
                 <button 
                   onClick={() => setView('admin-dashboard')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('dashboard') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <BarChart3 size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <BarChart3 size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {t('dashboard', lang, madrasah?.institution_type)}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <BarChart3 size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <BarChart3 size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {t('dashboard', lang, madrasah?.institution_type)}
                       </span>
                     </div>
@@ -397,25 +397,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {canAccess('institutions') && (
                 <button 
                   onClick={() => setView('admin-panel')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('list') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <Users size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <Users size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {lang === 'bn' ? 'প্রতিষ্ঠান' : 'Institutions'}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <Users size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <Users size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {lang === 'bn' ? 'প্রতিষ্ঠান' : 'Institutions'}
                       </span>
                     </div>
@@ -426,25 +426,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {canAccess('approvals') && (
                 <button 
                   onClick={() => setView('admin-approvals')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('approvals') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <CreditCard size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <CreditCard size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {t('approvals', lang, madrasah?.institution_type)}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <CreditCard size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <CreditCard size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {t('approvals', lang, madrasah?.institution_type)}
                       </span>
                     </div>
@@ -456,25 +456,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                 <>
                   <button 
                     onClick={() => setView('sms-voice-menu')} 
-                    className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                    className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                   >
                     {isTabActive('sms-voice-menu') ? (
-                      <div className="flex flex-col items-center">
-                        <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                          madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                      <div className="flex flex-col items-center max-w-full">
+                        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                          madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                         }`}>
-                          <MessageSquare size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                          <MessageSquare size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                         </div>
-                        <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                        <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                           {lang === 'bn' ? 'এসএমএস' : 'SMS'}
                         </span>
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center gap-0.5">
-                        <div className="w-8 h-8 flex items-center justify-center">
-                          <MessageSquare size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                      <div className="flex flex-col items-center gap-0.5 max-w-full">
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                          <MessageSquare size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                         </div>
-                        <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                           {lang === 'bn' ? 'এসএমএস' : 'SMS'}
                         </span>
                       </div>
@@ -484,25 +484,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   {(isSuperAdmin || canAccess('voice-service')) && (
                     <button 
                       onClick={() => setView('admin-voice-service')} 
-                      className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                      className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                     >
                       {isTabActive('voice-service') ? (
-                        <div className="flex flex-col items-center">
-                          <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                            madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                        <div className="flex flex-col items-center max-w-full">
+                          <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                            madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                           }`}>
-                            <Radio size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                            <Radio size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                           </div>
-                          <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                          <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                             {lang === 'bn' ? 'ভয়েস' : 'Voice'}
                           </span>
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center gap-0.5">
-                          <div className="w-8 h-8 flex items-center justify-center">
-                            <Radio size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                        <div className="flex flex-col items-center gap-0.5 max-w-full">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                            <Radio size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                           </div>
-                          <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                          <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                             {lang === 'bn' ? 'ভয়েস' : 'Voice'}
                           </span>
                         </div>
@@ -517,25 +517,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {/* Home */}
               <button 
                 onClick={() => setView('home')} 
-                className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
               >
                 {isTabActive('home') ? (
-                  <div className="flex flex-col items-center">
-                    <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                      madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                  <div className="flex flex-col items-center max-w-full">
+                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                      madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                     }`}>
-                      <Home size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                      <Home size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                     </div>
-                    <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                    <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                       {t('home', lang, madrasah?.institution_type)}
                     </span>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-0.5">
-                    <div className="w-8 h-8 flex items-center justify-center">
-                      <Home size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                  <div className="flex flex-col items-center gap-0.5 max-w-full">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                      <Home size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                     </div>
-                    <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                       {t('home', lang, madrasah?.institution_type)}
                     </span>
                   </div>
@@ -546,25 +546,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_students')) && (
                 <button 
                   onClick={() => setView('classes')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('classes') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <BookOpen size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <BookOpen size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {t('menu_students', lang, madrasah?.institution_type)}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <BookOpen size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <BookOpen size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {t('menu_students', lang, madrasah?.institution_type)}
                       </span>
                     </div>
@@ -584,25 +584,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                       setView('voice-broadcast');
                     }
                   }} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('wallet') || isTabActive('voice-broadcast') || isTabActive('sms-voice-menu') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <MessageSquare size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <MessageSquare size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <MessageSquare size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <MessageSquare size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {modules.modules.sms !== false && modules.modules.voice_broadcast ? t('sms_voice', lang) : modules.modules.sms !== false ? t('sms', lang) : t('voice', lang)}
                       </span>
                     </div>
@@ -614,25 +614,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_attendance')) && modules.modules.attendance && (
                 <button 
                   onClick={() => setView('attendance')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('attendance') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <ClipboardList size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <ClipboardList size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {t('menu_attendance', lang, madrasah?.institution_type)}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <ClipboardList size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <ClipboardList size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {t('menu_attendance', lang, madrasah?.institution_type)}
                       </span>
                     </div>
@@ -644,25 +644,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_accounting')) && modules.modules.accounting && (role === 'madrasah_admin' || role === 'accountant' || hasPermission('can_manage_accounting')) && (
                 <button 
                   onClick={() => setView('accounting')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('accounting') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <Banknote size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <Banknote size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {t('menu_accounting', lang, madrasah?.institution_type)}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <Banknote size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <Banknote size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {t('menu_accounting', lang, madrasah?.institution_type)}
                       </span>
                     </div>
@@ -674,25 +674,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {(isSuperAdmin || role === 'madrasah_admin') && modules.modules.library && (
                 <button 
                   onClick={() => setView('library')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('library') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <Library size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <Library size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {lang === 'bn' ? 'লাইব্রেরী' : 'Library'}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <Library size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <Library size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {lang === 'bn' ? 'লাইব্রেরী' : 'Library'}
                       </span>
                     </div>
@@ -704,25 +704,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_results') || hasPermission('can_manage_exams')) && modules.modules.results && (
                 <button 
                   onClick={() => setView('exams')} 
-                  className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+                  className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
                 >
                   {isTabActive('exams') ? (
-                    <div className="flex flex-col items-center">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+                    <div className="flex flex-col items-center max-w-full">
+                      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                        madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                       }`}>
-                        <GraduationCap size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                        <GraduationCap size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                       </div>
-                      <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                         {t('menu_exams', lang, madrasah?.institution_type)}
                       </span>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="w-8 h-8 flex items-center justify-center">
-                        <GraduationCap size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+                    <div className="flex flex-col items-center gap-0.5 max-w-full">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                        <GraduationCap size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                       </div>
-                      <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                         {t('menu_exams', lang, madrasah?.institution_type)}
                       </span>
                     </div>
@@ -735,25 +735,25 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
           {/* Account */}
           <button 
             onClick={() => setView(isSystemStaff ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))} 
-            className="relative flex flex-col items-center justify-end flex-1 min-w-[44px] cursor-pointer group py-0.5"
+            className="relative flex flex-col items-center justify-end flex-1 min-w-0 cursor-pointer group py-0.5 px-0.5"
           >
             {isTabActive('account') ? (
-              <div className="flex flex-col items-center">
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center -mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
-                  madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-4 ring-white'
+              <div className="flex flex-col items-center max-w-full">
+                <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center -mt-5 sm:-mt-6 mb-0.5 transition-all duration-300 shadow-lg border relative z-10 ${
+                  madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400 border-slate-700 shadow-black/60 ring-2 sm:ring-4 ring-slate-900' : 'bg-white text-[#2563EB] border-blue-100 shadow-blue-600/20 ring-2 sm:ring-4 ring-white'
                 }`}>
-                  <User size={21} strokeWidth={2.5} className="animate-in zoom-in-75 duration-200" />
+                  <User size={19} strokeWidth={2.5} className="sm:w-[21px] sm:h-[21px] animate-in zoom-in-75 duration-200" />
                 </div>
-                <span className={`text-[9.5px] font-black font-noto tracking-tight whitespace-nowrap ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
+                <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-black font-noto tracking-tighter sm:tracking-tight whitespace-nowrap truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>
                   {t('account', lang, madrasah?.institution_type)}
                 </span>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-0.5">
-                <div className="w-8 h-8 flex items-center justify-center">
-                  <User size={20} strokeWidth={1.8} className={madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'} />
+              <div className="flex flex-col items-center gap-0.5 max-w-full">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                  <User size={18} strokeWidth={1.8} className={`sm:w-[20px] sm:h-[20px] ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
                 </div>
-                <span className={`text-[9.5px] font-bold font-noto tracking-tight whitespace-nowrap opacity-80 ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                <span className={`text-[8.5px] xs:text-[9px] sm:text-[9.5px] font-bold font-noto tracking-tighter sm:tracking-tight whitespace-nowrap opacity-80 truncate max-w-full ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
                   {t('account', lang, madrasah?.institution_type)}
                 </span>
               </div>

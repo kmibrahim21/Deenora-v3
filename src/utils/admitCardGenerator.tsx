@@ -37,39 +37,39 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
   const getNameStyles = (name: string) => {
     const len = name ? name.length : 0;
-    // Keep the name bold and beautiful on a single line with larger sizes, without truncation unless absolutely extreme
+    // Scaled sizes so institution name never gets cut off or overflows the header area
     if (len > 45) {
       return {
-        h1Class: 'text-[22px] sm:text-[23px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[3px] mb-0.5 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
-        addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal pt-[1px]'
+        h1Class: 'text-[18px] sm:text-[19px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
+        addrClass: 'text-[11px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[10px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     if (len > 35) {
       return {
-        h1Class: 'text-[24px] sm:text-[25px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[3px] mb-0.5 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
-        addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal pt-[1px]'
+        h1Class: 'text-[20px] sm:text-[21px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
+        addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
-    if (len > 26) {
+    if (len > 25) {
       return {
-        h1Class: 'text-[28px] sm:text-[29px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[3px] mb-0.5 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
-        addrClass: 'text-[12.5px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-0.5 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal pt-[1px]'
+        h1Class: 'text-[22px] sm:text-[23px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
+        addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
-    if (len > 18) {
+    if (len > 15) {
       return {
-        h1Class: 'text-[33px] sm:text-[34px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[4px] mb-1 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
-        addrClass: 'text-[13px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-1 leading-normal pt-[1px] break-words line-clamp-1',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[12px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal py-0.5 pt-[2px]'
+        h1Class: 'text-[24px] sm:text-[25px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
+        addrClass: 'text-[12.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     return {
-      h1Class: 'text-[36px] sm:text-[38px] font-black text-[#0c4a7e] tracking-tight leading-tight pt-[4px] mb-1 whitespace-normal break-words line-clamp-2 max-w-full mx-auto',
-      addrClass: 'text-[14px] font-bold text-[#0c4a7e]/85 max-w-[95%] mx-auto mb-1 leading-normal pt-[1px] break-words line-clamp-1',
-      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[13px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-normal py-0.5 pt-[2px]'
+      h1Class: 'text-[25px] sm:text-[26px] font-black text-[#0c4a7e] tracking-tight leading-tight mb-0.5 whitespace-normal break-words max-w-full mx-auto',
+      addrClass: 'text-[13px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight break-words truncate',
+      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 gap-y-0.5 text-[12px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
     };
   };
   
@@ -552,8 +552,6 @@ export const generateAdmitCardPDF = async (
   container.style.left = '-9999px';
   document.body.appendChild(container);
 
-  const root = createRoot(container);
-
   const pdf = new jsPDF({
     orientation: isAdmission ? 'portrait' : 'landscape',
     unit: 'mm',
@@ -579,55 +577,56 @@ export const generateAdmitCardPDF = async (
     const student = students[i];
     console.log(`Generating admit card for: ${student.student_name} (${i + 1}/${students.length})`);
     
-    await new Promise<void>((resolve) => {
-      root.render(<AdmitCardTemplate exam={exam} student={student} madrasah={madrasah} templateId={templateId} lang={lang} />);
-      
-      let isResolved = false;
-      const timeout = setTimeout(() => {
-        if (!isResolved) {
-          isResolved = true;
-          resolve();
-        }
-      }, 5000);
+    // Clear container completely for fresh rendering per student
+    container.innerHTML = '';
+    const cardHost = document.createElement('div');
+    container.appendChild(cardHost);
+    const root = createRoot(cardHost);
 
-      const checkImages = () => {
-        if (isResolved) return;
+    await new Promise<void>((resolve) => {
+      root.render(
+        <AdmitCardTemplate 
+          exam={exam} 
+          student={student} 
+          madrasah={madrasah} 
+          templateId={templateId} 
+          lang={lang} 
+        />
+      );
+      
+      let attempts = 0;
+      const checkReady = () => {
+        attempts++;
+        const imgs = Array.from(cardHost.querySelectorAll('img'));
+        const allImgsLoaded = imgs.length === 0 || imgs.every(img => img.complete);
         
-        const imgs = container.querySelectorAll('img');
-        const allLoaded = Array.from(imgs).every(img => img.complete && img.naturalHeight !== 0);
-        
-        if (allLoaded && imgs.length > 0) {
-          isResolved = true;
-          clearTimeout(timeout);
-          setTimeout(resolve, 500);
-        } else if (imgs.length === 0 && document.body.contains(container)) {
-           setTimeout(() => {
-             if (!isResolved) {
-               isResolved = true;
-               clearTimeout(timeout);
-               resolve();
-             }
-           }, 800);
+        if (allImgsLoaded && attempts >= 2) {
+          // Give browser 150ms for flexbox reflow & font layout to completely settle
+          setTimeout(resolve, 150);
+        } else if (attempts > 30) {
+          // Fallback timeout after ~3 seconds
+          resolve();
         } else {
-          setTimeout(checkImages, 200);
+          setTimeout(checkReady, 100);
         }
       };
-      
-      checkImages();
+
+      setTimeout(checkReady, 50);
     });
 
     try {
-      const element = container.querySelector('div');
+      const element = cardHost.firstElementChild as HTMLElement;
       if (!element) {
         console.error('Admit card element not found');
+        root.unmount();
         continue;
       }
 
-      const imgData = await toJpeg(element as HTMLElement, {
+      const imgData = await toJpeg(element, {
         pixelRatio: 2, 
-        quality: 1.0,
+        quality: 0.98,
         backgroundColor: '#ffffff',
-        cacheBust: true,
+        cacheBust: false,
         style: {
           transform: 'scale(1)',
           transformOrigin: 'top left'
@@ -661,23 +660,23 @@ export const generateAdmitCardPDF = async (
       }
 
       onProgress?.(2 + Math.floor(((i + 1) / students.length) * 96));
-
-      // Help GC and prevent UI freeze - more frequent pauses for stability
-      if (i % 3 === 0) {
-        await new Promise(r => setTimeout(r, 150));
-      }
     } catch (err) {
       console.error('Error generating image for student:', student.student_name, err);
+    } finally {
+      root.unmount();
+      container.innerHTML = '';
+    }
+
+    // Help GC and keep UI responsive
+    if (i % 3 === 0) {
+      await new Promise(r => setTimeout(r, 100));
     }
   }
 
   // Clear memory
-  setTimeout(() => {
-    root.unmount();
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
-    }
-  }, 1000);
+  if (document.body.contains(container)) {
+    document.body.removeChild(container);
+  }
 
   const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
   pdf.save(`Admit_Cards_${safeExamName}.pdf`);
