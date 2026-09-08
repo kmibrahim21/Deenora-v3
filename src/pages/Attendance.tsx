@@ -194,6 +194,28 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [smsTemplates, setSmsTemplates] = useState<any[]>([]);
   const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState<string>('');
   const [voiceTemplates, setVoiceTemplates] = useState<any[]>([]);
+  const [voiceDurations, setVoiceDurations] = useState<{ [id: string]: number }>({});
+
+  useEffect(() => {
+    voiceTemplates.forEach((v) => {
+      if (v.id && v.file_url && !voiceDurations[v.id]) {
+        const audio = new Audio(v.file_url);
+        audio.onloadedmetadata = () => {
+          if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+            setVoiceDurations(prev => ({ ...prev, [v.id]: Math.ceil(audio.duration) }));
+          }
+        };
+      }
+    });
+  }, [voiceTemplates]);
+
+  const getPulsesForVoice = (voiceId: string) => {
+    const duration = voiceDurations[voiceId] || 0;
+    if (duration > 30) {
+      return Math.min(2, Math.ceil(duration / 30));
+    }
+    return 1;
+  };
   const [selectedVoiceTemplateId, setSelectedVoiceTemplateId] = useState<string>('');
   const [showSmsTemplateDropdown, setShowSmsTemplateDropdown] = useState(false);
   const [showVoiceTemplateDropdown, setShowVoiceTemplateDropdown] = useState(false);
@@ -1217,7 +1239,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       return;
     }
 
-    const estimatedCost = uniquePhoneNumbers.length * voiceRate;
+    const pulses = getPulsesForVoice(selectedVoiceTemplateId);
+    const estimatedCost = uniquePhoneNumbers.length * voiceRate * pulses;
     if (walletBalance < estimatedCost) {
       setErrorTitle(lang === 'bn' ? 'অপর্যাপ্ত ব্যালেন্স' : 'Insufficient Balance');
       setErrorDetails(lang === 'bn' ? `আপনার ব্যালেন্স কম। প্রয়োজন: ${estimatedCost} ৳` : `Insufficient balance. Required: ${estimatedCost} ৳`);

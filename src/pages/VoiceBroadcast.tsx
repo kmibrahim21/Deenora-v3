@@ -107,6 +107,28 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   
   // Voices state
   const [voices, setVoices] = useState<any[]>([]);
+  const [voiceDurations, setVoiceDurations] = useState<{ [id: string]: number }>({});
+
+  useEffect(() => {
+    voices.forEach((v) => {
+      if (v.id && v.file_url && !voiceDurations[v.id]) {
+        const audio = new Audio(v.file_url);
+        audio.onloadedmetadata = () => {
+          if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+            setVoiceDurations(prev => ({ ...prev, [v.id]: Math.ceil(audio.duration) }));
+          }
+        };
+      }
+    });
+  }, [voices]);
+
+  const getPulsesForVoice = (voiceId: string) => {
+    const duration = voiceDurations[voiceId] || 0;
+    if (duration > 30) {
+      return Math.min(2, Math.ceil(duration / 30));
+    }
+    return 1;
+  };
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Transaction state
@@ -703,7 +725,39 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
     
     const { data } = await query.order('created_at', { ascending: false }).limit(200);
-    if (data) setBroadcastHistory(data);
+    if (data) {
+      let instIdToFilter = madrasah?.id;
+      let txQuery = supabase.from('transactions').select('transaction_id, amount').eq('module', 'voice').eq('type', 'credit');
+      if (instIdToFilter && isValidUUID(instIdToFilter)) {
+        txQuery = txQuery.eq('institution_id', instIdToFilter);
+      }
+      const { data: refundTxs } = await txQuery;
+      const refundMap: { [campId: string]: number } = {};
+      if (refundTxs) {
+        refundTxs.forEach(tx => {
+          if (tx.transaction_id && tx.transaction_id.startsWith('REFUND_CAMP_')) {
+            const campId = tx.transaction_id.replace('REFUND_CAMP_', '');
+            refundMap[campId] = (refundMap[campId] || 0) + Number(tx.amount || 0);
+          }
+        });
+      }
+
+      const mappedData = data.map(item => {
+        let totalTxRefund = refundMap[item.provider_campaign_id] || 0;
+        if (item.retries && Array.isArray(item.retries)) {
+          item.retries.forEach((rId: string) => {
+            if (refundMap[rId]) totalTxRefund += refundMap[rId];
+          });
+        }
+        const effectiveRefund = Math.max(Number(item.refunded_amount || 0), totalTxRefund);
+        return {
+          ...item,
+          refunded_amount: effectiveRefund
+        };
+      });
+
+      setBroadcastHistory(mappedData);
+    }
     
     // Track results for pending/sending broadcasts
     if (data) {
@@ -858,7 +912,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       // Calculate cost based on normalized subscribers
-      const estimatedCost = uniqueNormalizedPhoneNumbers.length * voiceRate;
+      const pulses = getPulsesForVoice(retryBroadcastVoiceId || selectedVoiceId);
+      const estimatedCost = uniqueNormalizedPhoneNumbers.length * voiceRate * pulses;
 
       if (walletBalance < estimatedCost) {
         setStatusModal({
@@ -1146,7 +1201,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       return;
     }
 
-    const estimatedCost = count * voiceRate;
+    const pulses = getPulsesForVoice(selectedVoiceId);
+    const estimatedCost = count * voiceRate * pulses;
 
     if (!isSuperAdmin && walletBalance < estimatedCost) {
       setStatusModal({
@@ -1244,7 +1300,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // De-duplicate phone numbers
       const uniqueNormalizedPhoneNumbers = [...new Set(normalizedPhoneNumbers)];
       const finalCount = uniqueNormalizedPhoneNumbers.length;
-      const finalEstimatedCost = finalCount * voiceRate;
+      const pulses = getPulsesForVoice(selectedVoiceId);
+      const finalEstimatedCost = finalCount * voiceRate * pulses;
       
       if (finalCount === 0) {
         throw new Error('No valid 11-digit phone numbers (01...) found.');
@@ -1819,8 +1876,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       {showVoiceDropdown && (
                         <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
                           {voices.filter(v => (v.admin_status === 'approved' || v.provider_status === 'approved' || !!v.file_url)).map(v => (
-                            <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
+                            <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
                               <span className="font-black font-noto">{v.title}</span>
+                              {voiceDurations[v.id] ? (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedVoiceId === v.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                  {voiceDurations[v.id]}s ({getPulsesForVoice(v.id)} {getPulsesForVoice(v.id) === 1 ? 'Pulse' : 'Pulses'})
+                                </span>
+                              ) : null}
                             </button>
                           ))}
                         </div>
@@ -1992,8 +2054,26 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                           <p className="text-xs font-black text-[#1E3A8A]">{h.total_numbers}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('cost', lang)}</p>
-                          <p className="text-xs font-black text-red-500">{h.estimated_cost} ৳</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                            {lang === 'bn' ? 'সর্বমোট নিট খরচ' : 'Net Total Cost'}
+                          </p>
+                          {Number(h.refunded_amount || 0) > 0 ? (
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-black text-emerald-600">
+                                  {Math.max(0, Number((h.estimated_cost - Number(h.refunded_amount || 0)).toFixed(2)))} ৳
+                                </p>
+                                <p className="text-[10px] text-slate-400 line-through">
+                                  {h.estimated_cost} ৳
+                                </p>
+                              </div>
+                              <span className="text-[9px] font-bold text-emerald-600 block mt-0.5">
+                                ({lang === 'bn' ? `রিফান্ড: ${h.refunded_amount} ৳` : `Refunded: ${h.refunded_amount} ৳`})
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="text-xs font-black text-red-500">{h.estimated_cost} ৳</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2043,6 +2123,27 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                       <div className="text-lg font-black text-slate-900">
                                         {logs.reduce((acc: number, l: any) => acc + (parseInt(l.duration || l.billsec) || 0), 0)}s
                                       </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between text-xs mt-3">
+                                    <div className="space-y-0.5">
+                                      <span className="font-bold text-slate-500 block text-[10px] uppercase">
+                                        {lang === 'bn' ? 'প্রাথমিক চার্জ' : 'Initial Charge'}: {h.estimated_cost} ৳
+                                      </span>
+                                      {Number(h.refunded_amount || 0) > 0 && (
+                                        <span className="font-bold text-emerald-600 block text-[10px] uppercase">
+                                          {lang === 'bn' ? 'অব্যবহৃত/ব্যর্থ কল রিফান্ড' : 'Unused/Failed Refund'}: -{h.refunded_amount} ৳
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-[9px] font-black text-slate-400 uppercase block tracking-wider">
+                                        {lang === 'bn' ? 'সর্বমোট প্রকৃত খরচ' : 'Net Actual Cost'}
+                                      </span>
+                                      <span className="text-sm font-black text-[#1E3A8A]">
+                                        {Math.max(0, Number((h.estimated_cost - Number(h.refunded_amount || 0)).toFixed(2)))} ৳
+                                      </span>
                                     </div>
                                   </div>
 
