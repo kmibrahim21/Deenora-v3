@@ -199,7 +199,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [showVoiceTemplateDropdown, setShowVoiceTemplateDropdown] = useState(false);
   const [sendingVoiceAlerts, setSendingVoiceAlerts] = useState(false);
   const [walletBalance, setWalletBalance] = useState(madrasah?.balance || 0);
-  const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.50);
+  const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.45);
 
   const availableShortcodes = [
     { code: '{student_name}', label: lang === 'bn' ? 'শিক্ষার্থীর নাম' : 'Student Name' },
@@ -213,7 +213,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
       if (!r) {
         try {
           const { data } = await supabase.from('system_settings').select('voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
-          r = data?.voice_rate || 0.50;
+          r = data?.voice_rate || 0.45;
         } catch(e) {
           r = 0.50;
         }

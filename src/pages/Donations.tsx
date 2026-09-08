@@ -2428,7 +2428,7 @@ const Donations: React.FC<DonationsProps> = ({
                     {lang === 'bn' ? 'মোট প্রাপক সংখ্যা ও আনুমানিক কল খরচ:' : 'Recipients & Estimated Call Cost:'}
                   </span>
                   <span className="text-sm font-black font-mono">
-                    {computedTargetCount} জন দাতা • ৳ {((madrasah?.voice_rate || 1.0) * computedTargetCount).toFixed(2)}
+                    {computedTargetCount} জন দাতা • ৳ {((madrasah?.voice_rate || 0.45) * computedTargetCount).toFixed(2)}
                   </span>
                 </div>
                 <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100">

@@ -174,6 +174,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [systemGlobalSettings, setSystemGlobalSettings] = useState<SystemSettings | null>(null);
 
   const [rejectConfirm, setRejectConfirm] = useState<Transaction | null>(null);
+  const [bulkDeleteTab, setBulkDeleteTab] = useState<string | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
 
   const [globalStats, setGlobalStats] = useState({ 
@@ -254,7 +256,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [editReveClientId, setEditReveClientId] = useState('');
   const [editInstituteCode, setEditInstituteCode] = useState('');
   const [editSmsRate, setEditSmsRate] = useState<number>(0.50);
-  const [editVoiceRate, setEditVoiceRate] = useState<number>(0.50);
+  const [editVoiceRate, setEditVoiceRate] = useState<number>(0.45);
   const [editPaidMonths, setEditPaidMonths] = useState<string[]>([]);
   const [editPackageRate, setEditPackageRate] = useState<number>(0);
   const [editPackageName, setEditPackageName] = useState<string>('');
@@ -1904,7 +1906,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     setEditReveClientId(user.reve_client_id || '');
     setEditInstituteCode(userConfig?.institute_code || '');
     setEditSmsRate(user.sms_rate || 0.50);
-    setEditVoiceRate(user.voice_rate || 0.50);
+    setEditVoiceRate(user.voice_rate !== undefined && user.voice_rate !== null ? user.voice_rate : 0.45);
     setEditPaidMonths(userConfig?.paid_months || []);
     setEditPackageRate(userConfig?.package_rate || 0);
     setEditPackageName(userConfig?.package_name || '');
@@ -2017,7 +2019,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           reve_secret_key: editReveSecretKey.trim() || null,
           reve_client_id: editReveClientId.trim() || null,
           sms_rate: Number(editSmsRate) || 0.50,
-          voice_rate: Number(editVoiceRate) || 0.50,
+          voice_rate: Number(editVoiceRate) !== undefined && !isNaN(Number(editVoiceRate)) ? Number(editVoiceRate) : 0.45,
           custom_subscription_fee: editCustomSubscriptionFee === '' ? null : Number(editCustomSubscriptionFee),
           institute_code: editInstituteCode.trim(),
           config_json: {
@@ -2227,6 +2229,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       setIsRejecting(false);
     }
   };
+
+  
+
+  const bulkDeleteTransactions = async () => {
+    if (!bulkDeleteTab) return;
+    setIsBulkDeleting(true);
+    try {
+      const idsToDelete = pendingTrans.filter(tr => filterTransactionByTab(tr, bulkDeleteTab)).map(tr => tr.id);
+      if (idsToDelete.length === 0) {
+         setBulkDeleteTab(null);
+         return;
+      }
+      const { error } = await supabase.from('transactions').delete().in('id', idsToDelete);
+      if (error) throw error;
+      
+      setPendingTrans(prev => prev.filter(p => !idsToDelete.includes(p.id)));
+      setBulkDeleteTab(null);
+      setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'সকল পেন্ডিং পেমেন্ট মুছে ফেলা হয়েছে (কোনো SMS পাঠানো হয়নি)।' });
+      initData(true, true);
+    } catch (err: any) {
+      setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message });
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+
 
   const toggleSmsForRequest = (id: string) => {
     setSmsEnabledMap(prev => ({ ...prev, [id]: !prev[id] }));
@@ -3426,9 +3455,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
               </div>
               
               <div className="space-y-6">
-                <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                   <AlertCircle size={14} className="text-amber-400" /> Pending Requests ({paymentTab === 'sms' ? 'SMS' : paymentTab === 'voice' ? 'Voice' : 'Subscription'})
-                </h2>
+                <div className="flex items-center justify-between px-2">
+                  <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                     <AlertCircle size={14} className="text-amber-400" /> Pending Requests ({paymentTab === 'sms' ? 'SMS' : paymentTab === 'voice' ? 'Voice' : 'Subscription'})
+                  </h2>
+                  {pendingTrans.filter(tr => filterTransactionByTab(tr, paymentTab)).length > 0 && (
+                    <button
+                      onClick={() => setBulkDeleteTab(paymentTab)}
+                      className="text-[10px] font-black uppercase tracking-wider text-rose-500 hover:text-white bg-rose-500/10 hover:bg-rose-500 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+                    >
+                      <Trash2 size={12} /> Delete All Pending
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {pendingTrans.filter(tr => filterTransactionByTab(tr, paymentTab)).length > 0 ? pendingTrans.filter(tr => filterTransactionByTab(tr, paymentTab)).map(tr => (
                     <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-premium'} p-6 rounded-[2.5rem] border space-y-5 animate-in slide-in-from-left-4`}>
@@ -3939,7 +3978,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Voice Rate (BDT)</label>
-                                    <input type="number" step="0.01" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editVoiceRate} onChange={(e) => setEditVoiceRate(Number(e.target.value))} placeholder="0.50" />
+                                    <input type="number" step="0.01" readOnly={!canWrite('api_security')} className={`w-full h-14 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white focus:bg-slate-800' : 'bg-white border-slate-200 text-slate-900 focus:bg-white'} border rounded-2xl px-5 font-black text-sm outline-none focus:border-blue-500 transition-all ${!canWrite('api_security') ? 'cursor-not-allowed opacity-85' : ''}`} value={editVoiceRate} onChange={(e) => setEditVoiceRate(Number(e.target.value))} placeholder="0.45" />
+
                                   </div>
                                </div>
                             </div>
@@ -4574,6 +4614,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         document.body
       )}
 
+      {/* Bulk Delete Modal - PORTALED */}
+      {bulkDeleteTab && createPortal(
+        <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl text-center animate-in zoom-in-95 duration-500 border border-red-50">
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner border border-red-100">
+                 <Trash2 size={32} />
+              </div>
+              <h3 className="text-xl font-black text-[#1E3A8A] font-noto tracking-tight">আপনি কি নিশ্চিত?</h3>
+              <p className="text-[12px] font-bold text-slate-400 mt-2 font-noto leading-relaxed">
+                 আপনি {bulkDeleteTab === 'sms' ? 'SMS' : bulkDeleteTab === 'voice' ? 'Voice' : 'Subscription'} এর <strong>সকল পেন্ডিং রিকোয়েস্ট</strong> একসাথে মুছে ফেলতে চাচ্ছেন। <br/> (এতে কোনো Cancel SMS পাঠানো হবে না)
+              </p>
+              <div className="flex flex-col gap-2 mt-8">
+                 <button onClick={bulkDeleteTransactions} disabled={isBulkDeleting} className="w-full py-4 bg-red-500 text-white font-black rounded-full shadow-lg shadow-red-100 active:scale-95 transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-widest">
+                    {isBulkDeleting ? <Loader2 className="animate-spin" size={18} /> : 'হ্যাঁ, মুছে ফেলুন'}
+                 </button>
+                 <button onClick={() => setBulkDeleteTab(null)} disabled={isBulkDeleting} className="w-full py-3 bg-slate-50 text-slate-400 font-black rounded-full active:scale-95 transition-all text-[10px] uppercase tracking-widest">পিছনে যান</button>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
+      
       {/* Reject Confirmation Modal - PORTALED */}
       {rejectConfirm && createPortal(
         <div className="modal-overlay bg-slate-900/40 backdrop-blur-xl animate-in fade-in duration-300">

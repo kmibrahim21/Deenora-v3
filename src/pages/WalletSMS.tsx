@@ -128,7 +128,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [pendingTrxId, setPendingTrxId] = useState<string | null>(null);
   const [smsRate, setSmsRate] = useState<number>(madrasah?.sms_rate || 0.55);
 
-  const [voiceRate, setVoiceRate] = useState<number>(madrasah?.voice_rate || 1.00);
+  const [voiceRate, setVoiceRate] = useState<number>(madrasah?.voice_rate || 0.45);
   const [smsBalance, setSmsBalance] = useState<number>(0);
 
   const fetchWalletBalance = async () => {
@@ -190,7 +190,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
           }
         }
         
-        if (!vRate) vRate = data?.voice_rate || 1.00;
+        if (!vRate) vRate = data?.voice_rate || 0.45;
       } catch(e) {
         if (!vRate) vRate = 1.00;
         if (!sRate) sRate = 0.55;
@@ -254,7 +254,7 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     }
 
     if (activeSmsRate) setSmsRate(activeSmsRate);
-    if (settings.voice_rate) setVoiceRate(settings.voice_rate);
+    if (settings.voice_rate && !madrasah?.voice_rate) setVoiceRate(settings.voice_rate);
   };
 
   const fetchClasses = async () => {

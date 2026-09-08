@@ -834,7 +834,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('id', '00000000-0000-0000-0000-000000000001')
           .single();
         
-        const voiceRate = institution.voice_rate || sysSettings?.voice_rate || 0.50;
+        const voiceRate = institution.voice_rate || sysSettings?.voice_rate || 0.45;
         const refundAmount = Number((totalFailuresToRefund * voiceRate).toFixed(2));
 
         const txData: any = {

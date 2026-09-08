@@ -340,7 +340,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad'>('bkash');
   const [isWaitingPayment, setIsWaitingPayment] = useState(false);
   const [pendingTrxId, setPendingTrxId] = useState<string | null>(null);
-  const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.50);
+  const [voiceRate, setVoiceRate] = useState(madrasah?.voice_rate || 0.45);
 
   useEffect(() => {
     const initRate = async () => {
@@ -348,7 +348,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (!r) {
         try {
           const { data } = await supabase.from('system_settings').select('voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
-          r = data?.voice_rate || 0.50;
+          r = data?.voice_rate || 0.45;
         } catch(e) {
           r = 0.50;
         }
@@ -398,7 +398,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     const { data } = await supabase.from('system_settings').select('bkash_number, nagad_number, voice_rate').single();
     if (data?.bkash_number) setAdminBkash(data.bkash_number);
     if ((data as any)?.nagad_number) setAdminNagad((data as any).nagad_number);
-    if (data?.voice_rate) setVoiceRate(data.voice_rate);
+    if (data?.voice_rate && !madrasah?.voice_rate) setVoiceRate(data.voice_rate);
   };
 
   const fetchWalletBalance = async () => {
