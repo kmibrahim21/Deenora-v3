@@ -912,7 +912,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
 
       // Calculate cost based on normalized subscribers
-      const pulses = getPulsesForVoice(retryBroadcastVoiceId || selectedVoiceId);
+      const pulses = getPulsesForVoice(voiceId || broadcast.voice_template_id || selectedVoiceId);
       const estimatedCost = uniqueNormalizedPhoneNumbers.length * voiceRate * pulses;
 
       if (walletBalance < estimatedCost) {
@@ -2447,7 +2447,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                   {lang === 'bn' ? 'মোট আনুমানিক খরচ' : 'Total Estimated Cost'}
                 </span>
                 <span className="text-xl font-black text-blue-600">
-                  {Number(retryModal.phoneNumbers.length * voiceRate).toFixed(2)} ৳
+                  {Number(retryModal.phoneNumbers.length * voiceRate * getPulsesForVoice(retryModal.voiceId)).toFixed(2)} ৳
                 </span>
               </div>
             </div>
