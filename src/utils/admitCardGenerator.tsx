@@ -665,6 +665,18 @@ export const generateAdmitCardPDF = async (
   onProgress?.(50);
 
   try {
+    // Generate a unique entity ID based on the students and exam
+    const studentIds = students.map(s => s.id || s.roll).join('-');
+    
+    // Hash function to keep the entity ID short
+    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(studentIds));
+    const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    const entity_id = `exam_${exam.id || '0'}_batch_${hashHex.substring(0, 16)}`;
+
+    const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const filename = `Admit_Cards_${safeExamName}.pdf`;
+
     const response = await fetch('/api/pdf', {
       method: 'POST',
       headers: {
@@ -673,7 +685,10 @@ export const generateAdmitCardPDF = async (
       body: JSON.stringify({
         html: fullHtml,
         format: 'a4',
-        orientation: isPortrait ? 'portrait' : 'landscape'
+        orientation: isPortrait ? 'portrait' : 'landscape',
+        entity_type: 'admit_card',
+        entity_id: entity_id,
+        filename: filename
       }),
     });
 
@@ -683,20 +698,24 @@ export const generateAdmitCardPDF = async (
 
     onProgress?.(90);
 
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
+    const data = await response.json();
     
-    const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    a.download = `Admit_Cards_${safeExamName}.pdf`;
-    
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-    
+    if (data.url) {
+       // Create an anchor tag to trigger download from the signed URL
+       const a = document.createElement('a');
+       a.style.display = 'none';
+       a.href = data.url;
+       // Note: download attribute might not work cross-origin, but we try
+       a.download = filename;
+       
+       document.body.appendChild(a);
+       a.click();
+       document.body.removeChild(a);
+       
+       // Fallback for cross-origin downloads: if it opens in same tab, we can use target="_blank"
+       // But usually signed urls have Content-Disposition attachment set on the bucket!
+    }
+
     onProgress?.(100);
   } catch (error) {
     console.error('Server PDF generation failed:', error);
