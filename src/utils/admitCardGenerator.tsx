@@ -1,5 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { toJpeg } from 'html-to-image';
 import jsPDF from 'jspdf';
 import { Exam, Student } from '../types';
@@ -16,7 +17,7 @@ interface AdmitCardProps {
 
 const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, templateId = 'modern', lang }) => {
   const isBangla = lang === 'bn';
-  const fontFamily = isBangla ? "'Noto Serif Bengali', serif" : "'Times New Roman', serif";
+  const fontFamily = (templateId === 'modern' || templateId === 'admission' || isBangla) ? "'SolaimanLipi', sans-serif" : "'Times New Roman', serif";
 
   // Parse config_json if it's a string
   let config = madrasah?.config_json;
@@ -40,50 +41,50 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
     // Force single line, scale text down as length increases to prevent overflow without using ellipsis (....)
     if (len > 60) {
       return {
-        h1Class: 'text-[12px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[9px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[8.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[16px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[10px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[9px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     if (len > 50) {
       return {
-        h1Class: 'text-[14px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[9.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[9px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[19px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[11px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[10px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     if (len > 40) {
       return {
-        h1Class: 'text-[16px] font-black text-[#0c4a7e] tracking-tight leading-none mb-0.5 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[10px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[9.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[24px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     if (len > 30) {
       return {
-        h1Class: 'text-[19px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[10.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[10px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[28px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[13px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-[1px] leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[12px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     if (len > 22) { 
       return {
-        h1Class: 'text-[22px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[11px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[10.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[32px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[14px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[13px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     if (len > 15) {
       return {
-        h1Class: 'text-[25px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-        addrClass: 'text-[11.5px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
-        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[11px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+        h1Class: 'text-[38px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+        addrClass: 'text-[16px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-1 leading-tight truncate',
+        infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[14px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
       };
     }
     return {
-      h1Class: 'text-[28px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
-      addrClass: 'text-[12px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-0.5 leading-tight truncate',
-      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[11.5px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
+      h1Class: 'text-[44px] font-black text-[#0c4a7e] tracking-tight leading-none mb-1 whitespace-nowrap max-w-full mx-auto px-1',
+      addrClass: 'text-[18px] font-bold text-[#0c4a7e]/85 max-w-[98%] mx-auto mb-1.5 leading-tight truncate',
+      infoClass: 'flex items-center justify-center whitespace-nowrap flex-nowrap gap-x-2 text-[15px] font-bold text-[#0c4a7e]/80 max-w-full mx-auto leading-tight'
     };
   };
   
@@ -110,6 +111,13 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
       <div className="w-[190mm] h-[135mm] bg-white border-[3.5px] border-[#0c4a7e] rounded-[16px] overflow-hidden relative shadow-md flex flex-col justify-between p-[3.5mm] pb-[8mm]" style={{ fontFamily }}>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');
+          @font-face {
+            font-family: 'SolaimanLipi';
+            src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+          }
         `}</style>
         
         {/* Background Watermark */}
@@ -146,7 +154,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
 
           {/* Center: Madrasah Name & Subtitles */}
           <div className="flex-1 text-center pr-[42mm] pl-[2mm] flex flex-col justify-center h-full">
-            <h1 className={headerStyles.h1Class} style={{ fontFamily: isBangla ? "'Tiro Bangla', 'Noto Serif Bengali', serif" : "'Times New Roman', serif" }}>
+            <h1 className={headerStyles.h1Class}>
               {madrasah.name}
             </h1>
             <p className={headerStyles.addrClass}>
@@ -352,7 +360,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
               {madrasah.logo_url && (
                 <img src={madrasah.logo_url} className="w-[70px] h-[70px] object-contain mb-2" crossOrigin="anonymous" />
               )}
-              <h1 className="text-[40px] leading-[1.1] font-black text-black tracking-wide break-words w-full" style={{ fontFamily: isBangla ? "'Tiro Bangla', serif" : "'Times New Roman', serif" }}>
+              <h1 className="text-[40px] leading-[1.1] font-black text-black tracking-wide break-words w-full">
                 {madrasah.name}
               </h1>
               {madrasah.address && (
@@ -408,11 +416,11 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
                     </tr>
                     <tr>
                       <td className="py-1 font-bold align-top">{isBangla ? 'রোল' : 'Roll'}</td>
-                      <td className="py-1 font-black text-[38px] text-black italic">:<span className="ml-3">{student.roll || '-'}</span></td>
+                      <td className="py-1 font-black text-[38px] text-black italic">:<span className="ml-3">{isBangla ? toBanglaNum(student.roll || '') || '-' : student.roll || '-'}</span></td>
                     </tr>
                     <tr>
                       <td className="py-1 font-bold align-top">{isBangla ? 'শিক্ষাবর্ষ' : 'Session'}</td>
-                      <td className="py-1 font-semibold">:<span className="ml-3">{exam.exam_year || new Date().getFullYear().toString()}</span></td>
+                      <td className="py-1 font-semibold">:<span className="ml-3">{isBangla ? toBanglaNum(exam.exam_year || new Date().getFullYear().toString()) : (exam.exam_year || new Date().getFullYear().toString())}</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -466,17 +474,19 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
               <img src={madrasah.logo_url} alt="Logo" className="w-[84px] h-[84px] object-contain rounded-full" crossOrigin="anonymous" />
             </div>
           )}
-          <div className="text-left">
-            <h1 className="text-[44px] font-black drop-shadow-md tracking-wide leading-none" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+          <div className="text-left flex flex-col justify-center">
+            <h1 className="text-[52px] font-black drop-shadow-md tracking-wide leading-none text-center" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
               {madrasah.name}
             </h1>
-            <p className="text-[14px] mt-2.5 text-blue-50 drop-shadow flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-medium">
-              <span>{madrasah.address || ''}</span>
-              <div className="flex items-center gap-4">
-                {madrasah.contact_email && <span>Email: {madrasah.contact_email}</span>}
-                {madrasah.phone && <span>Mobile: {madrasah.phone}</span>}
+            <div className="flex flex-col items-center justify-center mt-3 gap-1.5 text-blue-50 drop-shadow font-medium">
+              <span className="text-[18px] text-center leading-tight">
+                {madrasah.address || ''}
+              </span>
+              <div className="flex items-center justify-center gap-6 text-[16px]">
+                {madrasah.contact_email && <span>{madrasah.contact_email}</span>}
+                {madrasah.phone && <span>{madrasah.phone}</span>}
               </div>
-            </p>
+            </div>
           </div>
         </div>
       </div>
@@ -499,7 +509,7 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
       </div>
 
       {/* Grid Inputs */}
-      <div className="relative z-10 mt-5 px-16 flex flex-col gap-[7px]">
+      <div className="relative z-10 mt-5 px-16 flex flex-col gap-[6px]">
         {[
           { label: isBangla ? 'নাম' : 'Name', value: student.student_name },
           { label: isBangla ? 'পিতা' : 'Father', value: student.guardian_name || '-' },
@@ -507,25 +517,25 @@ const AdmitCardTemplate: React.FC<AdmitCardProps> = ({ exam, student, madrasah, 
           { label: isBangla ? 'শ্রেণি' : 'Class', value: student.classes?.class_name || '-' },
           { 
             label: isBangla ? 'রোল' : 'Roll', 
-            value: student.roll || '-', 
+            value: isBangla ? toBanglaNum(student.roll || '') || '-' : student.roll || '-', 
             half: true, 
             label2: isBangla ? 'শিক্ষাবর্ষ' : 'Session', 
-            value2: exam.exam_year || new Date().getFullYear().toString()
+            value2: isBangla ? toBanglaNum(exam.exam_year || new Date().getFullYear().toString()) : (exam.exam_year || new Date().getFullYear().toString())
           }
         ].map((row, i) => (
-          <div key={i} className="flex h-[38px] gap-2">
-            <div className="w-28 bg-white border border-[#248ab3]/20 flex items-center justify-center font-bold text-[#054569] text-sm shadow-sm ring-1 ring-black/5 rounded-sm">
+          <div key={i} className="flex h-[34px] gap-2">
+            <div className="w-28 bg-white border border-[#248ab3]/20 flex items-center justify-center font-bold text-[#054569] text-[13px] shadow-sm ring-1 ring-black/5 rounded-sm">
               {row.label}
             </div>
-            <div className="flex-1 bg-white border border-[#248ab3]/20 flex items-center px-4 font-bold text-slate-800 text-[16px] shadow-sm ring-1 ring-black/5 rounded-sm tracking-wide">
+            <div className="flex-1 bg-white border border-[#248ab3]/20 flex items-center px-4 font-bold text-slate-800 text-[15px] shadow-sm ring-1 ring-black/5 rounded-sm tracking-wide">
               {row.value}
             </div>
             {row.half && (
               <>
-                <div className="w-32 bg-white border border-[#248ab3]/20 flex items-center justify-center font-bold text-[#054569] text-sm shadow-sm ring-1 ring-black/5 rounded-sm">
+                <div className="w-32 bg-white border border-[#248ab3]/20 flex items-center justify-center font-bold text-[#054569] text-[13px] shadow-sm ring-1 ring-black/5 rounded-sm">
                   {row.label2}
                 </div>
-                <div className="w-48 bg-white border border-[#248ab3]/20 flex items-center px-4 font-bold text-slate-800 text-[16px] shadow-sm ring-1 ring-black/5 rounded-sm">
+                <div className="w-48 bg-white border border-[#248ab3]/20 flex items-center px-4 font-bold text-slate-800 text-[15px] shadow-sm ring-1 ring-black/5 rounded-sm">
                   {row.value2}
                 </div>
               </>
@@ -557,142 +567,139 @@ export const generateAdmitCardPDF = async (
   lang: 'en' | 'bn' = 'en',
   onProgress?: (progress: number) => void
 ) => {
-  onProgress?.(2);
+  onProgress?.(5);
   const isAdmission = templateId === 'admission';
   
-  const container = document.createElement('div');
-  container.style.position = 'absolute';
-  container.style.top = '-9999px';
-  container.style.left = '-9999px';
-  document.body.appendChild(container);
-
-  const pdf = new jsPDF({
-    orientation: isAdmission ? 'portrait' : 'landscape',
-    unit: 'mm',
-    format: 'a4'
-  });
-
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  
-  // Card dimensions in mm
-  const cardWidthMm = isAdmission ? 190 : 142; 
-  const cardHeightMm = isAdmission ? 135 : 95;
-  
-  const gapY = isAdmission ? 8 : 6;
-  const gapX = 6;
-  
-  const marginX = (pageWidth - (isAdmission ? cardWidthMm : (cardWidthMm * 2 + gapX))) / 2;
-  const marginY = (pageHeight - (isAdmission ? (cardHeightMm * 2 + gapY) : (cardHeightMm * 2 + gapY))) / 2;
-
-  await document.fonts.ready;
-
-  for (let i = 0; i < students.length; i++) {
-    const student = students[i];
-    console.log(`Generating admit card for: ${student.student_name} (${i + 1}/${students.length})`);
+  // Render all cards as HTML string
+  const cardsHtml = students.map((student, i) => {
+    const cardHtml = renderToString(
+      <AdmitCardTemplate 
+        exam={exam} 
+        student={student} 
+        madrasah={madrasah} 
+        templateId={templateId} 
+        lang={lang} 
+      />
+    );
     
-    // Clear container completely for fresh rendering per student
-    container.innerHTML = '';
-    const cardHost = document.createElement('div');
-    container.appendChild(cardHost);
-    const root = createRoot(cardHost);
+    // Determine layout properties based on templateId
+    let cardsPerPage = 2;
+    let cardWidth = '190mm';
+    let cardHeight = '135mm';
+    let margin = '5mm auto';
+    let scale = 1;
 
-    await new Promise<void>((resolve) => {
-      root.render(
-        <AdmitCardTemplate 
-          exam={exam} 
-          student={student} 
-          madrasah={madrasah} 
-          templateId={templateId} 
-          lang={lang} 
-        />
-      );
-      
-      let attempts = 0;
-      const checkReady = () => {
-        attempts++;
-        const imgs = Array.from(cardHost.querySelectorAll('img'));
-        const allImgsLoaded = imgs.length === 0 || imgs.every(img => img.complete);
-        
-        if (allImgsLoaded && attempts >= 2) {
-          // Give browser 150ms for flexbox reflow & font layout to completely settle
-          setTimeout(resolve, 150);
-        } else if (attempts > 30) {
-          // Fallback timeout after ~3 seconds
-          resolve();
-        } else {
-          setTimeout(checkReady, 100);
+    if (templateId === 'modern') {
+      // 4 cards per page, A4 Landscape
+      cardsPerPage = 4;
+      cardWidth = '140mm';
+      cardHeight = '92mm';
+      margin = '4mm 3mm';
+      scale = 0.62; // 140mm = 529.13px, 529.13 / 850px = 0.6225
+    } else if (templateId === 'classic') {
+      // 6 cards per page, A4 Portrait
+      cardsPerPage = 6;
+      cardWidth = '95mm'; // Need to fit 2 side-by-side on A4 portrait (210mm)
+      cardHeight = '65mm'; // 600px * 0.40 = 240px = 63.5mm
+      margin = '10mm 4mm';
+      scale = 0.40; // 900px * 0.40 = 360px = 95.25mm
+    }
+
+    const isLastCardOnPage = (i + 1) % cardsPerPage === 0;
+    const isLastCardOverall = i === students.length - 1;
+    
+    // Wrap card to maintain sizes and optionally add page break
+    return `
+      <div style="display: inline-block; width: ${cardWidth}; height: ${cardHeight}; margin: ${margin}; vertical-align: top; box-sizing: border-box; position: relative; overflow: hidden; page-break-inside: avoid;">
+        <div style="position: absolute; top: 0; left: 0; transform-origin: top left; transform: scale(${scale});">
+          ${cardHtml}
+        </div>
+      </div>
+      ${(isLastCardOnPage && !isLastCardOverall) ? '<div style="page-break-after: always;"></div>' : ''}
+    `;
+  }).join('');
+
+  onProgress?.(30);
+
+  const isPortrait = templateId === 'admission' || templateId === 'classic';
+
+  // Wrap in a full HTML document with Tailwind and custom fonts
+  const fullHtml = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Admit Cards</title>
+      <base href="\${window.location.origin}/">
+      <script src="https://cdn.tailwindcss.com"></script>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Tiro+Bangla:ital@0;1&display=swap');
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
         }
-      };
+        body {
+          margin: 0;
+          padding: 0;
+          background-color: white;
+          text-align: center;
+        }
+        @page {
+          size: ${isPortrait ? 'a4 portrait' : 'a4 landscape'};
+          margin: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; padding: 2mm;">
+        ${cardsHtml}
+      </div>
+    </body>
+    </html>
+  `;
 
-      setTimeout(checkReady, 50);
+  onProgress?.(50);
+
+  try {
+    const response = await fetch('/api/pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        html: fullHtml,
+        format: 'a4',
+        orientation: isPortrait ? 'portrait' : 'landscape'
+      }),
     });
 
-    try {
-      const element = cardHost.firstElementChild as HTMLElement;
-      if (!element) {
-        console.error('Admit card element not found');
-        root.unmount();
-        continue;
-      }
-
-      const imgData = await toJpeg(element, {
-        pixelRatio: 2, 
-        quality: 0.98,
-        backgroundColor: '#ffffff',
-        cacheBust: false,
-        style: {
-          transform: 'scale(1)',
-          transformOrigin: 'top left'
-        }
-      });
-
-      if (isAdmission) {
-        // 2 per page, top and bottom
-        if (i > 0 && i % 2 === 0) {
-          pdf.addPage();
-        }
-        const posOnPage = i % 2;
-        const xPos = marginX;
-        const yPos = marginY + posOnPage * (cardHeightMm + gapY);
-
-        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'MEDIUM');
-        
-      } else {
-        // 4 per page
-        if (i > 0 && i % 4 === 0) {
-          pdf.addPage();
-        }
-        const posOnPage = i % 4;
-        const col = posOnPage % 2;
-        const row = Math.floor(posOnPage / 2);
-
-        const xPos = marginX + col * (cardWidthMm + gapX);
-        const yPos = marginY + row * (cardHeightMm + gapY);
-
-        pdf.addImage(imgData, 'JPEG', xPos, yPos, cardWidthMm, cardHeightMm, undefined, 'MEDIUM');
-      }
-
-      onProgress?.(2 + Math.floor(((i + 1) / students.length) * 96));
-    } catch (err) {
-      console.error('Error generating image for student:', student.student_name, err);
-    } finally {
-      root.unmount();
-      container.innerHTML = '';
+    if (!response.ok) {
+      throw new Error('Failed to generate PDF on server');
     }
 
-    // Help GC and keep UI responsive
-    if (i % 3 === 0) {
-      await new Promise(r => setTimeout(r, 100));
-    }
-  }
+    onProgress?.(90);
 
-  // Clear memory
-  if (document.body.contains(container)) {
-    document.body.removeChild(container);
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    
+    const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    a.download = `Admit_Cards_${safeExamName}.pdf`;
+    
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    onProgress?.(100);
+  } catch (error) {
+    console.error('Server PDF generation failed:', error);
+    alert(lang === 'bn' ? 'পিডিএফ জেনারেট করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।' : 'Failed to generate PDF. Please try again.');
   }
-
-  const safeExamName = (exam.exam_name || 'Exam').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  pdf.save(`Admit_Cards_${safeExamName}.pdf`);
-  onProgress?.(100);
 };

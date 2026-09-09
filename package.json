@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.41.0",
+    "@sparticuz/chromium": "^152.0.0",
     "@supabase/supabase-js": "^2.45.4",
     "@tailwindcss/typography": "^0.5.20",
     "better-sqlite3": "^12.6.2",
@@ -32,6 +33,7 @@
     "multer": "^2.2.0",
     "pdfkit": "^0.17.2",
     "pg": "^8.20.0",
+    "puppeteer-core": "^25.10.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
