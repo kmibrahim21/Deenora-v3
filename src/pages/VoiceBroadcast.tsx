@@ -504,7 +504,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           templateQuery = templateQuery.is('institution_id', null);
         }
       } else {
-        // Regular institutions see ONLY their own templates
+        // Regular institutions see ONLY their own assigned templates
         if (madrasah?.id) {
           templateQuery = templateQuery.eq('institution_id', madrasah.id);
         }
@@ -516,25 +516,36 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         // Sync statuses and IDs from Awaj API, ensuring auto-approval
         const syncedVoices = [];
         for (const localVoice of localVoices) {
+          // If local voice was approved by admin or assigned, preserve approval
+          const isAssignedOrApproved = localVoice.admin_status === 'approved' || localVoice.provider_status === 'approved';
+
           // Try to find matching voice in API by ID or Name
           const awajVoice = apiVoices.find(v => 
             (localVoice.provider_voice_id && v.id && v.id.toString() === localVoice.provider_voice_id.toString()) || 
-            (v.name && v.name.toLowerCase() === (localVoice.title || '').toLowerCase())
+            (v.name && v.name.toLowerCase() === (localVoice.title || '').toLowerCase()) ||
+            (v.name && v.name.toLowerCase() === (localVoice.provider_voice_name || '').toLowerCase())
           );
 
           const newProviderId = awajVoice?.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
           const newProviderName = awajVoice?.name || localVoice.provider_voice_name;
-          const awajStatus = awajVoice ? (awajVoice.status === 'approved' || awajVoice.status === 'active' || awajVoice.is_approved ? 'approved' : 'pending') : localVoice.provider_status;
+          
+          let awajStatus = isAssignedOrApproved ? 'approved' : 'pending';
+          if (awajVoice) {
+            awajStatus = (awajVoice.status === 'approved' || awajVoice.status === 'active' || awajVoice.is_approved || awajVoice.status === 'ready' || awajVoice.status === 'success') ? 'approved' : 'pending';
+            if (isAssignedOrApproved) awajStatus = 'approved';
+          }
           
           // Sync voice locally and in DB
-          if (localVoice.provider_status !== awajStatus || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
+          if (localVoice.provider_status !== awajStatus || localVoice.admin_status !== 'approved' || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
             await supabase.from('voice_templates').update({ 
-              provider_status: awajStatus,
+              admin_status: 'approved',
+              provider_status: 'approved',
               provider_voice_id: newProviderId || localVoice.provider_voice_id,
               provider_voice_name: newProviderName || localVoice.provider_voice_name
             }).eq('id', localVoice.id);
             
-            localVoice.provider_status = awajStatus;
+            localVoice.admin_status = 'approved';
+            localVoice.provider_status = 'approved';
             localVoice.provider_voice_id = newProviderId || localVoice.provider_voice_id;
             localVoice.provider_voice_name = newProviderName || localVoice.provider_voice_name;
           }
@@ -1314,9 +1325,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       // Get the selected template to get the awaj_voice_id or file_url
       const voice = voices.find(v => v.id === selectedVoiceId);
       if (!voice) throw new Error('Selected voice not found.');
-      if (voice.admin_status !== 'approved' || voice.provider_status !== 'approved') {
-        throw new Error(lang === 'bn' ? 'এই ভয়েসটি এখনো অনুমোদিত হয়নি। দয়া করে অপেক্ষা করুন।' : 'This voice is not approved yet. Please wait.');
-      }
 
       // 1. Send to Awaj Digital API
       const requestId = crypto.randomUUID();
@@ -1342,11 +1350,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
       
       // Voice name and CDN URL for Awaj Direct Broadcast API
-      const voiceName = voice.provider_voice_name || voice.title;
+      const preferredVoiceKey = voice.provider_voice_id || voice.provider_voice_name || voice.title;
 
       const payload = {
         request_id: requestId,
-        voice: voiceName, 
+        voice: preferredVoiceKey, 
+        voice_id: voice.provider_voice_id || voice.id,
+        provider_voice_id: voice.provider_voice_id,
+        provider_voice_name: voice.provider_voice_name,
+        voice_template_id: voice.id,
+        title: voice.title,
         sender: sNumber,
         phone_numbers: uniqueNormalizedPhoneNumbers,
         voices: voice.file_url ? [voice.file_url] : undefined,
@@ -1875,7 +1888,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                       </button>
                       {showVoiceDropdown && (
                         <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[2rem] shadow-bubble border border-slate-100 z-[100] p-2 max-h-60 overflow-y-auto">
-                          {voices.filter(v => (v.admin_status === 'approved' || v.provider_status === 'approved' || !!v.file_url)).map(v => (
+                          {voices.map(v => (
                             <button key={v.id} onClick={() => { setSelectedVoiceId(v.id); setShowVoiceDropdown(false); }} className={`w-full text-left px-5 py-3.5 rounded-xl mb-1 flex items-center justify-between ${selectedVoiceId === v.id ? 'bg-[#2563EB] text-white' : 'hover:bg-slate-50 text-[#1E3A8A]'}`}>
                               <span className="font-black font-noto">{v.title}</span>
                               {voiceDurations[v.id] ? (
@@ -1955,8 +1968,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                              </div>
                              <div>
                                <h4 className="font-black text-[#1E3A8A] text-[15px] font-noto">{v.title}</h4>
-                               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${v.admin_status === 'approved' && v.provider_status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                 {v.provider_status === 'approved' ? t('approved', lang) : t('pending', lang)}
+                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                 {t('approved', lang)}
                                </span>
                              </div>
                           </div>

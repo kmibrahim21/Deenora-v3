@@ -547,7 +547,7 @@ const Donations: React.FC<DonationsProps> = ({
       const { data, error } = await supabase
         .from('voice_templates')
         .select('*')
-        .or(`institution_id.eq.${madrasah.id},institution_id.is.null`)
+        .eq('institution_id', madrasah.id)
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
@@ -556,34 +556,7 @@ const Donations: React.FC<DonationsProps> = ({
           setSelectedVoiceTemplateId(data[0].id);
         }
       } else {
-        // Fallback assigned templates if none found in DB
-        const defaultAssigned = [
-          {
-            id: 'vt_assigned_donation_reminder',
-            title: 'দান আদায়ের সাধারণ ভয়েস বার্তা (যোগাযোগ ভয়েস টেব)',
-            duration: '30',
-            provider_status: 'approved',
-            admin_status: 'approved',
-          },
-          {
-            id: 'vt_assigned_monthly_reminder',
-            title: 'মাসিক অনুদান তাগাদা বার্তা (যোগাযোগ ভয়েস টেব)',
-            duration: '25',
-            provider_status: 'approved',
-            admin_status: 'approved',
-          },
-          {
-            id: 'vt_assigned_urgent_appeal',
-            title: 'জরুরী সাহায্য ও তহবিল আবেদন (যোগাযোগ ভয়েস টেব)',
-            duration: '40',
-            provider_status: 'approved',
-            admin_status: 'approved',
-          },
-        ];
-        setVoiceTemplates(defaultAssigned);
-        if (!selectedVoiceTemplateId) {
-          setSelectedVoiceTemplateId(defaultAssigned[0].id);
-        }
+        setVoiceTemplates([]);
       }
     } catch (e) {
       console.warn('Voice templates load error:', e);

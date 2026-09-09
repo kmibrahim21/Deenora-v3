@@ -2236,7 +2236,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     if (!bulkDeleteTab) return;
     setIsBulkDeleting(true);
     try {
-      const idsToDelete = pendingTrans.filter(tr => filterTransactionByTab(tr, bulkDeleteTab)).map(tr => tr.id);
+      const idsToDelete = pendingTrans.filter(tr => filterTransactionByTab(tr, bulkDeleteTab as 'sms' | 'voice' | 'subscription')).map(tr => tr.id);
       if (idsToDelete.length === 0) {
          setBulkDeleteTab(null);
          return;

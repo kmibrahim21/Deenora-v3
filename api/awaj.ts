@@ -391,29 +391,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           voicesList = [body.voice];
         }
 
-        // Auto-lookup file_url from Supabase voice_templates if voicesList is empty
-        if (voicesList.length === 0) {
-          const vKey = body.voice_id || body.voice_template_id || body.voice;
-          if (vKey) {
-            const vKeyStr = String(vKey).trim();
-            try {
-              const { data: dbVoices } = await supabase
-                .from('voice_templates')
-                .select('file_url, title, provider_voice_name')
-                .or(`id.eq.${vKeyStr},provider_voice_id.eq.${vKeyStr},title.eq.${vKeyStr},provider_voice_name.eq.${vKeyStr}`)
-                .limit(1);
-              if (dbVoices && dbVoices[0] && dbVoices[0].file_url) {
-                const url = dbVoices[0].file_url.trim();
-                if (url.startsWith('http://') || url.startsWith('https://')) {
-                  voicesList = [url];
-                  console.log('Auto-resolved voice audio URL from database:', url);
-                }
+        // Auto-lookup details from Supabase voice_templates if needed
+        let dbResolvedVoiceId = body.provider_voice_id || null;
+        let dbResolvedVoiceName = body.provider_voice_name || null;
+
+        const vKey = body.voice_id || body.voice_template_id || body.voice || body.provider_voice_id;
+        if (vKey) {
+          const vKeyStr = String(vKey).trim();
+          try {
+            const { data: dbVoices } = await supabase
+              .from('voice_templates')
+              .select('file_url, title, provider_voice_name, provider_voice_id')
+              .or(`id.eq.${vKeyStr},provider_voice_id.eq.${vKeyStr},title.eq.${vKeyStr},provider_voice_name.eq.${vKeyStr}`)
+              .limit(1);
+            if (dbVoices && dbVoices[0]) {
+              const matched = dbVoices[0];
+              if (matched.file_url && matched.file_url.trim().startsWith('http') && voicesList.length === 0) {
+                voicesList = [matched.file_url.trim()];
+                console.log('Auto-resolved voice audio URL from database:', matched.file_url);
               }
-            } catch (err: any) {
-              console.warn('Error resolving voice URL from database:', err.message);
+              if (matched.provider_voice_id) {
+                dbResolvedVoiceId = matched.provider_voice_id;
+              }
+              if (matched.provider_voice_name) {
+                dbResolvedVoiceName = matched.provider_voice_name;
+              }
             }
+          } catch (err: any) {
+            console.warn('Error resolving voice details from database:', err.message);
           }
         }
+
+        // Determine effective voice name or provider ID for standard broadcast
+        const effectiveVoiceKey = dbResolvedVoiceId || dbResolvedVoiceName || body.provider_voice_id || body.provider_voice_name || body.voice || body.voice_name || body.title || '';
 
         // 2. Generate unique request_id (16-64 chars required by Awaj Direct API)
         let requestId = (body.request_id || body.requestId || '').toString().trim();
@@ -461,17 +471,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             console.warn(`Awaj Direct Broadcast failed (${directResponse.status}):`, directData);
 
-            // Fallback to standard broadcast endpoint if direct API returns error (e.g. 403 missing permission or 400 format issue) and voice name is provided
-            const voiceName = (body.voice || body.voice_name || body.title || '').toString();
-            if (voiceName && !voiceName.startsWith('http')) {
-              console.log('Falling back to standard Awaj Broadcast endpoint with voice name:', voiceName);
+            // Fallback to standard broadcast endpoint if direct API returns error and effective voice key exists
+            if (effectiveVoiceKey && !effectiveVoiceKey.startsWith('http')) {
+              console.log('Falling back to standard Awaj Broadcast endpoint with voice key:', effectiveVoiceKey);
               const stdPayload = {
                 ...body,
                 request_id: requestId,
                 sender: senderNum,
-                voice: voiceName
+                voice: effectiveVoiceKey
               };
               delete stdPayload.voices;
+              delete stdPayload.file_url;
               delete stdPayload.direct;
 
               const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
@@ -488,16 +498,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           } catch (directErr: any) {
             console.error('Awaj Direct Broadcast Exception:', directErr.message);
-            const voiceName = (body.voice || body.voice_name || body.title || '').toString();
-            if (voiceName && !voiceName.startsWith('http')) {
+            if (effectiveVoiceKey && !effectiveVoiceKey.startsWith('http')) {
               console.log('Exception in Direct Broadcast, falling back to standard Awaj Broadcast');
               const stdPayload = {
                 ...body,
                 request_id: requestId,
                 sender: senderNum,
-                voice: voiceName
+                voice: effectiveVoiceKey
               };
               delete stdPayload.voices;
+              delete stdPayload.file_url;
               delete stdPayload.direct;
 
               const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
@@ -517,7 +527,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const stdPayload = {
           ...body,
           request_id: requestId,
-          sender: senderNum
+          sender: senderNum,
+          voice: effectiveVoiceKey
         };
 
         const response = await fetch(`${AWAJ_BASE_URL}/broadcasts`, { 

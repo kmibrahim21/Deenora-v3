@@ -602,8 +602,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
       const { data: localVoices } = await supabase
         .from('voice_templates')
         .select('id, provider_voice_name, title')
-        .eq('institution_id', institutionId)
-        .eq('provider_status', 'approved');
+        .eq('institution_id', institutionId);
       
       setVoices(localVoices || []);
       if (localVoices && localVoices.length > 0) {

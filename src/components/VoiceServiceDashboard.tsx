@@ -293,7 +293,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
           voice_name: vName,
           preview_url: vUrl,
           file_url: vUrl,
-          provider_status: (assigningVoice.status === 'approved' || assigningVoice.status === 'active' || assigningVoice.is_approved) ? 'approved' : 'pending'
+          provider_status: 'approved'
         })
       });
 

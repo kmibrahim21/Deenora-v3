@@ -266,8 +266,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
     if (!madrasah) return;
     const { data } = await requestManager.cachedFetch(
       'voice_templates',
-      (q: any) => q.select('*').eq('institution_id', madrasah.id).eq('provider_status', 'approved').order('created_at', { ascending: false }),
-      `voice_templates:${madrasah.id}:approved`
+      (q: any) => q.select('*').eq('institution_id', madrasah.id).order('created_at', { ascending: false }),
+      `voice_templates:${madrasah.id}:all`
     );
     if (data) setVoiceTemplates(data);
   };
