@@ -24,25 +24,31 @@ export async function downloadBlob(blob: Blob, fileName: string, mimeType: strin
 
   // 1. If running inside Android WebView with Native Download Bridge
   if (typeof androidBridge === 'function') {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        try {
-          const resultStr = (reader.result as string) || '';
-          const base64Content = resultStr.includes(',') ? resultStr.split(',')[1] : resultStr;
-          androidBridge(base64Content, fileName, mimeType);
-          resolve();
-        } catch (e) {
-          console.error('AndroidInterface download failed:', e);
-          reject(e);
-        }
-      };
-      reader.onerror = (err) => {
-        console.error('FileReader error:', err);
-        reject(err);
-      };
-      reader.readAsDataURL(blob);
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          try {
+            const resultStr = (reader.result as string) || '';
+            const base64Content = resultStr.includes(',') ? resultStr.split(',')[1] : resultStr;
+            androidBridge(base64Content, fileName, mimeType);
+            resolve();
+          } catch (e) {
+            console.error('AndroidInterface download failed inside reader:', e);
+            reject(e);
+          }
+        };
+        reader.onerror = (err) => {
+          console.error('FileReader error:', err);
+          reject(err);
+        };
+        reader.readAsDataURL(blob);
+      });
+      return; // Succeeded using Android Native Bridge
+    } catch (androidErr) {
+      console.warn('Native Android download threw an error. Falling back to browser download:', androidErr);
+      // Fall through to standard web browser download below
+    }
   }
 
   // 2. Standard Web Browser / Chrome / PWA direct download

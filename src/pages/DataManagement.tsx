@@ -139,8 +139,18 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
     reader.onloadend = () => {
       const base64data = reader.result as string;
       if (window.AndroidInterface && typeof window.AndroidInterface.downloadFile === 'function') {
-        const base64Content = base64data.split(',')[1];
-        window.AndroidInterface.downloadFile(base64Content, fileName, mimeType);
+        try {
+          const base64Content = base64data.split(',')[1];
+          window.AndroidInterface.downloadFile(base64Content, fileName, mimeType);
+        } catch (err) {
+          console.warn('AndroidInterface download failed, falling back to standard web download:', err);
+          const link = document.createElement('a');
+          link.href = base64data;
+          link.setAttribute('download', fileName);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
       } else {
         const link = document.createElement('a');
         link.href = base64data;
