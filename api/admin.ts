@@ -1,6 +1,60 @@
 
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
+async function autoFixVoiceRefunds(supabase: any) {
+  try {
+    const { data: broadcasts } = await supabase
+      .from('voice_broadcasts')
+      .select('id, institution_id, estimated_cost, refunded_amount')
+      .gt('refunded_amount', 0);
+
+    if (!broadcasts || broadcasts.length === 0) return;
+
+    for (const item of broadcasts) {
+      const estCost = Number(item.estimated_cost || 0);
+      const refAmount = Number(item.refunded_amount || 0);
+      if (refAmount > estCost) {
+        const excessAmount = Number((refAmount - estCost).toFixed(2));
+        if (excessAmount > 0) {
+          const { data: inst } = await supabase
+            .from('institutions')
+            .select('balance')
+            .eq('id', item.institution_id)
+            .single();
+
+          if (inst) {
+            const currentBal = Number(inst.balance || 0);
+            const newBal = Math.max(0, Number((currentBal - excessAmount).toFixed(2)));
+
+            await supabase
+              .from('institutions')
+              .update({ balance: newBal })
+              .eq('id', item.institution_id);
+
+            await supabase.from('transactions').insert({
+              institution_id: item.institution_id,
+              amount: excessAmount,
+              transaction_id: `CORRECT_VOICE_${item.id.slice(0, 8)}_${Date.now()}`,
+              sender_phone: 'SYSTEM',
+              description: `Voice refund auto-correction: Deducted ${excessAmount} ৳ excess refund`,
+              type: 'debit',
+              status: 'approved',
+              module: 'voice'
+            });
+
+            await supabase
+              .from('voice_broadcasts')
+              .update({ refunded_amount: estCost, is_refunded: true })
+              .eq('id', item.id);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Auto fix voice refunds error:', err);
+  }
+}
+
 export default async function handler(req, res) {
   const { method, body, query } = req;
   const action = query.action || body.action;
@@ -89,6 +143,9 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Forbidden: Requires Super Admin or Manager role' });
     }
 
+    // Auto-fix any voice balance overflow issues transparently in background
+    await autoFixVoiceRefunds(supabase);
+
     if (action === 'get_global_stats') {
       const [studentsRes, classesRes, teachersRes, transactionsRes, instsRes, stockRes, pendingRes] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }),
@@ -162,6 +219,75 @@ export default async function handler(req, res) {
         totalVoiceBalance,
         adminSMSStock: adminStock,
         typeBreakdown
+      });
+    }
+
+    if (action === 'audit_voice_balances') {
+      const { data: broadcasts, error: fetchErr } = await supabase
+        .from('voice_broadcasts')
+        .select('*');
+
+      if (fetchErr) throw fetchErr;
+
+      const itemsToFix = (broadcasts || []).filter(b => Number(b.refunded_amount || 0) > Number(b.estimated_cost || 0));
+
+      let totalExcessDeducted = 0;
+      const results = [];
+
+      for (const item of itemsToFix) {
+        const estCost = Number(item.estimated_cost || 0);
+        const refAmount = Number(item.refunded_amount || 0);
+        const excessAmount = Number((refAmount - estCost).toFixed(2));
+
+        if (excessAmount > 0) {
+          const { data: inst } = await supabase
+            .from('institutions')
+            .select('balance, name')
+            .eq('id', item.institution_id)
+            .single();
+
+          if (inst) {
+            const currentBal = Number(inst.balance || 0);
+            const newBal = Math.max(0, Number((currentBal - excessAmount).toFixed(2)));
+
+            await supabase
+              .from('institutions')
+              .update({ balance: newBal })
+              .eq('id', item.institution_id);
+
+            await supabase.from('transactions').insert({
+              institution_id: item.institution_id,
+              amount: excessAmount,
+              transaction_id: `CORRECT_VOICE_${item.id.slice(0, 8)}_${Date.now()}`,
+              sender_phone: 'SYSTEM',
+              description: `Voice refund audit correction: Deducted ${excessAmount} ৳ excess refund`,
+              type: 'debit',
+              status: 'approved',
+              module: 'voice'
+            });
+
+            await supabase
+              .from('voice_broadcasts')
+              .update({ refunded_amount: estCost, is_refunded: true })
+              .eq('id', item.id);
+
+            totalExcessDeducted += excessAmount;
+            results.push({
+              institution_name: inst.name,
+              broadcast_id: item.id,
+              excess_refund: excessAmount,
+              previous_balance: currentBal,
+              new_balance: newBal
+            });
+          }
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        fixed_count: results.length,
+        total_excess_deducted: Number(totalExcessDeducted.toFixed(2)),
+        details: results
       });
     }
 

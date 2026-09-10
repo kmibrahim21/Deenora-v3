@@ -14,6 +14,7 @@ import { requestManager } from '../services/RequestManager';
 import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Profile } from 'types';
 import { SMSService } from '../services/SMSService';
 import { generateSystemPaymentReportPDF, generateSubscriptionMatrixPDF } from '../utils/pdfGenerator';
+import { saveJsPdf, downloadBlob } from '../utils/fileDownloader';
 
 interface InstitutionWithStats extends Institution {
   student_count?: number;
@@ -818,9 +819,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       root.unmount();
       document.body.removeChild(container);
       
-      const pdfBlob = doc.output('blob');
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      window.open(blobUrl, '_blank');
+      const fileName = `Receipt_${(selectedUser?.name || 'User').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_${transaction.id.slice(0, 8)}.pdf`;
+      await saveJsPdf(doc, fileName);
     } catch(err: any) {
       console.error(err);
       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message || 'Failed to download receipt' });

@@ -5,6 +5,7 @@
  */
 
 import { solaimanLipiBase64 } from './fonts';
+import { downloadBlob, downloadFromUrl } from './fileDownloader';
 
 export interface ServerPdfOptions {
   html: string;
@@ -97,48 +98,12 @@ export async function downloadServerPdf(options: ServerPdfOptions): Promise<bool
     if (contentType.includes('application/json')) {
       const data = await response.json();
       if (data.url) {
-        // Fetch file directly into Blob to force direct attachment download
-        // and completely avoid opening or navigating to the external Supabase URL
-        try {
-          const fileRes = await fetch(data.url);
-          if (fileRes.ok) {
-            const blob = await fileRes.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = blobUrl;
-            a.download = options.filename;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(blobUrl);
-            document.body.removeChild(a);
-            return true;
-          }
-        } catch (fetchErr) {
-          console.warn('Direct blob fetch from signed URL failed, using fallback:', fetchErr);
-        }
-
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = data.url;
-        a.download = options.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        return true;
+        return await downloadFromUrl(data.url, options.filename, 'application/pdf');
       }
     } else {
       // Direct stream
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = options.filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      await downloadBlob(blob, options.filename, 'application/pdf');
       return true;
     }
     return false;

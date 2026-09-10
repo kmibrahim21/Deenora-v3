@@ -3,10 +3,85 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // native fetch used
 import FormData from 'form-data';
 import { Buffer } from 'node:buffer';
+import https from 'node:https';
+import http from 'node:http';
+import crypto from 'node:crypto';
 import { getSupabaseAdmin } from '../lib/supabase-admin.js';
 
 const AWAJ_BASE_URL = 'https://api.awajdigital.com/api';
 const supabase = getSupabaseAdmin();
+
+async function fetchWavDuration(url: string): Promise<number> {
+  return new Promise((resolve) => {
+    try {
+      const protocol = url.startsWith('https') ? https : http;
+      const req = protocol.get(url, (res) => {
+        const chunks: Buffer[] = [];
+        let totalLength = 0;
+        let resolved = false;
+        
+        res.on('data', (chunk) => {
+          chunks.push(chunk);
+          totalLength += chunk.length;
+          // WAV headers are in the first 4096 bytes
+          if (totalLength >= 4096) {
+            res.destroy();
+          }
+        });
+        
+        const finish = () => {
+          if (resolved) return;
+          resolved = true;
+          try {
+            const buffer = Buffer.concat(chunks);
+            if (buffer.length < 44) {
+              resolve(0);
+              return;
+            }
+            
+            const sampleRate = buffer.readUInt32LE(24);
+            const byteRate = buffer.readUInt32LE(28);
+            
+            let dataOffset = 12;
+            while (dataOffset < buffer.length - 8) {
+              const subchunkId = buffer.toString('ascii', dataOffset, dataOffset + 4);
+              const subchunkSize = buffer.readUInt32LE(dataOffset + 4);
+              if (subchunkId === 'data') {
+                const durationSec = subchunkSize / byteRate;
+                resolve(durationSec);
+                return;
+              }
+              dataOffset += 8 + subchunkSize;
+            }
+            
+            const estDuration = buffer.length / byteRate;
+            resolve(estDuration);
+          } catch (e) {
+            resolve(0);
+          }
+        };
+
+        res.on('end', finish);
+        res.on('close', finish);
+        res.on('error', () => {
+          if (!resolved) {
+            resolved = true;
+            resolve(0);
+          }
+        });
+      });
+
+      req.setTimeout(2000, () => {
+        req.destroy();
+        resolve(0);
+      });
+
+      req.on('error', () => resolve(0));
+    } catch (err) {
+      resolve(0);
+    }
+  });
+}
 
 async function parseRawMultipart(req: any): Promise<{ fields: Record<string, string>, files: { name: string, filename: string, mime: string, buffer: Buffer }[] }> {
   const contentType = req.headers['content-type'] || '';
@@ -686,29 +761,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const { data: profile, error: profileErr } = await supabase
           .from('profiles')
-          .select('institution_id')
+          .select('institution_id, role')
           .eq('id', user.id)
           .single();
 
-        if (profileErr || !profile?.institution_id) {
-          console.error('Profile/Institution fetch error:', profileErr);
-          return res.status(401).json({ error: 'Unauthorized: Could not determine institution' });
-        }
-
-        const institutionId = profile.institution_id;
-
-        // 1. Fetch broadcast details
+        // 1. Fetch broadcast details directly by broadcastId
         const { data: broadcast, error: broadcastErr } = await supabase
           .from('voice_broadcasts')
           .select('*')
           .eq('id', broadcastId)
-          .eq('institution_id', institutionId)
           .single();
 
         if (broadcastErr || !broadcast) {
           console.error('Broadcast fetch error:', broadcastErr);
-          return res.status(404).json({ error: 'Broadcast not found or access denied' });
+          return res.status(404).json({ error: 'Broadcast not found' });
         }
+
+        const deterministicId = crypto.randomUUID();
+
+        // Safe lookup of voice template duration (fetching WAV format dynamically if null)
+        let templateDuration = 0;
+        if (broadcast.voice_template_id) {
+          const { data: vTemp } = await supabase
+            .from('voice_templates')
+            .select('duration, file_url')
+            .eq('id', broadcast.voice_template_id)
+            .maybeSingle();
+          if (vTemp?.duration) {
+            templateDuration = Number(vTemp.duration) || 0;
+          } else if (vTemp?.file_url) {
+            try {
+              const fetchedDuration = await fetchWavDuration(vTemp.file_url);
+              if (fetchedDuration > 0) {
+                templateDuration = Math.ceil(fetchedDuration);
+                await supabase
+                  .from('voice_templates')
+                  .update({ duration: templateDuration })
+                  .eq('id', broadcast.voice_template_id);
+              }
+            } catch (err) {
+              console.error('Error fetching wav duration on-the-fly:', err);
+            }
+          }
+        }
+
+        const isSuperAdmin = profile?.role === 'super_admin' || profile?.role === 'manager';
+        const userInstId = profile?.institution_id;
+
+        if (!isSuperAdmin && userInstId !== broadcast.institution_id) {
+          return res.status(403).json({ error: 'Forbidden: Access denied to this broadcast' });
+        }
+
+        const institutionId = broadcast.institution_id;
 
         const { data: institution, error: instErr } = await supabase
           .from('institutions')
@@ -722,44 +826,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const targetCampaignId = campaignId || broadcast.provider_campaign_id;
-        if (!targetCampaignId) {
-          return res.status(400).json({ error: 'No provider campaign ID found to process' });
+
+        // Resolve all campaign runs for this broadcast (main run + all retries)
+        const allCampaignIds = [broadcast.provider_campaign_id, ...(broadcast.retries || [])].filter(id => !!id);
+        if (allCampaignIds.length === 0) {
+          return res.status(400).json({ error: 'No provider campaign IDs found to process' });
         }
 
-        // Add Jitter
-        const jitterMs = Math.floor(Math.random() * 2000) + 500;
-        await new Promise(r => setTimeout(r, jitterMs));
+        const { data: sysSettings } = await supabase
+          .from('system_settings')
+          .select('voice_rate')
+          .eq('id', '00000000-0000-0000-0000-000000000001')
+          .single();
 
-        // Check if already refunded
-        const refundTxId = `REFUND_CAMP_${targetCampaignId}`;
-        const { data: existingRefund } = await supabase
-          .from('transactions')
-          .select('id')
-          .eq('transaction_id', refundTxId)
-          .maybeSingle();
+        const voiceRate = Number(institution.voice_rate || sysSettings?.voice_rate || 0.45);
+        const totalSentOriginal = Math.max(1, Number(broadcast.total_numbers || 1));
+        const estimatedCostOriginal = Number(broadcast.estimated_cost || (totalSentOriginal * voiceRate));
+        const prevRefund = Number(broadcast.refunded_amount || 0);
 
-        if (existingRefund) {
-          return res.status(200).json({ success: true, already_refunded: true, message: 'Refund already processed for this campaign' });
-        }
+        // Maximum pulses a single call can ever consume based on the audio template length
+        const maxPulsesForThisAudio = (templateDuration > 0 && templateDuration > 30) ? Math.min(2, Math.ceil(templateDuration / 30)) : 1;
+        // In the database/UI, each call is charged strictly based on getPulsesForVoice:
+        const chargedPulsesPerCall = maxPulsesForThisAudio;
+        const costPerPulse = voiceRate;
 
-        // Generate deterministic UUID
-        const crypto = await import('crypto');
-        const hash = crypto.createHash('md5').update(refundTxId).digest('hex');
-        const deterministicId = `${hash.substring(0,8)}-${hash.substring(8,12)}-4${hash.substring(13,16)}-a${hash.substring(17,20)}-${hash.substring(20,32)}`;
+        const successStatuses = ['answered', 'completed', 'delivered', 'accepted', 'success', 'picked', 'pickedup', 'picked_up', 'connected', 'complete', 'finished', 'finished_success', 'picked up'];
+        const failureStatuses = [
+          'failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 
+          'unanswered', 'timeout', 'no-answer', 'abandoned', 'not_answered', 'notanswered', 
+          'notpicked', 'not_picked', 'missed', 'blocked', 'unavailable', 'not answered', 'not picked',
+          'no-picked', 'no_picked', 'noanswer', 'not-picked', 'reject', 'declined', 'failed-retry', 'failed_retry',
+          'no picked', 'no answered', 'no answer', 'not pick', 'not-pickedup', 'not_pickedup'
+        ];
 
-        // Fetch logs from Awaj API
-        let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${targetCampaignId}/result`, { headers: headers as any });
-        if (response.status === 404) {
-          response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${targetCampaignId}`, { headers: headers as any });
-        }
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to fetch from Awaj API: ${response.statusText}`);
-        }
-
-        const resultData = await response.json() as any;
-        
         const extractLogs = (details: any) => {
           if (!details) return [];
           if (Array.isArray(details)) return details;
@@ -783,9 +882,92 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return [];
         };
 
-        const logs = extractLogs(resultData);
+        let totalOverallRefundPulses = 0;
+        let anyLogsFound = false;
 
-        if (!logs || logs.length === 0) {
+        for (const campId of allCampaignIds) {
+          try {
+            let response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${campId}/result`, { headers: headers as any });
+            if (response.status === 404) {
+              response = await fetch(`${AWAJ_BASE_URL}/broadcasts/${campId}`, { headers: headers as any });
+            }
+
+            if (!response.ok) {
+              console.warn(`Campaign ${campId} logs fetch failed: ${response.statusText}`);
+              continue;
+            }
+
+            const resultData = await response.json() as any;
+            const campaignLogs = extractLogs(resultData);
+
+            if (!campaignLogs || campaignLogs.length === 0) {
+              continue;
+            }
+
+            anyLogsFound = true;
+            let campaignRefundPulses = 0;
+
+            campaignLogs.forEach((log: any) => {
+              const status = (log.status || log.state || log.call_status || '').toLowerCase().trim();
+              const rawDuration = log.duration ?? log.billsec ?? log.duration_sec ?? log.talking_time ?? log.seconds ?? log.duration_seconds ?? log.call_duration ?? log.answer_duration ?? 0;
+              const duration = Number(rawDuration) || 0;
+
+              const isFailedStatus = failureStatuses.includes(status) || status.includes('not picked') || status.includes('not answered') || status.includes('no answer');
+              const isSuccessStatus = successStatuses.includes(status);
+
+              if (isSuccessStatus || duration > 0) {
+                let pulsesUsed = 1;
+                if (duration > 0 && templateDuration > 30) {
+                  pulsesUsed = Math.min(2, Math.ceil(duration / 30));
+                }
+                if (pulsesUsed > maxPulsesForThisAudio) pulsesUsed = maxPulsesForThisAudio;
+                if (pulsesUsed > chargedPulsesPerCall) pulsesUsed = chargedPulsesPerCall;
+
+                const refundPulsesForThisCall = Math.max(0, chargedPulsesPerCall - pulsesUsed);
+                campaignRefundPulses += refundPulsesForThisCall;
+              } else if (isFailedStatus) {
+                campaignRefundPulses += chargedPulsesPerCall;
+              } else if (!['pending', 'sending', 'processing', 'queued'].includes(status)) {
+                campaignRefundPulses += chargedPulsesPerCall;
+              }
+            });
+
+            const isOriginal = String(campId) === String(broadcast.provider_campaign_id);
+            const apiTotal = Number(resultData.total || resultData.broadcast?.total || resultData.broadcast?.total_numbers || resultData.broadcast?.recipient_count || resultData.data?.total || resultData.stats?.total || 0);
+
+            let campaignTotalSent = 0;
+            if (apiTotal > campaignLogs.length) {
+              campaignTotalSent = apiTotal;
+            } else if (isOriginal) {
+              campaignTotalSent = Math.max(campaignLogs.length, totalSentOriginal);
+            } else {
+              campaignTotalSent = campaignLogs.length;
+            }
+
+            if (isOriginal && campaignTotalSent > totalSentOriginal) {
+              campaignTotalSent = totalSentOriginal;
+            }
+
+            const isFinished = ['completed', 'done', 'success', 'complete', 'finished', 'failed', 'error', 'cancelled'].includes(String(broadcast.status || '').toLowerCase());
+            if (isFinished) {
+              const droppedCalls = Math.max(0, campaignTotalSent - campaignLogs.length);
+              campaignRefundPulses += (droppedCalls * chargedPulsesPerCall);
+            }
+
+            const maxPossibleRefundPulses = campaignTotalSent * chargedPulsesPerCall;
+            if (campaignRefundPulses > maxPossibleRefundPulses) {
+              campaignRefundPulses = maxPossibleRefundPulses;
+            }
+
+            console.log(`Campaign ${campId}: Total sent: ${campaignTotalSent}, Logs: ${campaignLogs.length}, Refund pulses: ${campaignRefundPulses}`);
+            totalOverallRefundPulses += campaignRefundPulses;
+
+          } catch (campErr) {
+            console.error(`Error calculating refund for campaign ${campId}:`, campErr);
+          }
+        }
+
+        if (!anyLogsFound) {
           return res.status(200).json({ 
             success: true, 
             message: 'No call logs found yet. Please wait until broadcast is fully completed.',
@@ -793,76 +975,142 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        const { data: sysSettings } = await supabase
-          .from('system_settings')
-          .select('voice_rate')
-          .eq('id', '00000000-0000-0000-0000-000000000001')
-          .single();
+        const calculatedRefund = Number((totalOverallRefundPulses * costPerPulse).toFixed(2));
 
-        const voiceRate = Number(institution.voice_rate || sysSettings?.voice_rate || 0.45);
-        const totalSentOriginal = Number(broadcast.total_numbers || 1);
-        const estimatedCostOriginal = Number(broadcast.estimated_cost || (totalSentOriginal * voiceRate));
+        // IF prevRefund is higher than calculatedRefund, perform auto-correction (deduct excess)
+        // This is safe to run now because background polling is restricted to once per completed campaign
+        if (prevRefund > (calculatedRefund + 0.01)) {
+          const excessRefund = Number((prevRefund - calculatedRefund).toFixed(2));
+          if (excessRefund > 0) {
+            const { data: inst } = await supabase
+              .from('institutions')
+              .select('balance')
+              .eq('id', institutionId)
+              .single();
 
-        // Calculate how many 30-sec pulses were charged per call upfront (e.g. 1 pulse for <=30s, 2 pulses for >30s)
-        const chargedPulsesPerCall = Math.max(1, Math.round(estimatedCostOriginal / (totalSentOriginal * voiceRate)));
+            if (inst) {
+              const currentBal = Number(inst.balance || 0);
+              const newBal = Math.max(0, Number((currentBal - excessRefund).toFixed(2)));
+              await supabase.from('institutions').update({ balance: newBal }).eq('id', institutionId);
 
-        const successStatuses = ['answered', 'completed', 'delivered', 'accepted', 'success', 'picked', 'pickedup', 'picked_up', 'connected', 'complete', 'finished', 'finished_success', 'picked up'];
-        const failureStatuses = [
-          'failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 
-          'unanswered', 'timeout', 'no-answer', 'abandoned', 'not_answered', 'notanswered', 
-          'notpicked', 'not_picked', 'missed', 'blocked', 'unavailable', 'not answered', 'not picked',
-          'no-picked', 'no_picked', 'noanswer', 'not-picked', 'reject', 'declined', 'failed-retry', 'failed_retry',
-          'no picked', 'no answered', 'no answer', 'not pick', 'not-pickedup', 'not_pickedup'
-        ];
-
-        let totalRefundPulses = 0;
-
-        logs.forEach((log: any) => {
-          const status = (log.status || log.state || log.call_status || '').toLowerCase().trim();
-          const rawDuration = log.duration ?? log.billsec ?? log.duration_sec ?? log.talking_time ?? log.seconds ?? log.duration_seconds ?? log.call_duration ?? log.answer_duration ?? 0;
-          const duration = Number(rawDuration) || 0;
-
-          const isFailedStatus = failureStatuses.includes(status) || status.includes('not picked') || status.includes('not answered') || status.includes('no answer');
-          const isSuccessStatus = successStatuses.includes(status);
-
-          if (isFailedStatus || (duration === 0 && !['pending', 'sending', 'processing', 'queued'].includes(status))) {
-            // Unanswered or failed call => 0 pulses used => refund all charged pulses
-            totalRefundPulses += chargedPulsesPerCall;
-          } else if (isSuccessStatus || duration > 0) {
-            // Call was picked up! Calculate pulses used based on 30-sec pulse
-            let pulsesUsed = 1;
-            if (duration > 0) {
-              pulsesUsed = Math.ceil(duration / 30);
+              await supabase.from('transactions').insert({
+                institution_id: institutionId,
+                amount: excessRefund,
+                transaction_id: `CORRECT_VOICE_${broadcast.id.slice(0, 8)}_${Date.now()}`,
+                sender_phone: 'SYSTEM',
+                description: `Voice refund auto-correction: Deducted ${excessRefund} ৳ excess refund`,
+                type: 'debit',
+                status: 'approved',
+                module: 'voice'
+              });
             }
-            if (pulsesUsed > chargedPulsesPerCall) {
-              pulsesUsed = chargedPulsesPerCall;
-            }
-            const refundPulsesForThisCall = Math.max(0, chargedPulsesPerCall - pulsesUsed);
-            totalRefundPulses += refundPulsesForThisCall;
+
+            await supabase.from('voice_broadcasts').update({
+              refunded_amount: calculatedRefund,
+              is_refunded: calculatedRefund >= (estimatedCostOriginal - 0.01)
+            }).eq('id', broadcast.id);
+
+            return res.status(200).json({
+              success: true,
+              corrected: true,
+              refund_amount: calculatedRefund,
+              actual_cost: Number((estimatedCostOriginal - calculatedRefund).toFixed(2)),
+              message: `Corrected excess refund from ${prevRefund} ৳ to ${calculatedRefund} ৳`
+            });
           }
-        });
-
-        const isRetry = targetCampaignId !== broadcast.provider_campaign_id;
-        const apiTotal = Number(resultData.total || resultData.broadcast?.total || resultData.broadcast?.total_numbers || resultData.broadcast?.recipient_count || resultData.data?.total || resultData.stats?.total || 0);
-
-        let campaignTotalSent = 0;
-        if (apiTotal > logs.length) campaignTotalSent = apiTotal;
-        else if (!isRetry) campaignTotalSent = Math.max(logs.length, totalSentOriginal);
-        else campaignTotalSent = logs.length;
-
-        if (!isRetry && campaignTotalSent > totalSentOriginal) campaignTotalSent = totalSentOriginal;
-
-        const droppedCalls = Math.max(0, campaignTotalSent - logs.length);
-        totalRefundPulses += (droppedCalls * chargedPulsesPerCall);
-
-        const maxPossibleRefundPulses = campaignTotalSent * chargedPulsesPerCall;
-        if (totalRefundPulses > maxPossibleRefundPulses) {
-          totalRefundPulses = maxPossibleRefundPulses;
         }
 
-        console.log(`Campaign ${targetCampaignId}: Total sent: ${campaignTotalSent}, Logs: ${logs.length}, Charged pulses/call: ${chargedPulsesPerCall}, Total refund pulses: ${totalRefundPulses}`);
+        // IF prevRefund is equal to calculatedRefund (or within 0.01 range), treat as already fully refunded
+        if (Math.abs(prevRefund - calculatedRefund) <= 0.01) {
+          await supabase.from('voice_broadcasts').update({
+            is_refunded: true
+          }).eq('id', broadcast.id);
 
-        if (totalRefundPulses <= 0) {
+          return res.status(200).json({
+            success: true,
+            already_refunded: true,
+            refund_amount: prevRefund,
+            actual_cost: Number((estimatedCostOriginal - prevRefund).toFixed(2)),
+            message: `Sufficiently refunded (${prevRefund} ৳ credited previously)`
+          });
+        }
+
+        // IF calculatedRefund is GREATER than prevRefund, process additional refund
+        if (calculatedRefund > (prevRefund + 0.01)) {
+          const additionalRefund = Number((calculatedRefund - prevRefund).toFixed(2));
+          
+          try {
+            const { error: rpcErr } = await supabase.rpc('add_balance', {
+              p_institution_id: institutionId,
+              p_amount: additionalRefund
+            });
+            if (rpcErr) throw rpcErr;
+          } catch (err) {
+            const { data: inst } = await supabase.from('institutions').select('balance').eq('id', institutionId).single();
+            if (inst) {
+              const newBal = Number((Number(inst.balance || 0) + additionalRefund).toFixed(2));
+              await supabase.from('institutions').update({ balance: newBal }).eq('id', institutionId);
+            }
+          }
+
+          await supabase.from('transactions').insert({
+            institution_id: institutionId,
+            amount: additionalRefund,
+            transaction_id: `ADD_REFUND_${targetCampaignId}_${Date.now()}`,
+            sender_phone: 'SYSTEM',
+            description: `Voice refund adjustment: Credited ${additionalRefund} ৳ additional refund`,
+            type: 'credit',
+            status: 'approved',
+            module: 'voice'
+          });
+
+          await supabase.from('voice_broadcasts').update({
+            refunded_amount: calculatedRefund,
+            is_refunded: calculatedRefund >= (estimatedCostOriginal - 0.01)
+          }).eq('id', broadcast.id);
+
+          return res.status(200).json({
+            success: true,
+            updated: true,
+            refund_amount: calculatedRefund,
+            actual_cost: Number((estimatedCostOriginal - calculatedRefund).toFixed(2)),
+            message: `Updated refund to ${calculatedRefund} ৳`
+          });
+        }
+
+        // Check if transaction already exists for this campaign
+        const refundTxId = `REFUND_CAMP_${targetCampaignId}`;
+        const { data: existingRefund } = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('transaction_id', refundTxId)
+          .maybeSingle();
+
+        if (existingRefund) {
+          return res.status(200).json({ 
+            success: true, 
+            already_refunded: true, 
+            message: 'Refund already processed for this campaign', 
+            refund_amount: prevRefund,
+            actual_cost: Number((estimatedCostOriginal - prevRefund).toFixed(2))
+          });
+        }
+
+        // Maximum refund can NEVER exceed the remaining charged amount for this broadcast
+        const maxRefundAllowed = Math.max(0, Number((estimatedCostOriginal - prevRefund).toFixed(2)));
+
+        if (maxRefundAllowed <= 0 || broadcast.is_refunded) {
+          return res.status(200).json({ 
+            success: true, 
+            already_refunded: true, 
+            message: 'Refund already processed for this campaign', 
+            refund_amount: 0 
+          });
+        }
+
+        const refundAmount = Number(Math.min(calculatedRefund, maxRefundAllowed).toFixed(2));
+
+        if (refundAmount <= 0) {
           return res.status(200).json({ 
             success: true, 
             message: 'No unreceived calls or pulse refunds detected.', 
@@ -870,15 +1118,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        const refundAmount = Number((totalRefundPulses * voiceRate).toFixed(2));
-
         const txData: any = {
           id: deterministicId,
           institution_id: institutionId,
           amount: refundAmount,
           transaction_id: refundTxId,
           sender_phone: 'SYSTEM',
-          description: `Refund for ${totalRefundPulses} unreceived calls / unused pulses (Voice Broadcast)`,
+          description: `Refund for ${totalOverallRefundPulses} unreceived calls / unused pulses (Voice Broadcast)`,
           type: 'credit',
           status: 'approved',
           module: 'voice',
@@ -905,17 +1151,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            await supabase.from('institutions').update({ balance: newBalance }).eq('id', institutionId);
         }
 
-        const prevRefund = Number(broadcast.refunded_amount || 0);
         const newRefundTotal = Number((prevRefund + refundAmount).toFixed(2));
+        const isFullyRefunded = newRefundTotal >= (estimatedCostOriginal - 0.01);
         await supabase.from('voice_broadcasts').update({
           refunded_amount: newRefundTotal,
-          is_refunded: true
+          is_refunded: isFullyRefunded
         }).eq('id', broadcast.id);
 
         return res.status(200).json({ 
           success: true, 
-          refunded_calls: totalRefundPulses,
-          refunded_pulses: totalRefundPulses,
+          refunded_calls: totalOverallRefundPulses,
+          refunded_pulses: totalOverallRefundPulses,
           refund_amount: refundAmount,
           message: `Successfully refunded ${refundAmount} ৳` 
         });

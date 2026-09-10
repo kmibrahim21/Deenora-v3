@@ -23,6 +23,7 @@ import { NoticePDFTemplate } from '../components/pdf/NoticePDFTemplate';
 import { SyllabusPDFTemplate } from '../components/pdf/SyllabusPDFTemplate';
 import { DiaryPDFTemplate } from '../components/pdf/DiaryPDFTemplate';
 import { solaimanLipiBase64 } from './fonts';
+import { saveJsPdf } from './fileDownloader';
 import { downloadServerPdf, wrapHtmlForPdf } from './serverPdfHelper';
 
 export const solaimanLipiFontEmbedCSS = `
@@ -291,7 +292,7 @@ export const generateAttendanceReportPDF = async (
     }
     
     onProgress?.(98);
-    doc.save(`Attendance_Report_${className}_${month}.pdf`);
+    await saveJsPdf(doc, `Attendance_Report_${className}_${month}.pdf`);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -1947,7 +1948,7 @@ export const generateSubscriptionMatrixPDF = async (
         }
         
         onProgress?.(98);
-        doc.save(`Deenora_Subscription_Matrix_${year}.pdf`);
+        await saveJsPdf(doc, `Deenora_Subscription_Matrix_${year}.pdf`);
     } catch (error: any) {
         console.error("Error in generateSubscriptionMatrixPDF:", error);
         throw error;

@@ -104,6 +104,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   
   // Wallet state
   const [walletBalance, setWalletBalance] = useState(0);
+  const processingRefundsRef = useRef<Set<string>>(new Set());
   
   // Voices state
   const [voices, setVoices] = useState<any[]>([]);
@@ -270,6 +271,11 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const handleClaimRefundAuto = async (broadcastId: string, campaignId?: string) => {
+    if (processingRefundsRef.current.has(broadcastId)) {
+      return; // Already checking this broadcast
+    }
+    processingRefundsRef.current.add(broadcastId);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -287,21 +293,22 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
       const result = await response.json();
 
-      if (response.ok && !result.already_refunded && result.refund_amount > 0) {
-        // Show a small success toast for auto-refund
-        setStatusModal({ 
-          show: true, 
-          type: 'success', 
-          title: lang === 'bn' ? 'অটো রিফান্ড সফল' : 'Auto Refund Successful', 
-          message: lang === 'bn' ? `${result.refund_amount} ৳ রিফান্ড দেওয়া হয়েছে।` : `${result.refund_amount} ৳ has been refunded automatically.` 
-        });
+      if (response.ok && (result.corrected || result.updated || (!result.already_refunded && result.refund_amount > 0))) {
+        if (result.corrected) {
+          console.log('Excess refund corrected automatically:', result.message);
+        } else {
+          console.log(`Auto-refund processed in background: ${result.refund_amount} BDT credited successfully.`);
+        }
         // Automatically fetch wallet balance if a refund occurred in the background
         fetchWalletBalance();
         triggerRefresh();
         fetchUserTransactions();
+        fetchHistory(true);
       }
     } catch (err: any) {
       console.error('Auto refund claim error:', err);
+    } finally {
+      processingRefundsRef.current.delete(broadcastId);
     }
   };
 
@@ -760,7 +767,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
             if (refundMap[rId]) totalTxRefund += refundMap[rId];
           });
         }
-        const effectiveRefund = Math.max(Number(item.refunded_amount || 0), totalTxRefund);
+        const estCost = Number(item.estimated_cost || 0);
+        const rawRefund = Number(item.refunded_amount || 0);
+        const effectiveRefund = Math.min(estCost, Math.max(0, rawRefund));
         return {
           ...item,
           refunded_amount: effectiveRefund
@@ -770,8 +779,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       setBroadcastHistory(mappedData);
     }
     
-    // Track results for pending/sending broadcasts
+    // Track results for pending/sending broadcasts and auto-check completed refunds
     if (data) {
+      // Check completed broadcasts for refund accuracy (only if completed/failed and not already fully refunded)
+      data.filter(b => (b.status === 'completed' || b.status === 'failed') && !b.is_refunded).forEach(async (broadcast) => {
+        const activeCampaignId = (broadcast.retries && broadcast.retries.length > 0) 
+          ? broadcast.retries[broadcast.retries.length - 1] 
+          : broadcast.provider_campaign_id;
+        if (activeCampaignId) {
+          handleClaimRefundAuto(broadcast.id, activeCampaignId);
+        }
+      });
+
       data.filter(b => b.status === 'sending' || b.status === 'pending').forEach(async (broadcast) => {
         // Track the latest campaign (either the original or the latest retry)
         const activeCampaignId = (broadcast.retries && broadcast.retries.length > 0) 
@@ -1064,11 +1083,27 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         });
         
         // Deduplicate calls by phone, keeping the latest status
+        const cleanPhoneForDeduplication = (phoneStr: string) => {
+          if (!phoneStr) return '';
+          let digits = phoneStr.replace(/[^0-9]/g, '');
+          if (digits.startsWith('880')) {
+            digits = digits.substring(2);
+          }
+          if (digits.startsWith('01') && digits.length === 11) {
+            return digits;
+          }
+          if (digits.startsWith('1') && digits.length === 10) {
+            return '0' + digits;
+          }
+          return digits;
+        };
+
         const deduplicatedCallsMap = new Map();
         allCalls.forEach(call => {
            let p = extractPhoneFromLog(call);
            if (p) {
-             deduplicatedCallsMap.set(p, call);
+             const norm = cleanPhoneForDeduplication(p);
+             deduplicatedCallsMap.set(norm || p, call);
            }
         });
         
@@ -2051,9 +2086,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                           <ChevronDown size={16} className={`text-slate-300 transition-transform ${expandedHistoryId === h.id ? 'rotate-180' : ''}`} />
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-50">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3.5 border-t border-slate-100/80">
                         <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('target', lang)}</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{t('target', lang)}</p>
                           <p className="text-xs font-black text-[#1E3A8A] capitalize">
                             {h.target_class_name ? h.target_class_name : (
                               h.target_type === 'students' ? t('students', lang, madrasah?.institution_type) :
@@ -2063,30 +2098,29 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                           </p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('numbers', lang)}</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{t('numbers', lang)}</p>
                           <p className="text-xs font-black text-[#1E3A8A]">{h.total_numbers}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                            {lang === 'bn' ? 'সর্বমোট নিট খরচ' : 'Net Total Cost'}
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                            {lang === 'bn' ? 'প্রাথমিক চার্জ' : 'Initial Charge'}
                           </p>
-                          {Number(h.refunded_amount || 0) > 0 ? (
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-xs font-black text-emerald-600">
-                                  {Math.max(0, Number((h.estimated_cost - Number(h.refunded_amount || 0)).toFixed(2)))} ৳
-                                </p>
-                                <p className="text-[10px] text-slate-400 line-through">
-                                  {h.estimated_cost} ৳
-                                </p>
-                              </div>
-                              <span className="text-[9px] font-bold text-emerald-600 block mt-0.5">
-                                ({lang === 'bn' ? `রিফান্ড: ${h.refunded_amount} ৳` : `Refunded: ${h.refunded_amount} ৳`})
+                          <p className="text-xs font-bold text-slate-600">{h.estimated_cost} ৳</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                            {lang === 'bn' ? 'প্রকৃত খরচ (নিট)' : 'Actual Cost (Net)'}
+                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-xs font-black text-emerald-700">
+                              {Math.max(0, Number((h.estimated_cost - Number(h.refunded_amount || 0)).toFixed(2)))} ৳
+                            </p>
+                            {Number(h.refunded_amount || 0) > 0 && (
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                                {lang === 'bn' ? `রিফান্ড: ${h.refunded_amount} ৳` : `Refund: ${h.refunded_amount} ৳`}
                               </span>
-                            </div>
-                          ) : (
-                            <p className="text-xs font-black text-red-500">{h.estimated_cost} ৳</p>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2107,13 +2141,27 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                           <div className="space-y-4">
                             {(() => {
                               const logs = extractCallLogs(historyDetails);
-                              const failedLogs = logs.filter((log: any) => {
-                                const status = (log.status || log.state || log.call_status || '').toLowerCase();
-                                return ['failed', 'no answer', 'notanswered', 'not_answered', 'busy', 'cancelled', 'error', 'rejected', 'declined'].includes(status);
-                              });
+                              const successStatuses = ['answered', 'completed', 'delivered', 'accepted', 'success', 'picked', 'pickedup', 'picked_up', 'connected', 'complete', 'finished', 'finished_success', 'picked up'];
+                              const failureStatuses = [
+                                'failed', 'no answer', 'busy', 'cancelled', 'error', 'undelivered', 'rejected', 'declined', 
+                                'unanswered', 'timeout', 'no-answer', 'abandoned', 'not_answered', 'notanswered', 
+                                'notpicked', 'not_picked', 'missed', 'blocked', 'unavailable', 'not answered', 'not picked',
+                                'no-picked', 'no_picked', 'noanswer', 'not-picked', 'reject', 'declined', 'failed-retry', 'failed_retry',
+                                'no picked', 'no answered', 'no answer', 'not pick', 'not-pickedup', 'not_pickedup'
+                              ];
+
                               const answeredLogs = logs.filter((log: any) => {
-                                const status = (log.status || log.state || log.call_status || '').toLowerCase();
-                                return ['answered', 'success', 'completed'].includes(status);
+                                const status = (log.status || log.state || log.call_status || '').toLowerCase().trim();
+                                const rawDuration = log.duration ?? log.billsec ?? log.duration_sec ?? log.talking_time ?? log.seconds ?? 0;
+                                const duration = Number(rawDuration) || 0;
+                                return successStatuses.includes(status) || duration > 0;
+                              });
+
+                              const failedLogs = logs.filter((log: any) => {
+                                const status = (log.status || log.state || log.call_status || '').toLowerCase().trim();
+                                const rawDuration = log.duration ?? log.billsec ?? log.duration_sec ?? log.talking_time ?? log.seconds ?? 0;
+                                const duration = Number(rawDuration) || 0;
+                                return failureStatuses.includes(status) || (duration === 0 && !successStatuses.includes(status) && !['pending', 'sending', 'processing', 'queued'].includes(status));
                               });
                               
                               return (
@@ -2136,27 +2184,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                       <div className="text-lg font-black text-slate-900">
                                         {logs.reduce((acc: number, l: any) => acc + (parseInt(l.duration || l.billsec) || 0), 0)}s
                                       </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between text-xs mt-3">
-                                    <div className="space-y-0.5">
-                                      <span className="font-bold text-slate-500 block text-[10px] uppercase">
-                                        {lang === 'bn' ? 'প্রাথমিক চার্জ' : 'Initial Charge'}: {h.estimated_cost} ৳
-                                      </span>
-                                      {Number(h.refunded_amount || 0) > 0 && (
-                                        <span className="font-bold text-emerald-600 block text-[10px] uppercase">
-                                          {lang === 'bn' ? 'অব্যবহৃত/ব্যর্থ কল রিফান্ড' : 'Unused/Failed Refund'}: -{h.refunded_amount} ৳
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-right">
-                                      <span className="text-[9px] font-black text-slate-400 uppercase block tracking-wider">
-                                        {lang === 'bn' ? 'সর্বমোট প্রকৃত খরচ' : 'Net Actual Cost'}
-                                      </span>
-                                      <span className="text-sm font-black text-[#1E3A8A]">
-                                        {Math.max(0, Number((h.estimated_cost - Number(h.refunded_amount || 0)).toFixed(2)))} ৳
-                                      </span>
                                     </div>
                                   </div>
 
@@ -2307,31 +2334,44 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                <div className="grid grid-cols-1 gap-2.5">
                  {isFetchingTransactions ? (
                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-emerald-600" size={24} /></div>
-                 ) : userTransactions.length > 0 ? userTransactions.map(tr => (
-                   <div key={tr.id} className="bg-white p-4 rounded-[1.8rem] border border-slate-100 flex items-center justify-between shadow-bubble">
-                     <div className="min-w-0 flex-1">
-                       <div className="flex items-center gap-2">
-                         <p className="text-[15px] font-black leading-none text-slate-800">{tr.amount} ৳</p>
-                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : tr.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
-                           {tr.status === 'approved' ? (lang === 'bn' ? 'অনুমোদিত' : 'Approved') :
-                            tr.status === 'pending' ? (lang === 'bn' ? 'অপেক্ষমান' : 'Pending') :
-                            (lang === 'bn' ? 'প্রত্যাখ্যাত' : 'Rejected')}
-                         </span>
+                 ) : (() => {
+                   const rechargeTransactions = userTransactions.filter(tr => {
+                     const txId = (tr.transaction_id || '').toUpperCase();
+                     const desc = (tr.description || '').toLowerCase();
+                     return !txId.startsWith('ADD_REFUND_') && 
+                            !txId.startsWith('REFUND_') && 
+                            !txId.startsWith('CORRECT_VOICE_') && 
+                            !desc.includes('refund') && 
+                            !desc.includes('correction') && 
+                            !desc.includes('deducted');
+                   });
+                   
+                   return rechargeTransactions.length > 0 ? rechargeTransactions.map(tr => (
+                     <div key={tr.id} className="bg-white p-4 rounded-[1.8rem] border border-slate-100 flex items-center justify-between shadow-bubble">
+                       <div className="min-w-0 flex-1">
+                         <div className="flex items-center gap-2">
+                           <p className="text-[15px] font-black leading-none text-slate-800">{tr.amount} ৳</p>
+                           <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : tr.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
+                             {tr.status === 'approved' ? (lang === 'bn' ? 'অনুমোদিত' : 'Approved') :
+                              tr.status === 'pending' ? (lang === 'bn' ? 'অপেক্ষমান' : 'Pending') :
+                              (lang === 'bn' ? 'প্রত্যাখ্যাত' : 'Rejected')}
+                           </span>
+                         </div>
+                         <div className="flex items-center gap-2 mt-1.5">
+                            <Clock size={10} className="text-slate-400" />
+                            <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
+                         </div>
                        </div>
-                       <div className="flex items-center gap-2 mt-1.5">
-                          <Clock size={10} className="text-slate-400" />
-                          <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
+                       <div className="text-right">
+                          <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter opacity-60">TrxID: {tr.transaction_id}</p>
                        </div>
                      </div>
-                     <div className="text-right">
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter opacity-60">TrxID: {tr.transaction_id}</p>
+                   )) : (
+                     <div className="text-center py-10 rounded-[2.5rem] border border-dashed bg-slate-50 border-slate-200">
+                        <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest">{lang === 'bn' ? 'কোনো রিচার্জ রেকর্ড নেই' : 'No recharge records'}</p>
                      </div>
-                   </div>
-                 )) : (
-                   <div className="text-center py-10 rounded-[2.5rem] border border-dashed bg-slate-50 border-slate-200">
-                      <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest">No history records</p>
-                   </div>
-                 )}
+                   );
+                 })()}
                </div>
             </div>
           </div>

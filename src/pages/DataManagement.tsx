@@ -11,7 +11,7 @@ import { generateStudentListPDF } from 'utils/pdfGenerator';
 declare global {
   interface Window {
     AndroidInterface?: {
-      downloadFile: (base64: string, fileName: string, mimeType: string) => void;
+      downloadFile?: (base64: string, fileName: string, mimeType: string) => void;
     };
   }
 }
