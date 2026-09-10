@@ -588,7 +588,19 @@ export const ExamRoutinePDFTemplate: React.FC<ExamRoutinePDFTemplateProps> = ({
   };
 
   return (
-    <div className="bg-white font-solaiman" style={{ fontFamily: "'SolaimanLipi', sans-serif" }}>
+    <div className="bg-white font-solaiman" style={{ fontFamily: "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" }}>
+      <style>{`
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        .font-solaiman, .font-solaiman * {
+          font-family: 'SolaimanLipi', 'Noto Sans Bengali', sans-serif !important;
+        }
+      `}</style>
       <div className="pdf-page-container w-[1123px] h-[794px] bg-white mx-auto overflow-hidden flex relative flex-row">
         {routineSelectionMode === 'all' ? (
           <div className="w-full h-full p-2">

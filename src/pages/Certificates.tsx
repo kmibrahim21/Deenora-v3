@@ -4,6 +4,7 @@ import { Institution, Profile, Class, Student, Language } from '../types';
 import { supabase } from '../supabase';
 import { t } from '../translations';
 import { createRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import jsPDF from 'jspdf';
 import { toJpeg } from 'html-to-image';
 import { CertificateTemplate } from '../components/pdf/CertificateTemplate';
@@ -245,51 +246,155 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
     if (!studentWithClass) return;
 
     setDownloading(true);
+    const typeName = certificateTypes.find(t => t.id === selectedType)?.label.replace(/\s+/g, '_') || 'Certificate';
+    const safeStudentName = (studentWithClass.student_name || 'Student').replace(/\s+/g, '_');
+    const filename = `${safeStudentName}_${typeName}.pdf`;
+
     try {
-      // Create a hidden container to render the template
-      const container = document.createElement('div');
-      container.style.position = 'absolute';
-      container.style.top = '-9999px';
-      container.style.left = '-9999px';
-      document.body.appendChild(container);
+      // 1. Server-Side Generation with /api/pdf (Puppeteer + Supabase cache)
+      const certHtml = renderToString(
+        <CertificateTemplate 
+          madrasah={madrasah} 
+          student={studentWithClass} 
+          type={selectedType}
+          issueDate={formatIssueDate()}
+          certLang={certLang}
+        />
+      );
 
-      const root = createRoot(container);
-      
-      await new Promise<void>((resolve) => {
-        root.render(
-          <CertificateTemplate 
-            madrasah={madrasah} 
-            student={studentWithClass} 
-            type={selectedType}
-            issueDate={formatIssueDate()}
-            certLang={certLang}
-          />
-        );
-        setTimeout(resolve, 800); // Allow time for fonts/images to load
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>${safeStudentName}_Certificate</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&family=Tiro+Bangla:ital@0;1&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@400;500;600;700&display=swap');
+            @font-face {
+              font-family: 'SolaimanLipi';
+              src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+              font-weight: normal;
+              font-style: normal;
+              font-display: swap;
+            }
+            @page {
+              size: a4 landscape;
+              margin: 0;
+            }
+            html, body {
+              margin: 0;
+              padding: 0;
+              background-color: white;
+              width: 297mm;
+              height: 210mm;
+              overflow: hidden;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+            .cert-scale-wrapper {
+              width: 1122px;
+              height: 793px;
+              box-sizing: border-box;
+              overflow: hidden;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="cert-scale-wrapper">
+            ${certHtml}
+          </div>
+        </body>
+        </html>
+      `;
+
+      const response = await fetch('/api/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: fullHtml,
+          format: 'a4',
+          orientation: 'landscape',
+          entity_type: 'certificate',
+          entity_id: `${studentWithClass.id}_${selectedType}_${certLang}`,
+          filename: filename
+        })
       });
 
-      // Capture as image
-      const dataUrl = await toJpeg(container.firstElementChild as HTMLElement, { quality: 0.95, width: 1122, height: 793, backgroundColor: '#ffffff' });
+      if (response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          if (data.url) {
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = data.url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            return;
+          }
+        } else {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+      throw new Error('Server PDF generation returned non-OK response');
+    } catch (serverErr) {
+      console.warn('Server PDF generation failed, falling back to client-side:', serverErr);
 
-      // Create PDF: A4 landscape is 297x210 mm
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
+      // 2. Client-side Fallback using html-to-image + jsPDF
+      try {
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.top = '-9999px';
+        container.style.left = '-9999px';
+        document.body.appendChild(container);
 
-      // A4 size in mm is 297x210
-      pdf.addImage(dataUrl, 'JPEG', 0, 0, 297, 210);
+        const root = createRoot(container);
+        
+        await new Promise<void>((resolve) => {
+          root.render(
+            <CertificateTemplate 
+              madrasah={madrasah} 
+              student={studentWithClass} 
+              type={selectedType}
+              issueDate={formatIssueDate()}
+              certLang={certLang}
+            />
+          );
+          setTimeout(resolve, 800);
+        });
 
-      const typeName = certificateTypes.find(t => t.id === selectedType)?.label.replace(/\s+/g, '_') || 'Certificate';
-      pdf.save(`${studentWithClass.student_name}_${typeName}.pdf`);
+        const dataUrl = await toJpeg(container.firstElementChild as HTMLElement, { quality: 0.95, width: 1122, height: 793, backgroundColor: '#ffffff' });
 
-      // Cleanup
-      root.unmount();
-      document.body.removeChild(container);
-    } catch (err) {
-      console.error("Error generating Certificate PDF:", err);
-      alert(lang === 'bn' ? 'পিডিএফ তৈরি করতে সমস্যা হয়েছে' : 'Failed to generate PDF');
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, 297, 210);
+        pdf.save(filename);
+
+        root.unmount();
+        document.body.removeChild(container);
+      } catch (clientErr) {
+        console.error("Error generating Certificate PDF fallback:", clientErr);
+        alert(lang === 'bn' ? 'পিডিএফ তৈরি করতে সমস্যা হয়েছে' : 'Failed to generate PDF');
+      }
     } finally {
       setDownloading(false);
     }

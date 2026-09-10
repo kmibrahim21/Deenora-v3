@@ -16,7 +16,7 @@ export const RoutinePDFTemplate: React.FC<RoutinePDFTemplateProps> = ({ madrasah
   };
 
   return (
-    <div className="bg-white">
+    <div className="bg-white font-solaiman" style={{ fontFamily: "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" }}>
       {classes.map((cls) => {
         const classRoutines = routines.filter(r => r.class_id === cls.id);
         if (classRoutines.length === 0) return null;
@@ -24,7 +24,7 @@ export const RoutinePDFTemplate: React.FC<RoutinePDFTemplateProps> = ({ madrasah
         const timeSlots = Array.from(new Set(classRoutines.map((r: any) => `${r.start_time.slice(0, 5)} - ${r.end_time.slice(0, 5)}`))).sort();
 
         return (
-          <div key={cls.id} className="pdf-page-container w-[794px] h-[1123px] p-10 bg-white border-2 border-slate-900 mx-auto overflow-hidden flex flex-col relative">
+          <div key={cls.id} className="pdf-page-container w-[794px] h-[1123px] p-10 bg-white border-2 border-slate-900 mx-auto overflow-hidden flex flex-col relative font-solaiman" style={{ fontFamily: "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" }}>
             {/* Header */}
             <div className="text-center mb-6">
               <div className="flex items-center justify-center gap-4 mb-4">

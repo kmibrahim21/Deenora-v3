@@ -48,11 +48,30 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
 
   return (
     <>
+      <style>{`
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+          font-weight: bold;
+          font-style: normal;
+          font-display: swap;
+        }
+        .font-solaiman, .font-solaiman * {
+          font-family: 'SolaimanLipi', 'Noto Sans Bengali', sans-serif !important;
+        }
+      `}</style>
       {Array.from({ length: totalPages }).map((_, pageIndex) => {
         const pageData = students.slice(pageIndex * ROWS_PER_PAGE, (pageIndex + 1) * ROWS_PER_PAGE);
         
         return (
-          <div key={pageIndex} className="page-container" style={{ width: '1123px', height: '794px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
+          <div key={pageIndex} className="page-container font-solaiman" style={{ width: '1123px', height: '794px', backgroundColor: '#fff', color: '#000', fontFamily: isBangla ? "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" : 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }}>
             {/* Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.02] -rotate-12 select-none px-20">
               <h1 className="text-[8rem] font-black uppercase tracking-[0.2em] text-center leading-tight">{madrasah.name}</h1>

@@ -34,11 +34,17 @@ export default async function handler(req: Request, res: Response) {
       : `uncategorized/${dataHash}.pdf`;
 
     // Step 5, 6, 7: Caching logic with Database check
-    const { data: cacheRecord, error: dbError } = await supabase
-      .from('pdf_cache')
-      .select('*')
-      .eq('entity_key', entityKey)
-      .single();
+    let cacheRecord: any = null;
+    try {
+      const { data } = await supabase
+        .from('pdf_cache')
+        .select('*')
+        .eq('entity_key', entityKey)
+        .single();
+      cacheRecord = data;
+    } catch (dbErr) {
+      console.warn('Cache lookup skipped/failed:', dbErr);
+    }
 
     // Check if we should serve from cache
     let shouldServeFromCache = false;
@@ -119,35 +125,50 @@ export default async function handler(req: Request, res: Response) {
     await browser.close();
 
     // Step 3: Supabase Storage private bucket upload
-    await supabase.storage
-      .from('pdf_cache')
-      .upload(storagePath, pdfBuffer, {
-        contentType: 'application/pdf',
-        upsert: true
-      });
+    try {
+      await supabase.storage
+        .from('pdf_cache')
+        .upload(storagePath, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true
+        });
 
-    // Save to Postgres
-    await supabase
-      .from('pdf_cache')
-      .upsert({
-        entity_key: entityKey,
-        data_hash: dataHash,
-        pdf_url: storagePath,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'entity_key' });
+      // Save to Postgres
+      await supabase
+        .from('pdf_cache')
+        .upsert({
+          entity_key: entityKey,
+          data_hash: dataHash,
+          pdf_url: storagePath,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'entity_key' });
+    } catch (uploadErr) {
+      console.warn('Cache upload failed:', uploadErr);
+    }
 
     // Unlock
     generatingPdfs.delete(generationKey);
 
-    const { data: newSignedUrlData } = await supabase.storage
-      .from('pdf_cache')
-      .createSignedUrl(storagePath, 60 * 60, { download: filename });
+    try {
+      const { data: newSignedUrlData } = await supabase.storage
+        .from('pdf_cache')
+        .createSignedUrl(storagePath, 60 * 60, { download: filename });
 
-    return res.status(200).json({ 
-      url: newSignedUrlData?.signedUrl, 
-      cached: false,
-      message: 'Generated new PDF'
-    });
+      if (newSignedUrlData?.signedUrl) {
+        return res.status(200).json({ 
+          url: newSignedUrlData.signedUrl, 
+          cached: false,
+          message: 'Generated new PDF'
+        });
+      }
+    } catch (signErr) {
+      console.warn('Signed URL generation failed:', signErr);
+    }
+
+    // Direct stream fallback if Supabase signed URL is unavailable
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${typeof filename === 'string' ? filename : 'document.pdf'}"`);
+    return res.status(200).send(Buffer.from(pdfBuffer));
 
   } catch (error: any) {
     console.error('PDF generation error:', error);

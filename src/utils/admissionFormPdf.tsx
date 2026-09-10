@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { AdmissionFormData, AdmissionFormConfig, AdmissionFormLang } from '../components/admission_form/types';
 import { Institution } from '../types';
 import AdmissionFormPreview from '../components/admission_form/AdmissionFormPreview';
+import { downloadServerPdf, wrapHtmlForPdf, SOLAIMAN_LIPI_FONT_STYLE } from './serverPdfHelper';
 
 /**
  * Converts an external image URL to base64 via the local image proxy.
@@ -68,6 +69,7 @@ export const elementToImageDataUrl = async (element: HTMLElement): Promise<strin
       backgroundColor: '#ffffff',
       width: 794,
       height: 1123,
+      fontEmbedCSS: SOLAIMAN_LIPI_FONT_STYLE,
       style: {
         transform: 'none',
         transformOrigin: 'none',
@@ -98,6 +100,7 @@ export const elementToImageDataUrl = async (element: HTMLElement): Promise<strin
       backgroundColor: '#ffffff',
       width: 794,
       height: 1123,
+      fontEmbedCSS: SOLAIMAN_LIPI_FONT_STYLE,
       style: {
         transform: 'none',
         transformOrigin: 'none',
@@ -226,13 +229,33 @@ export const exportAdmissionFormHeadless = async ({
     });
 
     const targetElement = (container.querySelector('#print-area') as HTMLElement) || (container.firstElementChild as HTMLElement);
-    const imgDataUrl = await elementToImageDataUrl(targetElement);
-
+    
     const defaultFileName = isBlank
       ? 'Admission_Form_Blank.pdf'
       : `Admission_Form_${(formData.studentNameEn || formData.studentName || 'Student').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+    const finalFileName = fileName || defaultFileName;
 
-    saveImageAsA4Pdf(imgDataUrl, fileName || defaultFileName);
+    // Try server-side PDF generation first with SolaimanLipi font
+    try {
+      const targetHtml = targetElement.outerHTML;
+      const fullHtml = wrapHtmlForPdf(targetHtml, finalFileName, 'portrait');
+      const serverSuccess = await downloadServerPdf({
+        html: fullHtml,
+        format: 'a4',
+        orientation: 'portrait',
+        entity_type: 'admission_form',
+        entity_id: isBlank ? 'blank' : (formData.id || formData.formNumber || formData.studentName || 'form').replace(/[^a-zA-Z0-9_-]/g, '_'),
+        filename: finalFileName
+      });
+      if (serverSuccess) {
+        return;
+      }
+    } catch (serverErr) {
+      console.warn('Server PDF generation failed for admission form, using client fallback:', serverErr);
+    }
+
+    const imgDataUrl = await elementToImageDataUrl(targetElement);
+    saveImageAsA4Pdf(imgDataUrl, finalFileName);
   } finally {
     try {
       root.unmount();

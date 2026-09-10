@@ -272,9 +272,24 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
   const isCompact = totalStudents > 20;
 
   return (
-    <div className="pdf-template-wrapper bg-white text-slate-900 font-sans print:m-0 print:p-0">
+    <div className="pdf-template-wrapper bg-white text-slate-900 font-sans print:m-0 print:p-0 font-solaiman">
       <style>{`
-        .font-bangla { font-family: 'Hind Siliguri', 'Noto Sans Bengali', sans-serif; }
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+          font-weight: bold;
+          font-style: normal;
+          font-display: swap;
+        }
+        .font-bangla, .font-bangla * { font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important; }
+        .font-solaiman, .font-solaiman * { font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important; }
         .font-english { font-family: 'Inter', sans-serif; }
         @media print {
           .page-break { page-break-after: always; }

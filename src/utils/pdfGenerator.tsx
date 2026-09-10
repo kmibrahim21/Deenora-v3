@@ -23,6 +23,19 @@ import { NoticePDFTemplate } from '../components/pdf/NoticePDFTemplate';
 import { SyllabusPDFTemplate } from '../components/pdf/SyllabusPDFTemplate';
 import { DiaryPDFTemplate } from '../components/pdf/DiaryPDFTemplate';
 import { solaimanLipiBase64 } from './fonts';
+import { downloadServerPdf, wrapHtmlForPdf } from './serverPdfHelper';
+
+export const solaimanLipiFontEmbedCSS = `
+  @font-face {
+    font-family: 'SolaimanLipi';
+    src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+  }
+  .font-solaiman, .font-solaiman * {
+    font-family: 'SolaimanLipi', 'Noto Sans Bengali', sans-serif !important;
+  }
+`;
 
 const CACHE_KEY_FONT = 'bengali_font_base64_v1';
 let bengaliFontBase64: string | null = null;
@@ -398,12 +411,36 @@ export const generateResultPDF = async (
     onProgress?.(50);
 
     const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
+    const fileName = `Result_${(student.student_name || student.name || 'Student').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+
+    // Try server-side PDF generation first with SolaimanLipi font
+    try {
+        const fullHtml = wrapHtmlForPdf(targetEl.outerHTML, fileName, 'portrait');
+        const serverSuccess = await downloadServerPdf({
+            html: fullHtml,
+            format: 'a4',
+            orientation: 'portrait',
+            entity_type: 'result',
+            entity_id: `${exam?.id || 'exam'}_${student?.id || student?.roll_no || 'student'}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+            filename: fileName,
+            is_published: exam?.is_published
+        });
+        if (serverSuccess) {
+            onProgress?.(100);
+            root.unmount();
+            document.body.removeChild(container);
+            return;
+        }
+    } catch (serverErr) {
+        console.warn('Server PDF generation failed for marksheet, falling back to client:', serverErr);
+    }
 
     const imgData = await toPng(targetEl, {
         pixelRatio: 3, // High quality for print
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
+        fontEmbedCSS: solaimanLipiFontEmbedCSS,
     });
     onProgress?.(85);
 
@@ -490,6 +527,7 @@ export const generateMassMarksheetPDF = async (
                 backgroundColor: '#ffffff',
                 width: 794,
                 height: 1123,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
             });
             
             const isLeft = (i % 2 === 0);
@@ -797,11 +835,37 @@ export const generateClassResultPDF = async (
         });
         onProgress?.(35);
 
+        const wrapper = container.querySelector('#pdf-wrapper');
+        const premiumFileName = `Premium_Result_${(exam.exam_name || 'Class').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+
+        // Try server-side generation first
+        if (wrapper) {
+            try {
+                const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, premiumFileName, 'portrait');
+                const serverSuccess = await downloadServerPdf({
+                    html: fullHtml,
+                    format: 'a4',
+                    orientation: 'portrait',
+                    entity_type: 'class_result',
+                    entity_id: `${exam?.id || 'class_result'}_premium`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                    filename: premiumFileName,
+                    is_published: exam?.is_published
+                });
+                if (serverSuccess) {
+                    onProgress?.(100);
+                    root.unmount();
+                    document.body.removeChild(container);
+                    return;
+                }
+            } catch (serverErr) {
+                console.warn('Server PDF generation failed for premium class result, falling back to client:', serverErr);
+            }
+        }
+
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
 
-        const wrapper = container.querySelector('#pdf-wrapper');
         if (wrapper) {
             const pageElements = Array.from(wrapper.querySelectorAll('.pdf-page-container')) as HTMLElement[];
             const pagesToRender = pageElements.length > 0 ? pageElements : (Array.from(wrapper.children).filter(el => el.tagName !== 'STYLE') as HTMLElement[]);
@@ -813,7 +877,7 @@ export const generateClassResultPDF = async (
                     backgroundColor: '#ffffff',
                     width: 794,
                     height: 1123,
-                    fontEmbedCSS: '',
+                    fontEmbedCSS: solaimanLipiFontEmbedCSS,
                 });
                 if (i > 0) doc.addPage();
                 doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -825,7 +889,7 @@ export const generateClassResultPDF = async (
         root.unmount();
         document.body.removeChild(container);
 
-        doc.save(`Premium_Result_${exam.exam_name || 'Class'}.pdf`);
+        doc.save(premiumFileName);
         onProgress?.(100);
         return;
     }
@@ -841,11 +905,37 @@ export const generateClassResultPDF = async (
     });
     onProgress?.(35);
 
+    const classicFileName = `Class_Result_${(exam.exam_name || 'Class').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+    const wrapper = container.querySelector('#pdf-wrapper');
+
+    // Try server-side generation first
+    if (wrapper) {
+        try {
+            const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, classicFileName, 'landscape');
+            const serverSuccess = await downloadServerPdf({
+                html: fullHtml,
+                format: 'a4',
+                orientation: 'landscape',
+                entity_type: 'class_result',
+                entity_id: `${exam?.id || 'class_result'}_classic`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                filename: classicFileName,
+                is_published: exam?.is_published
+            });
+            if (serverSuccess) {
+                onProgress?.(100);
+                root.unmount();
+                document.body.removeChild(container);
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server PDF generation failed for classic class result, falling back to client:', serverErr);
+        }
+    }
+
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    const wrapper = container.querySelector('#pdf-wrapper');
     if (wrapper && wrapper.children.length > 0) {
         const pages = Array.from(wrapper.children);
         for (let i = 0; i < pages.length; i++) {
@@ -855,6 +945,7 @@ export const generateClassResultPDF = async (
                 backgroundColor: '#ffffff',
                 width: 1123,
                 height: 794,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -866,7 +957,7 @@ export const generateClassResultPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`Class_Result_${exam.exam_name}.pdf`);
+    doc.save(classicFileName);
     onProgress?.(100);
 };
 
@@ -1172,11 +1263,36 @@ export const generateFinalResultPDF = async (
     });
     onProgress?.(25);
 
+    const finalResultFileName = `Final_Result_${className.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+    const wrapper = container.querySelector('#pdf-wrapper');
+
+    // Try server-side generation first with SolaimanLipi font
+    if (wrapper) {
+        try {
+            const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, finalResultFileName, 'landscape');
+            const serverSuccess = await downloadServerPdf({
+                html: fullHtml,
+                format: 'a4',
+                orientation: 'landscape',
+                entity_type: 'final_result',
+                entity_id: `${className}_final_result`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                filename: finalResultFileName
+            });
+            if (serverSuccess) {
+                onProgress?.(100);
+                root.unmount();
+                document.body.removeChild(container);
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server PDF generation failed for final result, falling back to client:', serverErr);
+        }
+    }
+
     const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    const wrapper = container.querySelector('#pdf-wrapper');
     if (wrapper && wrapper.children.length > 0) {
         const pages = Array.from(wrapper.children);
         for (let i = 0; i < pages.length; i++) {
@@ -1186,6 +1302,7 @@ export const generateFinalResultPDF = async (
                 backgroundColor: '#ffffff',
                 width: 1123,
                 height: 794,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
             });
             if (i > 0) doc.addPage();
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -1197,7 +1314,7 @@ export const generateFinalResultPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`Final_Result_${className}.pdf`);
+    doc.save(finalResultFileName);
     onProgress?.(100);
 };
 
@@ -1267,6 +1384,28 @@ export const generateFinalIndividualResultPDF = async (
     onProgress?.(50);
 
     const targetEl = (container.querySelector('.pdf-page-container') || container.firstElementChild) as HTMLElement;
+    const finalMarksheetFileName = `MarkSheet_${(student.student_name || 'Student').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+
+    // Try server-side generation first with SolaimanLipi font
+    try {
+        const fullHtml = wrapHtmlForPdf(targetEl.outerHTML, finalMarksheetFileName, 'portrait');
+        const serverSuccess = await downloadServerPdf({
+            html: fullHtml,
+            format: 'a4',
+            orientation: 'portrait',
+            entity_type: 'final_individual_result',
+            entity_id: `${student.id || student.roll_no || 'student'}_final_marksheet`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+            filename: finalMarksheetFileName
+        });
+        if (serverSuccess) {
+            onProgress?.(100);
+            root.unmount();
+            document.body.removeChild(container);
+            return;
+        }
+    } catch (serverErr) {
+        console.warn('Server PDF generation failed for final individual marksheet, falling back to client:', serverErr);
+    }
 
     const imgData = await toJpeg(targetEl, {
         pixelRatio: 2,
@@ -1274,6 +1413,7 @@ export const generateFinalIndividualResultPDF = async (
         backgroundColor: '#ffffff',
         width: 794,
         height: 1123,
+        fontEmbedCSS: solaimanLipiFontEmbedCSS,
     });
     onProgress?.(85);
 
@@ -1287,7 +1427,7 @@ export const generateFinalIndividualResultPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`MarkSheet_${student.student_name || 'Student'}.pdf`);
+    doc.save(finalMarksheetFileName);
     onProgress?.(100);
 };
 
@@ -1376,11 +1516,36 @@ export const generateClassRoutinePDF = async (
     });
     onProgress?.(30);
 
+    const classRoutineFileName = `${(madrasah?.name || 'Madrasah').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_Class_Routine.pdf`;
+    const wrapper = container.querySelector('#pdf-wrapper');
+
+    // Try server-side generation first with SolaimanLipi font
+    if (wrapper) {
+        try {
+            const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, classRoutineFileName, 'portrait');
+            const serverSuccess = await downloadServerPdf({
+                html: fullHtml,
+                format: 'a4',
+                orientation: 'portrait',
+                entity_type: 'class_routine',
+                entity_id: `${madrasah?.id || 'madrasah'}_class_routine`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                filename: classRoutineFileName
+            });
+            if (serverSuccess) {
+                onProgress?.(100);
+                root.unmount();
+                document.body.removeChild(container);
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server PDF generation failed for class routine, falling back to client:', serverErr);
+        }
+    }
+
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    const wrapper = container.querySelector('#pdf-wrapper');
     if (wrapper) {
         const pageContainers = wrapper.querySelectorAll('.pdf-page-container');
         
@@ -1394,6 +1559,7 @@ export const generateClassRoutinePDF = async (
                 backgroundColor: '#ffffff',
                 width: 794,
                 height: 1123,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
             });
 
             if (pageAdded) doc.addPage();
@@ -1404,7 +1570,7 @@ export const generateClassRoutinePDF = async (
     }
     
     onProgress?.(98);
-    doc.save(`${madrasah?.name || 'Madrasah'}_Class_Routine.pdf`);
+    doc.save(classRoutineFileName);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -1436,11 +1602,36 @@ export const generateMasterClassRoutinePDF = async (
     });
     onProgress?.(40);
 
+    const masterRoutineFileName = `${(madrasah?.name || 'Madrasah').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_Master_Routine.pdf`;
+    const wrapper = container.querySelector('#pdf-wrapper');
+
+    // Try server-side generation first with SolaimanLipi font
+    if (wrapper) {
+        try {
+            const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, masterRoutineFileName, 'landscape');
+            const serverSuccess = await downloadServerPdf({
+                html: fullHtml,
+                format: 'a4',
+                orientation: 'landscape',
+                entity_type: 'master_routine',
+                entity_id: `${madrasah?.id || 'madrasah'}_master_routine`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                filename: masterRoutineFileName
+            });
+            if (serverSuccess) {
+                onProgress?.(100);
+                root.unmount();
+                document.body.removeChild(container);
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server PDF generation failed for master routine, falling back to client:', serverErr);
+        }
+    }
+
     const doc = new jsPDF('l', 'mm', 'a4'); // LANDSCAPE
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    const wrapper = container.querySelector('#pdf-wrapper');
     if (wrapper) {
         const pageElement = wrapper.querySelector('.pdf-page-container') as HTMLElement;
         if (pageElement) {
@@ -1450,6 +1641,7 @@ export const generateMasterClassRoutinePDF = async (
                 backgroundColor: '#ffffff',
                 width: 1123,
                 height: 794,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
             });
             onProgress?.(85);
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -1457,7 +1649,7 @@ export const generateMasterClassRoutinePDF = async (
     }
     
     onProgress?.(98);
-    doc.save(`${madrasah?.name || 'Madrasah'}_Master_Routine.pdf`);
+    doc.save(masterRoutineFileName);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -1509,13 +1701,36 @@ export const generateExamRoutinePDF = async (
     });
     onProgress?.(40);
 
-    const isLandscape = true;
-    
+    const examRoutineFileName = `${(madrasah?.name || 'Madrasah').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_Exam_Routine.pdf`;
+    const wrapper = container.querySelector('#pdf-wrapper');
+
+    // Try server-side generation first with SolaimanLipi font
+    if (wrapper) {
+        try {
+            const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, examRoutineFileName, 'landscape');
+            const serverSuccess = await downloadServerPdf({
+                html: fullHtml,
+                format: 'a4',
+                orientation: 'landscape',
+                entity_type: 'exam_routine',
+                entity_id: `${madrasah?.id || 'madrasah'}_${examName || 'exam'}_routine`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                filename: examRoutineFileName
+            });
+            if (serverSuccess) {
+                onProgress?.(100);
+                root.unmount();
+                document.body.removeChild(container);
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server PDF generation failed for exam routine, falling back to client:', serverErr);
+        }
+    }
+
     const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     
-    const wrapper = container.querySelector('#pdf-wrapper');
     if (wrapper) {
         const pageElement = wrapper.querySelector('.pdf-page-container') as HTMLElement;
         if (pageElement) {
@@ -1525,14 +1740,7 @@ export const generateExamRoutinePDF = async (
                 backgroundColor: '#ffffff',
                 width: 1123,
                 height: 794,
-                fontEmbedCSS: `
-                  @font-face {
-                    font-family: 'SolaimanLipi';
-                    src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype');
-                    font-weight: normal;
-                    font-style: normal;
-                  }
-                `,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
             });
             onProgress?.(85);
             doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
@@ -1540,7 +1748,7 @@ export const generateExamRoutinePDF = async (
     }
     
     onProgress?.(98);
-    doc.save(`${madrasah?.name || 'Madrasah'}_Exam_Routine.pdf`);
+    doc.save(examRoutineFileName);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -1714,7 +1922,7 @@ export const generateSubscriptionMatrixPDF = async (
                         width: 794,
                         height: 1123,
                         skipFonts: true,
-                        fontEmbedCSS: '',
+                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
                     });
                     if (i > 0) doc.addPage();
                     doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -1728,7 +1936,7 @@ export const generateSubscriptionMatrixPDF = async (
                         width: 794,
                         height: 1123,
                         skipFonts: true,
-                        fontEmbedCSS: '',
+                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
                     });
                     if (i > 0) doc.addPage();
                     doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -1811,7 +2019,7 @@ export const generateMessagePDF = async (
                         width: 794,
                         height: 1123,
                         skipFonts: true,
-                        fontEmbedCSS: '',
+                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
                     });
                     if (i > 0) doc.addPage();
                     doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
@@ -1825,7 +2033,7 @@ export const generateMessagePDF = async (
                         width: 794,
                         height: 1123,
                         skipFonts: true,
-                        fontEmbedCSS: '',
+                        fontEmbedCSS: solaimanLipiFontEmbedCSS,
                     });
                     if (i > 0) doc.addPage();
                     doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');

@@ -348,13 +348,16 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
         {(currentView === 'home' || currentView === 'admin-dashboard') && role !== 'parent' && <MultiCalendarHeader madrasah={madrasah} />}
 
-        <main className={`flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar ${role === 'parent' ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`}>
+        <main className={`flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar ${role === 'parent' ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`} style={role !== 'parent' ? { paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
           {children}
         </main>
 
         {/* Mobile Bottom Nav */}
         {role !== 'parent' && (
-          <div className="fixed md:hidden bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[98%] sm:w-[95%] max-w-lg z-[200]">
+          <div 
+            className="fixed md:hidden bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[98%] sm:w-[95%] max-w-lg z-[200]"
+            style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+          >
             <nav className={`backdrop-blur-[25px] border py-2 sm:py-2.5 rounded-[2.5rem] shadow-2xl flex justify-between items-end px-1 sm:px-2 overflow-visible relative gap-0.5 sm:gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
 
           {isSystemStaff ? (

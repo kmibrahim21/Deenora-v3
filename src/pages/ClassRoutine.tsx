@@ -4,6 +4,7 @@ import { supabase } from 'supabase';
 import { Institution, Language, Profile } from 'types';
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
+import { downloadServerPdf, wrapHtmlForPdf, SOLAIMAN_LIPI_FONT_STYLE } from '../utils/serverPdfHelper';
 
 
 interface ClassRoutineProps {
@@ -323,6 +324,31 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
 
     try {
       const element = targetRef.current;
+      const finalFileName = `${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`;
+      const isTwoCopy = layoutType === 'day_left' && pdfCopyMode === 'two';
+      const orientation = isTwoCopy ? 'portrait' : 'landscape';
+
+      // Try server-side generation via /api/pdf with SolaimanLipi font
+      try {
+        const elementHtml = element.outerHTML;
+        const fullHtml = wrapHtmlForPdf(elementHtml, finalFileName, orientation);
+        const serverSuccess = await downloadServerPdf({
+          html: fullHtml,
+          format: 'a4',
+          orientation,
+          entity_type: 'class_routine',
+          entity_id: (routineTitle || 'class_routine').replace(/[^a-zA-Z0-9_-]/g, '_'),
+          filename: finalFileName
+        });
+        if (serverSuccess) {
+          showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড হয়েছে!' : 'PDF downloaded!', 'success');
+          setDownloading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Server PDF failed for class routine, using client fallback:', err);
+      }
+
       const rect = element.getBoundingClientRect();
       // Calculate the actual height at 1:1 scale
       // rect.height is seasonally affected by previewScale and userZoom
@@ -339,6 +365,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         backgroundColor: '#ffffff',
         width: actualWidth,
         height: actualHeight,
+        fontEmbedCSS: SOLAIMAN_LIPI_FONT_STYLE,
         filter: (node: any) => {
           // Hide elements with specific attributes or classes
           if (node.getAttribute) {
@@ -794,7 +821,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
                        }}
                      >
                      {/* The Container to capture for PDF */}
-                     <div ref={pdfContentRef} className="text-slate-800 w-[1123px] min-h-[794px] p-10 bg-white relative border-[10px] flex flex-col justify-between" style={{ borderColor: `${rtTheme.primary}1a` }}>
+                     <div ref={pdfContentRef} className="text-slate-800 w-[1123px] min-h-[794px] p-10 bg-white relative border-[10px] flex flex-col justify-between font-noto" style={{ borderColor: `${rtTheme.primary}1a` }}>
                         
                         {/* Frame Design corners */}
                         <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>

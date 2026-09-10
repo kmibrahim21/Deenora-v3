@@ -89,26 +89,152 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
 
   const downloadPdfSingle = async () => {
     setIsGenerating(true);
-    try {
-      const pdf = new jsPDF("portrait", "mm", "a4");
-      const cardWidth = 54;
-      const cardHeight = 86;
+    const safeName = (student?.student_name || "Student").replace(/\s+/g, "_");
+    const filename = `${safeName}_ID_Card_Single.pdf`;
 
-      // Single Student Centered
+    try {
       setCurrentRenderStudent(student);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const cardData = await generateSingleCardData();
-      if (cardData) {
-        const gapX = 10;
-        const xMargin = (210 - (cardWidth * 2) - gapX) / 2;
-        const yMargin = 30; // Nice top spacing for a single print
-        pdf.addImage(cardData.front, "JPEG", xMargin, yMargin, cardWidth, cardHeight);
-        pdf.addImage(cardData.back, "JPEG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight);
-        pdf.save(`${(student?.student_name || "Student").replace(/\s+/g, "_")}_ID_Card_Single.pdf`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const frontEl = cardRef.current;
+      const backEl = backCardRef.current;
+
+      if (!frontEl || !backEl) {
+        throw new Error("Card elements not found in DOM");
       }
-    } catch (error) {
-      console.error("Error generating PDF", error);
-      alert("Failed to generate single PDF. Please try again.");
+
+      const frontHtml = frontEl.outerHTML;
+      const backHtml = backEl.outerHTML;
+
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>${safeName} ID Card</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @font-face {
+              font-family: 'SolaimanLipi';
+              src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+              font-weight: normal;
+              font-style: normal;
+              font-display: swap;
+            }
+            @page {
+              size: a4 portrait;
+              margin: 0;
+            }
+            html, body {
+              margin: 0;
+              padding: 0;
+              background-color: white;
+              width: 210mm;
+              height: 297mm;
+            }
+            .page-container {
+              width: 210mm;
+              height: 297mm;
+              display: flex;
+              justify-content: center;
+              align-items: flex-start;
+              padding-top: 30mm;
+              gap: 10mm;
+              box-sizing: border-box;
+            }
+            .card-slot {
+              width: 54mm;
+              height: 86mm;
+              overflow: hidden;
+              position: relative;
+              border-radius: 3.5mm;
+              box-sizing: border-box;
+              border: 0.5px solid #e2e8f0;
+            }
+            .card-slot > div {
+              transform: scale(0.7285) !important;
+              transform-origin: top left !important;
+              display: flex !important;
+              margin: 0 !important;
+              box-shadow: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="page-container">
+            <div class="card-slot">${frontHtml}</div>
+            <div class="card-slot">${backHtml}</div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const response = await fetch('/api/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: fullHtml,
+          format: 'a4',
+          orientation: 'portrait',
+          entity_type: 'student_id_card_single',
+          entity_id: `${student?.id || 'unknown'}`,
+          filename: filename
+        })
+      });
+
+      if (response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          if (data.url) {
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = data.url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            return;
+          }
+        } else {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          return;
+        }
+      }
+      throw new Error('Server returned non-OK response');
+    } catch (serverError) {
+      console.warn("Server ID card generation failed, falling back to client-side:", serverError);
+      
+      // Fallback to client-side jsPDF
+      try {
+        const pdf = new jsPDF("portrait", "mm", "a4");
+        const cardWidth = 54;
+        const cardHeight = 86;
+
+        setCurrentRenderStudent(student);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const cardData = await generateSingleCardData();
+        if (cardData) {
+          const gapX = 10;
+          const xMargin = (210 - (cardWidth * 2) - gapX) / 2;
+          const yMargin = 30;
+          pdf.addImage(cardData.front, "JPEG", xMargin, yMargin, cardWidth, cardHeight);
+          pdf.addImage(cardData.back, "JPEG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight);
+          pdf.save(filename);
+        }
+      } catch (clientErr) {
+        console.error("Error generating single PDF fallback:", clientErr);
+        alert("Failed to generate single PDF. Please try again.");
+      }
     } finally {
       setIsGenerating(false);
       setCurrentRenderStudent(student);
@@ -117,62 +243,193 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
 
   const downloadPdfMultiple = async () => {
     setIsGenerating(true);
+    const sideText = activeSide === 'front' ? 'Fronts' : 'Backs';
+    const filename = (allStudents && allStudents.length > 1) 
+      ? `${(allStudents[0]?.classes?.class_name || "Class").replace(/\s+/g, "_")}_Grid_${sideText}.pdf` 
+      : `${(student?.student_name || "Student").replace(/\s+/g, "_")}_A4_${sideText}.pdf`;
+
     try {
-      // Use Portrait A4 to fit 3 columns and 3 rows of ONLY front or back parts. (9 students/page)
-      const pdf = new jsPDF("portrait", "mm", "a4");
-      const cardWidth = 54;
-      const cardHeight = 86;
-      const pageW = 210;
-      const pageH = 297;
-      
-      const cols = 3;
-      const rows = 3;
-      const gapX = 8;
-      const colGap = 0; // Not needed
-      const marginX = (pageW - (cardWidth * cols) - (gapX * (cols - 1))) / 2; // Auto center horizontally
-      const gapY = 8; 
-      const marginY = (pageH - (cardHeight * rows) - (gapY * (rows - 1))) / 2; // Auto center vertically
-
       const studentsToRender = (allStudents && allStudents.length > 0) ? allStudents : [student];
-      
-      let currentIdxOnPage = 0;
+      const cardHtmlList: string[] = [];
 
+      // Render cards in DOM quickly to extract rendered HTML
       for (let i = 0; i < studentsToRender.length; i++) {
-        setBulkProgress(Math.round((i / studentsToRender.length) * 100));
+        setBulkProgress(Math.round(((i + 1) / studentsToRender.length) * 40));
         setCurrentRenderStudent(studentsToRender[i]);
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 60));
 
-        const cardData = await generateSingleCardData();
-        if (!cardData) continue;
-
-        // Calculate Position
-        const row = Math.floor(currentIdxOnPage / cols);
-        const col = currentIdxOnPage % cols;
-
-        const posX = marginX + (col * (cardWidth + gapX));
-        const posY = marginY + (row * (cardHeight + gapY));
-
-        const imageData = activeSide === 'front' ? cardData.front : cardData.back;
-
-        pdf.addImage(imageData, "JPEG", posX, posY, cardWidth, cardHeight);
-
-        currentIdxOnPage++;
-
-        // If we filled 9 spots on the page (3x3) and there are more students left
-        if (currentIdxOnPage === (cols * rows) && i < studentsToRender.length - 1) {
-            pdf.addPage();
-            currentIdxOnPage = 0;
+        const targetEl = activeSide === 'front' ? cardRef.current : backCardRef.current;
+        if (targetEl) {
+          cardHtmlList.push(targetEl.outerHTML);
         }
       }
 
-      setBulkProgress(100);
-      const sideText = activeSide === 'front' ? 'Fronts' : 'Backs';
-      const filename = (allStudents && allStudents.length > 1) ? `${(allStudents[0]?.classes?.class_name || "Class").replace(/\s+/g, "_")}_Grid_${sideText}.pdf` : `${(student?.student_name || "Student").replace(/\s+/g, "_")}_A4_${sideText}.pdf`;
-      pdf.save(filename);
-      
-    } catch (error) {
-      console.error("Error generating PDF Grid", error);
-      alert("Failed to generate PDF. Please try again.");
+      setBulkProgress(50);
+
+      // Group into pages of 9 cards (3 columns x 3 rows)
+      const pages: string[][] = [];
+      for (let i = 0; i < cardHtmlList.length; i += 9) {
+        pages.push(cardHtmlList.slice(i, i + 9));
+      }
+
+      const pagesHtml = pages.map((pageCards, pageIdx) => `
+        <div class="grid-page" style="width: 210mm; height: 297mm; display: grid; grid-template-columns: repeat(3, 54mm); grid-template-rows: repeat(3, 86mm); gap: 8mm; justify-content: center; align-content: center; box-sizing: border-box; ${pageIdx < pages.length - 1 ? 'page-break-after: always;' : ''}">
+          ${pageCards.map(c => `
+            <div class="card-slot">
+              ${c}
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>${filename}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @font-face {
+              font-family: 'SolaimanLipi';
+              src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+              font-weight: normal;
+              font-style: normal;
+              font-display: swap;
+            }
+            @page {
+              size: a4 portrait;
+              margin: 0;
+            }
+            html, body {
+              margin: 0;
+              padding: 0;
+              background-color: white;
+            }
+            .card-slot {
+              width: 54mm;
+              height: 86mm;
+              overflow: hidden;
+              position: relative;
+              border-radius: 3.5mm;
+              box-sizing: border-box;
+              border: 0.5px solid #e2e8f0;
+            }
+            .card-slot > div {
+              transform: scale(0.7285) !important;
+              transform-origin: top left !important;
+              display: flex !important;
+              margin: 0 !important;
+              box-shadow: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+        </body>
+        </html>
+      `;
+
+      setBulkProgress(70);
+
+      const batchKey = studentsToRender.map(s => s.id).slice(0, 5).join('-');
+      const response = await fetch('/api/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: fullHtml,
+          format: 'a4',
+          orientation: 'portrait',
+          entity_type: 'student_id_card_grid',
+          entity_id: `batch_${batchKey}_${activeSide}_${studentsToRender.length}`,
+          filename: filename
+        })
+      });
+
+      if (response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          if (data.url) {
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = data.url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setBulkProgress(100);
+            return;
+          }
+        } else {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          setBulkProgress(100);
+          return;
+        }
+      }
+      throw new Error('Server returned non-OK response');
+    } catch (serverErr) {
+      console.warn("Server ID card grid generation failed, falling back to client-side:", serverErr);
+
+      // Fallback: client-side jsPDF loop
+      try {
+        const pdf = new jsPDF("portrait", "mm", "a4");
+        const cardWidth = 54;
+        const cardHeight = 86;
+        const pageW = 210;
+        const pageH = 297;
+        
+        const cols = 3;
+        const rows = 3;
+        const gapX = 8;
+        const marginX = (pageW - (cardWidth * cols) - (gapX * (cols - 1))) / 2;
+        const gapY = 8; 
+        const marginY = (pageH - (cardHeight * rows) - (gapY * (rows - 1))) / 2;
+
+        const studentsToRender = (allStudents && allStudents.length > 0) ? allStudents : [student];
+        let currentIdxOnPage = 0;
+
+        for (let i = 0; i < studentsToRender.length; i++) {
+          setBulkProgress(Math.round((i / studentsToRender.length) * 100));
+          setCurrentRenderStudent(studentsToRender[i]);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          const cardData = await generateSingleCardData();
+          if (!cardData) continue;
+
+          const row = Math.floor(currentIdxOnPage / cols);
+          const col = currentIdxOnPage % cols;
+
+          const posX = marginX + (col * (cardWidth + gapX));
+          const posY = marginY + (row * (cardHeight + gapY));
+
+          const imageData = activeSide === 'front' ? cardData.front : cardData.back;
+
+          pdf.addImage(imageData, "JPEG", posX, posY, cardWidth, cardHeight);
+
+          currentIdxOnPage++;
+
+          if (currentIdxOnPage === (cols * rows) && i < studentsToRender.length - 1) {
+              pdf.addPage();
+              currentIdxOnPage = 0;
+          }
+        }
+
+        setBulkProgress(100);
+        pdf.save(filename);
+      } catch (clientError) {
+        console.error("Error generating PDF Grid fallback:", clientError);
+        alert("Failed to generate PDF. Please try again.");
+      }
     } finally {
       setIsGenerating(false);
       setBulkProgress(0);

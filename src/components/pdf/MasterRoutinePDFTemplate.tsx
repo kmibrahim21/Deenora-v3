@@ -19,8 +19,27 @@ export const MasterRoutinePDFTemplate: React.FC<MasterRoutinePDFTemplateProps> =
   const timeSlots = Array.from(new Set(routines.map(r => `${r.start_time.slice(0, 5)} - ${r.end_time.slice(0, 5)}`))).sort();
 
   return (
-    <div className="bg-white">
-      <div className="pdf-page-container w-[1123px] h-[794px] p-6 bg-white border border-slate-300 mx-auto overflow-hidden flex flex-col relative">
+    <div className="bg-white font-solaiman" style={{ fontFamily: "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" }}>
+      <style>{`
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+          font-weight: bold;
+          font-style: normal;
+          font-display: swap;
+        }
+        .font-solaiman, .font-solaiman * {
+          font-family: 'SolaimanLipi', 'Noto Sans Bengali', sans-serif !important;
+        }
+      `}</style>
+      <div className="pdf-page-container w-[1123px] h-[794px] p-6 bg-white border border-slate-300 mx-auto overflow-hidden flex flex-col relative font-solaiman" style={{ fontFamily: "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" }}>
         {/* Header Section */}
         <div className="text-center mb-2">
           <h1 className="text-2xl font-bold font-noto tracking-tight text-slate-900">{madrasah?.name}</h1>

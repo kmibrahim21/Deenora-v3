@@ -211,12 +211,13 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
           <div 
             ref={printRef}
             id="print-area"
-            className="bg-white font-solaiman flex flex-col justify-between relative overflow-hidden shrink-0 shadow-2xl"
+            className="bg-white font-noto flex flex-col justify-between relative overflow-hidden shrink-0 shadow-2xl"
             style={isPrint ? {
               width: '210mm', 
               height: '297mm', 
               padding: '10mm 12mm 10mm 12mm',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              fontFamily: "'Hind Siliguri', 'Noto Sans Bengali', sans-serif"
             } : { 
               width: '210mm', 
               height: '297mm', 
@@ -225,7 +226,8 @@ const AdmissionFormPreview: React.FC<Props> = ({ formData, madrasah, lang, confi
               transformOrigin: 'top center',
               position: 'absolute',
               top: 0,
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              fontFamily: "'Hind Siliguri', 'Noto Sans Bengali', sans-serif"
             }}
           >
           {/* Marksheet Style Borders */}

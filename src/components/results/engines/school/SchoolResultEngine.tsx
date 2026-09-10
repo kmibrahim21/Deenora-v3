@@ -2978,7 +2978,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                       const previewPillBadgeClass = isClassMode ? 'px-4 py-1 text-[10.5px]' : 'px-6 py-1.5 text-[12.5px]';
 
                       return (
-                        <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between font-solaiman" style={{ borderColor: `${rtTheme.primary}1a`, fontFamily: "'SolaimanLipi', sans-serif" }}>
+                        <div className="text-slate-800 w-[1123px] h-[794px] p-6 relative border-[10px] flex flex-col justify-between font-noto" style={{ borderColor: `${rtTheme.primary}1a` }}>
                           {/* Frame Design corners */}
                           <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 rounded-tl-xl m-2" style={{ borderColor: rtTheme.primary }}></div>
                           <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 rounded-tr-xl m-2" style={{ borderColor: rtTheme.primary }}></div>

@@ -116,7 +116,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
   }, [isBangla, finalGrade, isPassed, hasAnyMark]);
 
   return (
-    <div className={`w-[794px] h-[1123px] bg-white p-0 m-0 ${isBangla ? 'font-noto' : 'font-hind'} text-slate-900 relative overflow-hidden print-container shadow-2xl`} style={{ boxSizing: 'border-box' }}>
+    <div className={`w-[794px] h-[1123px] bg-white p-0 m-0 ${isBangla ? 'font-solaiman' : 'font-hind'} text-slate-900 relative overflow-hidden print-container shadow-2xl`} style={{ boxSizing: 'border-box', fontFamily: isBangla ? "'SolaimanLipi', 'Hind Siliguri', sans-serif" : undefined }}>
       
       {/* Premium Border Decor */}
       <div className="absolute inset-0 border-[10px] border-[#1E3A8A]/10 pointer-events-none"></div>
@@ -125,9 +125,24 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
       {/* Fonts Import & Print Styles */}
       <style>{`
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+          font-weight: bold;
+          font-style: normal;
+          font-display: swap;
+        }
         @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Inter:wght@400;600;800&family=Tiro+Bangla&family=JetBrains+Mono:wght@500;700&display=swap');
+        .font-solaiman, .font-solaiman * { font-family: 'SolaimanLipi', 'Hind Siliguri', sans-serif !important; }
         .font-tiro { font-family: 'Tiro Bangla', serif; }
-        .font-noto { font-family: 'Hind Siliguri', sans-serif; }
+        .font-noto { font-family: 'SolaimanLipi', 'Hind Siliguri', sans-serif; }
         .font-noto-serif { font-family: 'Noto Serif Bengali', serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         .font-inter { font-family: 'Inter', sans-serif; }

@@ -57,7 +57,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
     <span className={`inline-block mx-2 -translate-y-1 ${stretch ? 'flex-1' : ''}`}>
       <span 
         className={`border-b-[1.5px] border-dashed border-slate-400 px-3 text-center font-bold text-[#0f2c59] whitespace-nowrap ${stretch ? 'block w-full' : 'inline-block'}`}
-        style={{ minWidth: stretch ? undefined : minWidth, lineHeight: '1', fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif", fontSize: '22px' }}
+        style={{ minWidth: stretch ? undefined : minWidth, lineHeight: '1', fontFamily: isBn ? "'SolaimanLipi', 'Tiro Bangla', serif" : "'Playfair Display', serif", fontSize: '22px' }}
       >
         {value || ''}
       </span>
@@ -66,7 +66,16 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
 
 
   return (
-    <div className="w-[1122px] h-[793px] bg-white relative flex flex-col overflow-hidden box-border" style={{ fontFamily: isBn ? "'Noto Sans Bengali', sans-serif" : "'Inter', sans-serif" }}>
+    <div className="w-[1122px] h-[793px] bg-white relative flex flex-col overflow-hidden box-border" style={{ fontFamily: isBn ? "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" : "'Inter', sans-serif" }}>
+      <style>{`
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+      `}</style>
       
       {/* --- Premium Classic Borders --- */}
       {/* Outer Thin Border */}
@@ -141,7 +150,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
           {madrasah?.logo_url && (
             <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain drop-shadow-sm pb-2 mix-blend-multiply" alt="Logo" />
           )}
-          <h1 className="text-[44px] font-bold text-[#0f2c59] tracking-tight drop-shadow-sm text-center leading-tight whitespace-nowrap mt-1" style={{ fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif" }}>
+          <h1 className="text-[44px] font-bold text-[#0f2c59] tracking-tight drop-shadow-sm text-center leading-tight whitespace-nowrap mt-1" style={{ fontFamily: isBn ? "'SolaimanLipi', 'Tiro Bangla', serif" : "'Playfair Display', serif" }}>
             {isBn ? (madrasah?.name || 'প্রতিষ্ঠানের নাম') : (madrasah?.config_json as any)?.name_english || madrasah?.name || 'Institution Name'}
           </h1>
           <h2 className="text-[16px] font-semibold text-[#8b1414] tracking-widest uppercase mt-1 text-center max-w-3xl">
@@ -156,7 +165,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
              <div className="bg-[#0f2c59] text-white px-12 py-2">
                <h3 
                   className="text-[32px] font-black tracking-[0.15em] leading-none uppercase"
-                  style={{ fontFamily: isBn ? "'Tiro Bangla', serif" : "'Playfair Display', serif" }}
+                  style={{ fontFamily: isBn ? "'SolaimanLipi', 'Tiro Bangla', serif" : "'Playfair Display', serif" }}
                >
                  {title}
                </h3>

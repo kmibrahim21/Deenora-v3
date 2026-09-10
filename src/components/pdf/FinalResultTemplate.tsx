@@ -31,11 +31,30 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
 
   return (
     <>
+      <style>{`
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'SolaimanLipi';
+          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+          font-weight: bold;
+          font-style: normal;
+          font-display: swap;
+        }
+        .font-solaiman, .font-solaiman * {
+          font-family: 'SolaimanLipi', 'Noto Sans Bengali', sans-serif !important;
+        }
+      `}</style>
       {Array.from({ length: totalPages }).map((_, pageIndex) => {
         const pageData = students.slice(pageIndex * ROWS_PER_PAGE, (pageIndex + 1) * ROWS_PER_PAGE);
         
         return (
-          <div key={pageIndex} className="page-container relative" style={{ width: '1123px', height: '794px', padding: '40px 40px 90px 40px', backgroundColor: '#fff', color: '#000', fontFamily: 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden', border: '8px solid #f1f5f9' }}>
+          <div key={pageIndex} className="page-container relative font-solaiman" style={{ width: '1123px', height: '794px', padding: '40px 40px 90px 40px', backgroundColor: '#fff', color: '#000', fontFamily: isBangla ? "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" : 'system-ui, sans-serif', position: 'relative', boxSizing: 'border-box', overflow: 'hidden', border: '8px solid #f1f5f9' }}>
             {/* Header */}
             <div className="text-center mb-6 border-b-2 border-slate-900 pb-4">
               <h1 className="text-4xl font-black text-slate-900 mb-1 uppercase tracking-tight leading-normal">{madrasah.name}</h1>
