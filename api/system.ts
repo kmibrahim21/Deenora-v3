@@ -102,7 +102,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const response = await fetch(audioUrl, fetchOptions);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
+        // Forward the specific upstream error status (e.g. 403, 404) to avoid triggering a 5xx server error on Vercel
+        const status = response.status >= 400 && response.status < 500 ? response.status : 502;
+        return res.status(status).json({ 
+          error: `Upstream audio host returned status ${response.status}`,
+          statusText: response.statusText 
+        });
       }
 
       const arrayBuffer = await response.arrayBuffer();
@@ -189,7 +194,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+        // Forward the specific upstream error status (e.g. 403, 404) to avoid triggering a 5xx server error on Vercel
+        const status = response.status >= 400 && response.status < 500 ? response.status : 502;
+        return res.status(status).json({ 
+          error: `Upstream image host returned status ${response.status}`,
+          statusText: response.statusText 
+        });
       }
 
       const arrayBuffer = await response.arrayBuffer();
