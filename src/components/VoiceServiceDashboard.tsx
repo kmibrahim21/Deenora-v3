@@ -38,13 +38,8 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
   const getProxiedAudioUrl = useCallback((url?: string) => {
     if (!url || typeof url !== 'string') return '';
     const trimmed = url.trim();
-    if (!trimmed) return '';
-    if (trimmed.startsWith('data:') || trimmed.startsWith('blob:') || trimmed.startsWith('/api/proxy-audio')) {
-      return trimmed;
-    }
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return `/api/proxy-audio?url=${encodeURIComponent(trimmed)}`;
-    }
+    // Return original URL directly, completely bypassing /api/proxy-audio
+    // to save massive Vercel Fast Origin Transfer bandwidth and proxy overhead.
     return trimmed;
   }, []);
 

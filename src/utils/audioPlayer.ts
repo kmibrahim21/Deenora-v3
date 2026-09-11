@@ -27,17 +27,8 @@ class UniversalAudioPlayer {
   public getProxiedUrl(url: string): string {
     if (!url || typeof url !== 'string') return '';
     const trimmed = url.trim();
-    if (!trimmed) return '';
-    if (trimmed.startsWith('data:') || trimmed.startsWith('blob:') || trimmed.startsWith('/api/proxy-audio')) {
-      return trimmed;
-    }
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      // If it's on local or same host
-      if (typeof window !== 'undefined' && trimmed.includes(window.location.hostname)) {
-        return trimmed;
-      }
-      return `/api/proxy-audio?url=${encodeURIComponent(trimmed)}`;
-    }
+    // Return original URL directly, completely bypassing /api/proxy-audio
+    // to save massive Vercel Fast Origin Transfer bandwidth and proxy overhead.
     return trimmed;
   }
 
@@ -116,7 +107,10 @@ class UniversalAudioPlayer {
     // Method 2: Fallback to HTML5 Audio Element
     try {
       const audio = new Audio();
-      audio.crossOrigin = 'anonymous';
+      // Only set crossOrigin if the URL is local/proxied, otherwise do not set it to allow CORS-free play of external media.
+      if (typeof window !== 'undefined' && (proxiedUrl.startsWith('/') || proxiedUrl.includes(window.location.hostname))) {
+        audio.crossOrigin = 'anonymous';
+      }
       audio.src = proxiedUrl;
       this.currentAudioElement = audio;
 
@@ -131,6 +125,9 @@ class UniversalAudioPlayer {
       };
 
       audio.onerror = (e) => {
+        if (this.currentAudioElement !== audio || !this.isPlayingState) {
+          return; // Ignore errors if we stopped or are no longer playing this element
+        }
         console.warn('HTML5 Audio error on proxied URL, trying direct URL:', e);
         // Try direct URL fallback
         if (audio.src !== rawUrl) {

@@ -473,24 +473,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  const fetchVoices = async () => {
+  const fetchVoices = async (forceSync: boolean = false) => {
     if (!madrasah && !isSuperAdmin) return;
     setLoading(true);
     try {
       setApiError(null);
-      // Fetch from Awaj API
-      let apiVoices: any[] = [];
-      const response = await fetch('/api/awaj/voices');
-      if (response.ok) {
-        const data = await response.json();
-        apiVoices = Array.isArray(data) ? data : (data.voices || data.data || []);
-        console.log('Awaj Voices List:', apiVoices);
-      } else {
-        const errData = await response.json().catch(() => ({}));
-        setApiError(errData.error || `Awaj API Error: ${response.status}`);
-      }
 
-      // First, get local voices
+      // First, get local voices (Database-First)
       let systemId = null;
       try {
         const { data: sysInst } = await supabase.from('institutions').select('id').eq('name', 'SYSTEM_GLOBAL_INTERNAL').limit(1);
@@ -520,45 +509,62 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const { data: localVoices } = await templateQuery.order('created_at', { ascending: false });
       
       if (localVoices) {
-        // Sync statuses and IDs from Awaj API, ensuring auto-approval
-        const syncedVoices = [];
-        for (const localVoice of localVoices) {
-          // If local voice was approved by admin or assigned, preserve approval
-          const isAssignedOrApproved = localVoice.admin_status === 'approved' || localVoice.provider_status === 'approved';
+        setVoices(localVoices);
+      }
 
-          // Try to find matching voice in API by ID or Name
-          const awajVoice = apiVoices.find(v => 
-            (localVoice.provider_voice_id && v.id && v.id.toString() === localVoice.provider_voice_id.toString()) || 
-            (v.name && v.name.toLowerCase() === (localVoice.title || '').toLowerCase()) ||
-            (v.name && v.name.toLowerCase() === (localVoice.provider_voice_name || '').toLowerCase())
-          );
-
-          const newProviderId = awajVoice?.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
-          const newProviderName = awajVoice?.name || localVoice.provider_voice_name;
-          
-          let awajStatus = isAssignedOrApproved ? 'approved' : 'pending';
-          if (awajVoice) {
-            awajStatus = (awajVoice.status === 'approved' || awajVoice.status === 'active' || awajVoice.is_approved || awajVoice.status === 'ready' || awajVoice.status === 'success') ? 'approved' : 'pending';
-            if (isAssignedOrApproved) awajStatus = 'approved';
-          }
-          
-          // Sync voice locally and in DB
-          if (localVoice.provider_status !== awajStatus || localVoice.admin_status !== 'approved' || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
-            await supabase.from('voice_templates').update({ 
-              admin_status: 'approved',
-              provider_status: 'approved',
-              provider_voice_id: newProviderId || localVoice.provider_voice_id,
-              provider_voice_name: newProviderName || localVoice.provider_voice_name
-            }).eq('id', localVoice.id);
-            
-            localVoice.admin_status = 'approved';
-            localVoice.provider_status = 'approved';
-            localVoice.provider_voice_id = newProviderId || localVoice.provider_voice_id;
-            localVoice.provider_voice_name = newProviderName || localVoice.provider_voice_name;
-          }
-          syncedVoices.push(localVoice);
+      // Only query Awaj API if forceSync is explicitly requested
+      if (forceSync) {
+        let apiVoices: any[] = [];
+        const response = await fetch('/api/awaj/voices');
+        if (response.ok) {
+          const data = await response.json();
+          apiVoices = Array.isArray(data) ? data : (data.voices || data.data || []);
+          console.log('Awaj Voices List:', apiVoices);
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          setApiError(errData.error || `Awaj API Error: ${response.status}`);
         }
-        setVoices(syncedVoices);
+
+        if (localVoices && apiVoices.length > 0) {
+          const syncedVoices = [];
+          for (const localVoice of localVoices) {
+            // If local voice was approved by admin or assigned, preserve approval
+            const isAssignedOrApproved = localVoice.admin_status === 'approved' || localVoice.provider_status === 'approved';
+
+            // Try to find matching voice in API by ID or Name
+            const awajVoice = apiVoices.find(v => 
+              (localVoice.provider_voice_id && v.id && v.id.toString() === localVoice.provider_voice_id.toString()) || 
+              (v.name && v.name.toLowerCase() === (localVoice.title || '').toLowerCase()) ||
+              (v.name && v.name.toLowerCase() === (localVoice.provider_voice_name || '').toLowerCase())
+            );
+
+            const newProviderId = awajVoice?.id ? awajVoice.id.toString() : localVoice.provider_voice_id;
+            const newProviderName = awajVoice?.name || localVoice.provider_voice_name;
+            
+            let awajStatus = isAssignedOrApproved ? 'approved' : 'pending';
+            if (awajVoice) {
+              awajStatus = (awajVoice.status === 'approved' || awajVoice.status === 'active' || awajVoice.is_approved || awajVoice.status === 'ready' || awajVoice.status === 'success') ? 'approved' : 'pending';
+              if (isAssignedOrApproved) awajStatus = 'approved';
+            }
+            
+            // Sync voice locally and in DB
+            if (localVoice.provider_status !== awajStatus || localVoice.admin_status !== 'approved' || (newProviderId && localVoice.provider_voice_id !== newProviderId)) {
+              await supabase.from('voice_templates').update({ 
+                admin_status: 'approved',
+                provider_status: 'approved',
+                provider_voice_id: newProviderId || localVoice.provider_voice_id,
+                provider_voice_name: newProviderName || localVoice.provider_voice_name
+              }).eq('id', localVoice.id);
+              
+              localVoice.admin_status = 'approved';
+              localVoice.provider_status = 'approved';
+              localVoice.provider_voice_id = newProviderId || localVoice.provider_voice_id;
+              localVoice.provider_voice_name = newProviderName || localVoice.provider_voice_name;
+            }
+            syncedVoices.push(localVoice);
+          }
+          setVoices(syncedVoices);
+        }
       }
 
     } catch (error: any) {
@@ -609,14 +615,18 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  const fetchSenders = async () => {
+  const fetchSenders = async (force: boolean = false) => {
+    if (senders.length > 0 && !force) {
+      return; // Already loaded, skip API call to optimize speed
+    }
     try {
       setApiError(null);
-      // Fetch default senders from Awaj API
-      const response = await fetch('/api/awaj/senders');
       let sendersList: any[] = [];
       
-      if (response.ok) {
+      // Fetch default senders from Awaj API
+      const response = await fetch('/api/awaj/senders').catch(() => null);
+      
+      if (response && response.ok) {
         const data = await response.json();
         let fetchedList = Array.isArray(data) ? data : (data.senders || data.data || []);
         
@@ -628,8 +638,14 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
         console.log('Awaj Senders List (Filtered):', sendersList);
       } else {
-        const errData = await response.json().catch(() => ({}));
-        setApiError(errData.error || `Awaj API Error: ${response.status}`);
+        // Safe local fallback list if API is unreachable or times out
+        sendersList = [
+          {
+            id: '9610993084',
+            callingNumber: '09610993084',
+            name: 'Awaj Digital (09610993084)'
+          }
+        ];
       }
 
       if (madrasah?.voice_sender_id) {
@@ -655,7 +671,25 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
     } catch (error: any) {
       console.error('Error fetching senders:', error);
-      setApiError(error.message || 'Failed to fetch senders.');
+      // Hard fallback
+      const fallbackList = [
+        {
+          id: '9610993084',
+          callingNumber: '09610993084',
+          name: 'Awaj Digital (09610993084)'
+        }
+      ];
+      if (madrasah?.voice_sender_id) {
+        fallbackList.unshift({
+          id: madrasah.voice_sender_id,
+          callingNumber: madrasah.voice_sender_id,
+          name: 'Dedicated Sender ID'
+        });
+      }
+      setSenders(fallbackList);
+      if (fallbackList.length > 0 && !selectedSenderId) {
+        setSelectedSenderId(fallbackList[0].id || fallbackList[0].callingNumber);
+      }
     }
   };
 
@@ -1985,7 +2019,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           <div className="space-y-5 animate-in slide-in-from-bottom-5">
             <div className="flex items-center justify-between px-2">
               <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('your_voices', lang)}</h2>
-              <button onClick={fetchVoices} disabled={loading} className="bg-blue-50 text-[#2563EB] px-4 py-2 rounded-2xl text-[10px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100">
+              <button onClick={() => fetchVoices(true)} disabled={loading} className="bg-blue-50 text-[#2563EB] px-4 py-2 rounded-2xl text-[10px] font-black flex items-center gap-2 active:scale-95 transition-all border border-blue-100">
                  {loading ? <Loader2 className="animate-spin" size={14} /> : <History size={14} />} {t('sync_voices', lang)}
               </button>
             </div>
