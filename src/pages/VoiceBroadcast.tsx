@@ -105,6 +105,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   // Wallet state
   const [walletBalance, setWalletBalance] = useState(0);
   const processingRefundsRef = useRef<Set<string>>(new Set());
+  const hasFetchedSendersRef = useRef(false);
+  const isFetchingSendersRef = useRef(false);
   
   // Voices state
   const [voices, setVoices] = useState<any[]>([]);
@@ -616,9 +618,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   };
 
   const fetchSenders = async (force: boolean = false) => {
-    if (senders.length > 0 && !force) {
+    if (hasFetchedSendersRef.current && !force) {
       return; // Already loaded, skip API call to optimize speed
     }
+    if (isFetchingSendersRef.current) {
+      return; // Fetch already in progress, avoid double calls
+    }
+    isFetchingSendersRef.current = true;
     try {
       setApiError(null);
       let sendersList: any[] = [];
@@ -669,6 +675,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (sendersList.length > 0 && !selectedSenderId) {
         setSelectedSenderId(sendersList[0].id || sendersList[0].callingNumber || sendersList[0].caller_id);
       }
+      hasFetchedSendersRef.current = true;
     } catch (error: any) {
       console.error('Error fetching senders:', error);
       // Hard fallback
@@ -690,6 +697,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       if (fallbackList.length > 0 && !selectedSenderId) {
         setSelectedSenderId(fallbackList[0].id || fallbackList[0].callingNumber);
       }
+      // Mark as fetched so we don't spam if down
+      hasFetchedSendersRef.current = true;
+    } finally {
+      isFetchingSendersRef.current = false;
     }
   };
 
