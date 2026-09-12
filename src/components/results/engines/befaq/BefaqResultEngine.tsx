@@ -1270,14 +1270,23 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     if (!selectedExam) return;
     setIsSaving(true);
     const payload: any[] = [];
+    const toDelete: { student_id: string; subject_id: string }[] = [];
+
     Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
         Object.entries(subMarks).forEach(([subjectId, marks]) => {
-            payload.push({
-                exam_id: selectedExam.id,
-                student_id: studentId,
-                subject_id: subjectId,
-                marks_obtained: parseFloat(marks as string)
-            });
+            if (marks !== undefined && marks !== null && marks !== '') {
+                payload.push({
+                    exam_id: selectedExam.id,
+                    student_id: studentId,
+                    subject_id: subjectId,
+                    marks_obtained: parseFloat(marks as string)
+                });
+            } else {
+                toDelete.push({
+                    student_id: studentId,
+                    subject_id: subjectId
+                });
+            }
         });
     });
 
@@ -1288,6 +1297,22 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
             alert(lang === 'bn' ? `${sub.subject_name} বিষয়ের প্রাপ্ত নম্বর পূর্ণ নম্বর (${sub.total_marks}) এর বেশি হতে পারে না!` : `Obtained marks for ${sub.subject_name} cannot exceed full marks (${sub.total_marks})!`);
             setIsSaving(false);
             return;
+        }
+    }
+
+    // Delete cleared/deleted marks first
+    if (toDelete.length > 0) {
+        const deletePromises = toDelete.map((item) => {
+            return supabase.from('befaq_results')
+                .delete()
+                .eq('exam_id', selectedExam.id)
+                .eq('student_id', item.student_id)
+                .eq('subject_id', item.subject_id);
+        });
+        try {
+            await Promise.all(deletePromises);
+        } catch (delErr) {
+            console.error("Error deleting cleared marks:", delErr);
         }
     }
 

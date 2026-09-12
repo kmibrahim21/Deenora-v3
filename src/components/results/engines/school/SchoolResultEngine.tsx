@@ -1858,6 +1858,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     if (!selectedExam) return;
     setIsSaving(true);
     const payload: any[] = [];
+    const toDelete: { student_id: string; subject_id: string }[] = [];
+    
     Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
         // Filter out attendance and sub-mark keys to get actual subject IDs
         const actualSubjectIds = Object.keys(subMarks).filter(key => 
@@ -1872,9 +1874,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                   student_id: studentId,
                   subject_id: subjectId,
                   marks_obtained: parseFloat(marks as string),
-                  cq_marks: subMarks[`${subjectId}_cq`] !== undefined ? parseFloat(subMarks[`${subjectId}_cq`] as string) : null,
-                  mcq_marks: subMarks[`${subjectId}_mcq`] !== undefined ? parseFloat(subMarks[`${subjectId}_mcq`] as string) : null,
-                  practical_marks: subMarks[`${subjectId}_practical`] !== undefined ? parseFloat(subMarks[`${subjectId}_practical`] as string) : null,
+                  cq_marks: subMarks[`${subjectId}_cq`] !== undefined && subMarks[`${subjectId}_cq`] !== '' ? parseFloat(subMarks[`${subjectId}_cq`] as string) : null,
+                  mcq_marks: subMarks[`${subjectId}_mcq`] !== undefined && subMarks[`${subjectId}_mcq`] !== '' ? parseFloat(subMarks[`${subjectId}_mcq`] as string) : null,
+                  practical_marks: subMarks[`${subjectId}_practical`] !== undefined && subMarks[`${subjectId}_practical`] !== '' ? parseFloat(subMarks[`${subjectId}_practical`] as string) : null,
+              });
+            } else {
+              toDelete.push({
+                  student_id: studentId,
+                  subject_id: subjectId
               });
             }
         });
@@ -1888,6 +1895,21 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             alert(lang === 'bn' ? `${sub.subject_name} বিষয়ের প্রাপ্ত নম্বর পূর্ণ নম্বর (${sub.full_marks}) এর বেশি হতে পারে না!` : `Obtained marks for ${sub.subject_name} cannot exceed full marks (${sub.full_marks})!`);
             setIsSaving(false);
             return;
+        }
+    }
+
+    // Delete cleared/deleted marks
+    if (toDelete.length > 0) {
+        for (const item of toDelete) {
+            const { error: delError } = await supabase
+                .from('exam_marks')
+                .delete()
+                .eq('exam_id', selectedExam.id)
+                .eq('student_id', item.student_id)
+                .eq('subject_id', item.subject_id);
+            if (delError) {
+                console.error("Error deleting mark:", delError);
+            }
         }
     }
 
