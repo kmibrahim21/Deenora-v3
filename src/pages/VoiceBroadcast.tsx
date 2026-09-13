@@ -26,7 +26,11 @@ import {
   ExternalLink,
   Copy,
   ArrowRight,
-  ChevronLeft
+  ChevronLeft,
+  Lock,
+  Timer,
+  ShieldCheck,
+  Info
 } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, Class, Student, Profile, UserRole, Transaction } from 'types';
@@ -214,6 +218,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   }, []);
 
   // History state
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  // Real-time ticking timer for cooldown & countdown sync
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [broadcastHistory, setBroadcastHistory] = useState<any[]>([]);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [historyDetails, setHistoryDetails] = useState<any | null>(null);
@@ -912,6 +926,36 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const handleRetryFailed = async (broadcast: any, failedLogs: any[]) => {
     if (!failedLogs.length) return;
     
+    // Check if broadcast is still running or in cooling period
+    const isBroadcastRunning = ['sending', 'pending', 'processing', 'running', 'queued', 'scheduled', 'broadcasting'].includes(String(broadcast?.status || '').toLowerCase());
+    const createdTime = new Date(broadcast?.created_at).getTime();
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - createdTime) / 1000));
+    const remainingWaitSeconds = Math.max(0, 120 - elapsedSeconds);
+
+    if (isBroadcastRunning) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্রডকাস্ট চলমান রয়েছে' : 'Broadcast In Progress',
+        message: lang === 'bn' 
+          ? 'কল এখনও প্রসেসিং হচ্ছে। টেলিকম সার্ভার থেকে সব কলের রিপোর্ট চূড়ান্ত না হওয়া পর্যন্ত রিট্রাই করা যাবে না।' 
+          : 'Broadcast is still in progress. Please wait until all calls are finalized.'
+      });
+      return;
+    }
+
+    if (remainingWaitSeconds > 0) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'চূড়ান্ত রিপোর্টের অপেক্ষা' : 'Waiting For Final Reports',
+        message: lang === 'bn'
+          ? `টেলিকম সার্ভার থেকে সব কলের চূড়ান্ত রিপোর্ট নিশ্চিত হওয়ার জন্য আরও ${remainingWaitSeconds} সেকেন্ড অপেক্ষা করুন।`
+          : `Please wait ${remainingWaitSeconds}s for telecom server final delivery reports before retrying.`
+      });
+      return;
+    }
+
     // Extract phone numbers from failed logs using a more robust method
     const phoneNumbers = failedLogs.map(log => extractPhoneFromLog(log)).filter(Boolean);
     
@@ -1070,8 +1114,8 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     }
   };
 
-  const handleExpandHistory = async (broadcast: any) => {
-    if (expandedHistoryId === broadcast.id) {
+  const handleExpandHistory = async (broadcast: any, forceReload: boolean = false) => {
+    if (expandedHistoryId === broadcast.id && !forceReload) {
       setExpandedHistoryId(null);
       setHistoryDetails(null);
       return;
@@ -1079,7 +1123,9 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     
     setExpandedHistoryId(broadcast.id);
     setLoadingDetails(true);
-    setHistoryDetails(null);
+    if (!forceReload) {
+      setHistoryDetails(null);
+    }
     
     if (!broadcast.provider_campaign_id) {
       setHistoryDetails({ error: 'No campaign ID found for this broadcast' });
@@ -2172,9 +2218,23 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                     
                     {expandedHistoryId === h.id && (
                       <div className="bg-slate-50 p-5 border-t border-slate-100 animate-in slide-in-from-top-2">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                          <Smartphone size={12} /> {t('call_details', lang)}
-                        </h4>
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <Smartphone size={12} /> {t('call_details', lang)}
+                          </h4>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleExpandHistory(h, true);
+                            }}
+                            disabled={loadingDetails}
+                            className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors border border-blue-100"
+                            title={lang === 'bn' ? 'সর্বশেষ রিপোর্ট রিফ্রেশ করুন' : 'Refresh Report'}
+                          >
+                            <RefreshCw size={12} className={loadingDetails ? 'animate-spin' : ''} />
+                            {lang === 'bn' ? 'রিপোর্ট রিফ্রেশ' : 'Refresh Report'}
+                          </button>
+                        </div>
                         
                         {loadingDetails ? (
                           <div className="flex justify-center py-6"><Loader2 className="animate-spin text-[#2563EB]" size={24} /></div>
@@ -2208,6 +2268,24 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                 const duration = Number(rawDuration) || 0;
                                 return failureStatuses.includes(status) || (duration === 0 && !successStatuses.includes(status) && !['pending', 'sending', 'processing', 'queued'].includes(status));
                               });
+
+                              const isBroadcastRunning = ['sending', 'pending', 'processing', 'running', 'queued', 'scheduled', 'broadcasting'].includes(String(h.status || '').toLowerCase());
+                              const providerStatus = String(historyDetails?.broadcast?.status || historyDetails?.status || historyDetails?.state || '').toLowerCase();
+                              const isProviderRunning = ['sending', 'pending', 'processing', 'running', 'queued', 'scheduled', 'broadcasting'].includes(providerStatus);
+                              const isAwajComplete = historyDetails?.isComplete !== false && (historyDetails?.statusDistribution?.pending === 0 || historyDetails?.statusDistribution?.pending === undefined);
+                              const hasPendingLogs = logs.some((log: any) => {
+                                const status = (log.status || log.state || log.call_status || '').toLowerCase().trim();
+                                return ['pending', 'sending', 'processing', 'queued', 'calling', 'ringing', 'dialing', 'in_progress', 'in-progress'].includes(status);
+                              });
+
+                              const isStillProcessing = isBroadcastRunning || isProviderRunning || !isAwajComplete || hasPendingLogs;
+
+                              const createdTime = new Date(h.created_at).getTime();
+                              const elapsedSeconds = Math.max(0, Math.floor((currentTime - createdTime) / 1000));
+                              const COOLDOWN_SECONDS = 120; // 2 minutes wait for final telecom reports
+                              const remainingWaitSeconds = Math.max(0, COOLDOWN_SECONDS - elapsedSeconds);
+                              const isCooldownActive = remainingWaitSeconds > 0;
+                              const canRetry = !isStillProcessing && !isCooldownActive;
                               
                               return (
                                 <>
@@ -2232,8 +2310,53 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                     </div>
                                   </div>
 
+                                  {/* Telecom CDR Finalization & Processing Status Notifications */}
+                                  {isStillProcessing ? (
+                                    <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 flex items-start gap-3 text-amber-900">
+                                      <Loader2 size={18} className="animate-spin text-amber-600 flex-shrink-0 mt-0.5" />
+                                      <div className="flex-1 text-xs">
+                                        <p className="font-bold text-amber-950">
+                                          {lang === 'bn' ? 'কল ব্রডকাস্ট চলমান রয়েছে (Processing)' : 'Voice broadcast is still running'}
+                                        </p>
+                                        <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                                          {lang === 'bn'
+                                            ? 'টেলিকম অপারেটর সার্ভার থেকে সব কলের চূড়ান্ত ডেলিভারি রিপোর্ট না পাওয়া পর্যন্ত রিট্রাই বাটন সাময়িকভাবে লক থাকবে।'
+                                            : 'Retry is locked while calls are actively ringing and telecom CDR reports are finalizing.'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ) : isCooldownActive ? (
+                                    <div className="bg-blue-50 border border-blue-200/80 rounded-2xl p-3.5 flex items-start gap-3 text-blue-900">
+                                      <Timer size={18} className="text-blue-600 flex-shrink-0 mt-0.5 animate-pulse" />
+                                      <div className="flex-1 text-xs">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="font-bold text-blue-950">
+                                            {lang === 'bn' ? 'টেলিকম সার্ভার থেকে চূড়ান্ত রিপোর্টের অপেক্ষা' : 'Waiting for telecom final CDR sync'}
+                                          </p>
+                                          <span className="font-mono font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md text-[11px]">
+                                            {remainingWaitSeconds}s
+                                          </span>
+                                        </div>
+                                        <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                                          {lang === 'bn'
+                                            ? `সঠিক ডেলিভারি রিপোর্ট পেতে আরও ${remainingWaitSeconds} সেকেন্ড অপেক্ষা করুন। এরপর রিট্রাই বাটন সক্রিয় হবে।`
+                                            : `To ensure accurate billing and delivery status, waiting ${remainingWaitSeconds}s for telecom server final sync.`}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ) : failedLogs.length > 0 ? (
+                                    <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3 flex items-center gap-2.5 text-emerald-900 text-xs">
+                                      <ShieldCheck size={18} className="text-emerald-600 flex-shrink-0" />
+                                      <p className="text-[11px] text-emerald-800">
+                                        {lang === 'bn'
+                                          ? `সব কলের চূড়ান্ত রিপোর্ট সম্পন্ন হয়েছে। আপনি চাইলে ব্যর্থ ${failedLogs.length}টি কলে পুনরায় কল করতে পারেন।`
+                                          : `All telecom reports finalized. You can safely retry the ${failedLogs.length} failed calls.`}
+                                      </p>
+                                    </div>
+                                  ) : null}
+
                                   {failedLogs.length > 0 && (
-                                    <div className="flex justify-end mt-4 gap-2">
+                                    <div className="flex flex-wrap items-center justify-end mt-4 gap-2">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -2244,16 +2367,34 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                                         <Zap size={14} />
                                         {lang === 'bn' ? 'রিফান্ড নিন' : 'Claim Refund'}
                                       </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleRetryFailed(h, failedLogs);
-                                        }}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-xs font-black flex items-center gap-2 shadow-sm transition-all active:scale-95"
-                                      >
-                                        <RefreshCw size={14} />
-                                        Retry {failedLogs.length} Failed Calls
-                                      </button>
+
+                                      {canRetry ? (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRetryFailed(h, failedLogs);
+                                          }}
+                                          className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-xs font-black flex items-center gap-2 shadow-md transition-all active:scale-95 animate-in fade-in"
+                                        >
+                                          <RefreshCw size={14} />
+                                          {lang === 'bn' ? `ব্যর্থ ${failedLogs.length}টি কল পুনরায় করুন` : `Retry ${failedLogs.length} Failed Calls`}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          disabled
+                                          className="px-4 py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 cursor-not-allowed shadow-none"
+                                          title={isStillProcessing 
+                                            ? (lang === 'bn' ? 'কল শেষ না হওয়া পর্যন্ত রিট্রাই লক' : 'Retry locked while processing') 
+                                            : (lang === 'bn' ? `চূড়ান্ত রিপোর্টের অপেক্ষা: ${remainingWaitSeconds} সেকেন্ড` : `Waiting for report: ${remainingWaitSeconds}s`)}
+                                        >
+                                          <Lock size={13} className="text-slate-400" />
+                                          {isStillProcessing ? (
+                                            <span>{lang === 'bn' ? 'রিট্রাই লক (প্রসেসিং হচ্ছে)' : 'Retry Locked (Processing)'}</span>
+                                          ) : (
+                                            <span>{lang === 'bn' ? `রিট্রাই লক (${remainingWaitSeconds}s অপেক্ষা)` : `Retry Locked (${remainingWaitSeconds}s)`}</span>
+                                          )}
+                                        </button>
+                                      )}
                                     </div>
                                   )}
 
