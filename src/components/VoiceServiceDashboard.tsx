@@ -453,7 +453,6 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
               if (dateA !== dateB) return dateB - dateA;
               return Number(b.id || 0) - Number(a.id || 0);
             })
-            .slice(0, 20)
         : [];
       setVoices(apiVoices);
       setSenders(sendersRes.senders || sendersRes.data || []);
@@ -525,6 +524,9 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
   useEffect(() => {
     const allVoices = [...voices, ...assignedVoices];
+    const initialDurations: Record<string, number> = {};
+    let hasUpdates = false;
+
     allVoices.forEach((v) => {
       if (!v) return;
       const key = v.id || v.provider_voice_id;
@@ -532,21 +534,15 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       const rawDur = v.duration || v.duration_seconds || v.length || v.audio_duration;
       if (rawDur && !isNaN(Number(rawDur)) && Number(rawDur) > 0) {
         const secs = Math.round(Number(rawDur));
-        setAudioDurations(prev => (prev[key] === secs ? prev : { ...prev, [key]: secs }));
-      } else {
-        const url = getProxiedAudioUrl(v.previewUrl || v.preview_url || v.file_url || v.url);
-        if (url && !audioDurations[key]) {
-          const audio = new Audio(url);
-          audio.onloadedmetadata = () => {
-            if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-              const secs = Math.round(audio.duration);
-              setAudioDurations(prev => ({ ...prev, [key]: secs }));
-            }
-          };
-        }
+        initialDurations[key] = secs;
+        hasUpdates = true;
       }
     });
-  }, [voices, assignedVoices, getProxiedAudioUrl]);
+
+    if (hasUpdates) {
+      setAudioDurations(prev => ({ ...prev, ...initialDurations }));
+    }
+  }, [voices, assignedVoices]);
 
   const fetchBroadcastResult = async (id: string) => {
     setLoadingResult(true);
@@ -944,11 +940,11 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                 <div className="flex items-center gap-2.5">
                   <Info size={18} className="shrink-0 text-blue-500" />
                   <span className="font-bold">
-                    দ্রুততম স্পিডে লোড হওয়ার জন্য সর্বশেষ ২০টি ভয়েস প্রদর্শন করা হচ্ছে।
+                    Awaj Digital গেটওয়েতে সংরক্ষিত সকল ভয়েস ({filteredVoices.length}টি) প্রদর্শিত হচ্ছে।
                   </span>
                 </div>
                 <span className="hidden md:inline-flex px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 dark:bg-blue-900/60 dark:text-blue-200 shrink-0">
-                  Top 20 Voices
+                  মোট {filteredVoices.length}টি ভয়েস
                 </span>
               </div>
 
@@ -1042,7 +1038,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                             </div>
                             <audio 
                               controls 
-                              preload="metadata"
+                              preload="none"
                               src={getProxiedAudioUrl(voice.previewUrl || voice.preview_url || voice.file_url || voice.url)} 
                               className="w-full h-8 outline-none" 
                               onLoadedMetadata={(e) => {
