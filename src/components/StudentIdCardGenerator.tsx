@@ -103,12 +103,12 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
         throw new Error("Card elements not found in DOM");
       }
 
-      const frontHtml = frontEl.outerHTML;
-      const backHtml = backEl.outerHTML;
+      const frontHtml = frontEl.outerHTML.replace(/\bhidden\b/g, 'flex');
+      const backHtml = backEl.outerHTML.replace(/\bhidden\b/g, 'flex');
 
       const fullHtml = `
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="bn">
         <head>
           <meta charset="UTF-8">
           <title>${safeName} ID Card</title>
@@ -116,10 +116,30 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
           <style>
             @font-face {
               font-family: 'SolaimanLipi';
-              src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
+                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
               font-weight: normal;
               font-style: normal;
               font-display: swap;
+            }
+            @font-face {
+              font-family: 'SolaimanLipi';
+              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
+                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+              font-weight: bold;
+              font-style: normal;
+              font-display: swap;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .font-solaiman, .font-solaiman * {
+              font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
+            }
+            body, html, div, span, p, h1, h2, h3, h4, h5, h6, li {
+              font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
             }
             @page {
               size: a4 portrait;
@@ -149,10 +169,10 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               position: relative;
               border-radius: 3.5mm;
               box-sizing: border-box;
-              border: 0.5px solid #e2e8f0;
+              border: 0.5px solid #cbd5e1;
             }
             .card-slot > div {
-              transform: scale(0.7285) !important;
+              transform: scale(0.72) !important;
               transform-origin: top left !important;
               display: flex !important;
               margin: 0 !important;
@@ -178,7 +198,8 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
           orientation: 'portrait',
           entity_type: 'student_id_card_single',
           entity_id: `${student?.id || 'unknown'}`,
-          filename: filename
+          filename: filename,
+          force_refresh: true
         })
       });
 
@@ -252,15 +273,16 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
       const studentsToRender = (allStudents && allStudents.length > 0) ? allStudents : [student];
       const cardHtmlList: string[] = [];
 
-      // Render cards in DOM quickly to extract rendered HTML
+      // Render cards in DOM with sufficient delay to extract rendered HTML
       for (let i = 0; i < studentsToRender.length; i++) {
         setBulkProgress(Math.round(((i + 1) / studentsToRender.length) * 40));
         setCurrentRenderStudent(studentsToRender[i]);
-        await new Promise((resolve) => setTimeout(resolve, 60));
+        await new Promise((resolve) => setTimeout(resolve, 120));
 
         const targetEl = activeSide === 'front' ? cardRef.current : backCardRef.current;
         if (targetEl) {
-          cardHtmlList.push(targetEl.outerHTML);
+          const cleanHtml = targetEl.outerHTML.replace(/\bhidden\b/g, 'flex');
+          cardHtmlList.push(cleanHtml);
         }
       }
 
@@ -284,7 +306,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
 
       const fullHtml = `
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="bn">
         <head>
           <meta charset="UTF-8">
           <title>${filename}</title>
@@ -292,10 +314,30 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
           <style>
             @font-face {
               font-family: 'SolaimanLipi';
-              src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
+                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
               font-weight: normal;
               font-style: normal;
               font-display: swap;
+            }
+            @font-face {
+              font-family: 'SolaimanLipi';
+              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
+                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+              font-weight: bold;
+              font-style: normal;
+              font-display: swap;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .font-solaiman, .font-solaiman * {
+              font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
+            }
+            body, html, div, span, p, h1, h2, h3, h4, h5, h6, li {
+              font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
             }
             @page {
               size: a4 portrait;
@@ -313,10 +355,10 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               position: relative;
               border-radius: 3.5mm;
               box-sizing: border-box;
-              border: 0.5px solid #e2e8f0;
+              border: 0.5px solid #cbd5e1;
             }
             .card-slot > div {
-              transform: scale(0.7285) !important;
+              transform: scale(0.72) !important;
               transform-origin: top left !important;
               display: flex !important;
               margin: 0 !important;
@@ -342,7 +384,8 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
           orientation: 'portrait',
           entity_type: 'student_id_card_grid',
           entity_id: `batch_${batchKey}_${activeSide}_${studentsToRender.length}`,
-          filename: filename
+          filename: filename,
+          force_refresh: true
         })
       });
 
@@ -591,13 +634,13 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             }}
             ref={cardRef}
           >
-            {/* Top Modern Header Shape */}
+             {/* Top Modern Header Shape */}
              <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[155px]">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 280 155"
                   preserveAspectRatio="none"
-                  className="w-full h-full drop-shadow-md"
+                  className="w-full h-full"
                 >
                   <path d="M0,0 L280,0 L280,120 C180,160 100,80 0,140 Z" fill={themeColor}></path>
                   <path d="M0,0 L280,0 L280,110 C180,150 100,70 0,130 Z" fill="white" opacity="0.15"></path>
@@ -612,7 +655,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 280 70" 
                   preserveAspectRatio="none" 
-                  className="w-full h-full drop-shadow-[0_-2px_4px_rgba(0,0,0,0.1)]"
+                  className="w-full h-full"
                  >
                      <path d="M0,70 L280,70 L280,40 C180,0 100,50 0,20 Z" fill={themeColor}></path>
                      <path d="M0,70 L280,70 L280,50 C180,10 100,60 0,30 Z" fill="white" opacity="0.15"></path>
@@ -634,7 +677,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                           )}
                        </div>
                        <div className="flex-1 text-center flex flex-col justify-center min-w-0 px-0.5">
-                           <h3 className={`font-bold text-white font-solaiman drop-shadow-sm w-full mx-auto text-center ${nameSizeClass}`}>
+                           <h3 className={`font-bold text-white font-solaiman w-full mx-auto text-center ${nameSizeClass}`} style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
                             {instName}
                           </h3>
                           <p className={`text-white/95 font-medium -mt-0.5 w-full mx-auto text-center ${addressSizeClass}`}>
@@ -671,7 +714,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.class}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman">{currentRenderStudent.classes?.class_name || "-"}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman">{currentRenderStudent.classes?.class_name || (currentRenderStudent as any).class_name || "-"}</span>
                        </div>
                        {currentRenderStudent.section && (
                          <div className="flex items-start">
@@ -683,7 +726,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.id}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderStudent.registration_number || currentRenderStudent.roll || '-'}</span>
+                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderStudent.registration_number || (currentRenderStudent.roll !== null && currentRenderStudent.roll !== undefined ? currentRenderStudent.roll : null) || (currentRenderStudent as any).admission_number || currentRenderStudent.biometric_id || (currentRenderStudent.id ? currentRenderStudent.id.substring(0, 6).toUpperCase() : "-")}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.dob}</span>
@@ -698,7 +741,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.father}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman">{currentRenderStudent.guardian_name || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman">{(currentRenderStudent as any).father_name || currentRenderStudent.guardian_name || "-"}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.mother}</span>
@@ -708,12 +751,12 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.phone}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderStudent.guardian_phone || "-"}</span>
+                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderStudent.guardian_phone || currentRenderStudent.guardian_phone_2 || "-"}</span>
                        </div>
                        <div className="flex items-start">
                           <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.address}</span>
                           <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[10px] font-extrabold text-slate-800 leading-tight py-0.5 line-clamp-2 max-w-[155px] font-solaiman break-words">{currentRenderStudent.address || "-"}</span>
+                          <span className="text-[10px] font-extrabold text-slate-800 leading-tight py-0.5 line-clamp-2 max-w-[155px] font-solaiman break-words">{currentRenderStudent.address || (currentRenderStudent as any).permanent_address || "-"}</span>
                        </div>
                   </div>
 

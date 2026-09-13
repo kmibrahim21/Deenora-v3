@@ -48,8 +48,9 @@ export default async function handler(req: Request, res: Response) {
 
     // Check if we should serve from cache
     let shouldServeFromCache = false;
+    const forceRefresh = req.body.force_refresh === true;
     
-    if (cacheRecord) {
+    if (cacheRecord && !forceRefresh) {
       if (entity_type === 'fee_receipt') {
         // Fee Receipts are strictly immutable. Once generated, never regenerate even if data hash changes.
         shouldServeFromCache = true;
@@ -115,6 +116,11 @@ export default async function handler(req: Request, res: Response) {
     await page.setContent(html, {
       waitUntil: 'networkidle0' as any,
     });
+    try {
+      await page.evaluateHandle('document.fonts.ready');
+    } catch (fontErr) {
+      console.warn('Waiting for fonts failed:', fontErr);
+    }
     await page.emulateMediaType('print');
     const pdfBuffer = await page.pdf({
       format: format as any,
