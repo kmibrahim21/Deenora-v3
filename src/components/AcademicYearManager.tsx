@@ -1094,7 +1094,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                         ? "bg-slate-800 border-slate-700 text-slate-300"
                         : "bg-slate-50 border-slate-100 text-slate-700"
                     }`}
-                    placeholder="e.g. 2025"
+                    placeholder="e.g. 2026"
                     value={newYearName}
                     onChange={(e) => setNewYearName(e.target.value)}
                   />
@@ -1515,7 +1515,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                 <input
                   type="text"
                   className={`w-full h-12 border rounded-xl px-4 font-black text-sm outline-none ${isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-slate-50 border-slate-100 text-[#1E3A8A]"}`}
-                  placeholder="e.g. 2025-2026"
+                  placeholder="e.g. 2026"
                   value={newYearName}
                   onChange={(e) => setNewYearName(e.target.value)}
                 />

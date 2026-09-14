@@ -240,6 +240,17 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
   const toBnNum = (n: number | string) => isBangla ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]) : String(n);
 
+  // Formatted academic year (2026 / ২০২৬ instead of 2025-2026)
+  const displayAcademicYear = React.useMemo(() => {
+    let yr = exam?.academic_year;
+    if (!yr || yr === '2025-2026' || yr === '২০২৫-২০২৬' || yr === `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`) {
+      yr = '2026';
+    } else if (typeof yr === 'string' && (yr.includes('2025-2026') || yr.includes('২০২৫-২০২৬'))) {
+      yr = yr.replace(/2025-2026/g, '2026').replace(/২০২৫-২০২৬/g, '২০২৬');
+    }
+    return toBnNum(yr);
+  }, [exam?.academic_year, isBangla]);
+
   // Grade Distribution
   const gradeCounts = React.useMemo(() => {
     const counts: Record<string, number> = { 'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'F': 0 };
@@ -372,7 +383,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
                     <div className={`text-center ${
                       numStudentsOnPage > 22 ? 'py-0.5 text-[9.5px]' : 'py-1 text-[10px]'
                     } font-bold text-slate-800 border-b border-slate-200`}>
-                      {t.academicYear}: {exam?.academic_year || `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`}
+                      {t.academicYear}: {displayAcademicYear}
                     </div>
                     <div className={`bg-[#1E3A8A]/90 text-white text-center font-extrabold ${
                       numStudentsOnPage > 22 ? 'py-0.5 text-[9.5px]' : 'py-1 text-[10px]'

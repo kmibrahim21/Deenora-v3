@@ -232,7 +232,15 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             </div>
             {/* Last Column: Other Info */}
             <div className="space-y-1.5 pl-1 col-span-3">
-              <div className="flex items-center"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.academic_year || new Date().getFullYear())}</span></div>
+              <div className="flex items-center"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {(() => {
+                let yr = student.academic_year || exam?.academic_year || String(new Date().getFullYear());
+                if (yr === '2025-2026' || yr === '২০২৫-২০২৬') {
+                  yr = '2026';
+                } else if (typeof yr === 'string' && (yr.includes('2025-2026') || yr.includes('২০২৫-২০২৬'))) {
+                  yr = yr.replace(/2025-2026/g, '2026').replace(/২০২৫-২০২৬/g, '২০২৬');
+                }
+                return toBnNum(yr);
+              })()}</span></div>
               <div className="flex items-start"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] leading-tight">{(() => {
                 const reg = String(student.registration_number || '-');
                 if (reg.length > 5 && reg !== '-') {

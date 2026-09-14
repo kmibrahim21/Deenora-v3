@@ -23,8 +23,42 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
         groupedStudents[className] = students;
     }
 
-    // Set exactly 14 rows per page to prevent vertical overflow and overlap with the signature area
-    const ROWS_PER_PAGE = 14;
+    // Helper to calculate approximate rendered row height based on text content length
+    const estimateRowHeight = (item: any): number => {
+        const getLines = (text: any, charsPerLine: number): number => {
+            if (!text) return 1;
+            const str = String(text).trim();
+            if (!str || str === '-') return 1;
+            const paragraphs = str.split(/\r?\n/);
+            let count = 0;
+            for (const p of paragraphs) {
+                const pLen = p.trim().length;
+                if (pLen === 0) continue;
+                count += Math.max(1, Math.ceil(pLen / charsPerLine));
+            }
+            return count || 1;
+        };
+
+        const nameLines = getLines(item.student_name, 26);
+        const regLines = getLines(item.registration_number || item.admission_number, 16);
+        const fatherLines = getLines(item.guardian_name, 24);
+        const motherLines = getLines(item.mother_name, 24);
+        const phone1Lines = getLines(item.guardian_phone, 16);
+        const phone2Lines = getLines(item.guardian_phone_2, 16);
+        
+        const otherLines = Math.max(1, nameLines, regLines, fatherLines, motherLines, phone1Lines, phone2Lines);
+        const otherHeight = 22 + (otherLines - 1) * 13;
+
+        // Address font size is reduced (8.5px) so more characters fit per line and line height is smaller
+        const addressLines = getLines(item.address, 32);
+        const addressHeight = 18 + (addressLines - 1) * 10.5;
+
+        return Math.max(otherHeight, addressHeight);
+    };
+
+    // Dynamic height-based pagination to prevent vertical overflow while keeping pages well-filled
+    const MAX_PAGE_ROW_HEIGHT = 520;
+    const MAX_ROWS_PER_PAGE = 14;
 
     // Flatten to pages
     const pages: { title: string; data: any[] }[] = [];
@@ -36,10 +70,32 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
             return rollA - rollB;
         });
 
-        for (let i = 0; i < sorted.length; i += ROWS_PER_PAGE) {
+        let currentPageData: any[] = [];
+        let currentPageHeight = 0;
+
+        sorted.forEach((student) => {
+            const rowHeight = estimateRowHeight(student);
+
+            if (
+                currentPageData.length > 0 &&
+                (currentPageHeight + rowHeight > MAX_PAGE_ROW_HEIGHT || currentPageData.length >= MAX_ROWS_PER_PAGE)
+            ) {
+                pages.push({
+                    title: cls,
+                    data: currentPageData
+                });
+                currentPageData = [student];
+                currentPageHeight = rowHeight;
+            } else {
+                currentPageData.push(student);
+                currentPageHeight += rowHeight;
+            }
+        });
+
+        if (currentPageData.length > 0) {
             pages.push({
                 title: cls,
-                data: sorted.slice(i, i + ROWS_PER_PAGE)
+                data: currentPageData
             });
         }
     });
@@ -105,7 +161,7 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
                                             <td style={{ ...tdStyle, fontWeight: '500' }}>{item.guardian_phone_2 || '-'}</td>
                                             <td style={tdStyle}>{item.date_of_birth || '-'}</td>
                                             <td style={{ ...tdStyle, fontWeight: 'bold', color: '#dc2626' }}>{item.blood_group || '-'}</td>
-                                            <td style={{ ...tdStyle, textAlign: 'left', wordBreak: 'break-word', fontSize: '10px' }}>{item.address || '-'}</td>
+                                            <td style={{ ...tdStyle, textAlign: 'left', wordBreak: 'break-word', fontSize: '8.5px', lineHeight: '1.2' }}>{item.address || '-'}</td>
                                         </tr>
                                     );
                                 })}
