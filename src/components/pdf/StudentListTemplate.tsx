@@ -47,18 +47,18 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
         const phone2Lines = getLines(item.guardian_phone_2, 16);
         
         const otherLines = Math.max(1, nameLines, regLines, fatherLines, motherLines, phone1Lines, phone2Lines);
-        const otherHeight = 22 + (otherLines - 1) * 13;
+        const otherHeight = 20 + (otherLines - 1) * 12.5;
 
         // Address font size is reduced (8.5px) so more characters fit per line and line height is smaller
         const addressLines = getLines(item.address, 32);
-        const addressHeight = 18 + (addressLines - 1) * 10.5;
+        const addressHeight = 17 + (addressLines - 1) * 10;
 
         return Math.max(otherHeight, addressHeight);
     };
 
-    // Dynamic height-based pagination to prevent vertical overflow while keeping pages well-filled
-    const MAX_PAGE_ROW_HEIGHT = 520;
-    const MAX_ROWS_PER_PAGE = 14;
+    // Dynamic height-based pagination to support exactly 16 rows per page comfortably
+    const MAX_PAGE_ROW_HEIGHT = 550;
+    const MAX_ROWS_PER_PAGE = 16;
 
     // Flatten to pages
     const pages: { title: string; data: any[] }[] = [];
@@ -237,7 +237,7 @@ export const StudentListTemplate: React.FC<StudentListTemplateProps> = ({ studen
 };
 
 const thStyle: React.CSSProperties = {
-    padding: '6px 4px',
+    padding: '5px 4px',
     borderBottom: '2px solid #cbd5e1',
     borderRight: '1px solid rgba(255,255,255,0.15)',
     fontWeight: 'bold',
@@ -248,11 +248,11 @@ const thStyle: React.CSSProperties = {
 };
 
 const tdStyle: React.CSSProperties = {
-    padding: '4px 6px',
+    padding: '3px 5px',
     borderBottom: '1px solid #cbd5e1',
     borderRight: '1px solid #e2e8f0',
     textAlign: 'center',
     color: '#334155',
     verticalAlign: 'middle',
-    lineHeight: '1.3'
+    lineHeight: '1.25'
 };
