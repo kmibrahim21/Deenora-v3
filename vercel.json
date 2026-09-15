@@ -12,6 +12,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/agent/:path*",
+      "destination": "/api/agent.ts"
+    },
+    {
       "source": "/api/teachers/:path*",
       "destination": "/api/teachers.ts"
     },

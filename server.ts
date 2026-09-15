@@ -142,6 +142,11 @@ async function startServer() {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
   });
 
+  // Specific Routes for Agent Gateway (Agent 2)
+  app.use('/api/agent', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'agent.ts'), req, res);
+  });
+
   // Specific Routes for Teachers
   app.use('/api/teachers', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'teachers.ts'), req, res);
