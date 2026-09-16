@@ -34,8 +34,15 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
   const isSuperAdmin = role === 'super_admin';
   const isAdmin = role === 'madrasah_admin' || isSuperAdmin;
   const canAccessAdmissionForm = hasAdmissionFormAccess(madrasah, isAdmin);
+  
+  const configObj = madrasah?.config_json || {} as any;
+  const modulesConfig = configObj.modules || {} as any;
+  
+  const hasCertificates = modulesConfig.certificates ?? true;
+  const hasClassRoutine = modulesConfig.class_routine ?? false;
+  const hasIdCards = modulesConfig.id_cards ?? false;
 
-  const modules = [
+  const allModules = [
     {
       id: 'admission-form' as View,
       title: lang === 'bn' ? 'ভর্তি ফরম' : 'Admission Form',
@@ -47,6 +54,7 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
       iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
       restricted: !canAccessAdmissionForm,
       badge: !canAccessAdmissionForm ? (lang === 'bn' ? 'স্ট্যান্ডার্ড+' : 'Standard+') : null,
+      show: true,
       onClick: () => {
         if (!canAccessAdmissionForm) {
           if (onUpgradeClick) {
@@ -75,6 +83,7 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
       iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
       restricted: false,
       badge: null,
+      show: hasCertificates,
       onClick: () => onNavigate('certificates'),
     },
     {
@@ -88,6 +97,7 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
       iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
       restricted: false,
       badge: null,
+      show: hasClassRoutine,
       onClick: () => onNavigate('class-routine'),
     },
     {
@@ -101,9 +111,12 @@ export const AcademicDocuments: React.FC<AcademicDocumentsProps> = ({
       iconBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
       restricted: false,
       badge: null,
+      show: hasIdCards,
       onClick: () => onNavigate('id-cards'),
     },
   ];
+
+  const modules = allModules.filter(m => m.show);
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-slate-900' : ''}`}>
