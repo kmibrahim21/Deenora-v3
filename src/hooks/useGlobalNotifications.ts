@@ -100,94 +100,103 @@ export function useGlobalNotifications({
     const channelName = `global_notifs_${institutionId}_${userId || 'anon'}`;
     console.log(`[useGlobalNotifications] Subscribing to channel: ${channelName}`);
 
+    const handleIncomingMsg = (newMsg: any) => {
+      if (!newMsg) return;
+
+      // Don't notify if sent by current user
+      if (userId && (newMsg.sender_id === userId || newMsg.sender_id === `parent-${userId}`)) {
+        return;
+      }
+
+      let isRelevant = false;
+      let notifTitle = newMsg.title || newMsg.sender_name || 'নতুন নোটিশ / চ্যাট মেসেজ';
+      let notifBody = parseMessageText(newMsg.message);
+
+      const convId = (newMsg.conversation_id || '').toLowerCase();
+      const className = (newMsg.class_name || '').toLowerCase();
+
+      if (userRole === 'parent') {
+        // Check Live Chat matching
+        if (convId) {
+          const matchesClassGroup = isForStudentClass(convId, studentClassName, studentClassId) || (studentClassId && (convId === `class-group-${studentClassId}`.toLowerCase() || convId.includes(studentClassId.toLowerCase())));
+          const matchesAnnouncement = convId.startsWith('announcement-');
+          const matchesDirect = userId && convId.includes(userId.toLowerCase());
+
+          if (matchesClassGroup || matchesAnnouncement || matchesDirect) {
+            isRelevant = true;
+            if (matchesClassGroup) {
+              notifTitle = `${studentClassName || 'শ্রেণী'} গ্রুপ মেসেজ`;
+            } else if (matchesAnnouncement) {
+              notifTitle = 'প্রতিষ্ঠান অফিসিয়াল নোটিশ';
+            }
+          }
+        }
+
+        // Check Notice / Daily Diary matching
+        if (!isRelevant && className) {
+          let targetClass = className;
+          try {
+            if (typeof newMsg.message === 'string' && newMsg.message.trim().startsWith('{')) {
+              const p = JSON.parse(newMsg.message);
+              if (p.classGroup) targetClass = p.classGroup;
+            } else if (typeof newMsg.message === 'object' && newMsg.message?.classGroup) {
+              targetClass = newMsg.message.classGroup;
+            }
+          } catch {
+            // ignore
+          }
+
+          if (className.startsWith('app_syllabus_')) {
+            targetClass = className.replace('app_syllabus_', '');
+          } else if (className.startsWith('app_suggestion_')) {
+            targetClass = className.replace('app_suggestion_', '');
+          } else if (className.startsWith('app_routine_')) {
+            targetClass = className.replace('app_routine_', '');
+          }
+
+          if (isForStudentClass(targetClass, studentClassName, studentClassId) || isForStudentClass(className, studentClassName, studentClassId)) {
+            isRelevant = true;
+            if (className === 'app_notice' || className === 'app_holiday' || className === 'app_ptm') {
+              notifTitle = newMsg.title || 'গুরুত্বপূর্ণ নোটিশ';
+            } else {
+              notifTitle = `${studentClassName || 'শ্রেণী'} বার্তা / ডায়েরি`;
+            }
+          }
+        }
+      } else {
+        // Staff / Admin / Teacher
+        isRelevant = true;
+      }
+
+      if (isRelevant) {
+        console.log('[useGlobalNotifications] Relevant notification received:', newMsg);
+        playNotificationSound();
+        sendPushNotification(notifTitle, notifBody, '/icon.png', `msg-${newMsg.id}`);
+
+        if (onNewNotifRef.current) {
+          onNewNotifRef.current(newMsg);
+        }
+      }
+    };
+
     const channel = supabase
       .channel(channelName)
+      .on(
+        'broadcast',
+        { event: 'new_message' },
+        (payload) => {
+          if (payload?.payload) handleIncomingMsg(payload.payload);
+        }
+      )
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `institution_id=eq.${institutionId}`
         },
         (payload) => {
-          const newMsg = payload.new as any;
-          if (!newMsg) return;
-
-          // Don't notify if sent by current user
-          if (userId && (newMsg.sender_id === userId || newMsg.sender_id === `parent-${userId}`)) {
-            return;
-          }
-
-          let isRelevant = false;
-          let notifTitle = newMsg.title || newMsg.sender_name || 'নতুন নোটিশ / চ্যাট মেসেজ';
-          let notifBody = parseMessageText(newMsg.message);
-
-          const convId = (newMsg.conversation_id || '').toLowerCase();
-          const className = (newMsg.class_name || '').toLowerCase();
-
-          if (userRole === 'parent') {
-            // Check Live Chat matching
-            if (convId) {
-              const matchesClassGroup = isForStudentClass(convId, studentClassName, studentClassId) || (studentClassId && (convId === `class-group-${studentClassId}`.toLowerCase() || convId.includes(studentClassId.toLowerCase())));
-              const matchesAnnouncement = convId.startsWith('announcement-');
-              const matchesDirect = userId && convId.includes(userId.toLowerCase());
-
-              if (matchesClassGroup || matchesAnnouncement || matchesDirect) {
-                isRelevant = true;
-                if (matchesClassGroup) {
-                  notifTitle = `${studentClassName || 'শ্রেণী'} গ্রুপ মেসেজ`;
-                } else if (matchesAnnouncement) {
-                  notifTitle = 'প্রতিষ্ঠান অফিসিয়াল নোটিশ';
-                }
-              }
-            }
-
-            // Check Notice / Daily Diary matching
-            if (!isRelevant && className) {
-              let targetClass = className;
-              try {
-                if (typeof newMsg.message === 'string' && newMsg.message.trim().startsWith('{')) {
-                  const p = JSON.parse(newMsg.message);
-                  if (p.classGroup) targetClass = p.classGroup;
-                } else if (typeof newMsg.message === 'object' && newMsg.message?.classGroup) {
-                  targetClass = newMsg.message.classGroup;
-                }
-              } catch {
-                // ignore
-              }
-
-              if (className.startsWith('app_syllabus_')) {
-                targetClass = className.replace('app_syllabus_', '');
-              } else if (className.startsWith('app_suggestion_')) {
-                targetClass = className.replace('app_suggestion_', '');
-              } else if (className.startsWith('app_routine_')) {
-                targetClass = className.replace('app_routine_', '');
-              }
-
-              if (isForStudentClass(targetClass, studentClassName, studentClassId) || isForStudentClass(className, studentClassName, studentClassId)) {
-                isRelevant = true;
-                if (className === 'app_notice' || className === 'app_holiday' || className === 'app_ptm') {
-                  notifTitle = newMsg.title || 'গুরুত্বপূর্ণ নোটিশ';
-                } else {
-                  notifTitle = `${studentClassName || 'শ্রেণী'} বার্তা / ডায়েরি`;
-                }
-              }
-            }
-          } else {
-            // Staff / Admin / Teacher
-            isRelevant = true;
-          }
-
-          if (isRelevant) {
-            console.log('[useGlobalNotifications] Relevant notification received:', newMsg);
-            playNotificationSound();
-            sendPushNotification(notifTitle, notifBody, '/icon.png', `msg-${newMsg.id}`);
-
-            if (onNewNotifRef.current) {
-              onNewNotifRef.current(newMsg);
-            }
-          }
+          if (payload?.new) handleIncomingMsg(payload.new);
         }
       )
       .subscribe();

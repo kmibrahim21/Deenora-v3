@@ -265,7 +265,19 @@ export class ChatService {
       console.warn('[ChatService] Online insert notice, saved to local cache:', err);
     }
 
-    // 2. Always persist to localStorage for instant local view & offline reliability
+    // 2. Broadcast via Supabase Realtime channel for instant real-time delivery
+    try {
+      const realtimeChannel = supabase.channel(`chat_realtime_${institutionId}`);
+      realtimeChannel.send({
+        type: 'broadcast',
+        event: 'new_message',
+        payload: newMessage
+      });
+    } catch (e) {
+      console.warn('[ChatService] Realtime broadcast notice:', e);
+    }
+
+    // 3. Always persist to localStorage for instant local view & offline reliability
     const localKey = `deenora_chat_msg_${conversationId}`;
     const stored = localStorage.getItem(localKey);
     const existing: ChatMessage[] = stored ? JSON.parse(stored) : [];

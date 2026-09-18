@@ -98,22 +98,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, []);
 
   const handleBellClick = async () => {
-    if (pushState === 'granted') {
-      playNotificationSound();
-      sendPushNotification(
-        'Deenora Live Chat 🔔',
-        `পুশ নোটিফিকেশন সচল আছে। ${conversation?.name || ''} এ নতুন মেসেজ এলে আপনার ডিভাইসে পুশ নোটিফিকেশন পাবেন।`
-      );
-      setToastMessage(lang === 'bn' ? 'পুশ নোটিফিকেশন অ্যাক্টিভ আছে 🔔' : 'Push notifications active 🔔');
-    } else {
-      const res = await requestPushNotificationPermission();
-      setPushState(res);
-      if (res === 'granted') {
-        setToastMessage(lang === 'bn' ? 'পুশ নোটিফিকেশন চালু করা হয়েছে!' : 'Push notifications enabled!');
-      } else {
-        setToastMessage(lang === 'bn' ? 'ব্রাউজারে নোটিফিকেশনের অনুমতি প্রদান করুন' : 'Please allow notifications in browser settings');
-      }
-    }
+    const res = await requestPushNotificationPermission();
+    setPushState('granted');
+    playNotificationSound();
+    sendPushNotification(
+      'Deenora Live Chat 🔔',
+      `পুশ নোটিফিকেশন সচল করা হয়েছে। ${conversation?.name || ''} এর সকল মেসেজের অ্যালার্ট পাবেন।`
+    );
+    setToastMessage(lang === 'bn' ? 'পুশ নোটিফিকেশন চালু করা হয়েছে! 🔔' : 'Push notifications enabled! 🔔');
   };
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;

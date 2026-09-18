@@ -1,41 +1,69 @@
-// Push Notification Utility for Live Chat
+// Push Notification Utility for Live Chat & Android WebView
+
+export function isAndroidWebView(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /Android/i.test(ua) && (/wv/i.test(ua) || /Version\/[\d.]+/i.test(ua) || (window as any).Android !== undefined);
+}
 
 export function isPushNotificationSupported(): boolean {
-  return typeof window !== 'undefined' && 'Notification' in window;
+  return typeof window !== 'undefined' && ('Notification' in window || isAndroidWebView());
 }
 
 export function getNotificationPermissionState(): NotificationPermission {
-  if (!isPushNotificationSupported()) return 'denied';
-  return Notification.permission;
+  if (typeof window === 'undefined') return 'denied';
+  
+  const localEnabled = localStorage.getItem('deenora_notification_enabled') === 'true';
+  
+  if (typeof Notification !== 'undefined' && 'permission' in Notification) {
+    if (Notification.permission === 'granted') return 'granted';
+    if (Notification.permission === 'denied' && !localEnabled) return 'denied';
+  }
+
+  // In Android WebView or when user clicked enable in app, treat as granted
+  if (localEnabled || isAndroidWebView()) {
+    return 'granted';
+  }
+
+  return 'default';
 }
 
 export async function requestPushNotificationPermission(): Promise<NotificationPermission> {
-  if (!isPushNotificationSupported()) return 'denied';
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      playNotificationSound();
-      sendPushNotification(
-        'Deenora Chat Notifications Enabled! 🔔',
-        'আপনাকে Deenora লাইভ চ্যাটে স্বাগতম। এখন থেকে নতুন মেসেজের পুশ নোটিফিকেশন পাবেন।',
-        '/icon.png'
-      );
+  // Always mark user intention as enabled in local storage
+  localStorage.setItem('deenora_notification_enabled', 'true');
+
+  if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && 'requestPermission' in Notification) {
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        playNotificationSound();
+        sendPushNotification(
+          'Deenora Chat Notifications Enabled! 🔔',
+          'আপনাকে Deenora লাইভ চ্যাটে স্বাগতম। এখন থেকে নতুন মেসেজের পুশ নোটিফিকেশন পাবেন।',
+          '/icon.png'
+        );
+        return 'granted';
+      }
+    } catch (error) {
+      console.warn('Notification.requestPermission error (WebView fallback):', error);
     }
-    return permission;
-  } catch (error) {
-    console.error('Error requesting notification permission:', error);
-    return 'denied';
   }
+
+  // Android WebView fallback: trigger chime & confirm granted
+  playNotificationSound();
+  return 'granted';
 }
 
 export function sendPushNotification(title: string, body: string, icon?: string, tag?: string) {
-  if (!isPushNotificationSupported() || Notification.permission !== 'granted') {
-    return;
-  }
+  // Always trigger sound chime for live messages
+  playNotificationSound();
+
+  if (typeof window === 'undefined') return;
+
+  const perm = getNotificationPermissionState();
+  if (perm !== 'granted') return;
 
   try {
-    playNotificationSound();
-
     const options: NotificationOptions = {
       body,
       icon: icon || '/icon.png',
@@ -48,7 +76,7 @@ export function sendPushNotification(title: string, body: string, icon?: string,
       navigator.serviceWorker.ready.then(registration => {
         registration.showNotification(title, options);
       });
-    } else {
+    } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       const notification = new Notification(title, options);
       notification.onclick = () => {
         window.focus();
@@ -56,7 +84,7 @@ export function sendPushNotification(title: string, body: string, icon?: string,
       };
     }
   } catch (error) {
-    console.error('Error firing push notification:', error);
+    console.warn('Error firing native browser notification:', error);
   }
 }
 

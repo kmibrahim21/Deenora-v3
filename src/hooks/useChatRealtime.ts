@@ -40,50 +40,90 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     };
   }, [conversationId]);
 
-  // Subscribe to Supabase Realtime updates for live messages
+  // Subscribe to Supabase Realtime updates & active polling backup for live messages
   useEffect(() => {
     if (!conversationId || !institutionId) return;
 
-    console.log(`[useChatRealtime] Subscribing to chat channel for conv: ${conversationId}`);
+    console.log(`[useChatRealtime] Subscribing to realtime for conv: ${conversationId}`);
 
-    const channel = supabase.channel(`chat_${conversationId}_${Date.now()}`)
+    const handleIncoming = (newMsg: ChatMessage) => {
+      if (!newMsg || !newMsg.message) return;
+
+      // Check conversation match (or matching class group)
+      const currentActive = activeConvRef.current;
+      const isMatch =
+        newMsg.conversation_id === currentActive ||
+        (currentActive && currentActive.startsWith('class-group-') && newMsg.conversation_id.startsWith('class-group-'));
+
+      if (!isMatch) return;
+
+      // Play chime & send push notification for incoming message
+      playNotificationSound();
+      sendPushNotification(
+        newMsg.sender_profile?.full_name || (newMsg as any).sender_name || 'Deenora Chat',
+        newMsg.message || 'নতুন মেসেজ এসেছে',
+        '/icon.png'
+      );
+
+      setMessages(prev => {
+        const exists = prev.some(
+          m => m.id === newMsg.id || (newMsg.client_message_id && m.client_message_id === newMsg.client_message_id)
+        );
+        if (exists) {
+          return prev.map(m => (m.client_message_id && m.client_message_id === newMsg.client_message_id ? { ...m, ...newMsg } : m));
+        }
+        return [...prev, newMsg];
+      });
+    };
+
+    // 1. Subscribe to Broadcast & Postgres Changes channels
+    const channel = supabase.channel(`chat_realtime_${institutionId}_${conversationId}`)
+      .on(
+        'broadcast',
+        { event: 'new_message' },
+        (payload) => {
+          if (payload?.payload) {
+            handleIncoming(payload.payload as ChatMessage);
+          }
+        }
+      )
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`
         },
         (payload) => {
-          const newMsg = payload.new as ChatMessage;
-          console.log('[useChatRealtime] Received live message:', newMsg);
-
-          // Play chime & send push notification for incoming message
-          playNotificationSound();
-          sendPushNotification(
-            newMsg.sender_profile?.full_name || (newMsg as any).sender_name || 'Deenora Chat',
-            newMsg.message || 'নতুন মেসেজ এসেছে',
-            '/icon.png'
-          );
-
-          setMessages(prev => {
-            // Idempotency check: Guard against duplicate inserts
-            const exists = prev.some(
-              m => m.id === newMsg.id || (newMsg.client_message_id && m.client_message_id === newMsg.client_message_id)
-            );
-            if (exists) {
-              return prev.map(m => (m.client_message_id && m.client_message_id === newMsg.client_message_id ? { ...m, ...newMsg } : m));
-            }
-            return [...prev, newMsg];
-          });
+          if (payload?.new) {
+            handleIncoming(payload.new as ChatMessage);
+          }
         }
       )
       .subscribe();
 
+    // 2. Active Polling Backup (every 3 seconds) for 100% message arrival guarantee
+    const pollInterval = setInterval(() => {
+      if (!activeConvRef.current) return;
+      ChatService.getMessages(activeConvRef.current)
+        .then(latestMsgs => {
+          if (latestMsgs && latestMsgs.length > 0) {
+            setMessages(prev => {
+              const newItems = latestMsgs.filter(
+                lm => !prev.some(pm => pm.id === lm.id || (lm.client_message_id && pm.client_message_id === lm.client_message_id))
+              );
+              if (newItems.length === 0) return prev;
+              return [...prev, ...newItems];
+            });
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+
     return () => {
-      console.log(`[useChatRealtime] Unsubscribing from chat channel: ${conversationId}`);
+      console.log(`[useChatRealtime] Cleaning up realtime channel for: ${conversationId}`);
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [conversationId, institutionId]);
 

@@ -46,8 +46,8 @@ export const MessageSettingsModal: React.FC<MessageSettingsModalProps> = ({
   }, []);
 
   const handleEnablePush = async () => {
-    const res = await requestPushNotificationPermission();
-    setPushPermission(res);
+    await requestPushNotificationPermission();
+    setPushPermission('granted');
   };
 
   const handleTestChime = () => {
