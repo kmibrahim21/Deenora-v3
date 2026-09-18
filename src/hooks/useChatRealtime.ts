@@ -7,6 +7,7 @@ import { sendPushNotification, playNotificationSound } from '../lib/pushNotifica
 export function useChatRealtime(conversationId: string | null, institutionId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const activeConvRef = useRef<string | null>(conversationId);
 
   useEffect(() => {
@@ -17,39 +18,45 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
+      setError(null);
       return;
     }
 
     let isMounted = true;
     setLoading(true);
+    setError(null);
 
-    ChatService.getMessages(conversationId)
-      .then(msgs => {
+    ChatService.getMessages(conversationId, institutionId || undefined)
+      .then(res => {
         if (isMounted) {
-          setMessages(msgs);
+          setMessages(res.messages || []);
+          if (res.error) setError(res.error);
           setLoading(false);
         }
       })
       .catch(err => {
         console.error('[useChatRealtime] Load messages error:', err);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setError(err?.message || 'মেসেজ লোড করতে ব্যর্থ হয়েছে');
+          setLoading(false);
+        }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [conversationId]);
+  }, [conversationId, institutionId]);
 
   // Subscribe to Supabase Realtime updates & active polling backup for live messages
   useEffect(() => {
     if (!conversationId || !institutionId) return;
 
-    console.log(`[useChatRealtime] Subscribing to realtime for conv: ${conversationId}`);
+    const channelName = `chat_realtime_${institutionId}_${conversationId}`;
+    console.log(`[useChatRealtime] Subscribing to realtime channel: ${channelName}`);
 
     const handleIncoming = (newMsg: ChatMessage) => {
       if (!newMsg || !newMsg.message) return;
 
-      // Check conversation match (or matching class group / class_name)
       const currentActive = activeConvRef.current;
       if (!currentActive) return;
 
@@ -85,40 +92,30 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       });
     };
 
-    // 1. Subscribe to Broadcast & Postgres Changes channels
-    const channel = supabase.channel(`chat_realtime_${institutionId}_${conversationId}`)
-      .on(
-        'broadcast',
-        { event: 'new_message' },
-        (payload) => {
-          if (payload?.payload) {
-            handleIncoming(payload.payload as ChatMessage);
-          }
+    // Single deterministic channel subscription
+    const channel = supabase.channel(channelName)
+      .on('broadcast', { event: 'new_message' }, (p) => p?.payload && handleIncoming(p.payload as ChatMessage))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => p?.new && handleIncoming(p.new as ChatMessage))
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`[useChatRealtime] SUBSCRIBED to ${channelName}`);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`[useChatRealtime] CHANNEL_ERROR for ${channelName}:`, err);
+        } else if (status === 'TIMED_OUT') {
+          console.warn(`[useChatRealtime] TIMED_OUT for ${channelName}`);
+        } else if (status === 'CLOSED') {
+          console.log(`[useChatRealtime] CLOSED ${channelName}`);
         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-        },
-        (payload) => {
-          if (payload?.new) {
-            handleIncoming(payload.new as ChatMessage);
-          }
-        }
-      )
-      .subscribe();
+      });
 
-    // 2. Active Polling Backup (every 3 seconds) for 100% message arrival guarantee
+    // Active Polling Backup (every 4 seconds) for guaranteed sync
     const pollInterval = setInterval(() => {
       if (!activeConvRef.current) return;
-      ChatService.getMessages(activeConvRef.current)
-        .then(latestMsgs => {
-          if (latestMsgs && latestMsgs.length > 0) {
+      ChatService.getMessages(activeConvRef.current, institutionId)
+        .then(res => {
+          if (res.messages && res.messages.length > 0) {
             setMessages(prev => {
-              const newItems = latestMsgs.filter(
+              const newItems = res.messages.filter(
                 lm => !prev.some(pm => pm.id === lm.id || (lm.client_message_id && pm.client_message_id === lm.client_message_id))
               );
               if (newItems.length === 0) return prev;
@@ -127,10 +124,10 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
           }
         })
         .catch(() => {});
-    }, 3000);
+    }, 4000);
 
     return () => {
-      console.log(`[useChatRealtime] Cleaning up realtime channel for: ${conversationId}`);
+      console.log(`[useChatRealtime] Cleaning up realtime channel: ${channelName}`);
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
@@ -173,14 +170,18 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       setMessages(prev =>
         prev.map(m => (m.client_message_id === clientMsgId ? sentMsg : m))
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('[useChatRealtime] Send error:', err);
+      // Remove failed optimistic message and set user-visible error
+      setMessages(prev => prev.filter(m => m.client_message_id !== clientMsgId));
+      setError(err?.message || 'মেসেজ পাঠানো সম্ভব হয়নি');
     }
   }, [conversationId, institutionId]);
 
   return {
     messages,
     loading,
+    error,
     sendMessage
   };
 }

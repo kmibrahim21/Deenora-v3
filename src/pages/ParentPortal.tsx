@@ -2703,7 +2703,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 institution={currentInstitution || madrasah}
                 profile={{
                   id: student?.guardian_phone ? `parent-${student.guardian_phone}` : (student?.id ? `parent-${student.id}` : 'parent-user'),
-                  institution_id: madrasah?.id || '',
+                  institution_id: currentInstitution?.id || madrasah?.id || '',
                   full_name: `${student?.student_name ? student.student_name + ' (অভিভাবক)' : 'অভিভাবক'}`,
                   role: 'parent',
                   class_id: student?.class_id || student?.classes?.id,

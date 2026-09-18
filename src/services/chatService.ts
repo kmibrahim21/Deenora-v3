@@ -173,53 +173,87 @@ export class ChatService {
   /**
    * Gets message history for a specific conversation.
    */
-  static async getMessages(conversationId: string, limit = 50): Promise<ChatMessage[]> {
+  static async getMessages(
+    conversationId: string,
+    institutionId?: string,
+    limit = 50
+  ): Promise<{ messages: ChatMessage[]; error: string | null }> {
+    if (!conversationId) {
+      return { messages: [], error: null };
+    }
+
     try {
       const isClassGroup = conversationId.startsWith('class-group-');
       const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
 
-      // 1. First try querying by exact conversation_id
-      const { data: convData, error: convErr } = await supabase
+      // 1. Query by exact conversation_id
+      let query = supabase
         .from('messages')
         .select('*')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
         .limit(limit);
 
-      if (!convErr && convData && convData.length > 0) {
-        return convData as ChatMessage[];
+      if (institutionId) {
+        query = query.eq('institution_id', institutionId);
       }
 
-      // 2. Fallback query by class_name or raw class ID
+      const { data: convData, error: convErr } = await query;
+
+      if (!convErr && convData && convData.length > 0) {
+        return { messages: convData as ChatMessage[], error: null };
+      }
+
+      if (convErr) {
+        console.error('[ChatService] Error querying messages by conversation_id:', convErr);
+      }
+
+      // 2. Fallback query by class_name or raw class ID if conversation_id query returned 0 rows
       const queryClass = classIdRaw || conversationId;
-      const { data: classData, error: classErr } = await supabase
+      let classQuery = supabase
         .from('messages')
         .select('*')
         .eq('class_name', queryClass)
         .order('created_at', { ascending: true })
         .limit(limit);
 
+      if (institutionId) {
+        classQuery = classQuery.eq('institution_id', institutionId);
+      }
+
+      const { data: classData, error: classErr } = await classQuery;
+
       if (!classErr && classData && classData.length > 0) {
-        return classData as ChatMessage[];
+        return { messages: classData as ChatMessage[], error: null };
+      }
+
+      if (classErr) {
+        console.error('[ChatService] Error querying messages by class_name:', classErr);
       }
 
       // 3. Fallback to localStorage cache
       const localKey = `deenora_chat_msg_${conversationId}`;
       const stored = localStorage.getItem(localKey);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-      return [];
-    } catch (err) {
-      console.warn('[ChatService] Supabase messages query fallback:', err);
+      const cached = stored ? JSON.parse(stored) : [];
+
+      const queryError = convErr || classErr;
+      return {
+        messages: cached,
+        error: queryError ? queryError.message : null
+      };
+    } catch (err: any) {
+      console.error('[ChatService] Exception in getMessages:', err);
       const localKey = `deenora_chat_msg_${conversationId}`;
       const stored = localStorage.getItem(localKey);
-      return stored ? JSON.parse(stored) : [];
+      return {
+        messages: stored ? JSON.parse(stored) : [],
+        error: err?.message || 'মেসেজ লোড করার সময় সমস্যা হয়েছে'
+      };
     }
   }
 
   /**
-   * Sends a message in a conversation.
+   * Sends a message in a conversation using the canonical schema.
    */
   static async sendMessage(
     institutionId: string,
@@ -230,13 +264,33 @@ export class ChatService {
     senderName?: string,
     className?: string
   ): Promise<ChatMessage> {
+    // Fail safely if institutionId or required parameters are missing
+    if (!institutionId || !institutionId.trim()) {
+      const errMsg = 'প্রতিষ্ঠানের আইডি (Institution ID) পাওয়া যায়নি। মেসেজ পাঠানো সম্ভব নয়।';
+      console.error('[ChatService] Missing institutionId:', { institutionId, conversationId, senderId });
+      throw new Error(errMsg);
+    }
+
+    if (!conversationId || !conversationId.trim()) {
+      throw new Error('কনভারসেশন আইডি (Conversation ID) পাওয়া যায়নি।');
+    }
+
+    if (!messageText || !messageText.trim()) {
+      throw new Error('মেসেজের লেখা খালি হতে পারে না।');
+    }
+
+    const cleanInstitutionId = institutionId.trim();
+    const cleanConversationId = conversationId.trim();
+    const cleanSenderId = senderId ? senderId.trim() : 'parent-user';
+    const cleanSenderName = senderName || 'User';
+
     const newMessage: ChatMessage = {
-      id: clientMessageId || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      conversation_id: conversationId,
-      institution_id: institutionId,
-      sender_id: senderId,
-      sender_name: senderName || 'User',
-      class_name: className || conversationId,
+      id: clientMessageId || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      conversation_id: cleanConversationId,
+      institution_id: cleanInstitutionId,
+      sender_id: cleanSenderId,
+      sender_name: cleanSenderName,
+      class_name: className || cleanConversationId,
       client_message_id: clientMessageId,
       message: messageText.trim(),
       message_type: 'text',
@@ -244,154 +298,92 @@ export class ChatService {
       is_edited: false,
       is_deleted: false,
       sender_profile: {
-        id: senderId,
-        institution_id: institutionId,
-        full_name: senderName || 'User',
-        role: senderId.startsWith('parent') ? 'parent' : 'teacher',
+        id: cleanSenderId,
+        institution_id: cleanInstitutionId,
+        full_name: cleanSenderName,
+        role: cleanSenderId.startsWith('parent') ? 'parent' : 'teacher',
         is_active: true,
         created_at: new Date().toISOString()
       } as any
     };
 
-    // 0. Ensure conversation row exists in Supabase DB
+    // 1. Ensure conversation row exists in Supabase DB
     try {
       await supabase.from('conversations').upsert([
         {
-          id: conversationId,
-          institution_id: institutionId,
-          type: conversationId.startsWith('class-group-') ? 'class_group' : (conversationId.startsWith('announcement-') ? 'announcement' : 'direct'),
+          id: cleanConversationId,
+          institution_id: cleanInstitutionId,
+          type: cleanConversationId.startsWith('class-group-') ? 'class_group' : (cleanConversationId.startsWith('announcement-') ? 'announcement' : 'direct'),
           name: className ? `${className} (অভিভাবক ও শিক্ষক গ্রুপ)` : 'চ্যাট রুম',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
       ], { onConflict: 'id' });
     } catch (e) {
-      console.warn('[ChatService] Conv upsert notice:', e);
+      console.warn('[ChatService] Conversation upsert notice:', e);
     }
 
-    // 1. Insert message into Supabase with 3-tier automatic fallback retry
-    let isSavedToDB = false;
-
-    // Tier 1: Complete Payload
-    try {
-      const tier1Payload: any = {
-        conversation_id: conversationId,
-        institution_id: institutionId,
-        sender_id: senderId,
-        sender_name: senderName || 'User',
-        class_name: className || conversationId,
-        client_message_id: clientMessageId || newMessage.id,
-        message: messageText.trim(),
-        message_type: 'text'
-      };
-
-      const { data, error } = await supabase
-        .from('messages')
-        .insert([tier1Payload])
-        .select()
-        .single();
-
-      if (!error && data) {
-        newMessage.id = data.id;
-        isSavedToDB = true;
-      } else {
-        console.warn('[ChatService] Tier 1 insert notice:', error?.message || error);
-      }
-    } catch (err) {
-      console.warn('[ChatService] Tier 1 exception:', err);
-    }
-
-    // Tier 2: Standard Messaging Payload (if Tier 1 failed)
-    if (!isSavedToDB) {
-      try {
-        const tier2Payload: any = {
-          conversation_id: conversationId,
-          institution_id: institutionId,
-          sender_id: senderId,
-          sender_name: senderName || 'User',
-          class_name: className || conversationId,
-          message: messageText.trim()
-        };
-
-        const { data, error } = await supabase
-          .from('messages')
-          .insert([tier2Payload])
-          .select()
-          .single();
-
-        if (!error && data) {
-          newMessage.id = data.id;
-          isSavedToDB = true;
-        } else {
-          console.warn('[ChatService] Tier 2 insert notice:', error?.message || error);
-        }
-      } catch (err) {
-        console.warn('[ChatService] Tier 2 exception:', err);
-      }
-    }
-
-    // Tier 3: Core Notice / Messages Schema Payload (Guaranteed columns across all schemas)
-    if (!isSavedToDB) {
-      try {
-        const tier3Payload: any = {
-          institution_id: institutionId,
-          class_name: conversationId,
-          title: senderName || 'Chat Message',
-          sender_name: senderName || 'User',
-          message: messageText.trim()
-        };
-
-        const { data, error } = await supabase
-          .from('messages')
-          .insert([tier3Payload])
-          .select()
-          .single();
-
-        if (!error && data) {
-          newMessage.id = data.id;
-          isSavedToDB = true;
-        } else {
-          console.error('[ChatService] Tier 3 insert error:', error?.message || error);
-        }
-      } catch (err) {
-        console.error('[ChatService] Tier 3 exception:', err);
-      }
-    }
-
-    // 2. Guaranteed WebSocket Realtime Broadcast on SUBSCRIBED connection
-    const broadcastRealtime = (channelName: string) => {
-      try {
-        const channel = supabase.channel(`${channelName}_${Date.now()}`);
-        channel.subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            channel.send({
-              type: 'broadcast',
-              event: 'new_message',
-              payload: newMessage
-            });
-            setTimeout(() => {
-              supabase.removeChannel(channel);
-            }, 1200);
-          }
-        });
-      } catch (e) {
-        console.warn('[ChatService] Realtime broadcast error:', e);
-      }
+    // 2. Canonical Database Insertion
+    const canonicalPayload = {
+      conversation_id: cleanConversationId,
+      institution_id: cleanInstitutionId,
+      sender_id: cleanSenderId,
+      sender_name: cleanSenderName,
+      class_name: className || cleanConversationId,
+      client_message_id: clientMessageId || newMessage.id,
+      message: messageText.trim(),
+      message_type: 'text'
     };
 
-    broadcastRealtime(`chat_realtime_${institutionId}`);
-    broadcastRealtime(`global_notifs_${institutionId}`);
-    broadcastRealtime(`chat_${conversationId}`);
+    const { data: dbData, error: dbError } = await supabase
+      .from('messages')
+      .insert([canonicalPayload])
+      .select()
+      .single();
 
-    // 3. Always persist to localStorage for instant local view & offline reliability
-    const localKey = `deenora_chat_msg_${conversationId}`;
-    const stored = localStorage.getItem(localKey);
-    const existing: ChatMessage[] = stored ? JSON.parse(stored) : [];
+    if (dbError) {
+      console.error('[ChatService] Supabase DB Insert Failed:', dbError);
+      throw new Error(`মেসেজ সংরক্ষণ করা যায়নি: ${dbError.message || 'Database Insert Error'}`);
+    }
 
-    // Idempotent push (prevent duplicate clientMessageId)
-    if (!existing.some(m => m.id === newMessage.id || (clientMessageId && m.client_message_id === clientMessageId))) {
-      existing.push(newMessage);
-      localStorage.setItem(localKey, JSON.stringify(existing));
+    if (dbData) {
+      newMessage.id = dbData.id;
+    }
+
+    // 3. Deterministic Realtime Broadcast AFTER successful DB insert
+    try {
+      const channelName = `chat_realtime_${cleanInstitutionId}_${cleanConversationId}`;
+      const channel = supabase.channel(channelName);
+      channel.subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          channel.send({
+            type: 'broadcast',
+            event: 'new_message',
+            payload: newMessage
+          });
+          setTimeout(() => {
+            supabase.removeChannel(channel);
+          }, 2000);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`[ChatService] Broadcast channel error for ${channelName}:`, err);
+        }
+      });
+    } catch (broadcastErr) {
+      console.warn('[ChatService] Realtime broadcast exception:', broadcastErr);
+    }
+
+    // 4. Persist to localStorage for offline cache
+    try {
+      const localKey = `deenora_chat_msg_${cleanConversationId}`;
+      const stored = localStorage.getItem(localKey);
+      const existing: ChatMessage[] = stored ? JSON.parse(stored) : [];
+
+      if (!existing.some(m => m.id === newMessage.id || (clientMessageId && m.client_message_id === clientMessageId))) {
+        existing.push(newMessage);
+        localStorage.setItem(localKey, JSON.stringify(existing));
+      }
+    } catch (e) {
+      console.warn('[ChatService] localStorage caching notice:', e);
     }
 
     return newMessage;
