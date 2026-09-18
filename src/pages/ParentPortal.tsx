@@ -45,7 +45,10 @@ import {
   Moon,
   Sun,
   TrendingDown,
+  MessageSquareText,
 } from 'lucide-react';
+import { ChatApp } from './ChatApp';
+import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
 import { getBengaliDate, getHijriDate } from '../utils/calendarUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Attendance, Fee, Language, Institution } from 'types';
@@ -143,7 +146,8 @@ interface ParentPortalProps {
 }
 
 const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'results' | 'fees' | 'notices' | 'profile'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'results' | 'fees' | 'notices' | 'chat' | 'profile'>('home');
+  const [isMobileChatActive, setIsMobileChatActive] = useState(false);
   const modules = useMemo(() => madrasah?.config_json?.modules || {} as any, [madrasah]);
   const [activeNoticeTab, setActiveNoticeTab] = useState<'notice' | 'diary' | 'syllabus' | 'suggestion' | 'routine'>('notice');
   const [student, setStudent] = useState<any>(null);
@@ -200,6 +204,18 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     setEvents(data.events || []);
     setClassTotal(data.classTotal || 0);
   }, []);
+
+  // Hook into global push notifications & live message sync
+  useGlobalNotifications({
+    institutionId: currentInstitution?.id || madrasah?.id || student?.institution_id,
+    userId: student?.id || student?.guardian_phone,
+    userRole: 'parent',
+    studentClassId: student?.class_id || student?.classes?.id,
+    studentClassName: student?.classes?.class_name || student?.class_name,
+    onNewNotification: useCallback(() => {
+      fetchData();
+    }, [studentId])
+  });
 
   // Filter published routines that belong to student's class
   const publishedClassRoutines = useMemo(() => {
@@ -784,29 +800,51 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
         {/* Stats Grid - Only on Home */}
         {activeTab === 'home' && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 animate-in fade-in slide-in-from-top-6 duration-700 delay-100">
-            {[
-              { id: 'attendance', icon: CheckCircle2, color: 'emerald', label: 'উপস্থিতি', value: `${stats.present}/${stats.total}`, sub: 'এই মাস', visible: modules.attendance !== false },
-              { id: 'results', icon: GraduationCap, color: 'blue', label: 'ফলাফল', value: stats.lastGpa, sub: 'সর্বশেষ', visible: (modules.results !== false || modules.exam !== false) },
-              { id: 'fees', icon: CreditCard, color: 'orange', label: 'বকেয়া ফি', value: `৳${stats.pendingFees}`, sub: 'পরিশোধিত', visible: modules.accounting !== false },
-              { id: 'notices', icon: Bell, color: 'red', label: 'নোটিশ', value: notices.length.toString(), sub: 'সব তথ্য', visible: true },
-            ].filter(s => s.visible).map((stat, i) => (
-              <motion.div 
-                key={i} 
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setActiveTab(stat.id as any)}
-                className="bg-white border border-slate-100 p-5 rounded-[2rem] flex flex-col items-center text-center gap-3 cursor-pointer shadow-soft hover:shadow-premium hover:-translate-y-1 transition-all h-full"
-              >
-                <div className={`w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100`}>
-                  <stat.icon size={22} className={stat.id === 'attendance' ? 'text-emerald-500' : stat.id === 'results' ? 'text-blue-600' : stat.id === 'fees' ? 'text-orange-500' : 'text-red-500'} />
+          <div className="space-y-4 mt-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 animate-in fade-in slide-in-from-top-6 duration-700 delay-100">
+              {[
+                { id: 'chat', icon: MessageSquareText, color: 'emerald', label: 'লাইভ চ্যাট', value: 'চ্যাট করুন', sub: 'শিক্ষক ও অভিভাবক', visible: true },
+                { id: 'attendance', icon: CheckCircle2, color: 'emerald', label: 'উপস্থিতি', value: `${stats.present}/${stats.total}`, sub: 'এই মাস', visible: modules.attendance !== false },
+                { id: 'results', icon: GraduationCap, color: 'blue', label: 'ফলাফল', value: stats.lastGpa, sub: 'সর্বশেষ', visible: (modules.results !== false || modules.exam !== false) },
+                { id: 'fees', icon: CreditCard, color: 'orange', label: 'বকেয়া ফি', value: `৳${stats.pendingFees}`, sub: 'পরিশোধিত', visible: modules.accounting !== false },
+                { id: 'notices', icon: Bell, color: 'red', label: 'নোটিশ', value: notices.length.toString(), sub: 'সব তথ্য', visible: true },
+              ].filter(s => s.visible).map((stat, i) => (
+                <motion.div 
+                  key={i} 
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setActiveTab(stat.id as any)}
+                  className="bg-white border border-slate-100 p-4 sm:p-5 rounded-[2rem] flex flex-col items-center text-center gap-2 sm:gap-3 cursor-pointer shadow-soft hover:shadow-premium hover:-translate-y-1 transition-all h-full"
+                >
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100`}>
+                    <stat.icon size={20} className={stat.id === 'chat' ? 'text-emerald-600' : stat.id === 'attendance' ? 'text-emerald-500' : stat.id === 'results' ? 'text-blue-600' : stat.id === 'fees' ? 'text-orange-500' : 'text-red-500'} />
+                  </div>
+                  <div className="space-y-0.5 sm:space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{stat.label}</p>
+                    <p className="text-sm sm:text-base font-black text-slate-900">{stat.value}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em]">{stat.sub}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Live Chat Prominent Banner Card */}
+            <div 
+              onClick={() => setActiveTab('chat')}
+              className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-4 sm:p-5 rounded-[2rem] flex items-center justify-between cursor-pointer shadow-lg shadow-emerald-600/20 hover:scale-[1.01] transition-all"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shrink-0">
+                  <MessageSquareText size={22} />
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{stat.label}</p>
-                  <p className="text-base font-black text-slate-900">{stat.value}</p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em]">{stat.sub}</p>
+                <div>
+                  <h3 className="font-black text-xs sm:text-sm text-white leading-tight">শিক্ষক ও প্রতিষ্ঠান লাইভ চ্যাট</h3>
+                  <p className="text-[10px] sm:text-[11px] text-emerald-100 font-medium">শ্রেণি শিক্ষক ও অভিভাবক চ্যাট গ্রুপে যুক্ত হন</p>
                 </div>
-              </motion.div>
-            ))}
+              </div>
+              <div className="px-3 py-1.5 bg-white text-emerald-700 font-black text-[11px] rounded-xl shadow-sm shrink-0 flex items-center gap-1">
+                চ্যাট করুন <ChevronRight size={13} />
+              </div>
+            </div>
           </div>
         )}
 
@@ -2527,17 +2565,45 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
               })()}
             </motion.div>
           )}
+          {activeTab === 'chat' && (
+            <motion.div key="chat" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={isMobileChatActive ? 'pb-0' : 'pb-16'}>
+              <ChatApp
+                institution={currentInstitution || madrasah}
+                profile={{
+                  id: student?.guardian_phone ? `parent-${student.guardian_phone}` : (student?.id ? `parent-${student.id}` : 'parent-user'),
+                  institution_id: madrasah?.id || '',
+                  full_name: `${student?.student_name ? student.student_name + ' (অভিভাবক)' : 'অভিভাবক'}`,
+                  role: 'parent',
+                  class_id: student?.class_id || student?.classes?.id,
+                  is_active: true,
+                  created_at: new Date().toISOString()
+                }}
+                classes={
+                  student?.classes
+                    ? [student.classes]
+                    : (student?.class_id
+                      ? [{ id: student.class_id, class_name: student.class_name || 'আমার ক্লাস' }]
+                      : [])
+                }
+                lang={lang}
+                isDark={madrasah?.theme === 'dark'}
+                onMobileChatStateChange={setIsMobileChatActive}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
       {/* Modern Bottom Navigation */}
-      <div 
-        className="fixed md:hidden bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[98%] sm:w-[92%] max-w-md z-[200]"
-        style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
-      >
+      {!(activeTab === 'chat' && isMobileChatActive) && (
+        <div 
+          className="fixed md:hidden bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[98%] sm:w-[92%] max-w-md z-[200]"
+          style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+        >
         <nav className={`backdrop-blur-[25px] border py-2 sm:py-2.5 rounded-[2.5rem] shadow-2xl flex justify-between items-end px-1 sm:px-2 overflow-visible relative gap-0.5 sm:gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
           {[
             { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড' },
+            { id: 'chat', icon: MessageSquareText, label: 'চ্যাট' },
             { id: 'attendance', icon: Calendar, label: 'হাজিরা' },
             { id: 'results', icon: GraduationCap, label: 'পরীক্ষা' },
             { id: 'fees', icon: CreditCard, label: 'ফি' },
@@ -2578,6 +2644,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           })}
         </nav>
       </div>
+      )}
       </div>
       </div>
     </motion.div>

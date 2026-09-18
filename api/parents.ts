@@ -234,14 +234,16 @@ export default async function handler(req, res) {
           return true;
         }
 
-        if (!studentClassName && !studentClassId) return false;
+        if (!studentClassName && !studentClassId) return true;
 
         if (studentClassName && norm === studentClassName) return true;
-        if (studentClassId && norm === studentClassId) return true;
+        if (studentClassId && (norm === studentClassId || norm.includes(studentClassId) || studentClassId.includes(norm))) return true;
 
-        const cleanNorm = norm.replace(/[\s_-]+/g, '');
-        const cleanSName = studentClassName.replace(/[\s_-]+/g, '');
-        if (cleanNorm && cleanSName && cleanNorm === cleanSName) return true;
+        const normBengali = (str: string) => str.replace(/শ্রেণী/g, 'শ্রেণি').replace(/[\s_-]+/g, '').toLowerCase();
+        const cleanNorm = normBengali(norm);
+        const cleanSName = normBengali(studentClassName || '');
+
+        if (cleanNorm && cleanSName && (cleanNorm === cleanSName || cleanNorm.includes(cleanSName) || cleanSName.includes(cleanNorm))) return true;
 
         return false;
       };

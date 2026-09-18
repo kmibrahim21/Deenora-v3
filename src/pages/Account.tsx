@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart } from 'lucide-react';
+import { LogOut, Camera, Loader2, User as UserIcon, ShieldCheck, Database, ChevronRight, Check, MessageSquare, Zap, Globe, Smartphone, Save, Users, Layers, Edit3, UserPlus, Languages, Mail, Key, Settings, Fingerprint, Copy, History, Server, CreditCard, Shield, Sliders, Activity, Bell, RefreshCw, AlertTriangle, GraduationCap, ChevronLeft, ArrowRight, LayoutDashboard, Settings2, X, Sparkles, Box, ShieldAlert, Award, CheckCircle2, Lock, Terminal, Cpu, Calendar as CalendarIcon, MapPin, Play, Moon, Sun, PhoneCall, UserCheck, MessageCircle, MessageSquareText, Headset, Phone, Package, ExternalLink, FileText, Clock, Heart } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { Institution, Language, View, Profile } from 'types';
@@ -1731,6 +1731,16 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
             />
           </>
         )}
+
+        {/* Live Chat Card */}
+        <ActionCard
+          icon={MessageSquareText}
+          title={lang === 'bn' ? 'লাইভ চ্যাট' : 'Live Chat'}
+          subtitle={lang === 'bn' ? 'গ্রুপ ও ডিরেক্ট মেসেজ' : 'Group & Direct Chat'}
+          colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+          onClick={() => setView('chat')}
+          dark={madrasah?.theme === 'dark'}
+        />
 
         {/* Message Card */}
         {(isAdmin || canSendMessages) && modules.messages && (

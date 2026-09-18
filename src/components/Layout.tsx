@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, Library, LayoutDashboard, FileText, Radio, Heart } from 'lucide-react';
+import { Home, User, BookOpen, Wallet, ShieldCheck, BarChart3, CreditCard, RefreshCw, Smartphone, Bell, X, Info, AlertTriangle, CheckCircle2, Clock, Calculator, ClipboardList, GraduationCap, Banknote, MessageSquare, Users, Mic, Play, UserCheck, Building2, MessageCircle, MessageSquareText, Library, LayoutDashboard, FileText, Radio, Heart } from 'lucide-react';
 import { View, Language, Institution, Transaction, Profile } from 'types';
 import { t } from 'translations';
 import { supabase } from 'supabase';
@@ -16,6 +16,7 @@ interface LayoutProps {
   lang: Language;
   madrasah: Institution | null;
   profile?: Profile | null;
+  isMobileChatActive?: boolean;
 }
 
 interface AppNotification {
@@ -26,7 +27,7 @@ interface AppNotification {
   time: string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, madrasah, profile }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, madrasah, profile, isMobileChatActive = false }) => {
   const isOnline = useOfflineStatus();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -280,6 +281,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-sm font-bold font-noto">বার্তা</span>
                 </button>
               )}
+              {(isSuperAdmin || modules.modules.live_chat) && (
+                <button onClick={() => setView('chat')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('chat') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <MessageSquareText size={22} strokeWidth={isTabActive('chat') ? 2.5 : 2} className="text-emerald-500" />
+                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'লাইভ চ্যাট' : 'Live Chat'}</span>
+                </button>
+              )}
               {(isSuperAdmin || role === 'madrasah_admin' || hasPermission('can_manage_results') || hasPermission('can_manage_exams')) && modules.modules.results && (
                 <button onClick={() => setView('exams')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('exams') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-white hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                   <GraduationCap size={22} strokeWidth={isTabActive('exams') ? 2.5 : 2} />
@@ -348,12 +355,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
         {(currentView === 'home' || currentView === 'admin-dashboard') && role !== 'parent' && <MultiCalendarHeader madrasah={madrasah} />}
 
-        <main className={`flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar ${role === 'parent' ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`} style={role !== 'parent' ? { paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
+        <main className={`flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar ${(role === 'parent' || currentView === 'chat' || currentView === 'messages') ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`} style={(role !== 'parent' && currentView !== 'chat' && currentView !== 'messages') ? { paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
           {children}
         </main>
 
         {/* Mobile Bottom Nav */}
-        {role !== 'parent' && (
+        {role !== 'parent' && !(currentView === 'chat' && isMobileChatActive) && (
           <div 
             className="fixed md:hidden bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[98%] sm:w-[95%] max-w-lg z-[200]"
             style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}

@@ -177,6 +177,7 @@ export interface Profile {
   institution_id: string;
   full_name: string;
   role: UserRole;
+  class_id?: string;
   is_active: boolean;
   created_at: string;
   permissions?: {
@@ -526,7 +527,87 @@ export type View =
   | 'admission-form'
   | 'academic-documents'
   | 'profile-settings'
-  | 'donations';
+  | 'donations'
+  | 'chat';
+
+export type ConversationType = 'direct' | 'class_group' | 'announcement' | 'teacher_staff' | 'custom_group';
+
+export interface Conversation {
+  id: string;
+  institution_id: string;
+  type: ConversationType;
+  name?: string;
+  class_id?: string;
+  section_id?: string;
+  is_announcement_only?: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  metadata?: any;
+  unread_count?: number;
+  last_message?: ChatMessage;
+  members?: ConversationMember[];
+}
+
+export interface ConversationMember {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  institution_id: string;
+  member_role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+  left_at?: string;
+  last_read_message_id?: string;
+  last_read_at?: string;
+  is_muted?: boolean;
+  is_pinned?: boolean;
+  profile?: Profile;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  institution_id: string;
+  sender_id: string;
+  client_message_id?: string;
+  message: string;
+  message_type: 'text' | 'image' | 'document' | 'voice' | 'system_event';
+  attachment_url?: string;
+  attachment_name?: string;
+  attachment_size?: number;
+  voice_duration?: number;
+  reply_to_message_id?: string;
+  reply_to_message?: {
+    id: string;
+    sender_id?: string;
+    sender_name: string;
+    message: string;
+    message_type?: string;
+  };
+  is_edited?: boolean;
+  edited_at?: string;
+  is_deleted?: boolean;
+  deleted_for_me?: boolean;
+  is_starred?: boolean;
+  delivered_at?: string;
+  read_at?: string;
+  read_by?: Array<{ user_id: string; user_name: string; role?: string; read_at: string }>;
+  delivered_to?: Array<{ user_id: string; user_name: string; role?: string; delivered_at: string }>;
+  created_at: string;
+  updated_at?: string;
+  sender_profile?: Profile;
+}
+
+export interface ConversationSettings {
+  isMuted?: boolean;
+  muteUntil?: '8hours' | '1week' | 'always' | null;
+  readReceipts?: boolean;
+  mediaAutoDownload?: 'all' | 'wifi' | 'never';
+  enterKeySends?: boolean;
+  wallpaper?: 'default' | 'light' | 'dark' | 'mint' | 'emerald' | 'amber';
+  isArchived?: boolean;
+  isBlocked?: boolean;
+}
 
 export interface Donation {
   id: string;

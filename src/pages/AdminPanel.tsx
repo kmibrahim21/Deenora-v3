@@ -239,7 +239,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     parent_portal: false,
     donations: false,
     backup_restore: false,
-    biometric_device_sync: false
+    biometric_device_sync: false,
+    live_chat: false
   });
   const [editSubscriptionEnd, setEditSubscriptionEnd] = useState('');
   const [editSubscriptionType, setEditSubscriptionType] = useState<'monthly' | 'quarterly' | 'yearly' | 'lifetime'>('monthly');
@@ -352,6 +353,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       donations: false,
       backup_restore: false,
       biometric_device_sync: false,
+      live_chat: false,
     };
 
     // 10. Ultimate package: Attendance, exam, Accounting, sms, voice, certificate, students photo, ID card, class routine, parent portal, messages
@@ -1864,6 +1866,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         donations: userModules.donations ?? false,
         backup_restore: userModules.backup_restore ?? false,
         biometric_device_sync: userModules.biometric_device_sync ?? false,
+        live_chat: userModules.live_chat ?? false,
         ...userModules
       });
     } else {
@@ -1884,6 +1887,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         donations: false,
         backup_restore: false,
         biometric_device_sync: false,
+        live_chat: false,
       });
     }
 
@@ -4006,6 +4010,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                       voice_broadcast: 'Voice Broadcast',
                                       sms: 'SMS',
                                       messages: 'Messages',
+                                      live_chat: 'Live Chat',
                                       class_routine: 'Class Routine',
                                       certificates: 'Certificates',
                                       id_cards: 'ID Cards',

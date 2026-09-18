@@ -558,10 +558,10 @@ export default function Messages({
   if (!madrasah) return null;
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-500 pb-24 max-w-7xl mx-auto px-2 sm:px-4 md:px-8 pt-6">
+    <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-500 pb-24 max-w-7xl mx-auto px-1 sm:px-3 pt-2">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 rounded-2xl text-white shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 rounded-2xl text-white shadow-md">
         <div>
           <h1 className="text-2xl font-black tracking-tight flex items-center gap-3">
             <MessageSquare size={26} />
@@ -575,23 +575,23 @@ export default function Messages({
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap bg-white border border-slate-200 p-2 rounded-2xl gap-2 shadow-sm">
-        <button onClick={() => setActiveTab('messages')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'messages' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'text-slate-500 hover:bg-slate-50'}`}>
+      <div className="flex flex-wrap bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-1.5 rounded-2xl gap-2 shadow-xs">
+        <button onClick={() => setActiveTab('messages')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'messages' ? 'bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-950/60 dark:text-blue-400 dark:border-blue-900' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
           <BookOpen size={18} /><span>{lang === 'bn' ? 'ডায়েরি' : 'Diary'}</span>
         </button>
-        <button onClick={() => setActiveTab('notices')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'notices' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'text-slate-500 hover:bg-slate-50'}`}>
+        <button onClick={() => setActiveTab('notices')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'notices' ? 'bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-900' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
           <Bell size={18} /><span>{lang === 'bn' ? 'নোটিশ' : 'Notice'}</span>
         </button>
-        <button onClick={() => setActiveTab('syllabus')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'syllabus' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'text-slate-500 hover:bg-slate-50'}`}>
+        <button onClick={() => setActiveTab('syllabus')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'syllabus' ? 'bg-purple-50 text-purple-600 border border-purple-100 dark:bg-purple-950/60 dark:text-purple-400 dark:border-purple-900' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
            <BookOpen size={18} /><span>{lang === 'bn' ? 'সিলেবাস' : 'Syllabus'}</span>
         </button>
-        <button onClick={() => setActiveTab('suggestion')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'suggestion' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'text-slate-500 hover:bg-slate-50'}`}>
+        <button onClick={() => setActiveTab('suggestion')} className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${activeTab === 'suggestion' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
            <BookOpen size={18} /><span>{lang === 'bn' ? 'সাজেশন' : 'Suggestion'}</span>
         </button>
       </div>
 
       {/* Main Content Area */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 p-6 md:p-8 min-h-[400px]">
+      <div className="space-y-4 min-h-[400px]">
          
          {isLoading ? (
             <div className="py-20 text-center animate-pulse flex flex-col items-center justify-center">

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
 import { useGlobalUpdate } from "hooks/useGlobalUpdate";
+import { useGlobalNotifications } from "hooks/useGlobalNotifications";
 import { requestManager } from "services/RequestManager";
 
 const Auth = React.lazy(() => import("pages/Auth"));
@@ -56,6 +57,7 @@ const ClassRoutine = React.lazy(() => import("pages/ClassRoutine"));
 const Certificates = React.lazy(() => import("pages/Certificates"));
 const IdCards = React.lazy(() => import("pages/IdCards"));
 const ProfileSettings = React.lazy(() => import("pages/ProfileSettings"));
+const ChatApp = React.lazy(() => import("pages/ChatApp").then(m => ({ default: m.ChatApp })));
 const VoiceServiceDashboard = React.lazy(() =>
   import("components/VoiceServiceDashboard").then((module) => ({
     default: module.VoiceServiceDashboard,
@@ -82,6 +84,7 @@ const App: React.FC = () => {
     refreshMadrasah,
   } = useAuth();
   const [view, setView] = useState<View>("home");
+  const [isMobileChatActive, setIsMobileChatActive] = useState(false);
   useAndroidBackHandler(view, setView);
   const [walletTab, setWalletTab] = useState<
     "templates" | "bulk-sms" | "history" | "recharge"
@@ -131,6 +134,13 @@ const App: React.FC = () => {
     }
     return false;
   }, [madrasah]);
+
+  // Mount global real-time notifications for institution staff/admins
+  useGlobalNotifications({
+    institutionId: madrasah?.id,
+    userId: profile?.id,
+    userRole: profile?.role
+  });
 
   const triggerRefresh = () => {
     // Instead of total invalidation, we increment dataVersion to trigger targeted effect hooks
@@ -920,6 +930,16 @@ const App: React.FC = () => {
             lang={lang}
           />
         );
+      case "chat":
+        return (
+          <ChatApp
+            institution={madrasah}
+            profile={profile}
+            lang={lang}
+            isDark={madrasah?.theme === "dark"}
+            onMobileChatStateChange={setIsMobileChatActive}
+          />
+        );
       default:
         return (
           <Home
@@ -967,6 +987,7 @@ const App: React.FC = () => {
       lang={lang}
       madrasah={madrasah}
       profile={profile}
+      isMobileChatActive={isMobileChatActive}
     >
       <OfflineIndicator />
       <Suspense

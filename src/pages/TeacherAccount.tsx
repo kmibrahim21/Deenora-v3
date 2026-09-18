@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp } from 'lucide-react';
+import { LogOut, User as UserIcon, ShieldCheck, Key, Copy, Activity, Calendar as CalendarIcon, MapPin, Play, MessageCircle, MessageSquareText, Headset, Check, X, CheckCircle2, Loader2, CreditCard, GraduationCap, LayoutDashboard, Smartphone, Mail, Box, ArrowLeft, ArrowRight, ChevronRight, Languages, Clock, AlertCircle, Percent, ChevronDown, ChevronUp, Info, TrendingUp } from 'lucide-react';
 import { supabase } from 'supabase';
 import { Institution, Language, View, Profile } from 'types';
 import { t } from 'translations';
@@ -875,6 +875,16 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                       dark={isDark}
                     />
                   )}
+
+                  {/* Live Chat Card */}
+                  <ActionCard
+                    icon={MessageSquareText}
+                    title={lang === 'bn' ? 'লাইভ চ্যাট' : 'Live Chat'}
+                    subtitle={lang === 'bn' ? 'ক্লাস ও অভিভাবক চ্যাট' : 'Group & Direct Chat'}
+                    colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                    onClick={() => setView('chat')}
+                    dark={isDark}
+                  />
 
                   {/* Tutorials Card */}
                   <ActionCard
