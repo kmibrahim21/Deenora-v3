@@ -23,6 +23,7 @@ import {
 import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired";
 import { useGlobalUpdate } from "hooks/useGlobalUpdate";
 import { useGlobalNotifications } from "hooks/useGlobalNotifications";
+import { InAppNotificationToast } from "components/InAppNotificationToast";
 import { requestManager } from "services/RequestManager";
 
 const Auth = React.lazy(() => import("pages/Auth"));
@@ -1157,6 +1158,7 @@ const App: React.FC = () => {
           </div>,
           document.body,
         )}
+      <InAppNotificationToast onOpenItem={() => setView('chat' as any)} />
     </Layout>
   );
 };

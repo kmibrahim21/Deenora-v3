@@ -55,26 +55,13 @@ root.render(
 
 // Register PWA service worker explicitly
 if ('serviceWorker' in navigator) {
-  // Use Vite PWA virtual module if available, otherwise fallback to standard registration
-  // @ts-ignore
-  import('virtual:pwa-register')
-    .then(({ registerSW }) => {
-      registerSW({ 
-        immediate: true,
-        onRegisteredSW(swUrl, r) {
-          console.log('PWA ServiceWorker registered:', swUrl);
-        },
-        onRegisterError(error) {
-          console.error('PWA ServiceWorker registration error:', error);
-        }
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        console.log('[SW] ServiceWorker registered with scope:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[SW] ServiceWorker registration notice:', err);
       });
-    })
-    .catch((err) => {
-      // Fallback
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(error => {
-          console.error('ServiceWorker registration failed: ', error);
-        });
-      });
-    });
+  });
 }

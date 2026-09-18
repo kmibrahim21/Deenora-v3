@@ -1,5 +1,16 @@
 // Push Notification Utility for Live Chat, PWA & Android WebView
 
+// Custom event name for in-app notification banner
+export const DEENORA_NOTIF_EVENT = 'deenora-inapp-notification';
+
+export interface InAppNotificationPayload {
+  id: string;
+  title: string;
+  body: string;
+  icon?: string;
+  timestamp: number;
+}
+
 // Unlock Web Audio context on first user touch/click for reliable sound playback
 if (typeof window !== 'undefined') {
   const unlockAudio = () => {
@@ -49,26 +60,28 @@ export async function requestPushNotificationPermission(): Promise<NotificationP
   // Mark user intention as enabled in local storage
   localStorage.setItem('deenora_notification_enabled', 'true');
 
+  let result: NotificationPermission = 'default';
+
   if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && 'requestPermission' in Notification) {
     try {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        playNotificationSound();
-        sendPushNotification(
-          'Deenora নোটিফিকেশন চালু হয়েছে! 🔔',
-          'এখন থেকে নতুন নোটিশ ও মেসেজের পুশ নোটিফিকেশন সরাসরি পাবেন।',
-          '/Deenora192.png'
-        );
-        return 'granted';
-      }
+      result = await Notification.requestPermission();
     } catch (error) {
       console.warn('[PushNotifications] Notification.requestPermission warning:', error);
     }
   }
 
-  // Fallback confirmation
+  if (result === 'granted' || localStorage.getItem('deenora_notification_enabled') === 'true') {
+    playNotificationSound();
+    sendPushNotification(
+      'Deenora নোটিফিকেশন চালু হয়েছে! 🔔',
+      'এখন থেকে নতুন নোটিশ ও মেসেজের পুশ নোটিফিকেশন সরাসরি পাবেন।',
+      '/Deenora192.png'
+    );
+    return 'granted';
+  }
+
   playNotificationSound();
-  return 'granted';
+  return result;
 }
 
 function triggerNativeNotification(title: string, options: NotificationOptions) {
@@ -79,62 +92,72 @@ function triggerNativeNotification(title: string, options: NotificationOptions) 
         window.focus();
         notification.close();
       };
+      return true;
     }
   } catch (err) {
-    console.warn('[PushNotifications] Native Notification fallback error:', err);
+    console.warn('[PushNotifications] Native Notification constructor notice:', err);
   }
+  return false;
 }
 
 export function sendPushNotification(title: string, body: string, icon?: string, tag?: string) {
   // 1. Play soft audio chime on every incoming notification
   playNotificationSound();
 
+  // 2. Trigger vibration if supported
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate([150, 80, 150]);
+    }
+  } catch {}
+
   if (typeof window === 'undefined') return;
+
+  const iconUrl = icon || '/Deenora192.png';
+  const notifId = tag || `deenora-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+
+  // 3. Dispatch in-app notification event so active screen shows floating animated banner
+  try {
+    const customEvent = new CustomEvent<InAppNotificationPayload>(DEENORA_NOTIF_EVENT, {
+      detail: {
+        id: notifId,
+        title,
+        body,
+        icon: iconUrl,
+        timestamp: Date.now()
+      }
+    });
+    window.dispatchEvent(customEvent);
+  } catch (e) {
+    console.warn('[PushNotifications] In-app event dispatch notice:', e);
+  }
 
   const perm = getNotificationPermissionState();
   if (perm !== 'granted') return;
 
-  try {
-    const iconUrl = icon || '/Deenora192.png';
-    const options: NotificationOptions = {
-      body,
-      icon: iconUrl,
-      badge: iconUrl,
-      tag: tag || `deenora-${Date.now()}`,
-      silent: false,
-      data: { url: window.location.href }
-    };
+  const options: NotificationOptions = {
+    body,
+    icon: iconUrl,
+    badge: iconUrl,
+    tag: notifId,
+    silent: false,
+    data: { url: window.location.href }
+  };
 
-    // 2. Prioritize Service Worker registration for mobile Android, Chrome & PWA
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistration().then(registration => {
-        if (registration && registration.showNotification) {
-          registration.showNotification(title, options).catch(() => {
-            triggerNativeNotification(title, options);
+  // 4. Try native Notification constructor first (Works instantly on Desktop Chrome, Firefox, Safari, Edge)
+  const nativeShown = triggerNativeNotification(title, options);
+
+  // 5. Also attempt Service Worker notification (Required for Mobile Android Chrome & PWA)
+  if ('serviceWorker' in navigator) {
+    try {
+      navigator.serviceWorker.getRegistration().then((registration) => {
+        if (registration && registration.showNotification && !nativeShown) {
+          registration.showNotification(title, options).catch((err) => {
+            console.warn('[PushNotifications] SW showNotification error:', err);
           });
-        } else if (navigator.serviceWorker.ready) {
-          navigator.serviceWorker.ready.then(reg => {
-            if (reg && reg.showNotification) {
-              reg.showNotification(title, options).catch(() => {
-                triggerNativeNotification(title, options);
-              });
-            } else {
-              triggerNativeNotification(title, options);
-            }
-          }).catch(() => {
-            triggerNativeNotification(title, options);
-          });
-        } else {
-          triggerNativeNotification(title, options);
         }
-      }).catch(() => {
-        triggerNativeNotification(title, options);
-      });
-    } else {
-      triggerNativeNotification(title, options);
-    }
-  } catch (error) {
-    console.warn('[PushNotifications] Error firing notification:', error);
+      }).catch(() => {});
+    } catch {}
   }
 }
 

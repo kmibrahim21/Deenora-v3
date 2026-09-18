@@ -21,7 +21,15 @@ export function isForStudentClass(
     norm === 'সব শ্রেণি' ||
     norm === 'সব শ্রেণী' ||
     norm === 'all parents' ||
-    norm === 'all students'
+    norm === 'all students' ||
+    norm === 'app_notice' ||
+    norm === 'app_holiday' ||
+    norm === 'app_ptm' ||
+    norm === 'notice' ||
+    norm === 'general' ||
+    norm.includes('announcement') ||
+    norm.includes('notice') ||
+    norm.includes('নোটিশ')
   ) {
     return true;
   }
@@ -31,7 +39,7 @@ export function isForStudentClass(
 
   if (!sName && !sId) return true;
 
-  if (sName && norm === sName) return true;
+  if (sName && (norm === sName || norm.includes(sName) || sName.includes(norm))) return true;
   if (sId && (norm === sId || norm.includes(sId) || sId.includes(norm))) return true;
 
   const normBengali = (str: string) => str.replace(/শ্রেণী/g, 'শ্রেণি').replace(/[\s_-]+/g, '').toLowerCase();
