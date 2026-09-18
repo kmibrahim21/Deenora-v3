@@ -323,34 +323,68 @@ export class ChatService {
       console.warn('[ChatService] Conversation upsert notice:', e);
     }
 
-    // 2. Canonical Database Insertion
-    const canonicalPayload = {
-      conversation_id: cleanConversationId,
-      institution_id: cleanInstitutionId,
-      sender_id: cleanSenderId,
-      sender_name: cleanSenderName,
-      class_name: className || cleanConversationId,
-      client_message_id: clientMessageId || newMessage.id,
-      message: messageText.trim(),
-      message_type: 'text'
-    };
+    // 2. Database Insertion with multi-schema resilience
+    let isSavedToDB = false;
+    
+    // Attempt 1: Full chat payload
+    try {
+      const fullPayload: any = {
+        conversation_id: cleanConversationId,
+        institution_id: cleanInstitutionId,
+        sender_id: cleanSenderId,
+        sender_name: cleanSenderName,
+        title: cleanSenderName || 'Chat Message',
+        class_name: className || cleanConversationId,
+        client_message_id: clientMessageId || newMessage.id,
+        message: messageText.trim(),
+        message_type: 'text'
+      };
 
-    const { data: dbData, error: dbError } = await supabase
-      .from('messages')
-      .insert([canonicalPayload])
-      .select()
-      .single();
+      const { data: dbData1, error: dbError1 } = await supabase
+        .from('messages')
+        .insert([fullPayload])
+        .select()
+        .maybeSingle();
 
-    if (dbError) {
-      console.error('[ChatService] Supabase DB Insert Failed:', dbError);
-      throw new Error(`মেসেজ সংরক্ষণ করা যায়নি: ${dbError.message || 'Database Insert Error'}`);
+      if (!dbError1 && dbData1) {
+        newMessage.id = dbData1.id;
+        isSavedToDB = true;
+      } else if (dbError1) {
+        console.warn('[ChatService] Primary schema insert notice:', dbError1.message);
+      }
+    } catch (e) {
+      console.warn('[ChatService] Primary schema exception:', e);
     }
 
-    if (dbData) {
-      newMessage.id = dbData.id;
+    // Attempt 2: Standard Deenora messages schema (institution_id, class_name, title, message, sender_name)
+    if (!isSavedToDB) {
+      try {
+        const standardPayload: any = {
+          institution_id: cleanInstitutionId,
+          class_name: className || cleanConversationId,
+          title: cleanSenderName || 'Chat Message',
+          sender_name: cleanSenderName || 'Admin',
+          message: messageText.trim()
+        };
+
+        const { data: dbData2, error: dbError2 } = await supabase
+          .from('messages')
+          .insert([standardPayload])
+          .select()
+          .maybeSingle();
+
+        if (!dbError2 && dbData2) {
+          newMessage.id = dbData2.id;
+          isSavedToDB = true;
+        } else if (dbError2) {
+          console.error('[ChatService] Secondary schema insert error:', dbError2.message);
+        }
+      } catch (e) {
+        console.error('[ChatService] Secondary schema exception:', e);
+      }
     }
 
-    // 3. Deterministic Realtime Broadcast AFTER successful DB insert
+    // 3. Deterministic Realtime Broadcast (Broadcasts to all subscribed peers)
     try {
       const channelName = `chat_realtime_${cleanInstitutionId}_${cleanConversationId}`;
       const channel = supabase.channel(channelName);
