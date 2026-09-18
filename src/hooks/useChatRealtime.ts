@@ -78,7 +78,7 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       sendPushNotification(
         newMsg.sender_profile?.full_name || (newMsg as any).sender_name || 'Deenora Chat',
         newMsg.message || 'নতুন মেসেজ এসেছে',
-        '/icon.png'
+        '/Deenora192.png'
       );
 
       setMessages(prev => {

@@ -384,27 +384,50 @@ export class ChatService {
       }
     }
 
-    // 3. Deterministic Realtime Broadcast (Broadcasts to all subscribed peers)
+    // 3. Deterministic Realtime Broadcast (Broadcasts to active room & global notification subscribers)
     try {
-      const channelName = `chat_realtime_${cleanInstitutionId}_${cleanConversationId}`;
-      const channel = supabase.channel(channelName);
-      channel.subscribe((status, err) => {
+      const roomChannelName = `chat_realtime_${cleanInstitutionId}_${cleanConversationId}`;
+      const globalChannelName = `global_notifs_${cleanInstitutionId}`;
+
+      const roomChannel = supabase.channel(roomChannelName);
+      roomChannel.subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          channel.send({
+          roomChannel.send({
             type: 'broadcast',
             event: 'new_message',
             payload: newMessage
           });
           setTimeout(() => {
-            supabase.removeChannel(channel);
-          }, 2000);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error(`[ChatService] Broadcast channel error for ${channelName}:`, err);
+            supabase.removeChannel(roomChannel);
+          }, 2500);
+        }
+      });
+
+      const globalChannel = supabase.channel(globalChannelName);
+      globalChannel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          globalChannel.send({
+            type: 'broadcast',
+            event: 'new_message',
+            payload: newMessage
+          });
+          setTimeout(() => {
+            supabase.removeChannel(globalChannel);
+          }, 2500);
         }
       });
     } catch (broadcastErr) {
       console.warn('[ChatService] Realtime broadcast exception:', broadcastErr);
     }
+
+    // Tab-to-tab instant BroadcastChannel dispatch
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel(`deenora_msg_channel_${cleanInstitutionId}`);
+        bc.postMessage({ type: 'NEW_MESSAGE', payload: newMessage });
+        setTimeout(() => bc.close(), 1000);
+      }
+    } catch (e) {}
 
     // 4. Persist to localStorage for offline cache
     try {

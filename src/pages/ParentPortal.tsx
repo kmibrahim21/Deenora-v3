@@ -200,7 +200,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       sendPushNotification(
         'Deenora Parent Portal',
         'নোটিফিকেশন সফলভাবে চালু হয়েছে। এখন থেকে সকল নোটিশ ও মেসেজের নোটিফিকেশন পাবেন।',
-        '/icon.png'
+        '/Deenora192.png'
       );
     } else if (res === 'denied') {
       setNotifToast('ব্রাউজার সেটিংসে গিয়ে নোটিফিকেশন অনুমতি প্রদান করুন।');

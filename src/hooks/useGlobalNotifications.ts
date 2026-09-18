@@ -97,8 +97,9 @@ export function useGlobalNotifications({
   useEffect(() => {
     if (!institutionId) return;
 
-    const channelName = `global_notifs_${institutionId}_${userId || 'anon'}`;
-    console.log(`[useGlobalNotifications] Subscribing to channel: ${channelName}`);
+    const channelName = `global_notifs_${institutionId}`;
+    const userChannelName = `global_notifs_${institutionId}_${userId || 'anon'}`;
+    console.log(`[useGlobalNotifications] Subscribing to notification channels for institution: ${institutionId}`);
 
     const handleIncomingMsg = (newMsg: any) => {
       if (!newMsg) return;
@@ -171,7 +172,7 @@ export function useGlobalNotifications({
       if (isRelevant) {
         console.log('[useGlobalNotifications] Relevant notification received:', newMsg);
         playNotificationSound();
-        sendPushNotification(notifTitle, notifBody, '/icon.png', `msg-${newMsg.id}`);
+        sendPushNotification(notifTitle, notifBody, '/Deenora192.png', `msg-${newMsg.id || Date.now()}`);
 
         if (onNewNotifRef.current) {
           onNewNotifRef.current(newMsg);
@@ -179,7 +180,7 @@ export function useGlobalNotifications({
       }
     };
 
-    const channel = supabase
+    const channel1 = supabase
       .channel(channelName)
       .on(
         'broadcast',
@@ -201,6 +202,17 @@ export function useGlobalNotifications({
       )
       .subscribe();
 
+    const channel2 = supabase
+      .channel(userChannelName)
+      .on(
+        'broadcast',
+        { event: 'new_message' },
+        (payload) => {
+          if (payload?.payload) handleIncomingMsg(payload.payload);
+        }
+      )
+      .subscribe();
+
     // BroadcastChannel tab-to-tab sync fallback
     let bc: BroadcastChannel | null = null;
     try {
@@ -209,8 +221,8 @@ export function useGlobalNotifications({
         bc.onmessage = (event) => {
           if (event.data && event.data.type === 'NEW_MESSAGE') {
             const msg = event.data.payload;
-            if (msg && onNewNotifRef.current) {
-              onNewNotifRef.current(msg);
+            if (msg) {
+              handleIncomingMsg(msg);
             }
           }
         };
@@ -220,8 +232,9 @@ export function useGlobalNotifications({
     }
 
     return () => {
-      console.log(`[useGlobalNotifications] Unsubscribing from channel: ${channelName}`);
-      supabase.removeChannel(channel);
+      console.log(`[useGlobalNotifications] Unsubscribing from notification channels for: ${institutionId}`);
+      supabase.removeChannel(channel1);
+      supabase.removeChannel(channel2);
       if (bc) bc.close();
     };
   }, [institutionId, userId, userRole, studentClassId, studentClassName]);
