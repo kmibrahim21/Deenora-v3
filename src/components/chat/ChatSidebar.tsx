@@ -68,7 +68,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     <div className={`w-full md:w-80 lg:w-96 flex flex-col h-full md:border-r ${isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200/80 text-slate-900'}`}>
       
       {/* Title & Subtitle Header */}
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-3">
+      <div 
+        className="px-4 pb-2 flex items-center justify-between gap-3"
+        style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
+      >
         <div>
           <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             {lang === 'bn' ? 'মেসেজসমূহ' : 'Messages'}

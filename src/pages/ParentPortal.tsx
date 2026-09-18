@@ -49,6 +49,12 @@ import {
 } from 'lucide-react';
 import { ChatApp } from './ChatApp';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
+import { 
+  requestPushNotificationPermission, 
+  getNotificationPermissionState, 
+  playNotificationSound, 
+  sendPushNotification 
+} from '../lib/pushNotifications';
 import { getBengaliDate, getHijriDate } from '../utils/calendarUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Attendance, Fee, Language, Institution } from 'types';
@@ -172,6 +178,58 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [profileSubTab, setProfileSubTab] = useState<'basic' | 'family' | 'address'>('basic');
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
+  const [showNotifBanner, setShowNotifBanner] = useState<boolean>(false);
+  const [notifToast, setNotifToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    const perm = getNotificationPermissionState();
+    setNotifPermission(perm);
+    if (perm === 'default') {
+      setShowNotifBanner(true);
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    const res = await requestPushNotificationPermission();
+    setNotifPermission(res);
+    setShowNotifBanner(false);
+    if (res === 'granted') {
+      setNotifToast('নোটিফিকেশন সফলভাবে চালু করা হয়েছে! 🔔');
+      playNotificationSound();
+      sendPushNotification(
+        'Deenora Parent Portal',
+        'নোটিফিকেশন সফলভাবে চালু হয়েছে। এখন থেকে সকল নোটিশ ও মেসেজের নোটিফিকেশন পাবেন।',
+        '/icon.png'
+      );
+    } else if (res === 'denied') {
+      setNotifToast('ব্রাউজার সেটিংসে গিয়ে নোটিফিকেশন অনুমতি প্রদান করুন।');
+    }
+    setTimeout(() => setNotifToast(null), 4000);
+  };
+
+  // Auto prompt permission on first user interaction when app opens
+  useEffect(() => {
+    if (notifPermission !== 'default') return;
+
+    const handleFirstInteraction = async () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+      const res = await requestPushNotificationPermission();
+      setNotifPermission(res);
+      if (res === 'granted') {
+        setShowNotifBanner(false);
+      }
+    };
+
+    window.addEventListener('click', handleFirstInteraction, { once: true });
+    window.addEventListener('touchstart', handleFirstInteraction, { once: true });
+
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, [notifPermission]);
 
   const CACHE_KEY = `parent_data_v2_${studentId}`;
 
@@ -720,9 +778,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
       <div className="flex-1 lg:ml-64 flex flex-col h-screen overflow-hidden bg-blue-50/50">
         {/* Top Header */}
-        <header className="px-5 md:px-8 py-3 md:py-5 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-slate-100 z-40 sticky top-0">
+        <header 
+          className="px-5 md:px-8 pb-3 md:py-5 flex items-center justify-between bg-white/90 backdrop-blur-xl border-b border-slate-100 z-40 sticky top-0"
+          style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
+        >
           <div className="flex items-center gap-3">
-            <div className="lg:hidden w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20">
+            <div className="lg:hidden w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20 shrink-0">
               <BookOpen size={20} />
             </div>
             <div>
@@ -737,11 +798,82 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
-            <button onClick={fetchData} className="p-2.5 md:p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all border border-slate-100 hover:border-blue-100 group">
+            <button 
+              onClick={handleEnableNotifications} 
+              className={`p-2.5 md:p-3 rounded-xl transition-all border flex items-center gap-1.5 font-bold text-xs font-noto cursor-pointer ${
+                notifPermission === 'granted'
+                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                  : notifPermission === 'denied'
+                  ? 'bg-amber-50 text-amber-600 border-amber-200'
+                  : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-md'
+              }`}
+              title={
+                notifPermission === 'granted'
+                  ? 'নোটিফিকেশন সক্রিয় আছে'
+                  : notifPermission === 'denied'
+                  ? 'ব্রাউজারে নোটিফিকেশন ব্লক করা রয়েছে'
+                  : 'নোটিফিকেশন চালু করুন'
+              }
+            >
+              <BellRing size={18} className={notifPermission === 'default' ? 'animate-bounce' : ''} />
+              <span className="hidden sm:inline">
+                {notifPermission === 'granted' ? 'অন' : notifPermission === 'denied' ? 'ব্লকড' : 'নোটিফিকেশন'}
+              </span>
+            </button>
+            <button onClick={fetchData} className="p-2.5 md:p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all border border-slate-100 hover:border-blue-100 group cursor-pointer">
               <RefreshCw size={18} className={`${refreshing ? 'animate-spin' : ''} group-active:rotate-180 transition-transform`} />
             </button>
           </div>
         </header>
+
+        {/* Notification Alert Toast */}
+        <AnimatePresence>
+          {notifToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="fixed top-16 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-2 text-xs font-bold font-noto"
+            >
+              <BellRing size={16} className="text-emerald-400" />
+              <span>{notifToast}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Top Notification Enable Banner */}
+        {showNotifBanner && notifPermission === 'default' && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-5 py-3 flex flex-wrap items-center justify-between gap-2 shadow-md z-30"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                <BellRing className="w-4 h-4 text-white animate-bounce" />
+              </div>
+              <div className="text-left">
+                <p className="font-black text-xs font-noto">নোটিফিকেশন সুবিধা চালু করুন 🔔</p>
+                <p className="text-[10px] text-blue-100 font-noto">ক্লাসের নোটিশ, চ্যাট মেসেজ ও ফলের আপডেট সাথে সাথে পাবেন।</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleEnableNotifications}
+                className="px-3.5 py-1.5 bg-white text-blue-700 font-black text-xs rounded-xl shadow-md active:scale-95 transition-all font-noto hover:bg-blue-50 cursor-pointer"
+              >
+                অনুমতি দিন
+              </button>
+              <button
+                onClick={() => setShowNotifBanner(false)}
+                className="p-1 text-white/80 hover:text-white cursor-pointer"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         <main className="flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar px-5 md:px-8 pt-4 pb-44 md:pb-8">
         {/* Date Display */}

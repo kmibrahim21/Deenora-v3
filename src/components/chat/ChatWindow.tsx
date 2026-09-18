@@ -380,9 +380,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       ) : (
         /* Glassmorphic Native Top App Bar */
-        <div className={`p-3 px-4 border-b flex items-center justify-between gap-3 backdrop-blur-xl sticky top-0 z-20 shadow-xs ${
-          isDark ? 'bg-slate-900/90 border-slate-800/80' : 'bg-white/90 border-slate-200/80'
-        }`}>
+        <div 
+          className={`px-4 pb-3 border-b flex items-center justify-between gap-3 backdrop-blur-xl sticky top-0 z-20 shadow-xs ${
+            isDark ? 'bg-slate-900/90 border-slate-800/80' : 'bg-white/90 border-slate-200/80'
+          }`}
+          style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
+        >
           <div className="flex items-center gap-3 min-w-0">
             {onBackMobile && (
               <button
