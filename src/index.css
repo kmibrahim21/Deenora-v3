@@ -83,12 +83,11 @@ body {
   width: 100%;
   margin: 0;
   padding: 0;
-  overscroll-behavior: none;
+  overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-size: 14px;
-  transition: background-color 0.3s ease;
 }
 
 .dark html, .dark body {
@@ -148,10 +147,25 @@ body {
   }
 }
 
+/* iOS WebKit Hardware Acceleration & Anti-Flicker Rules */
+[class*="backdrop-blur"],
+.glass-card {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.overflow-y-auto,
+.overflow-x-auto,
+.scroll-container {
+  -webkit-overflow-scrolling: touch;
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 2.5rem;
   border: 1px solid rgba(255, 255, 255, 0.25);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);

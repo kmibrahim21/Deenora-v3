@@ -715,12 +715,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="flex h-screen bg-[#0F172A] overflow-hidden"
+          className="flex h-[100dvh] bg-[#0F172A] overflow-hidden"
         >
           <div className="flex flex-1 h-full bg-slate-50 overflow-hidden">
 
       {/* Desktop Sidebar */}
-      <div className={`hidden lg:flex w-72 flex-col border-r h-screen fixed top-0 left-0 z-50 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'}`}>
+      <div className={`hidden lg:flex w-72 flex-col border-r h-[100dvh] fixed top-0 left-0 z-50 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'}`}>
         <div className="p-6 border-b border-inherit flex flex-col justify-center">
           <div className="flex items-center gap-4">
              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden shrink-0 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
@@ -776,7 +776,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         </div>
       </div>
 
-      <div className="flex-1 lg:ml-64 flex flex-col h-screen overflow-hidden bg-blue-50/50">
+      <div className="flex-1 lg:ml-64 flex flex-col h-[100dvh] overflow-hidden bg-blue-50/50">
         {/* Top Header */}
         <header 
           className="px-5 md:px-8 pb-3 md:py-5 flex items-center justify-between bg-white/90 backdrop-blur-xl border-b border-slate-100 z-40 sticky top-0"

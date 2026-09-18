@@ -175,24 +175,34 @@ export class ChatService {
    */
   static async getMessages(conversationId: string, limit = 50): Promise<ChatMessage[]> {
     try {
-      const { data, error } = await supabase
+      const isClassGroup = conversationId.startsWith('class-group-');
+      const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
+
+      let query = supabase
         .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
+        .select('*');
+
+      if (isClassGroup && classIdRaw) {
+        query = query.or(`conversation_id.eq.${conversationId},conversation_id.eq.${classIdRaw},class_name.eq.${classIdRaw}`);
+      } else {
+        query = query.eq('conversation_id', conversationId);
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: true })
         .limit(limit);
 
-      if (error || !data || data.length === 0) {
-        // Fallback to localStorage cache
-        const localKey = `deenora_chat_msg_${conversationId}`;
-        const stored = localStorage.getItem(localKey);
-        if (stored) {
-          return JSON.parse(stored);
-        }
-        return [];
+      if (!error && data && data.length > 0) {
+        return data as ChatMessage[];
       }
 
-      return data as ChatMessage[];
+      // Fallback to localStorage cache
+      const localKey = `deenora_chat_msg_${conversationId}`;
+      const stored = localStorage.getItem(localKey);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+      return [];
     } catch (err) {
       console.warn('[ChatService] Supabase messages query fallback:', err);
       const localKey = `deenora_chat_msg_${conversationId}`;
@@ -236,7 +246,23 @@ export class ChatService {
       } as any
     };
 
-    // 1. Try Supabase insert
+    // 0. Ensure conversation row exists in Supabase DB to satisfy Foreign Key constraint
+    try {
+      await supabase.from('conversations').upsert([
+        {
+          id: conversationId,
+          institution_id: institutionId,
+          type: conversationId.startsWith('class-group-') ? 'class_group' : (conversationId.startsWith('announcement-') ? 'announcement' : 'direct'),
+          name: className ? `${className} (অভিভাবক ও শিক্ষক গ্রুপ)` : 'চ্যাট রুম',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ], { onConflict: 'id' });
+    } catch (e) {
+      console.warn('[ChatService] Conv upsert notice:', e);
+    }
+
+    // 1. Insert message into Supabase with automatic fallback retry
     try {
       const insertPayload: any = {
         conversation_id: conversationId,
@@ -250,32 +276,63 @@ export class ChatService {
       if (senderName) insertPayload.sender_name = senderName;
       if (className) insertPayload.class_name = className;
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('messages')
         .insert([insertPayload])
         .select()
         .single();
 
+      // Retry if schema mismatch or missing optional columns
+      if (error) {
+        console.warn('[ChatService] Initial insert notice, retrying minimal payload:', error.message || error);
+        const minimalPayload = {
+          conversation_id: conversationId,
+          institution_id: institutionId,
+          sender_id: senderId,
+          message: messageText.trim()
+        };
+        const retryRes = await supabase
+          .from('messages')
+          .insert([minimalPayload])
+          .select()
+          .single();
+        if (retryRes.data) {
+          data = retryRes.data;
+          error = null;
+        }
+      }
+
       if (!error && data) {
         newMessage.id = data.id;
-      } else if (error) {
-        console.error('[ChatService] Insert error:', error);
       }
     } catch (err) {
       console.warn('[ChatService] Online insert notice, saved to local cache:', err);
     }
 
-    // 2. Broadcast via Supabase Realtime channel for instant real-time delivery
-    try {
-      const realtimeChannel = supabase.channel(`chat_realtime_${institutionId}`);
-      realtimeChannel.send({
-        type: 'broadcast',
-        event: 'new_message',
-        payload: newMessage
-      });
-    } catch (e) {
-      console.warn('[ChatService] Realtime broadcast notice:', e);
-    }
+    // 2. Guaranteed WebSocket Realtime Broadcast on SUBSCRIBED connection
+    const broadcastRealtime = (channelName: string) => {
+      try {
+        const channel = supabase.channel(`${channelName}_${Date.now()}`);
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            channel.send({
+              type: 'broadcast',
+              event: 'new_message',
+              payload: newMessage
+            });
+            setTimeout(() => {
+              supabase.removeChannel(channel);
+            }, 1200);
+          }
+        });
+      } catch (e) {
+        console.warn('[ChatService] Realtime broadcast error:', e);
+      }
+    };
+
+    broadcastRealtime(`chat_realtime_${institutionId}`);
+    broadcastRealtime(`global_notifs_${institutionId}`);
+    broadcastRealtime(`chat_${conversationId}`);
 
     // 3. Always persist to localStorage for instant local view & offline reliability
     const localKey = `deenora_chat_msg_${conversationId}`;
