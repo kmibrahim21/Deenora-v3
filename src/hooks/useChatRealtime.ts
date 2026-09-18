@@ -46,7 +46,7 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
 
     console.log(`[useChatRealtime] Subscribing to chat channel for conv: ${conversationId}`);
 
-    const channel = supabase.channel(`chat_${conversationId}`)
+    const channel = supabase.channel(`chat_${conversationId}_${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -62,7 +62,7 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
           // Play chime & send push notification for incoming message
           playNotificationSound();
           sendPushNotification(
-            newMsg.sender_profile?.full_name || 'Deenora Chat',
+            newMsg.sender_profile?.full_name || (newMsg as any).sender_name || 'Deenora Chat',
             newMsg.message || 'নতুন মেসেজ এসেছে',
             '/icon.png'
           );
@@ -72,7 +72,9 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
             const exists = prev.some(
               m => m.id === newMsg.id || (newMsg.client_message_id && m.client_message_id === newMsg.client_message_id)
             );
-            if (exists) return prev;
+            if (exists) {
+              return prev.map(m => (m.client_message_id && m.client_message_id === newMsg.client_message_id ? { ...m, ...newMsg } : m));
+            }
             return [...prev, newMsg];
           });
         }
@@ -86,7 +88,7 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
   }, [conversationId, institutionId]);
 
   // Function to send a message
-  const sendMessage = useCallback(async (senderId: string, text: string) => {
+  const sendMessage = useCallback(async (senderId: string, text: string, senderName?: string, className?: string) => {
     if (!conversationId || !institutionId || !text.trim()) return;
 
     const clientMsgId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -97,16 +99,26 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       conversation_id: conversationId,
       institution_id: institutionId,
       sender_id: senderId,
+      sender_name: senderName || 'User',
+      class_name: className || undefined,
       client_message_id: clientMsgId,
       message: text.trim(),
       message_type: 'text',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      sender_profile: {
+        id: senderId,
+        institution_id: institutionId,
+        full_name: senderName || 'User',
+        role: senderId.startsWith('parent') ? 'parent' : 'teacher',
+        is_active: true,
+        created_at: new Date().toISOString()
+      } as any
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
 
     try {
-      const sentMsg = await ChatService.sendMessage(institutionId, conversationId, senderId, text, clientMsgId);
+      const sentMsg = await ChatService.sendMessage(institutionId, conversationId, senderId, text, clientMsgId, senderName, className);
       
       // Reconcile optimistic message with server response
       setMessages(prev =>

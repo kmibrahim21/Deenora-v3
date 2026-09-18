@@ -517,8 +517,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         ) : (
           visibleMessages.map((m) => {
             const isMe = m.sender_id === currentUser?.id;
-            const senderName = m.sender_profile?.full_name || (lang === 'bn' ? 'শিক্ষক / সদস্য' : 'Teacher/Member');
-            const roleBadge = getRoleLabel(m.sender_profile?.role);
+            const senderName = m.sender_profile?.full_name || (m as any).sender_name || (lang === 'bn' ? 'শিক্ষক / সদস্য' : 'Teacher/Member');
+            const roleBadge = getRoleLabel(m.sender_profile?.role || ((m as any).sender_id?.startsWith('parent') ? 'parent' : 'teacher'));
             const isSelected = selectedMsgIds.includes(m.id);
             const msgReactions = reactions[m.id] || [];
 

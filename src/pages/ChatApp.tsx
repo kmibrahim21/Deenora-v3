@@ -48,14 +48,14 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     const loadData = async () => {
       let activeClasses = classes;
 
-      // If classes list wasn't passed, fetch classes from database
-      if (activeClasses.length === 0 && institutionId) {
+      // Fetch official classes list from database to ensure identical class IDs across all roles
+      if (institutionId) {
         try {
           const { data } = await supabase
             .from('classes')
             .select('*')
             .eq('institution_id', institutionId);
-          if (data) activeClasses = data as Class[];
+          if (data && data.length > 0) activeClasses = data as Class[];
         } catch (err) {
           console.warn('[ChatApp] Class list fetch fallback:', err);
         }
@@ -86,7 +86,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     };
 
     loadData();
-  }, [institutionId, currentUserId, classes, userRole, userClassId]);
+  }, [institutionId, currentUserId, userRole, userClassId]);
 
   // Hook into Realtime chat for active conversation
   const { messages, loading, sendMessage } = useChatRealtime(activeConversationId, institutionId);
@@ -100,7 +100,9 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 
   const handleSendMessage = (text: string) => {
     if (!currentUserId) return;
-    sendMessage(currentUserId, text);
+    const senderName = profile?.full_name || (profile as any)?.name || (userRole === 'parent' ? 'অভিভাবক' : 'এডমিন / শিক্ষক');
+    const className = activeConversation?.class_id || undefined;
+    sendMessage(currentUserId, text, senderName, className);
   };
 
   return (

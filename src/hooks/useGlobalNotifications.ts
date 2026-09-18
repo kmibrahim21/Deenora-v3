@@ -129,7 +129,7 @@ export function useGlobalNotifications({
           if (userRole === 'parent') {
             // Check Live Chat matching
             if (convId) {
-              const matchesClassGroup = studentClassId && (convId === `class-group-${studentClassId}`.toLowerCase() || convId.includes(studentClassId.toLowerCase()));
+              const matchesClassGroup = isForStudentClass(convId, studentClassName, studentClassId) || (studentClassId && (convId === `class-group-${studentClassId}`.toLowerCase() || convId.includes(studentClassId.toLowerCase())));
               const matchesAnnouncement = convId.startsWith('announcement-');
               const matchesDirect = userId && convId.includes(userId.toLowerCase());
 

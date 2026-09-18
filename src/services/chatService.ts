@@ -44,8 +44,15 @@ export class ChatService {
 
       // Filter classes for parent if userRole is parent and userClassId is specified
       let filteredClasses = classesList;
+      const normBengali = (str: string) => (str || '').replace(/শ্রেণী/g, 'শ্রেণি').replace(/[\s_-]+/g, '').toLowerCase();
+
       if (userRole === 'parent' && userClassId) {
-        const matching = classesList.filter(c => c.id === userClassId || c.id.includes(userClassId) || userClassId.includes(c.id));
+        const matching = classesList.filter(c => {
+          if (c.id === userClassId || c.id.includes(userClassId) || userClassId.includes(c.id)) return true;
+          const normC = normBengali(c.name);
+          const normU = normBengali(userClassId);
+          return normC && normU && (normC === normU || normC.includes(normU) || normU.includes(normC));
+        });
         if (matching.length > 0) {
           filteredClasses = matching;
         }
@@ -58,7 +65,7 @@ export class ChatService {
       for (const cls of filteredClasses) {
         const classGroupId = `class-group-${cls.id}`;
         const exists = mappedConversations.some(
-          c => c.class_id === cls.id || c.id === classGroupId || c.name?.includes(cls.name)
+          c => c.class_id === cls.id || c.id === classGroupId || normBengali(c.name).includes(normBengali(cls.name))
         );
 
         if (!exists) {
@@ -110,7 +117,10 @@ export class ChatService {
         finalConversations = mappedConversations.filter(c => {
           if (c.type === 'teacher_staff') return false;
           if (c.type === 'class_group' && userClassId) {
-            return c.class_id === userClassId || c.id === `class-group-${userClassId}` || c.id.includes(userClassId);
+            if (c.class_id === userClassId || c.id === `class-group-${userClassId}` || c.id.includes(userClassId)) return true;
+            const normC = normBengali(c.name);
+            const normU = normBengali(userClassId);
+            return normC && normU && (normC === normU || normC.includes(normU) || normU.includes(normC));
           }
           return true;
         });
@@ -199,38 +209,57 @@ export class ChatService {
     conversationId: string,
     senderId: string,
     messageText: string,
-    clientMessageId?: string
+    clientMessageId?: string,
+    senderName?: string,
+    className?: string
   ): Promise<ChatMessage> {
     const newMessage: ChatMessage = {
       id: clientMessageId || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       conversation_id: conversationId,
       institution_id: institutionId,
       sender_id: senderId,
+      sender_name: senderName || 'User',
+      class_name: className || undefined,
       client_message_id: clientMessageId,
       message: messageText.trim(),
       message_type: 'text',
       created_at: new Date().toISOString(),
       is_edited: false,
-      is_deleted: false
+      is_deleted: false,
+      sender_profile: {
+        id: senderId,
+        institution_id: institutionId,
+        full_name: senderName || 'User',
+        role: senderId.startsWith('parent') ? 'parent' : 'teacher',
+        is_active: true,
+        created_at: new Date().toISOString()
+      } as any
     };
 
     // 1. Try Supabase insert
     try {
+      const insertPayload: any = {
+        conversation_id: conversationId,
+        institution_id: institutionId,
+        sender_id: senderId,
+        client_message_id: clientMessageId || newMessage.id,
+        message: messageText.trim(),
+        message_type: 'text'
+      };
+
+      if (senderName) insertPayload.sender_name = senderName;
+      if (className) insertPayload.class_name = className;
+
       const { data, error } = await supabase
         .from('messages')
-        .insert([{
-          conversation_id: conversationId,
-          institution_id: institutionId,
-          sender_id: senderId,
-          client_message_id: clientMessageId || newMessage.id,
-          message: messageText.trim(),
-          message_type: 'text'
-        }])
+        .insert([insertPayload])
         .select()
         .single();
 
       if (!error && data) {
         newMessage.id = data.id;
+      } else if (error) {
+        console.error('[ChatService] Insert error:', error);
       }
     } catch (err) {
       console.warn('[ChatService] Online insert notice, saved to local cache:', err);

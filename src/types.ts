@@ -569,6 +569,8 @@ export interface ChatMessage {
   conversation_id: string;
   institution_id: string;
   sender_id: string;
+  sender_name?: string;
+  class_name?: string;
   client_message_id?: string;
   message: string;
   message_type: 'text' | 'image' | 'document' | 'voice' | 'system_event';
