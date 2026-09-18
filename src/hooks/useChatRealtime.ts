@@ -49,11 +49,20 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     const handleIncoming = (newMsg: ChatMessage) => {
       if (!newMsg || !newMsg.message) return;
 
-      // Check conversation match (or matching class group)
+      // Check conversation match (or matching class group / class_name)
       const currentActive = activeConvRef.current;
+      if (!currentActive) return;
+
+      const activeRaw = currentActive.replace('class-group-', '');
+
       const isMatch =
         newMsg.conversation_id === currentActive ||
-        (currentActive && currentActive.startsWith('class-group-') && newMsg.conversation_id.startsWith('class-group-'));
+        (newMsg.conversation_id && newMsg.conversation_id === activeRaw) ||
+        (newMsg.class_name && (newMsg.class_name === currentActive || newMsg.class_name === activeRaw)) ||
+        (currentActive.startsWith('class-group-') && (
+          (newMsg.conversation_id && newMsg.conversation_id.startsWith('class-group-')) ||
+          (newMsg.class_name && (newMsg.class_name.startsWith('class-group-') || newMsg.class_name === activeRaw))
+        ));
 
       if (!isMatch) return;
 

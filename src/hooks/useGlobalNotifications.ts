@@ -112,7 +112,7 @@ export function useGlobalNotifications({
       let notifTitle = newMsg.title || newMsg.sender_name || 'নতুন নোটিশ / চ্যাট মেসেজ';
       let notifBody = parseMessageText(newMsg.message);
 
-      const convId = (newMsg.conversation_id || '').toLowerCase();
+      const convId = (newMsg.conversation_id || newMsg.class_name || '').toLowerCase();
       const className = (newMsg.class_name || '').toLowerCase();
 
       if (userRole === 'parent') {

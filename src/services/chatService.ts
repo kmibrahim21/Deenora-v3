@@ -178,25 +178,32 @@ export class ChatService {
       const isClassGroup = conversationId.startsWith('class-group-');
       const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
 
-      let query = supabase
+      // 1. First try querying by exact conversation_id
+      const { data: convData, error: convErr } = await supabase
         .from('messages')
-        .select('*');
-
-      if (isClassGroup && classIdRaw) {
-        query = query.or(`conversation_id.eq.${conversationId},conversation_id.eq.${classIdRaw},class_name.eq.${classIdRaw}`);
-      } else {
-        query = query.eq('conversation_id', conversationId);
-      }
-
-      const { data, error } = await query
+        .select('*')
+        .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
         .limit(limit);
 
-      if (!error && data && data.length > 0) {
-        return data as ChatMessage[];
+      if (!convErr && convData && convData.length > 0) {
+        return convData as ChatMessage[];
       }
 
-      // Fallback to localStorage cache
+      // 2. Fallback query by class_name or raw class ID
+      const queryClass = classIdRaw || conversationId;
+      const { data: classData, error: classErr } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('class_name', queryClass)
+        .order('created_at', { ascending: true })
+        .limit(limit);
+
+      if (!classErr && classData && classData.length > 0) {
+        return classData as ChatMessage[];
+      }
+
+      // 3. Fallback to localStorage cache
       const localKey = `deenora_chat_msg_${conversationId}`;
       const stored = localStorage.getItem(localKey);
       if (stored) {
@@ -229,7 +236,7 @@ export class ChatService {
       institution_id: institutionId,
       sender_id: senderId,
       sender_name: senderName || 'User',
-      class_name: className || undefined,
+      class_name: className || conversationId,
       client_message_id: clientMessageId,
       message: messageText.trim(),
       message_type: 'text',
@@ -246,7 +253,7 @@ export class ChatService {
       } as any
     };
 
-    // 0. Ensure conversation row exists in Supabase DB to satisfy Foreign Key constraint
+    // 0. Ensure conversation row exists in Supabase DB
     try {
       await supabase.from('conversations').upsert([
         {
@@ -262,51 +269,93 @@ export class ChatService {
       console.warn('[ChatService] Conv upsert notice:', e);
     }
 
-    // 1. Insert message into Supabase with automatic fallback retry
+    // 1. Insert message into Supabase with 3-tier automatic fallback retry
+    let isSavedToDB = false;
+
+    // Tier 1: Complete Payload
     try {
-      const insertPayload: any = {
+      const tier1Payload: any = {
         conversation_id: conversationId,
         institution_id: institutionId,
         sender_id: senderId,
+        sender_name: senderName || 'User',
+        class_name: className || conversationId,
         client_message_id: clientMessageId || newMessage.id,
         message: messageText.trim(),
         message_type: 'text'
       };
 
-      if (senderName) insertPayload.sender_name = senderName;
-      if (className) insertPayload.class_name = className;
-
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
-        .insert([insertPayload])
+        .insert([tier1Payload])
         .select()
         .single();
 
-      // Retry if schema mismatch or missing optional columns
-      if (error) {
-        console.warn('[ChatService] Initial insert notice, retrying minimal payload:', error.message || error);
-        const minimalPayload = {
+      if (!error && data) {
+        newMessage.id = data.id;
+        isSavedToDB = true;
+      } else {
+        console.warn('[ChatService] Tier 1 insert notice:', error?.message || error);
+      }
+    } catch (err) {
+      console.warn('[ChatService] Tier 1 exception:', err);
+    }
+
+    // Tier 2: Standard Messaging Payload (if Tier 1 failed)
+    if (!isSavedToDB) {
+      try {
+        const tier2Payload: any = {
           conversation_id: conversationId,
           institution_id: institutionId,
           sender_id: senderId,
+          sender_name: senderName || 'User',
+          class_name: className || conversationId,
           message: messageText.trim()
         };
-        const retryRes = await supabase
+
+        const { data, error } = await supabase
           .from('messages')
-          .insert([minimalPayload])
+          .insert([tier2Payload])
           .select()
           .single();
-        if (retryRes.data) {
-          data = retryRes.data;
-          error = null;
-        }
-      }
 
-      if (!error && data) {
-        newMessage.id = data.id;
+        if (!error && data) {
+          newMessage.id = data.id;
+          isSavedToDB = true;
+        } else {
+          console.warn('[ChatService] Tier 2 insert notice:', error?.message || error);
+        }
+      } catch (err) {
+        console.warn('[ChatService] Tier 2 exception:', err);
       }
-    } catch (err) {
-      console.warn('[ChatService] Online insert notice, saved to local cache:', err);
+    }
+
+    // Tier 3: Core Notice / Messages Schema Payload (Guaranteed columns across all schemas)
+    if (!isSavedToDB) {
+      try {
+        const tier3Payload: any = {
+          institution_id: institutionId,
+          class_name: conversationId,
+          title: senderName || 'Chat Message',
+          sender_name: senderName || 'User',
+          message: messageText.trim()
+        };
+
+        const { data, error } = await supabase
+          .from('messages')
+          .insert([tier3Payload])
+          .select()
+          .single();
+
+        if (!error && data) {
+          newMessage.id = data.id;
+          isSavedToDB = true;
+        } else {
+          console.error('[ChatService] Tier 3 insert error:', error?.message || error);
+        }
+      } catch (err) {
+        console.error('[ChatService] Tier 3 exception:', err);
+      }
     }
 
     // 2. Guaranteed WebSocket Realtime Broadcast on SUBSCRIBED connection
