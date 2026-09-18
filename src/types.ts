@@ -591,6 +591,8 @@ export interface ChatMessage {
   is_deleted?: boolean;
   deleted_for_me?: boolean;
   is_starred?: boolean;
+  is_parent?: boolean;
+  sender_role?: string;
   delivered_at?: string;
   read_at?: string;
   read_by?: Array<{ user_id: string; user_name: string; role?: string; read_at: string }>;

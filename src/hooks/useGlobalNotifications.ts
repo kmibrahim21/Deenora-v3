@@ -128,14 +128,16 @@ export function useGlobalNotifications({
         // Check Live Chat matching
         if (convId) {
           const matchesClassGroup = isForStudentClass(convId, studentClassName, studentClassId) || (studentClassId && (convId === `class-group-${studentClassId}`.toLowerCase() || convId.includes(studentClassId.toLowerCase())));
-          const matchesAnnouncement = convId.startsWith('announcement-');
-          const matchesDirect = userId && convId.includes(userId.toLowerCase());
+          const matchesGeneral = convId === 'general-chat' || convId === 'general' || convId.startsWith('announcement-') || convId.startsWith('general-');
+          const matchesDirect = userId && (convId.includes(userId.toLowerCase()) || (newMsg.recipient_id && newMsg.recipient_id === userId));
 
-          if (matchesClassGroup || matchesAnnouncement || matchesDirect) {
+          if (matchesClassGroup || matchesGeneral || matchesDirect) {
             isRelevant = true;
-            if (matchesClassGroup) {
-              notifTitle = `${studentClassName || 'শ্রেণী'} গ্রুপ মেসেজ`;
-            } else if (matchesAnnouncement) {
+            if (matchesDirect) {
+              notifTitle = newMsg.sender_name ? `${newMsg.sender_name} (শিক্ষক/এডমিন)` : 'শিক্ষক/এডমিনের মেসেজ';
+            } else if (matchesClassGroup) {
+              notifTitle = `${studentClassName || 'শ্রেণি'} গ্রুপ মেসেজ`;
+            } else if (matchesGeneral) {
               notifTitle = 'প্রতিষ্ঠান অফিসিয়াল নোটিশ';
             }
           }
@@ -168,13 +170,20 @@ export function useGlobalNotifications({
             if (className === 'app_notice' || className === 'app_holiday' || className === 'app_ptm') {
               notifTitle = newMsg.title || 'গুরুত্বপূর্ণ নোটিশ';
             } else {
-              notifTitle = `${studentClassName || 'শ্রেণী'} বার্তা / ডায়েরি`;
+              notifTitle = `${studentClassName || 'শ্রেণি'} বার্তা / ডায়েরি`;
             }
           }
         }
       } else {
         // Staff / Admin / Teacher
         isRelevant = true;
+        if (newMsg.sender_role === 'parent' || newMsg.sender_id?.startsWith('parent-') || newMsg.is_parent) {
+          notifTitle = `অভিভাবক: ${newMsg.sender_name || 'নতুন মেসেজ'}`;
+        } else if (newMsg.sender_name) {
+          notifTitle = `${newMsg.sender_name}`;
+        } else {
+          notifTitle = 'নতুন মেসেজ এসেছে';
+        }
       }
 
       if (isRelevant) {

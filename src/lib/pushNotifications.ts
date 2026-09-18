@@ -1,16 +1,5 @@
 // Push Notification Utility for Live Chat, PWA & Android WebView
 
-// Custom event name for in-app notification banner
-export const DEENORA_NOTIF_EVENT = 'deenora-inapp-notification';
-
-export interface InAppNotificationPayload {
-  id: string;
-  title: string;
-  body: string;
-  icon?: string;
-  timestamp: number;
-}
-
 // Unlock Web Audio context on first user touch/click for reliable sound playback
 if (typeof window !== 'undefined') {
   const unlockAudio = () => {
@@ -57,34 +46,56 @@ export function getNotificationPermissionState(): NotificationPermission {
 }
 
 export async function requestPushNotificationPermission(): Promise<NotificationPermission> {
-  // Mark user intention as enabled in local storage
-  localStorage.setItem('deenora_notification_enabled', 'true');
+  if (typeof window === 'undefined') return 'denied';
+
+  // Ensure ServiceWorker is registered and active
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    } catch (e) {
+      console.warn('[PushNotifications] SW registration notice:', e);
+    }
+  }
 
   let result: NotificationPermission = 'default';
 
   if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && 'requestPermission' in Notification) {
     try {
-      result = await Notification.requestPermission();
+      const p = Notification.requestPermission((status) => {
+        if (status) result = status;
+      });
+      if (p && typeof p.then === 'function') {
+        result = await p;
+      }
     } catch (error) {
       console.warn('[PushNotifications] Notification.requestPermission warning:', error);
     }
+  } else if (isAndroidWebView()) {
+    result = 'granted';
   }
 
   if (result === 'granted' || localStorage.getItem('deenora_notification_enabled') === 'true') {
+    localStorage.setItem('deenora_notification_enabled', 'true');
     playNotificationSound();
+    
+    // Immediate test push notification on device
     sendPushNotification(
       'Deenora নোটিফিকেশন চালু হয়েছে! 🔔',
-      'এখন থেকে নতুন নোটিশ ও মেসেজের পুশ নোটিফিকেশন সরাসরি পাবেন।',
+      'এখন থেকে এডমিন, শিক্ষক ও অভিভাবকদের নতুন মেসেজ সরাসরি মোবাইলে পুশ নোটিফিকেশন পাবেন।',
       '/Deenora192.png'
     );
     return 'granted';
+  }
+
+  if (result === 'denied') {
+    localStorage.setItem('deenora_notification_enabled', 'false');
   }
 
   playNotificationSound();
   return result;
 }
 
-function triggerNativeNotification(title: string, options: NotificationOptions) {
+function triggerNativeNotification(title: string, options: NotificationOptions): boolean {
   try {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       const notification = new Notification(title, options);
@@ -95,69 +106,67 @@ function triggerNativeNotification(title: string, options: NotificationOptions) 
       return true;
     }
   } catch (err) {
-    console.warn('[PushNotifications] Native Notification constructor notice:', err);
+    // Note: Android Chrome deliberately throws on new Notification() and requires ServiceWorker showNotification
+    console.log('[PushNotifications] Native Notification not supported on this device/browser:', err);
   }
   return false;
 }
 
-export function sendPushNotification(title: string, body: string, icon?: string, tag?: string) {
+export async function sendPushNotification(title: string, body: string, icon?: string, tag?: string) {
   // 1. Play soft audio chime on every incoming notification
   playNotificationSound();
 
   // 2. Trigger vibration if supported
   try {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate([150, 80, 150]);
+      navigator.vibrate([200, 100, 200]);
     }
   } catch {}
 
   if (typeof window === 'undefined') return;
 
-  const iconUrl = icon || '/Deenora192.png';
-  const notifId = tag || `deenora-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-
-  // 3. Dispatch in-app notification event so active screen shows floating animated banner
-  try {
-    const customEvent = new CustomEvent<InAppNotificationPayload>(DEENORA_NOTIF_EVENT, {
-      detail: {
-        id: notifId,
-        title,
-        body,
-        icon: iconUrl,
-        timestamp: Date.now()
-      }
-    });
-    window.dispatchEvent(customEvent);
-  } catch (e) {
-    console.warn('[PushNotifications] In-app event dispatch notice:', e);
-  }
-
   const perm = getNotificationPermissionState();
   if (perm !== 'granted') return;
 
-  const options: NotificationOptions = {
+  const iconUrl = icon || '/Deenora192.png';
+  const notifId = tag || `deenora-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+
+  const options: NotificationOptions & { renotify?: boolean } = {
     body,
     icon: iconUrl,
     badge: iconUrl,
     tag: notifId,
+    renotify: true,
     silent: false,
-    data: { url: window.location.href }
+    data: { url: window.location.href, timestamp: Date.now() }
   };
 
-  // 4. Try native Notification constructor first (Works instantly on Desktop Chrome, Firefox, Safari, Edge)
-  const nativeShown = triggerNativeNotification(title, options);
-
-  // 5. Also attempt Service Worker notification (Required for Mobile Android Chrome & PWA)
+  // 3. Deliver via Service Worker (Required for Mobile Android Chrome & PWA)
+  let swDelivered = false;
   if ('serviceWorker' in navigator) {
     try {
-      navigator.serviceWorker.getRegistration().then((registration) => {
-        if (registration && registration.showNotification && !nativeShown) {
-          registration.showNotification(title, options).catch((err) => {
-            console.warn('[PushNotifications] SW showNotification error:', err);
-          });
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, options);
+        swDelivered = true;
+      } else {
+        const readyReg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 800))
+        ]);
+        if (readyReg && (readyReg as ServiceWorkerRegistration).showNotification) {
+          await (readyReg as ServiceWorkerRegistration).showNotification(title, options);
+          swDelivered = true;
         }
-      }).catch(() => {});
-    } catch {}
+      }
+    } catch (swErr) {
+      console.warn('[PushNotifications] SW showNotification notice:', swErr);
+    }
+  }
+
+  // 4. Fallback to native desktop Notification constructor if SW did not display it
+  if (!swDelivered) {
+    triggerNativeNotification(title, options);
   }
 }
 

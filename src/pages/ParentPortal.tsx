@@ -49,7 +49,6 @@ import {
 } from 'lucide-react';
 import { ChatApp } from './ChatApp';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
-import { InAppNotificationToast } from '../components/InAppNotificationToast';
 import { 
   requestPushNotificationPermission, 
   getNotificationPermissionState, 
@@ -2780,7 +2779,6 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       )}
       </div>
       </div>
-      <InAppNotificationToast onOpenItem={() => setActiveTab('chat')} />
     </motion.div>
     )}
   </AnimatePresence>

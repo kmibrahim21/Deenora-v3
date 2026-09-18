@@ -284,6 +284,8 @@ export class ChatService {
     const cleanSenderId = senderId ? senderId.trim() : 'parent-user';
     const cleanSenderName = senderName || 'User';
 
+    const isSenderParent = cleanSenderId.startsWith('parent') || (senderName && senderName.includes('অভিভাবক'));
+
     const newMessage: ChatMessage = {
       id: clientMessageId || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       conversation_id: cleanConversationId,
@@ -297,11 +299,13 @@ export class ChatService {
       created_at: new Date().toISOString(),
       is_edited: false,
       is_deleted: false,
+      is_parent: isSenderParent,
+      sender_role: isSenderParent ? 'parent' : 'teacher',
       sender_profile: {
         id: cleanSenderId,
         institution_id: cleanInstitutionId,
         full_name: cleanSenderName,
-        role: cleanSenderId.startsWith('parent') ? 'parent' : 'teacher',
+        role: isSenderParent ? 'parent' : 'teacher',
         is_active: true,
         created_at: new Date().toISOString()
       } as any

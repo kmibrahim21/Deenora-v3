@@ -53,9 +53,9 @@ root.render(
   </ErrorBoundary>
 );
 
-// Register PWA service worker explicitly
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+// Register PWA service worker explicitly for Mobile & Desktop Push Notifications
+const registerServiceWorker = () => {
+  if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
       .then((reg) => {
         console.log('[SW] ServiceWorker registered with scope:', reg.scope);
@@ -63,5 +63,11 @@ if ('serviceWorker' in navigator) {
       .catch((err) => {
         console.warn('[SW] ServiceWorker registration notice:', err);
       });
-  });
+  }
+};
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  registerServiceWorker();
+} else {
+  window.addEventListener('load', registerServiceWorker);
 }
