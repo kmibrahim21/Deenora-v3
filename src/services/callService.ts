@@ -47,16 +47,24 @@ const RTC_CONFIG: RTCConfiguration = {
   iceCandidatePoolSize: 10,
 };
 
+
+
 export class VoiceCallService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteAudioElement: HTMLAudioElement | null = null;
   private channel: any = null;
+  private directChannel: any = null;
+  private phoneChannel: any = null;
   private currentInstitutionId: string = '';
   private currentUserId: string = '';
+  private currentPhone: string = '';
   private activeCallData: CallPayload | null = null;
   private isCaller: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private isSubscribed: boolean = false;
+  private subscribePromise: Promise<boolean> | null = null;
+  private subscribeResolver: ((val: boolean) => void) | null = null;
 
   // Listeners
   public onStatusChange?: (status: CallStatus, data?: CallPayload) => void;
@@ -72,63 +80,200 @@ export class VoiceCallService {
     }
   }
 
+  private normPhone(p?: string): string {
+    if (!p) return '';
+    const digits = String(p).replace(/\D/g, '');
+    return digits.slice(-10); // Standard Bangladesh 10-digit normalized phone
+  }
+
   /**
    * Initialize signaling channel for the institution and user
    */
-  public initSignaling(institutionId: string, userId: string) {
-    if (!institutionId || !userId) return;
-    if (this.currentInstitutionId === institutionId && this.currentUserId === userId && this.channel) {
+  public initSignaling(institutionId: string, userId: string, phone?: string) {
+    const cleanInstId = String(institutionId || '').trim();
+    const cleanUserId = String(userId || '').trim();
+    const cleanPhone = this.normPhone(phone);
+
+    if (!cleanInstId && !cleanUserId && !cleanPhone) return;
+
+    if (
+      this.currentInstitutionId === cleanInstId &&
+      this.currentUserId === cleanUserId &&
+      this.currentPhone === cleanPhone &&
+      (this.channel || this.directChannel)
+    ) {
       return;
     }
 
-    this.currentInstitutionId = institutionId;
-    this.currentUserId = userId;
+    this.currentInstitutionId = cleanInstId;
+    this.currentUserId = cleanUserId;
+    this.currentPhone = cleanPhone;
 
+    // Teardown existing channels cleanly
     if (this.channel) {
-      try {
-        supabase.removeChannel(this.channel);
-      } catch {}
+      try { supabase.removeChannel(this.channel); } catch {}
+      this.channel = null;
+    }
+    if (this.directChannel) {
+      try { supabase.removeChannel(this.directChannel); } catch {}
+      this.directChannel = null;
+    }
+    if (this.phoneChannel) {
+      try { supabase.removeChannel(this.phoneChannel); } catch {}
+      this.phoneChannel = null;
     }
 
-    const channelName = `institution-calls-${institutionId}`;
-    this.channel = supabase.channel(channelName, {
-      config: { broadcast: { self: false } },
+    this.isSubscribed = false;
+    this.subscribePromise = new Promise<boolean>((resolve) => {
+      this.subscribeResolver = resolve;
     });
 
-    this.channel
-      .on('broadcast', { event: 'call:initiate' }, ({ payload }: { payload: CallPayload }) => {
-        this.handleIncomingOffer(payload);
-      })
-      .on('broadcast', { event: 'call:ringing' }, ({ payload }: { payload: CallPayload }) => {
-        if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
-          this.onStatusChange?.('calling', this.activeCallData);
-        }
-      })
-      .on('broadcast', { event: 'call:accept' }, async ({ payload }: { payload: CallPayload }) => {
-        if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
-          await this.handleRemoteAnswer(payload);
-        }
-      })
-      .on('broadcast', { event: 'call:reject' }, ({ payload }: { payload: CallPayload }) => {
-        if (this.activeCallData && this.activeCallData.callId === payload.callId) {
-          this.handleCallRejected(payload.reason);
-        }
-      })
-      .on('broadcast', { event: 'call:candidate' }, async ({ payload }: { payload: CallPayload }) => {
-        if (this.activeCallData && this.activeCallData.callId === payload.callId) {
-          await this.handleRemoteCandidate(payload);
-        }
-      })
-      .on('broadcast', { event: 'call:end' }, ({ payload }: { payload: CallPayload }) => {
-        if (this.activeCallData && this.activeCallData.callId === payload.callId) {
-          this.handleCallEndedRemotely();
-        }
-      })
-      .subscribe((status: string) => {
+    const attachListeners = (ch: any) => {
+      ch
+        .on('broadcast', { event: 'call:initiate' }, ({ payload }: { payload: CallPayload }) => {
+          this.handleIncomingOffer(payload);
+        })
+        .on('broadcast', { event: 'call:ringing' }, ({ payload }: { payload: CallPayload }) => {
+          if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+            this.onStatusChange?.('calling', this.activeCallData);
+          }
+        })
+        .on('broadcast', { event: 'call:accept' }, async ({ payload }: { payload: CallPayload }) => {
+          if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+            await this.handleRemoteAnswer(payload);
+          }
+        })
+        .on('broadcast', { event: 'call:reject' }, ({ payload }: { payload: CallPayload }) => {
+          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+            this.handleCallRejected(payload.reason);
+          }
+        })
+        .on('broadcast', { event: 'call:candidate' }, async ({ payload }: { payload: CallPayload }) => {
+          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+            await this.handleRemoteCandidate(payload);
+          }
+        })
+        .on('broadcast', { event: 'call:end' }, ({ payload }: { payload: CallPayload }) => {
+          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+            this.handleCallEndedRemotely();
+          }
+        });
+    };
+
+    // 1. Institution-wide channel
+    if (cleanInstId) {
+      const channelName = `institution-calls-${cleanInstId}`;
+      this.channel = supabase.channel(channelName, {
+        config: { broadcast: { self: false } },
+      });
+      attachListeners(this.channel);
+      this.channel.subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
-          console.log('[VoiceCall] Realtime Signaling Connected:', channelName);
+          console.log('[VoiceCall] Institution Channel Connected:', channelName);
+          this.isSubscribed = true;
+          this.subscribeResolver?.(true);
         }
       });
+    }
+
+    // 2. Direct Student ID channel (for guardian portal)
+    if (cleanUserId && !cleanUserId.startsWith('admin') && !cleanUserId.startsWith('user-')) {
+      const directChannelName = `student-call-${cleanUserId.toLowerCase()}`;
+      this.directChannel = supabase.channel(directChannelName, {
+        config: { broadcast: { self: false } },
+      });
+      attachListeners(this.directChannel);
+      this.directChannel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[VoiceCall] Direct Student Channel Connected:', directChannelName);
+          this.isSubscribed = true;
+          this.subscribeResolver?.(true);
+        }
+      });
+    }
+
+    // 3. Direct Guardian Phone channel
+    if (cleanPhone) {
+      const phoneChannelName = `phone-call-${cleanPhone}`;
+      this.phoneChannel = supabase.channel(phoneChannelName, {
+        config: { broadcast: { self: false } },
+      });
+      attachListeners(this.phoneChannel);
+      this.phoneChannel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[VoiceCall] Direct Phone Channel Connected:', phoneChannelName);
+          this.isSubscribed = true;
+          this.subscribeResolver?.(true);
+        }
+      });
+    }
+  }
+
+  /**
+   * Resilient broadcast across all active signaling channels
+   */
+  private async broadcastSignaling(event: string, payload: any) {
+    const promises: Promise<any>[] = [];
+
+    if (this.channel) {
+      promises.push(
+        this.channel
+          .send({ type: 'broadcast', event, payload })
+          .catch((e: any) => console.warn('[VoiceCall] broadcast on main channel failed:', e))
+      );
+    }
+    if (this.directChannel) {
+      promises.push(
+        this.directChannel
+          .send({ type: 'broadcast', event, payload })
+          .catch((e: any) => console.warn('[VoiceCall] broadcast on direct channel failed:', e))
+      );
+    }
+    if (this.phoneChannel) {
+      promises.push(
+        this.phoneChannel
+          .send({ type: 'broadcast', event, payload })
+          .catch((e: any) => console.warn('[VoiceCall] broadcast on phone channel failed:', e))
+      );
+    }
+
+    // If payload has student info, send directly to student's dedicated channel as well
+    const studentId = payload?.student?.id;
+    if (studentId) {
+      const targetChanName = `student-call-${String(studentId).trim().toLowerCase()}`;
+      if (!this.directChannel || this.directChannel.topic !== targetChanName) {
+        try {
+          const directChan = supabase.channel(targetChanName, {
+            config: { broadcast: { self: false } },
+          });
+          directChan.subscribe(async (st: string) => {
+            if (st === 'SUBSCRIBED') {
+              await directChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+            }
+          });
+        } catch {}
+      }
+    }
+
+    // If payload has guardian phone, send to phone channel as well
+    const guardianPhone = this.normPhone(payload?.calleePhone || payload?.student?.guardian_phone);
+    if (guardianPhone) {
+      const phoneChanName = `phone-call-${guardianPhone}`;
+      if (!this.phoneChannel || this.phoneChannel.topic !== phoneChanName) {
+        try {
+          const pChan = supabase.channel(phoneChanName, {
+            config: { broadcast: { self: false } },
+          });
+          pChan.subscribe(async (st: string) => {
+            if (st === 'SUBSCRIBED') {
+              await pChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+            }
+          });
+        } catch {}
+      }
+    }
+
+    await Promise.all(promises);
   }
 
   /**
@@ -184,16 +329,12 @@ export class VoiceCallService {
     this.peerConnection = pc;
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && this.channel) {
-        this.channel.send({
-          type: 'broadcast',
-          event: 'call:candidate',
-          payload: {
-            callId,
-            candidate: event.candidate.toJSON(),
-            senderId: this.currentUserId,
-            timestamp: Date.now(),
-          },
+      if (event.candidate) {
+        this.broadcastSignaling('call:candidate', {
+          callId,
+          candidate: event.candidate.toJSON(),
+          senderId: this.currentUserId,
+          timestamp: Date.now(),
         });
       }
     };
@@ -240,6 +381,14 @@ export class VoiceCallService {
         this.initSignaling(institutionId, caller.id);
       }
 
+      // Wait for channel subscription to be established before sending
+      if (!this.isSubscribed && this.subscribePromise) {
+        await Promise.race([
+          this.subscribePromise,
+          new Promise((resolve) => setTimeout(resolve, 1500)),
+        ]);
+      }
+
       const stream = await this.acquireLocalStream();
       const pc = this.createPeerConnection(callId);
 
@@ -272,19 +421,16 @@ export class VoiceCallService {
       callSoundService.startOutgoingRingback();
       this.onStatusChange?.('calling', payload);
 
-      // Broadcast via Supabase
-      if (this.channel) {
-        try {
-          await this.channel.send({
-            type: 'broadcast',
-            event: 'call:initiate',
-            payload,
-          });
-          console.log('[VoiceCall] Broadcasted call:initiate:', callId);
-        } catch (sendErr) {
-          console.warn('[VoiceCall] Error broadcasting call:initiate:', sendErr);
+      // Broadcast offer on all channels
+      await this.broadcastSignaling('call:initiate', payload);
+      console.log('[VoiceCall] Broadcasted call:initiate:', callId);
+
+      // Send a second pulse after 450ms to ensure delivery even during initial network handshake
+      setTimeout(() => {
+        if (this.activeCallData && this.activeCallData.callId === callId && this.isCaller) {
+          this.broadcastSignaling('call:initiate', payload);
         }
-      }
+      }, 450);
 
       return true;
     } catch (error: any) {
@@ -301,32 +447,41 @@ export class VoiceCallService {
    */
   private async handleIncomingOffer(payload: CallPayload) {
     // 1. Ignore if current user is the caller or we initiated this call
-    if (this.isCaller || this.currentUserId === payload.caller.id) {
+    if (this.isCaller || String(this.currentUserId) === String(payload.caller.id)) {
       return;
     }
 
-    // 2. Determine if this incoming call is destined for this student or guardian
-    const isTargetStudent =
-      this.currentUserId === payload.student.id ||
-      this.currentUserId === payload.calleePhone ||
-      (payload.student.guardian_phone && this.currentUserId === payload.student.guardian_phone) ||
-      (this.currentUserId.startsWith('parent') &&
-        (this.currentUserId.includes(payload.student.id) ||
-         (payload.calleePhone && this.currentUserId.includes(payload.calleePhone))));
+    // 2. Normalize and check if this call belongs to this user or student
+    const norm = (s?: any) => String(s || '').trim().toLowerCase();
+    const myId = norm(this.currentUserId);
+    const targetStudentId = norm(payload.student.id);
 
-    if (!isTargetStudent) {
+    const myPhone = this.normPhone(this.currentPhone || this.currentUserId);
+    const targetPhone = this.normPhone(payload.calleePhone || payload.student.guardian_phone);
+
+    const isIdMatch = Boolean(myId && targetStudentId && (myId === targetStudentId || myId.includes(targetStudentId) || targetStudentId.includes(myId)));
+    const isPhoneMatch = Boolean(myPhone && targetPhone && myPhone === targetPhone);
+    const isParentPrefix = myId.startsWith('parent') && (myId.includes(targetStudentId) || (targetPhone && myId.includes(targetPhone)));
+
+    const isForMe = isIdMatch || isPhoneMatch || isParentPrefix;
+
+    if (!isForMe) {
       return;
     }
+
+    console.log('[VoiceCall] Incoming offer matched! Ringing incoming call modal...', {
+      myId,
+      targetStudentId,
+      myPhone,
+      targetPhone,
+    });
 
     // If already in a call, send busy
     if (this.activeCallData && this.activeCallData.callId !== payload.callId) {
-      if (this.channel) {
-        this.channel.send({
-          type: 'broadcast',
-          event: 'call:reject',
-          payload: { callId: payload.callId, reason: 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন।' },
-        });
-      }
+      this.broadcastSignaling('call:reject', {
+        callId: payload.callId,
+        reason: 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন।',
+      });
       return;
     }
 
@@ -339,13 +494,10 @@ export class VoiceCallService {
     this.onIncomingCall?.(payload);
 
     // Notify caller that phone is ringing
-    if (this.channel) {
-      this.channel.send({
-        type: 'broadcast',
-        event: 'call:ringing',
-        payload: { callId: payload.callId, calleeId: this.currentUserId },
-      });
-    }
+    this.broadcastSignaling('call:ringing', {
+      callId: payload.callId,
+      calleeId: this.currentUserId,
+    });
   }
 
   /**
@@ -379,22 +531,16 @@ export class VoiceCallService {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      // Broadcast accept
-      if (this.channel) {
-        await this.channel.send({
-          type: 'broadcast',
-          event: 'call:accept',
-          payload: {
-            callId,
-            answer: {
-              type: answer.type,
-              sdp: answer.sdp,
-            },
-            calleeName: this.activeCallData.student.guardian_name || 'অভিভাবক',
-            timestamp: Date.now(),
-          },
-        });
-      }
+      // Broadcast accept across channels
+      await this.broadcastSignaling('call:accept', {
+        callId,
+        answer: {
+          type: answer.type,
+          sdp: answer.sdp,
+        },
+        calleeName: this.activeCallData.student.guardian_name || 'অভিভাবক',
+        timestamp: Date.now(),
+      });
 
       this.onStatusChange?.('connected', this.activeCallData);
       callSoundService.playConnectChime();
@@ -456,15 +602,11 @@ export class VoiceCallService {
     callSoundService.stopAll();
     callSoundService.playDisconnectChime();
 
-    if (this.activeCallData && this.channel) {
-      this.channel.send({
-        type: 'broadcast',
-        event: 'call:reject',
-        payload: {
-          callId: this.activeCallData.callId,
-          reason,
-          timestamp: Date.now(),
-        },
+    if (this.activeCallData) {
+      this.broadcastSignaling('call:reject', {
+        callId: this.activeCallData.callId,
+        reason,
+        timestamp: Date.now(),
       });
     }
 
@@ -492,14 +634,10 @@ export class VoiceCallService {
     callSoundService.stopAll();
     callSoundService.playDisconnectChime();
 
-    if (this.activeCallData && this.channel) {
-      this.channel.send({
-        type: 'broadcast',
-        event: 'call:end',
-        payload: {
-          callId: this.activeCallData.callId,
-          timestamp: Date.now(),
-        },
+    if (this.activeCallData) {
+      this.broadcastSignaling('call:end', {
+        callId: this.activeCallData.callId,
+        timestamp: Date.now(),
       });
     }
 
@@ -565,10 +703,16 @@ export class VoiceCallService {
     this.cleanup();
     callSoundService.stopAll();
     if (this.channel) {
-      try {
-        supabase.removeChannel(this.channel);
-      } catch {}
+      try { supabase.removeChannel(this.channel); } catch {}
       this.channel = null;
+    }
+    if (this.directChannel) {
+      try { supabase.removeChannel(this.directChannel); } catch {}
+      this.directChannel = null;
+    }
+    if (this.phoneChannel) {
+      try { supabase.removeChannel(this.phoneChannel); } catch {}
+      this.phoneChannel = null;
     }
   }
 }

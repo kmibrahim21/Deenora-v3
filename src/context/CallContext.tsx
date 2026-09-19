@@ -8,7 +8,7 @@ interface CallContextType {
   isCaller: boolean;
   duration: number;
   isMuted: boolean;
-  initSignaling: (institutionId: string, userId: string) => void;
+  initSignaling: (institutionId: string, userId: string, phone?: string) => void;
   startCall: (student: CallStudentInfo, caller?: CallParticipantInfo, institutionId?: string) => Promise<boolean>;
   acceptCall: () => Promise<boolean>;
   rejectCall: (reason?: string) => void;
@@ -74,9 +74,9 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [callStatus]);
 
-  const initSignaling = useCallback((institutionId: string, userId: string) => {
-    if (institutionId && userId) {
-      voiceCallService.initSignaling(institutionId, userId);
+  const initSignaling = useCallback((institutionId: string, userId: string, phone?: string) => {
+    if (institutionId || userId || phone) {
+      voiceCallService.initSignaling(institutionId, userId, phone);
     }
   }, []);
 

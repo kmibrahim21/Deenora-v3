@@ -206,12 +206,19 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
   // Initialize Voice Call Signaling listener for Guardian app so parent can receive incoming calls
   useEffect(() => {
-    const activeInstId = currentInstitution?.id || madrasah?.id || student?.institution_id;
-    const activeStudentId = studentId || student?.id;
-    if (activeInstId && activeStudentId) {
-      initSignaling(activeInstId, activeStudentId);
+    let parentSession: any = {};
+    try {
+      parentSession = JSON.parse(localStorage.getItem('parent_session') || '{}');
+    } catch {}
+
+    const activeInstId = currentInstitution?.id || madrasah?.id || student?.institution_id || parentSession.institution_id || '';
+    const activeStudentId = studentId || student?.id || parentSession.student_id || '';
+    const activePhone = student?.guardian_phone || parentSession.guardian_phone || '';
+
+    if (activeInstId || activeStudentId || activePhone) {
+      initSignaling(activeInstId, activeStudentId, activePhone);
     }
-  }, [currentInstitution?.id, madrasah?.id, student?.institution_id, studentId, student?.id, initSignaling]);
+  }, [currentInstitution?.id, madrasah?.id, student?.institution_id, studentId, student?.id, student?.guardian_phone, initSignaling]);
 
   useEffect(() => {
     const perm = getNotificationPermissionState();
