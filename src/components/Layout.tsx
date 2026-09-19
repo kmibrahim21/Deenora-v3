@@ -355,7 +355,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
 
         {(currentView === 'home' || currentView === 'admin-dashboard') && role !== 'parent' && <MultiCalendarHeader madrasah={madrasah} />}
 
-        <main className={`flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar ${(role === 'parent' || currentView === 'chat' || currentView === 'messages') ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`} style={(role !== 'parent' && currentView !== 'chat' && currentView !== 'messages') ? { paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
+        <main className={`flex-1 overflow-y-auto w-full custom-scrollbar ${(role === 'parent' || currentView === 'chat' || currentView === 'messages') ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`} style={(role !== 'parent' && currentView !== 'chat' && currentView !== 'messages') ? { paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
           {children}
         </main>
 

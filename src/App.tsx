@@ -164,7 +164,13 @@ const App: React.FC = () => {
   }, [profile?.role, view]);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    try {
+      window.scrollTo(0, 0);
+      const scrollable = document.querySelector('main');
+      if (scrollable) {
+        scrollable.scrollTop = 0;
+      }
+    } catch (e) {}
   }, [view]);
 
   useEffect(() => {

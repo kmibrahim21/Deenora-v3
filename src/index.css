@@ -69,25 +69,35 @@
 }
 
 :root {
-  --safe-top: env(safe-area-inset-top);
-  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 html {
   height: 100%;
+  height: -webkit-fill-available;
   width: 100%;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   height: 100%;
+  height: -webkit-fill-available;
   width: 100%;
   margin: 0;
   padding: 0;
-  overscroll-behavior-y: none;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+  overscroll-behavior: none;
+  -webkit-overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-size: 14px;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
 }
 
 .dark html, .dark body {
@@ -110,6 +120,15 @@ body {
   width: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Prevent iOS momentum scrolling vs CSS smooth scrolling collision and screen shaking */
+@supports (-webkit-touch-callout: none) {
+  * {
+    scroll-behavior: auto !important;
+  }
 }
 
 .font-noto { font-family: 'Noto Sans Bengali', sans-serif; }
@@ -147,19 +166,29 @@ body {
   }
 }
 
-/* iOS WebKit Hardware Acceleration & Anti-Flicker Rules */
+/* iOS WebKit Hardware Acceleration & Anti-Flicker / Anti-Jitter Rules */
+header,
+nav,
+aside,
 [class*="backdrop-blur"],
-.glass-card {
+.glass-card,
+.modal-overlay {
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  -webkit-perspective: 1000;
+  perspective: 1000;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  transform-style: preserve-3d;
 }
 
 .overflow-y-auto,
 .overflow-x-auto,
-.scroll-container {
+.scroll-container,
+main {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  -webkit-overscroll-behavior: contain;
 }
 
 .glass-card {

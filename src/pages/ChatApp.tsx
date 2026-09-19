@@ -107,7 +107,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   };
 
   return (
-    <div className={`h-[calc(100dvh-4rem)] md:h-[calc(100vh-5rem)] w-full flex flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
+    <div className={`h-full w-full flex flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
       <div className="flex-1 flex overflow-hidden w-full h-full bg-white dark:bg-slate-900">
         {/* Left Sidebar (Visible on Desktop OR when mobile chat is NOT active) */}
         <div className={`w-full md:w-auto ${showMobileChat ? 'hidden md:flex' : 'flex'} flex-col h-full shrink-0`}>
