@@ -137,6 +137,7 @@ const App: React.FC = () => {
   }, [madrasah]);
 
   const isLiveChatEnabled = useMemo(() => {
+    if (madrasah?.is_super_admin || profile?.role === 'super_admin') return true;
     let config = madrasah?.config_json as any;
     if (typeof config === 'string') {
       try {
@@ -146,7 +147,7 @@ const App: React.FC = () => {
       }
     }
     const configModules = config?.modules || {};
-    return configModules.live_chat === true || profile?.role === 'super_admin';
+    return configModules.live_chat === true || (madrasah as any)?.live_chat === true || (config as any)?.live_chat === true;
   }, [madrasah, profile?.role]);
 
   // Mount global real-time notifications for institution staff/admins
@@ -509,6 +510,7 @@ const App: React.FC = () => {
           <Students
             selectedClass={selectedClass}
             madrasah={madrasah}
+            profile={profile}
             onStudentClick={(s) => {
               setSelectedStudent(s);
               setView("student-details");

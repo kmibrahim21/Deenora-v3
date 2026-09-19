@@ -39,8 +39,12 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.services.mozilla.com' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 export class VoiceCallService {
@@ -231,6 +235,11 @@ export class VoiceCallService {
       this.isCaller = true;
       const callId = `call-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       
+      // Ensure signaling channel is connected
+      if (!this.channel || this.currentInstitutionId !== institutionId) {
+        this.initSignaling(institutionId, caller.id);
+      }
+
       const stream = await this.acquireLocalStream();
       const pc = this.createPeerConnection(callId);
 
@@ -265,11 +274,16 @@ export class VoiceCallService {
 
       // Broadcast via Supabase
       if (this.channel) {
-        await this.channel.send({
-          type: 'broadcast',
-          event: 'call:initiate',
-          payload,
-        });
+        try {
+          await this.channel.send({
+            type: 'broadcast',
+            event: 'call:initiate',
+            payload,
+          });
+          console.log('[VoiceCall] Broadcasted call:initiate:', callId);
+        } catch (sendErr) {
+          console.warn('[VoiceCall] Error broadcasting call:initiate:', sendErr);
+        }
       }
 
       return true;
@@ -286,15 +300,23 @@ export class VoiceCallService {
    * Handle incoming call offer on Callee (Guardian / Teacher)
    */
   private async handleIncomingOffer(payload: CallPayload) {
-    // Check if this call is relevant for current user or student
-    const isForMe =
+    // 1. Ignore if current user is the caller or we initiated this call
+    if (this.isCaller || this.currentUserId === payload.caller.id) {
+      return;
+    }
+
+    // 2. Determine if this incoming call is destined for this student or guardian
+    const isTargetStudent =
       this.currentUserId === payload.student.id ||
       this.currentUserId === payload.calleePhone ||
+      (payload.student.guardian_phone && this.currentUserId === payload.student.guardian_phone) ||
       (this.currentUserId.startsWith('parent') &&
-        (this.currentUserId.includes(payload.student.id) || (payload.calleePhone && this.currentUserId.includes(payload.calleePhone)))) ||
-      (payload.caller.id !== this.currentUserId);
+        (this.currentUserId.includes(payload.student.id) ||
+         (payload.calleePhone && this.currentUserId.includes(payload.calleePhone))));
 
-    if (!isForMe) return;
+    if (!isTargetStudent) {
+      return;
+    }
 
     // If already in a call, send busy
     if (this.activeCallData && this.activeCallData.callId !== payload.callId) {

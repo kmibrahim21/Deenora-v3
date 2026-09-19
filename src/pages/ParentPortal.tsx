@@ -168,7 +168,16 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return (config?.modules || {}) as any;
   }, [currentInstitution, madrasah]);
 
-  const isLiveChatEnabled = modules.live_chat === true;
+  const isLiveChatEnabled = useMemo(() => {
+    const inst = currentInstitution || madrasah;
+    if (inst?.is_super_admin) return true;
+    let config: any = inst?.config_json;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const configModules = config?.modules || {};
+    return configModules.live_chat === true || (inst as any)?.live_chat === true || (config as any)?.live_chat === true;
+  }, [currentInstitution, madrasah]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
   const [feeStructures, setFeeStructures] = useState<any[]>([]);
@@ -195,14 +204,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   
   const { initSignaling, startCall } = useVoiceCall();
 
-  // Initialize Voice Call Signaling listener for Guardian app only if live chat & voice call module is active
+  // Initialize Voice Call Signaling listener for Guardian app so parent can receive incoming calls
   useEffect(() => {
-    if (!isLiveChatEnabled) return;
-    const activeInstId = currentInstitution?.id || madrasah?.id;
-    if (activeInstId && studentId) {
-      initSignaling(activeInstId, studentId);
+    const activeInstId = currentInstitution?.id || madrasah?.id || student?.institution_id;
+    const activeStudentId = studentId || student?.id;
+    if (activeInstId && activeStudentId) {
+      initSignaling(activeInstId, activeStudentId);
     }
-  }, [currentInstitution?.id, madrasah?.id, studentId, isLiveChatEnabled, initSignaling]);
+  }, [currentInstitution?.id, madrasah?.id, student?.institution_id, studentId, student?.id, initSignaling]);
 
   useEffect(() => {
     const perm = getNotificationPermissionState();

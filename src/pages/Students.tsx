@@ -25,13 +25,14 @@ interface StudentsProps {
   canUseVoice?: boolean;
   institutionId?: string;
   madrasah?: Institution | null;
+  profile?: any;
   onNavigateToWallet?: () => void;
   onNavigateToVoiceBroadcast?: (ids: string[]) => void;
 }
 
 const PAGE_SIZE = 50;
 
-const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
+const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -81,13 +82,13 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
         guardian_phone: student.guardian_phone,
       },
       {
-        id: madrasah?.id || 'admin',
-        name: madrasah?.name || 'মাদ্রাসা কর্তৃপক্ষ',
-        role: 'teacher',
+        id: profile?.id || madrasah?.id || 'admin',
+        name: profile?.full_name || profile?.name || madrasah?.name || 'মাদ্রাসা কর্তৃপক্ষ',
+        role: profile?.role || 'teacher',
       },
       institutionId || madrasah?.id
     );
-  }, [startCall, selectedClass, madrasah, institutionId, isLiveChatEnabled, lang]);
+  }, [startCall, selectedClass, madrasah, profile, institutionId, isLiveChatEnabled, lang]);
 
   // Fetch Templates (Cached)
   const fetchTemplates = useCallback(async () => {
