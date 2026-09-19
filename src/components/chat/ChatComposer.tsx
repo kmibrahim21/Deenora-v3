@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Smile, Paperclip, Sparkles, FileText, X, Reply, Edit3 } from 'lucide-react';
+import { Send, Smile, Paperclip, Sparkles, FileText, X, Reply, Edit3, Mic } from 'lucide-react';
 import { ChatMessage } from '../../types';
 
 interface ChatComposerProps {
@@ -9,6 +9,7 @@ interface ChatComposerProps {
   editingMessage?: ChatMessage | null;
   onCancelEdit?: () => void;
   onEditSubmit?: (msgId: string, newText: string) => void;
+  onStartVoice?: () => void;
   disabled?: boolean;
   isAnnouncementOnly?: boolean;
   userRole?: string;
@@ -23,6 +24,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   editingMessage,
   onCancelEdit,
   onEditSubmit,
+  onStartVoice,
   disabled = false,
   isAnnouncementOnly = false,
   userRole,
@@ -99,9 +101,12 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   }
 
   return (
-    <div className={`p-3 sm:p-4 pb-4 sm:pb-5 border-t relative space-y-2.5 backdrop-blur-xl transition-all shadow-lg ${
-      isDark ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200/80'
-    }`}>
+    <div 
+      className={`p-2 sm:p-3 border-t relative space-y-2 transition-all ${
+        isDark ? 'bg-[#202C33] border-[#2A3942]' : 'bg-[#F0F2F5] border-[#E9EDEF]'
+      }`}
+      style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       
       {/* Hidden File Input for Documents */}
       <input
@@ -248,14 +253,14 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         </div>
       )}
 
-      {/* Main Composer Form Bar */}
-      <form onSubmit={handleSubmit} className="flex items-center gap-2">
+      {/* WhatsApp Native Composer Form Bar */}
+      <form onSubmit={handleSubmit} className="flex items-center gap-1.5 sm:gap-2">
         
         {/* Rounded Input Pill */}
-        <div className={`flex-1 flex items-center gap-2.5 px-4 py-2.5 rounded-full border transition-all ${
+        <div className={`flex-1 flex items-center gap-2 px-3 sm:px-4 py-2 rounded-[24px] shadow-xs border transition-all ${
           isDark
-            ? 'bg-slate-800/90 border-slate-700/80 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:border-emerald-500'
-            : 'bg-slate-100/90 border-slate-200/80 focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:bg-white focus-within:border-emerald-500'
+            ? 'bg-[#2A3942] border-[#384A54] text-[#E9EDEF]'
+            : 'bg-white border-[#E9EDEF] text-[#111B21]'
         }`}>
           {/* Interactive Emoji Button */}
           <button
@@ -265,10 +270,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               setShowTemplates(false);
               setShowAttachmentTray(false);
             }}
-            className={`text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors shrink-0 active:scale-90 ${
-              showEmojiPicker ? 'text-emerald-600 dark:text-emerald-400' : ''
-            }`}
-            title={lang === 'bn' ? 'ইমোজি নির্বাচন করুন' : 'Emojis'}
+            className="text-[#8696A0] hover:text-[#00A884] transition-colors shrink-0 active:scale-90"
+            title={lang === 'bn' ? 'ইমোজি' : 'Emojis'}
           >
             <Smile className="w-5 h-5" />
           </button>
@@ -278,8 +281,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={lang === 'bn' ? 'বার্তা লিখুন...' : 'Type a message...'}
-            className="flex-1 text-xs sm:text-sm bg-transparent border-none focus:outline-none text-slate-900 dark:text-white placeholder-slate-400 font-normal"
+            placeholder={lang === 'bn' ? 'মেসেজ লিখুন...' : 'Type a message...'}
+            className="flex-1 text-xs sm:text-sm bg-transparent border-none focus:outline-none placeholder-[#8696A0] font-normal py-0.5"
           />
 
           {/* Attachment Paperclip */}
@@ -290,22 +293,29 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               setShowEmojiPicker(false);
               setShowTemplates(false);
             }}
-            className={`text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors shrink-0 active:scale-90 ${
-              showAttachmentTray ? 'text-emerald-600 dark:text-emerald-400' : ''
-            }`}
+            className="text-[#8696A0] hover:text-[#00A884] transition-colors shrink-0 -rotate-45 active:scale-90"
             title={lang === 'bn' ? 'ডকুমেন্ট ফাইল সংযুক্তি' : 'Attach Document'}
           >
             <Paperclip className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Circular Gradient Send Button */}
+        {/* WhatsApp Circular Action Button (Mic / Send) */}
         <button
-          type="submit"
-          disabled={!text.trim() || disabled}
-          className="w-11 h-11 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-emerald-600/30 flex items-center justify-center shrink-0 active:scale-90"
+          type={text.trim() ? "submit" : "button"}
+          onClick={() => {
+            if (!text.trim() && onStartVoice) {
+              onStartVoice();
+            }
+          }}
+          disabled={disabled}
+          className="w-11 h-11 rounded-full bg-[#00A884] hover:bg-[#008F6F] text-white flex items-center justify-center shadow-md shrink-0 active:scale-90 transition-all"
         >
-          <Send className="w-5 h-5 ml-0.5" />
+          {text.trim() ? (
+            <Send className="w-5 h-5 ml-0.5" />
+          ) : (
+            <Mic className="w-5 h-5" />
+          )}
         </button>
       </form>
 

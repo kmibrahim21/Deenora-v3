@@ -65,26 +65,28 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   };
 
   return (
-    <div className={`w-full md:w-80 lg:w-96 flex flex-col h-full md:border-r ${isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200/80 text-slate-900'}`}>
+    <div className={`w-full md:w-80 lg:w-96 flex flex-col h-full md:border-r ${isDark ? 'bg-[#111B21] border-[#222D34] text-[#E9EDEF]' : 'bg-white border-[#E9EDEF] text-[#111B21]'}`}>
       
-      {/* Title & Subtitle Header */}
+      {/* WhatsApp Signature Header */}
       <div 
-        className="px-4 pb-2 flex items-center justify-between gap-3"
-        style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
+        className={`px-4 py-3 flex items-center justify-between gap-3 text-white shadow-xs shrink-0 ${
+          isDark ? 'bg-[#1F2C34]' : 'bg-[#008069]'
+        }`}
+        style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
       >
         <div>
-          <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            {lang === 'bn' ? 'মেসেজসমূহ' : 'Messages'}
+          <h2 className="text-xl font-bold tracking-tight text-white">
+            {lang === 'bn' ? 'দ্বীনোরা চ্যাট' : 'Deenora Chat'}
           </h2>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">
-            {lang === 'bn' ? 'আপনার প্রতিষ্ঠানের সাথে যুক্ত থাকুন' : 'Stay connected with your institution'}
+          <p className="text-[11px] text-emerald-100 font-normal">
+            {lang === 'bn' ? 'মাদরাসা ও ক্লাসরুম বার্তা' : 'Madrasah & Classroom Messages'}
           </p>
         </div>
 
         {onNewDirectChat && (
           <button
             onClick={onNewDirectChat}
-            className="p-2.5 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-blue-400 transition-all shrink-0 active:scale-95 shadow-2xs"
+            className="p-2.5 rounded-full hover:bg-white/15 text-white transition-all shrink-0 active:scale-95"
             title={lang === 'bn' ? 'নতুন মেসেজ' : 'New Message'}
           >
             <MessageSquarePlus className="w-5 h-5" />
@@ -93,76 +95,67 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       </div>
 
       {/* Search Input Bar */}
-      <div className="px-4 py-2">
-        <div className="relative flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={lang === 'bn' ? 'কনভারসেশন খুঁজুন...' : 'Search conversations...'}
-              className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-2xl border transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isDark
-                  ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-500'
-                  : 'bg-slate-50 border-slate-200/80 text-slate-800 placeholder-slate-400'
-              }`}
-            />
-          </div>
-          <button className={`p-2.5 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
+      <div className={`p-2.5 border-b ${isDark ? 'bg-[#111B21] border-[#222D34]' : 'bg-white border-[#E9EDEF]'}`}>
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${isDark ? 'bg-[#202C33]' : 'bg-[#F0F2F5]'}`}>
+          <Search className="w-4 h-4 text-[#8696A0] shrink-0" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={lang === 'bn' ? 'খুঁজুন বা নতুন চ্যাট শুরু করুন...' : 'Search or start new chat...'}
+            className="w-full bg-transparent text-xs sm:text-sm border-none focus:outline-none placeholder-[#8696A0] text-[#111B21] dark:text-[#E9EDEF]"
+          />
         </div>
 
         {/* Filter Pills */}
-        <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar pb-1 text-xs font-semibold">
+        <div className="flex gap-1.5 mt-2.5 overflow-x-auto no-scrollbar pb-0.5 text-xs font-semibold">
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-1.5 rounded-full transition-all whitespace-nowrap ${
+            className={`px-3 py-1 rounded-full transition-all whitespace-nowrap text-xs ${
               filter === 'all'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                ? 'bg-[#008069] dark:bg-[#00A884] text-white shadow-xs'
                 : isDark
-                ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-[#202C33] text-[#8696A0] hover:bg-[#2A3942]'
+                : 'bg-[#F0F2F5] text-[#54656F] hover:bg-[#E9EDEF]'
             }`}
           >
             {lang === 'bn' ? 'সব' : 'All'}
           </button>
           <button
             onClick={() => setFilter('direct')}
-            className={`px-4 py-1.5 rounded-full transition-all whitespace-nowrap ${
+            className={`px-3 py-1 rounded-full transition-all whitespace-nowrap text-xs ${
               filter === 'direct'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                ? 'bg-[#008069] dark:bg-[#00A884] text-white shadow-xs'
                 : isDark
-                ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-[#202C33] text-[#8696A0] hover:bg-[#2A3942]'
+                : 'bg-[#F0F2F5] text-[#54656F] hover:bg-[#E9EDEF]'
             }`}
           >
-            {lang === 'bn' ? 'ব্যক্তিগত' : 'Personal'}
+            {lang === 'bn' ? 'ব্যক্তিগত' : 'Direct'}
           </button>
           <button
             onClick={() => setFilter('class')}
-            className={`px-4 py-1.5 rounded-full transition-all whitespace-nowrap ${
+            className={`px-3 py-1 rounded-full transition-all whitespace-nowrap text-xs ${
               filter === 'class'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                ? 'bg-[#008069] dark:bg-[#00A884] text-white shadow-xs'
                 : isDark
-                ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-[#202C33] text-[#8696A0] hover:bg-[#2A3942]'
+                : 'bg-[#F0F2F5] text-[#54656F] hover:bg-[#E9EDEF]'
             }`}
           >
-            {lang === 'bn' ? 'আমার ক্লাস' : 'My Classes'}
+            {lang === 'bn' ? 'ক্লাস গ্রুপ' : 'Class Groups'}
           </button>
           <button
             onClick={() => setFilter('announcement')}
-            className={`px-4 py-1.5 rounded-full transition-all whitespace-nowrap ${
+            className={`px-3 py-1 rounded-full transition-all whitespace-nowrap text-xs ${
               filter === 'announcement'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                ? 'bg-[#008069] dark:bg-[#00A884] text-white shadow-xs'
                 : isDark
-                ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-[#202C33] text-[#8696A0] hover:bg-[#2A3942]'
+                : 'bg-[#F0F2F5] text-[#54656F] hover:bg-[#E9EDEF]'
             }`}
           >
-            {lang === 'bn' ? 'নোটিশ' : 'Announcements'}
+            {lang === 'bn' ? 'নোটিশ বোর্ড' : 'Notice Board'}
           </button>
         </div>
       </div>
@@ -181,28 +174,34 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               <button
                 key={c.id}
                 onClick={() => onSelectConversation(c.id)}
-                className={`w-full p-3 my-0.5 rounded-2xl flex items-center gap-3 text-left transition-all relative ${
+                className={`w-full px-3 py-3 flex items-center gap-3 text-left transition-colors relative border-b ${
+                  isDark ? 'border-[#222D34]' : 'border-[#F0F2F5]'
+                } ${
                   isActive
                     ? isDark
-                      ? 'bg-slate-800/90 text-white shadow-sm border-l-4 border-l-emerald-500'
-                      : 'bg-emerald-50/80 text-slate-900 shadow-xs border-l-4 border-l-emerald-600'
+                      ? 'bg-[#2A3942]'
+                      : 'bg-[#F0F2F5]'
                     : isDark
-                    ? 'hover:bg-slate-800/50'
-                    : 'hover:bg-slate-50'
+                    ? 'hover:bg-[#202C33]'
+                    : 'hover:bg-[#F5F6F6]'
                 }`}
               >
                 {/* Avatar Icon */}
-                {getGroupIcon(c.type, c.name)}
+                <div className="relative shrink-0">
+                  {getGroupIcon(c.type, c.name)}
+                </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate flex items-center gap-1">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <h3 className="font-semibold text-sm text-[#111B21] dark:text-[#E9EDEF] truncate flex items-center gap-1">
                       {c.name}
-                      {c.type === 'teacher_staff' && <Shield className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600 shrink-0" />}
+                      {c.type === 'teacher_staff' && <Shield className="w-3.5 h-3.5 text-[#00A884] fill-[#00A884] shrink-0" />}
                     </h3>
                     {c.last_message?.created_at && (
-                      <span className="text-[10px] font-medium text-slate-400 shrink-0 ml-1">
+                      <span className={`text-[11px] font-normal shrink-0 ml-1 ${
+                        c.unread_count && c.unread_count > 0 ? 'text-[#25D366] font-semibold' : 'text-[#8696A0]'
+                      }`}>
                         {new Date(c.last_message.created_at).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -211,20 +210,34 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     )}
                   </div>
 
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate leading-snug">
-                    {c.last_message ? c.last_message.message : lang === 'bn' ? 'বার্তা পাঠান...' : 'Start conversation...'}
-                  </p>
-                </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-[#667781] dark:text-[#8696A0] truncate leading-snug">
+                        {c.last_message ? c.last_message.message : (lang === 'bn' ? 'বার্তা পাঠান...' : 'Start conversation...')}
+                      </p>
+                      {c.members && c.members.length > 0 && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                            {lang === 'bn' ? 'শিক্ষক' : 'Teachers'}: {c.members.filter(m => m.profile?.role === 'teacher' || m.profile?.role === 'madrasah_admin').length}
+                          </span>
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+                            {lang === 'bn' ? 'অভিভাবক' : 'Guardians'}: {c.members.filter(m => m.profile?.role === 'parent').length}
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
-                {/* Right Badge / Checkmark */}
-                <div className="shrink-0 flex items-center justify-center">
-                  {c.unread_count && c.unread_count > 0 ? (
-                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center shadow-sm shadow-emerald-600/30">
-                      {c.unread_count}
-                    </span>
-                  ) : (
-                    <CheckCheck className="w-4 h-4 text-emerald-600" />
-                  )}
+                    {/* Right Badge / Checkmark */}
+                    <div className="shrink-0 ml-2 flex items-center self-start mt-1">
+                      {c.unread_count && c.unread_count > 0 ? (
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25D366] text-white text-[10px] font-bold flex items-center justify-center">
+                          {c.unread_count}
+                        </span>
+                      ) : (
+                        <CheckCheck className="w-4 h-4 text-[#53BDEB]" />
+                      )}
+                    </div>
+                  </div>
                 </div>
               </button>
             );

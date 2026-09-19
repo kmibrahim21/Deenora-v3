@@ -15,6 +15,7 @@ interface ChatAppProps {
   lang?: 'bn' | 'en';
   isDark?: boolean;
   onMobileChatStateChange?: (showMobileChat: boolean) => void;
+  onStartVoiceCall?: (targetName?: string) => void;
 }
 
 export const ChatApp: React.FC<ChatAppProps> = ({
@@ -25,6 +26,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   lang = 'bn',
   isDark = false,
   onMobileChatStateChange,
+  onStartVoiceCall,
 }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -132,6 +134,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             onSendMessage={handleSendMessage}
             onOpenInfo={() => setShowGroupInfo(true)}
             onBackMobile={() => setShowMobileChat(false)}
+            onStartVoiceCall={onStartVoiceCall ? () => onStartVoiceCall(activeConversation?.name) : undefined}
             lang={lang}
             isDark={isDark}
           />

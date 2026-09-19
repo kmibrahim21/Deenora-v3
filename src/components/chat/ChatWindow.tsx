@@ -34,8 +34,14 @@ import {
   Smile,
   PhoneCall,
   Video,
+  Download,
+  File,
+  ExternalLink,
+  MicOff,
+  Square,
   Bell,
-  BellRing
+  BellRing,
+  Send
 } from 'lucide-react';
 
 interface ChatWindowProps {
@@ -48,6 +54,7 @@ interface ChatWindowProps {
   onSendMessage: (text: string, replyToMessageId?: string) => void;
   onOpenInfo?: () => void;
   onBackMobile?: () => void;
+  onStartVoiceCall?: () => void;
   lang?: 'bn' | 'en';
   isDark?: boolean;
 }
@@ -62,11 +69,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onSendMessage,
   onOpenInfo,
   onBackMobile,
+  onStartVoiceCall,
   lang = 'bn',
   isDark = false,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
   // Local state for interactive message capabilities
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>(initialMessages);
@@ -120,6 +129,59 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     confirmLabel: '',
     onConfirm: () => {},
   });
+
+  // Voice Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startRecording = () => {
+    setIsRecording(true);
+    setRecordingDuration(0);
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingDuration(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopRecording = (cancel = false) => {
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (!cancel && recordingDuration > 0) {
+      onSendMessage(lang === 'bn' ? `🎤 ভয়েস মেসেজ (${recordingDuration}s)` : `🎤 Voice message (${recordingDuration}s)`);
+      setToastMessage(lang === 'bn' ? 'ভয়েস মেসেজ পাঠানো হয়েছে' : 'Voice message sent');
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const linkify = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.split(urlRegex).map((part, i) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 dark:text-blue-400 underline hover:no-underline break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+            <ExternalLink className="inline-block w-3 h-3 ml-1" />
+          </a>
+        );
+      }
+      return part;
+    });
+  };
 
   // Sync initialMessages to localMessages
   useEffect(() => {
@@ -297,16 +359,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   // Touch handlers for Long-Press on Mobile
-  const handleTouchStart = (msg: ChatMessage) => {
+  const handleTouchStart = (msg: ChatMessage, e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (touch) {
+      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    }
     touchTimerRef.current = setTimeout(() => {
       setContextMenuMsg(msg);
-    }, 450); // 450ms long press threshold
+      touchTimerRef.current = null;
+    }, 500); // 500ms long press threshold
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartPos.current && e.touches[0]) {
+      const dx = Math.abs(e.touches[0].clientX - touchStartPos.current.x);
+      const dy = Math.abs(e.touches[0].clientY - touchStartPos.current.y);
+      if (dx > 8 || dy > 8) {
+        // User is scrolling: cancel long press immediately to avoid freezing screen
+        if (touchTimerRef.current) {
+          clearTimeout(touchTimerRef.current);
+          touchTimerRef.current = null;
+        }
+      }
+    }
   };
 
   const handleTouchEnd = () => {
     if (touchTimerRef.current) {
       clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
     }
+    touchStartPos.current = null;
   };
 
   const visibleMessages = localMessages.filter(m => !m.deleted_for_me);
@@ -334,7 +417,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Multi-Select Header (Replaces top bar in Select Mode) */}
       {isSelectMode ? (
-        <div className="p-3.5 px-4 bg-emerald-700 text-white border-b border-emerald-800 flex items-center justify-between shadow-md animate-in slide-in-from-top-2 duration-200 z-20">
+        <div className="p-3 px-4 bg-[#005C4B] text-white flex items-center justify-between shadow-md z-30">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -371,18 +454,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       ) : (
-        /* Glassmorphic Native Top App Bar */
+        /* WhatsApp Signature Top App Bar */
         <div 
-          className={`px-4 pb-3 border-b flex items-center justify-between gap-3 backdrop-blur-xl sticky top-0 z-20 shadow-xs ${
-            isDark ? 'bg-slate-900/90 border-slate-800/80' : 'bg-white/90 border-slate-200/80'
+          className={`px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 text-white sticky top-0 z-30 shadow-md ${
+            isDark ? 'bg-[#1F2C34] border-b border-[#2A3942]' : 'bg-[#008069]'
           }`}
-          style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
+          style={{ paddingTop: 'calc(0.6rem + env(safe-area-inset-top, 0px))' }}
         >
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {onBackMobile && (
               <button
                 onClick={onBackMobile}
-                className="md:hidden p-2 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-slate-800 dark:text-emerald-400 transition-colors shrink-0 active:scale-90"
+                className="md:hidden p-1.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-transform shrink-0"
                 title={lang === 'bn' ? 'ফিরে যান' : 'Back'}
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -390,16 +473,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             )}
 
             {/* Avatar with Status Ring */}
-            <div className="relative shrink-0">
+            <div className="relative shrink-0 cursor-pointer" onClick={onOpenInfo}>
               <div
-                className={`w-11 h-11 rounded-full flex items-center justify-center text-white shadow-sm ring-2 ring-emerald-500/80 ring-offset-2 ${
-                  isDark ? 'ring-offset-slate-900' : 'ring-offset-white'
-                } ${
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-xs overflow-hidden ${
                   conversation.type === 'announcement'
                     ? 'bg-rose-500'
                     : conversation.type === 'class_group'
-                    ? 'bg-teal-600'
-                    : 'bg-emerald-600'
+                    ? 'bg-[#005C4B]'
+                    : 'bg-emerald-700'
                 }`}
               >
                 {conversation.type === 'announcement' ? (
@@ -408,41 +489,54 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <Users className="w-5 h-5" />
                 )}
               </div>
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900 animate-pulse" />
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#25D366] rounded-full border-2 border-[#008069] dark:border-[#1F2C34]" />
             </div>
 
-            <div className="min-w-0">
-              <h2 className="font-bold text-sm text-slate-900 dark:text-white truncate leading-tight flex items-center gap-1.5">
+            <div className="min-w-0 cursor-pointer" onClick={onOpenInfo}>
+              <h2 className="font-bold text-sm sm:text-base text-white truncate leading-snug">
                 {conversation.name}
               </h2>
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold truncate mt-0.5 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                {conversation.type === 'class_group'
-                  ? lang === 'bn' ? 'অনলাইন • ১০০ জন সদস্য' : 'Online • 100 Members'
-                  : conversation.type === 'announcement'
-                  ? lang === 'bn' ? 'অফিসিয়াল নোটিশ বোর্ড' : 'Official Notice Board'
-                  : lang === 'bn' ? 'অনলাইন' : 'Online'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] text-emerald-100 dark:text-emerald-300 font-normal truncate">
+                  {conversation.type === 'class_group'
+                    ? (lang === 'bn' ? 'অনলাইন' : 'online')
+                    : conversation.type === 'announcement'
+                    ? (lang === 'bn' ? 'অফিসিয়াল নোটিশ বোর্ড' : 'Official Notice Board')
+                    : (lang === 'bn' ? 'অনলাইন' : 'online')}
+                </p>
+                {conversation.members && conversation.members.length > 0 && (
+                  <div className="flex items-center gap-2 text-[10px] text-white/80">
+                    <span>• {lang === 'bn' ? 'শিক্ষক' : 'T'}: {conversation.members.filter(m => m.profile?.role === 'teacher' || m.profile?.role === 'madrasah_admin').length}</span>
+                    <span>• {lang === 'bn' ? 'অভিভাবক' : 'G'}: {conversation.members.filter(m => m.profile?.role === 'parent').length}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Right Header App Controls */}
-          <div className="flex items-center gap-1">
+          {/* Right Header App Controls (WhatsApp style: Call, Push Bell, Menu) */}
+          <div className="flex items-center gap-0.5 sm:gap-1 text-white shrink-0">
+            {onStartVoiceCall && (
+              <button
+                onClick={onStartVoiceCall}
+                className="p-2 sm:p-2.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-all"
+                title={lang === 'bn' ? 'ভয়েস কল করুন' : 'Voice Call'}
+              >
+                <PhoneCall className="w-5 h-5" />
+              </button>
+            )}
+
             <button
               onClick={handleBellClick}
-              className={`p-2.5 rounded-full transition-all active:scale-90 relative ${
-                pushState === 'granted'
-                  ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-400'
-                  : 'text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
+              className="p-2 sm:p-2.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-all relative"
               title={
                 pushState === 'granted'
-                  ? (lang === 'bn' ? 'পুশ নোটিফিকেশন চালূ আছে (টেস্ট ক্লিক করুন)' : 'Push active (Click to test)')
-                  : (lang === 'bn' ? 'পুশ নোটিফিকেশন চালু করুন' : 'Enable Push Notifications')
+                  ? (lang === 'bn' ? 'নোটিফিকেশন সক্রিয় (ক্লিক করে টেস্ট করুন)' : 'Push active (Click to test)')
+                  : (lang === 'bn' ? 'নোটিফিকেশন চালু করুন' : 'Enable Push Notifications')
               }
             >
               {pushState === 'granted' ? (
-                <BellRing className="w-5 h-5 animate-bounce text-emerald-600 dark:text-emerald-400" />
+                <BellRing className="w-5 h-5 text-emerald-200" />
               ) : (
                 <Bell className="w-5 h-5" />
               )}
@@ -450,7 +544,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             <button
               onClick={() => setShowSettingsModal(true)}
-              className="p-2.5 rounded-full text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-90"
+              className="p-2 sm:p-2.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-all"
               title={lang === 'bn' ? 'মেনু সেটিংস' : 'Menu Settings'}
             >
               <MoreVertical className="w-5 h-5" />
@@ -486,13 +580,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      {/* Messages Scroll Area */}
-      <div ref={scrollRef} className="flex-1 p-3 sm:p-4 overflow-y-auto space-y-3.5">
+      {/* WhatsApp Messages Scroll Area */}
+      <div 
+        ref={scrollRef} 
+        className={`flex-1 p-3 sm:p-4 overflow-y-auto space-y-2.5 relative ${
+          isDark 
+            ? 'bg-[#0B141A] bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:20px_20px]' 
+            : 'bg-[#EFEAE2] bg-[radial-gradient(#0000000a_1px,transparent_1px)] [background-size:20px_20px]'
+        }`}
+        style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}
+      >
         
         {/* Date Separator Pill */}
-        <div className="flex justify-center my-2">
-          <span className="px-4 py-1 rounded-full bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border border-slate-200/60 dark:border-slate-700/60 shadow-2xs">
-            Today, 21 Apr 2025
+        <div className="flex justify-center my-2 sticky top-2 z-10 pointer-events-none">
+          <span className="px-3.5 py-1 rounded-lg bg-white/95 dark:bg-[#182229]/95 text-[#54656F] dark:text-[#8696A0] text-[11px] font-semibold uppercase tracking-wider backdrop-blur-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] border border-black/5">
+            {lang === 'bn' ? 'আজ' : 'Today'}
           </span>
         </div>
 
@@ -525,8 +627,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             return (
               <div
                 key={m.id}
-                onTouchStart={() => handleTouchStart(m)}
+                onTouchStart={(e) => handleTouchStart(m, e)}
+                onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
                 onClick={() => {
                   if (isSelectMode) {
                     toggleSelectMessage(m.id);
@@ -541,7 +645,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <div
                     className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 self-center transition-all ${
                       isSelected
-                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        ? 'bg-[#008069] border-[#008069] text-white'
                         : 'border-slate-400 dark:border-slate-600 bg-white/50'
                     }`}
                   >
@@ -562,7 +666,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   {/* Sender Name & Role Badge (Incoming only) */}
                   {!isMe && (
                     <div className="flex items-center gap-1.5 mb-1 px-1">
-                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                      <span className="text-xs font-bold text-[#008069] dark:text-[#25D366]">
                         {senderName}
                       </span>
                       <span className="text-[10px] text-slate-400 font-medium">
@@ -571,20 +675,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                   )}
 
-                  {/* WhatsApp/Telegram Native Style Message Bubble */}
+                  {/* WhatsApp Native Style Message Bubble */}
                   <div
-                    className={`px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs relative break-words ${
+                    className={`px-3.5 py-2 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] relative break-words ${
                       isMe
-                        ? 'bg-gradient-to-br from-[#DCF8C6] to-[#C7F3C1] dark:from-[#005C4B] dark:to-[#004B3E] text-slate-900 dark:text-emerald-50 rounded-tr-xs border border-emerald-300/40 dark:border-emerald-600/30'
+                        ? 'bg-[#D9FDD3] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-xs'
                         : isDark
-                        ? 'bg-slate-800 text-slate-100 rounded-tl-xs border border-slate-700/80'
-                        : 'bg-white text-slate-800 rounded-tl-xs border border-slate-200/80'
+                        ? 'bg-[#202C33] text-[#E9EDEF] rounded-tl-xs'
+                        : 'bg-white text-[#111B21] rounded-tl-xs'
                     }`}
                   >
                     {/* Embedded Replied Message Quote Box */}
                     {repliedTarget && (
-                      <div className="mb-2 p-2 px-2.5 rounded-xl bg-black/5 dark:bg-black/20 border-l-4 border-l-emerald-600 dark:border-l-teal-400 text-xs space-y-0.5">
-                        <span className="font-bold text-[10px] text-emerald-700 dark:text-emerald-300 block">
+                      <div className="mb-1.5 p-2 px-2.5 rounded-xl bg-black/5 dark:bg-black/20 border-l-4 border-l-[#008069] dark:border-l-[#25D366] text-xs space-y-0.5">
+                        <span className="font-bold text-[10px] text-[#008069] dark:text-[#25D366] block">
                           {'sender_name' in repliedTarget && repliedTarget.sender_name
                             ? repliedTarget.sender_name
                             : 'sender_profile' in repliedTarget && repliedTarget.sender_profile?.full_name
@@ -598,9 +702,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     )}
 
                     {/* Main Message Text */}
-                    <p className={`whitespace-pre-wrap font-normal ${m.is_deleted ? 'italic text-slate-500' : ''}`}>
-                      {m.message}
-                    </p>
+                    <div className={`space-y-2 ${m.is_deleted ? 'italic text-slate-500' : ''}`}>
+                      {/* Document Attachment Rendering */}
+                      {(m.message_type === 'document' || m.message.includes('📄 [')) && (
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-black/5 dark:bg-black/20 border border-black/5 mb-2">
+                          <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <File className="w-5 h-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate">
+                              {m.attachment_name || m.message.match(/\[(.*?)\]/)?.[1] || (lang === 'bn' ? 'ডকুমেন্ট ফাইল' : 'Document File')}
+                            </p>
+                            <p className="text-[10px] opacity-60">
+                              {m.attachment_size ? `${(m.attachment_size / 1024).toFixed(1)} KB` : 'PDF / Document'}
+                            </p>
+                          </div>
+                          <a
+                            href={m.attachment_url || '#'}
+                            download={m.attachment_name || 'document'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-full bg-white dark:bg-slate-800 text-emerald-600 shadow-sm hover:scale-110 transition-transform active:scale-95"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!m.attachment_url) {
+                                setToastMessage(lang === 'bn' ? 'ডাউনলোড লিঙ্ক পাওয়া যায়নি' : 'Download link not found');
+                              }
+                            }}
+                          >
+                            <Download className="w-4 h-4" />
+                          </a>
+                        </div>
+                      )}
+
+                      <p className="whitespace-pre-wrap font-normal">
+                        {m.is_deleted ? m.message : linkify(m.message)}
+                      </p>
+                    </div>
 
                     {/* Quick Reaction Bar Trigger Button */}
                     {!isSelectMode && (
@@ -631,9 +769,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                     {/* Bottom Timestamp & Delivery Status */}
                     <div
-                      className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] font-medium ${
-                        isMe ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400'
-                      }`}
+                      className={`flex items-center justify-end gap-1.5 mt-0.5 text-[10px] font-medium text-[#667781] dark:text-[#8696A0]`}
                     >
                       {/* Star Indicator */}
                       {m.is_starred && (
@@ -654,9 +790,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         })}
                       </span>
 
-                      {/* Double Checkmarks */}
+                      {/* WhatsApp Blue Double Checkmarks */}
                       {isMe && (
-                        <CheckCheck className="w-3.5 h-3.5 text-blue-600 dark:text-teal-300" />
+                        m.read_at ? (
+                          <CheckCheck className="w-4 h-4 text-[#53BDEB] stroke-[2.4]" />
+                        ) : (
+                          <CheckCheck className="w-4 h-4 text-[#8696A0] stroke-[2.4]" />
+                        )
                       )}
                     </div>
                   </div>
@@ -679,18 +819,47 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
 
       {/* Floating Input Composer */}
-      <ChatComposer
-        onSendMessage={onSendMessage}
-        replyingToMessage={replyingToMsg}
-        onCancelReply={() => setReplyingToMsg(null)}
-        editingMessage={editingMsg}
-        onCancelEdit={() => setEditingMsg(null)}
-        onEditSubmit={handleEditSubmit}
-        isAnnouncementOnly={conversation.is_announcement_only}
-        userRole={userRole}
-        lang={lang}
-        isDark={isDark}
-      />
+      {isRecording ? (
+        <div className={`p-3 border-t flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 ${
+          isDark ? 'bg-[#202C33] border-[#2A3942]' : 'bg-[#F0F2F5] border-[#E9EDEF]'
+        }`}>
+          <div className="flex items-center gap-3 text-rose-500 font-bold animate-pulse">
+            <div className="w-3 h-3 bg-rose-500 rounded-full" />
+            <span className="text-sm font-mono">{formatDuration(recordingDuration)}</span>
+          </div>
+          <div className="flex-1 text-center text-xs text-slate-500">
+            {lang === 'bn' ? 'রেকর্ড হচ্ছে...' : 'Recording...'}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => stopRecording(true)}
+              className="p-2.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-rose-500"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => stopRecording(false)}
+              className="w-11 h-11 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-95"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <ChatComposer
+          onSendMessage={onSendMessage}
+          replyingToMessage={replyingToMsg}
+          onCancelReply={() => setReplyingToMsg(null)}
+          editingMessage={editingMsg}
+          onCancelEdit={() => setEditingMsg(null)}
+          onEditSubmit={handleEditSubmit}
+          onStartVoice={() => startRecording()}
+          isAnnouncementOnly={conversation.is_announcement_only}
+          userRole={userRole}
+          lang={lang}
+          isDark={isDark}
+        />
+      )}
 
       {/* Message Context Action Menu */}
       <MessageContextMenu
