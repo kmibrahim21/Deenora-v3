@@ -9,7 +9,8 @@ import {
   Volume2,
   Trash2,
   Info,
-  CheckSquare
+  CheckSquare,
+  HardDriveDownload
 } from 'lucide-react';
 import { Conversation, ConversationSettings } from '../../types';
 
@@ -20,6 +21,7 @@ interface MessageSettingsModalProps {
   onOpenStarredMessages?: () => void;
   onSelectMode?: () => void;
   onClearChat?: () => void;
+  onOpenBackup?: () => void;
   lang?: 'bn' | 'en';
   isDark?: boolean;
 }
@@ -31,6 +33,7 @@ export const MessageSettingsModal: React.FC<MessageSettingsModalProps> = ({
   onOpenStarredMessages,
   onSelectMode,
   onClearChat,
+  onOpenBackup,
   lang = 'bn',
   isDark = false,
 }) => {
@@ -61,6 +64,15 @@ export const MessageSettingsModal: React.FC<MessageSettingsModalProps> = ({
       icon: settings.isMuted ? <BellOff className="w-5 h-5 text-rose-500" /> : <Bell className="w-5 h-5 text-emerald-600" />,
       label: settings.isMuted ? (lang === 'bn' ? 'আনমিউট করুন' : 'Unmute') : (lang === 'bn' ? 'মিউট করুন' : 'Mute Notifications'),
       onClick: () => updateSetting('isMuted', !settings.isMuted)
+    },
+    {
+      id: 'backup',
+      icon: <HardDriveDownload className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />,
+      label: lang === 'bn' ? 'চ্যাট ব্যাকআপ ও রিস্টোর' : 'Chat Backup & Restore',
+      onClick: () => {
+        onOpenBackup?.();
+        onClose();
+      }
     },
     {
       id: 'select',

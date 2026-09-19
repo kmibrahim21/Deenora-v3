@@ -15,7 +15,8 @@ import {
   BookOpen,
   School,
   ArrowRight,
-  Loader2
+  Loader2,
+  HardDriveDownload
 } from 'lucide-react';
 
 interface ChatSidebarProps {
@@ -23,6 +24,7 @@ interface ChatSidebarProps {
   activeConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
   onNewDirectChat?: () => void;
+  onOpenBackup?: () => void;
   lang?: 'bn' | 'en';
   isDark?: boolean;
   loading?: boolean;
@@ -33,6 +35,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   activeConversationId,
   onSelectConversation,
   onNewDirectChat,
+  onOpenBackup,
   lang = 'bn',
   isDark = false,
   loading = false,
@@ -174,15 +177,27 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           </p>
         </div>
 
-        {onNewDirectChat && (
-          <button
-            onClick={onNewDirectChat}
-            className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 transition-all shrink-0 active:scale-95 shadow-xs"
-            title={lang === 'bn' ? 'নতুন মেসেজ' : 'New Message'}
-          >
-            <MessageSquarePlus className="w-5 h-5" />
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onOpenBackup && (
+            <button
+              onClick={onOpenBackup}
+              className="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 transition-all shrink-0 active:scale-95 shadow-xs"
+              title={lang === 'bn' ? 'এনক্রিপ্টেড ব্যাকআপ ও রিস্টোর' : 'Encrypted Chat Backup & Restore'}
+            >
+              <HardDriveDownload className="w-5 h-5" />
+            </button>
+          )}
+
+          {onNewDirectChat && (
+            <button
+              onClick={onNewDirectChat}
+              className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 transition-all shrink-0 active:scale-95 shadow-xs"
+              title={lang === 'bn' ? 'নতুন মেসেজ' : 'New Message'}
+            >
+              <MessageSquarePlus className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Refined Modern Search Input */}

@@ -49,8 +49,13 @@ import {
   Volume2,
   VolumeX,
   Loader2,
-  MessageSquare
+  MessageSquare,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+  Archive
 } from 'lucide-react';
+import { ChatArchiveService } from '../../services/chatArchiveService';
 
 interface ChatWindowProps {
   conversation: Conversation | null;
@@ -71,6 +76,8 @@ interface ChatWindowProps {
   onOpenInfo?: () => void;
   onBackMobile?: () => void;
   onStartVoiceCall?: () => void;
+  onRetryMessage?: (clientMessageId: string) => void;
+  onOpenBackup?: () => void;
   lang?: 'bn' | 'en';
   isDark?: boolean;
 }
@@ -221,6 +228,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onOpenInfo,
   onBackMobile,
   onStartVoiceCall,
+  onRetryMessage,
+  onOpenBackup,
   lang = 'bn',
   isDark = false,
 }) => {
@@ -252,6 +261,52 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Toast & Confirm dialog
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [pushState, setPushState] = useState<NotificationPermission>('default');
+
+  // V3 Archive Integration: Track archived count and load into view
+  const [archivedCountForConv, setArchivedCountForConv] = useState<number>(0);
+  const [isLoadingArchived, setIsLoadingArchived] = useState(false);
+  const [hasLoadedArchived, setHasLoadedArchived] = useState(false);
+
+  useEffect(() => {
+    if (conversation?.institution_id && conversation?.id) {
+      ChatArchiveService.getArchivedMessageCountForConv(conversation.institution_id, conversation.id)
+        .then(count => setArchivedCountForConv(count))
+        .catch(() => setArchivedCountForConv(0));
+      setHasLoadedArchived(false);
+    }
+  }, [conversation?.institution_id, conversation?.id]);
+
+  const handleLoadArchivedHistory = async () => {
+    if (!conversation?.institution_id || !conversation?.id) return;
+    setIsLoadingArchived(true);
+    try {
+      const cached = await ChatArchiveService.getCachedArchivedMessages(
+        conversation.institution_id,
+        conversation.id
+      );
+      if (cached.length > 0) {
+        setLocalMessages(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newUnique = cached.filter(c => !existingIds.has(c.id));
+          return [...newUnique, ...prev].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        });
+        setHasLoadedArchived(true);
+        setToastMessage(lang === 'bn' ? `${cached.length} টি আর্কাইভকৃত বার্তা লোড করা হয়েছে` : `${cached.length} archived messages loaded`);
+      } else {
+        if (onOpenBackup) {
+          onOpenBackup();
+        } else {
+          setToastMessage(lang === 'bn' ? 'আর্কাইভ ফাইল থেকে রিস্টোর করতে ব্যাকআপ মেনু খুলুন' : 'Open backup menu to restore archive');
+        }
+      }
+    } catch (e) {
+      setToastMessage(lang === 'bn' ? 'আর্কাইভ লোড করা সম্ভব হয়নি' : 'Could not load archive');
+    } finally {
+      setIsLoadingArchived(false);
+    }
+  };
 
   useEffect(() => {
     setPushState(getNotificationPermissionState());
@@ -901,7 +956,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           </div>
         ) : (
-          visibleMessages.map((m) => {
+          <>
+            {/* Archived Messages Banner (V3 Optimization) */}
+            {archivedCountForConv > 0 && !hasLoadedArchived && (
+              <div className="flex justify-center my-2">
+                <button
+                  type="button"
+                  onClick={handleLoadArchivedHistory}
+                  disabled={isLoadingArchived}
+                  className="px-3 py-1.5 rounded-full bg-blue-50/90 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  {isLoadingArchived ? (
+                    <span>{lang === 'bn' ? 'আর্কাইভ লোড হচ্ছে...' : 'Loading archive...'}</span>
+                  ) : (
+                    <span>
+                      {lang === 'bn'
+                        ? `${archivedCountForConv} টি পূর্ববর্তী বার্তা লোড করুন`
+                        : `Load ${archivedCountForConv} archived messages`}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {visibleMessages.map((m) => {
             const isMe = m.sender_id === currentUser?.id;
             const senderName = m.sender_profile?.full_name || (m as any).sender_name || (lang === 'bn' ? 'শিক্ষক / সদস্য' : 'Teacher/Member');
             const role = m.sender_profile?.role || ((m as any).sender_id?.startsWith('parent') ? 'parent' : 'teacher');
@@ -1212,10 +1291,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                         {/* Delivery Status */}
                         {isMe && (
-                          m.read_at ? (
-                            <CheckCheck className="w-3.5 h-3.5 text-white" />
+                          m.status === 'failed' ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onRetryMessage && (m.client_message_id || m.id)) {
+                                  onRetryMessage(m.client_message_id || m.id);
+                                }
+                              }}
+                              className="flex items-center gap-1 text-rose-300 hover:text-white bg-rose-900/50 hover:bg-rose-800/80 px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer"
+                              title="পাঠানো যায়নি — পুনরায় চেষ্টা করতে ক্লিক করুন"
+                            >
+                              <AlertCircle className="w-3.5 h-3.5 text-rose-300" />
+                              <span>পুনরায় পাঠান</span>
+                              <RefreshCw className="w-3 h-3" />
+                            </button>
+                          ) : (m.status === 'pending' || m.status === 'sending' || m.synced === 0) ? (
+                            <span className="flex items-center gap-0.5 text-white/60" title="পাঠানো হচ্ছে...">
+                              <Clock className="w-3.5 h-3.5 text-white/70 animate-pulse" />
+                            </span>
+                          ) : (m.status === 'read' || m.read_at) ? (
+                            <span title="পড়া হয়েছে (Read)">
+                              <CheckCheck className="w-3.5 h-3.5 text-cyan-200" />
+                            </span>
+                          ) : (m.status === 'delivered' || m.delivered_at) ? (
+                            <span title="পৌঁছেছে (Delivered)">
+                              <CheckCheck className="w-3.5 h-3.5 text-white" />
+                            </span>
                           ) : (
-                            <CheckCheck className="w-3.5 h-3.5 text-white/60" />
+                            <span title="সার্ভারে পাঠানো হয়েছে (Sent)">
+                              <Check className="w-3.5 h-3.5 text-white/80" />
+                            </span>
                           )
                         )}
                       </div>
@@ -1235,7 +1342,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </div>
               </React.Fragment>
             );
-          })
+          })}
+          </>
         )}
       </div>
 
@@ -1331,6 +1439,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
         onOpenStarredMessages={() => setShowStarredModal(true)}
+        onOpenBackup={onOpenBackup}
         lang={lang}
         isDark={isDark}
       />

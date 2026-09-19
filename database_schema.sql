@@ -354,3 +354,57 @@ CREATE TABLE promotion_logs (
     executed_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     status TEXT NOT NULL
 );
+
+-- Table: chat_retention_policies
+CREATE TABLE chat_retention_policies (
+    institution_id UUID PRIMARY KEY REFERENCES institutions(id) ON DELETE CASCADE,
+    hot_retention_days INT NOT NULL DEFAULT 90,
+    announcement_retention_mode TEXT NOT NULL DEFAULT 'permanent',
+    announcement_retention_days INT DEFAULT 365,
+    protect_pinned_messages BOOLEAN NOT NULL DEFAULT true,
+    protect_starred_messages BOOLEAN NOT NULL DEFAULT true,
+    auto_archive_enabled BOOLEAN NOT NULL DEFAULT true,
+    archive_granularity TEXT NOT NULL DEFAULT 'per_conversation_month',
+    storage_destination TEXT NOT NULL DEFAULT 'local_encrypted',
+    last_archive_run_at TIMESTAMP WITH TIME ZONE,
+    last_cleanup_run_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- Table: chat_archives
+CREATE TABLE chat_archives (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+    conversation_id TEXT,
+    conversation_name TEXT,
+    date_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    date_end TIMESTAMP WITH TIME ZONE NOT NULL,
+    message_count INT NOT NULL DEFAULT 0,
+    archive_size_bytes BIGINT NOT NULL DEFAULT 0,
+    compressed_size_bytes BIGINT,
+    checksum TEXT NOT NULL,
+    encryption_version TEXT NOT NULL DEFAULT 'AES-256-GCM-V3',
+    storage_location TEXT NOT NULL DEFAULT 'local_encrypted',
+    storage_path TEXT,
+    status TEXT NOT NULL DEFAULT 'created',
+    crypto_metadata JSONB DEFAULT '{}'::jsonb,
+    encrypted_package_url TEXT,
+    created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    verified_at TIMESTAMP WITH TIME ZONE,
+    cleaned_up_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- Table: chat_archive_audit_logs
+CREATE TABLE chat_archive_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    institution_id UUID NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+    archive_id UUID REFERENCES chat_archives(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    affected_message_count INT DEFAULT 0,
+    date_range JSONB,
+    details TEXT,
+    performed_by TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+

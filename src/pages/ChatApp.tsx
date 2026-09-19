@@ -4,7 +4,9 @@ import { Institution, Profile, Class, Conversation, ChatMessage } from '../types
 import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ChatWindow } from '../components/chat/ChatWindow';
 import { ClassGroupInfoModal } from '../components/chat/ClassGroupInfoModal';
+import { ChatBackupModal } from '../components/chat/ChatBackupModal';
 import { ChatService } from '../services/chatService';
+import { ChatLocalStore } from '../services/chatLocalStore';
 import { useChatRealtime } from '../hooks/useChatRealtime';
 
 interface ChatAppProps {
@@ -76,6 +78,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
 
   const [showGroupInfo, setShowGroupInfo] = useState<boolean>(false);
   const [showMobileChat, setShowMobileChat] = useState<boolean>(false);
+  const [showBackupModal, setShowBackupModal] = useState<boolean>(false);
 
   // Notify parent of mobile chat view state change
   useEffect(() => {
@@ -165,7 +168,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   }, [institutionId, currentUserId, userRole, userClassId]);
 
   // Hook into Realtime chat for active conversation
-  const { messages, loading, error: chatError, sendMessage } = useChatRealtime(activeConversationId, institutionId);
+  const { messages, loading, error: chatError, sendMessage, retryMessage } = useChatRealtime(activeConversationId, institutionId);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) || null;
 
@@ -250,6 +253,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             conversations={conversations}
             activeConversationId={activeConversationId}
             onSelectConversation={handleSelectConversation}
+            onOpenBackup={() => setShowBackupModal(true)}
             lang={lang}
             isDark={isDark}
             loading={conversationsLoading}
@@ -267,8 +271,10 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             userRole={profile?.role}
             onSendMessage={handleSendMessage}
             onOpenInfo={() => setShowGroupInfo(true)}
+            onOpenBackup={() => setShowBackupModal(true)}
             onBackMobile={() => setShowMobileChat(false)}
             onStartVoiceCall={onStartVoiceCall ? () => onStartVoiceCall(activeConversation?.name) : undefined}
+            onRetryMessage={retryMessage}
             lang={lang}
             isDark={isDark}
           />
@@ -285,6 +291,26 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           isDark={isDark}
         />
       )}
+
+      {/* Encrypted Chat Backup & Restore Modal */}
+      <ChatBackupModal
+        isOpen={showBackupModal}
+        onClose={() => setShowBackupModal(false)}
+        institutionId={institutionId || 'default-inst'}
+        userId={currentUserId}
+        userEmail={profile?.email || institution?.email}
+        onRestoreComplete={async () => {
+          // Refresh conversations and active chat messages from IndexedDB
+          if (institutionId) {
+            const localConvs = await ChatLocalStore.getCachedConversations(institutionId);
+            if (localConvs && localConvs.length > 0) {
+              setConversations(localConvs);
+            }
+          }
+        }}
+        lang={lang}
+        isDark={isDark}
+      />
     </div>
   );
 };

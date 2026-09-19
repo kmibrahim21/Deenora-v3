@@ -2,19 +2,47 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../supabase';
 import { ChatMessage } from '../types';
 import { ChatService, formatRowToChatMessage } from '../services/chatService';
+import { ChatLocalStore } from '../services/chatLocalStore';
 import { sendPushNotification, playNotificationSound } from '../lib/pushNotifications';
 
 export function useChatRealtime(conversationId: string | null, institutionId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const activeConvRef = useRef<string | null>(conversationId);
 
   useEffect(() => {
     activeConvRef.current = conversationId;
   }, [conversationId]);
 
-  // Load initial messages when active conversation changes
+  // Handle online event to auto-sync pending offline messages
+  useEffect(() => {
+    const handleOnline = async () => {
+      console.log('[useChatRealtime] Device is online, checking pending messages sync...');
+      setIsSyncing(true);
+      try {
+        const syncedCount = await ChatService.syncPendingMessages(institutionId || undefined);
+        if (syncedCount > 0 && activeConvRef.current) {
+          const refreshed = await ChatService.getMessages(activeConvRef.current, institutionId || undefined);
+          if (refreshed.messages && refreshed.messages.length > 0) {
+            setMessages(refreshed.messages);
+          }
+        }
+      } catch (e) {
+        console.warn('[useChatRealtime] Online sync warning:', e);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [institutionId]);
+
+  // Load initial messages with instant 0ms IndexedDB cache
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
@@ -24,33 +52,56 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
 
     let isMounted = true;
 
-    // Check local cache first so user sees messages immediately with 0ms delay!
-    const localKey = `deenora_chat_msg_${conversationId}`;
-    let hasCache = false;
-    try {
-      const cached = localStorage.getItem(localKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
-          hasCache = true;
+    // 1. Instant 0ms read from IndexedDB
+    ChatLocalStore.getCachedMessages(conversationId)
+      .then(async cachedMsgs => {
+        if (!isMounted) return;
+        if (cachedMsgs && cachedMsgs.length > 0) {
+          const pending = await ChatLocalStore.getPendingMessages(institutionId || undefined);
+          const pendingForConv = pending.filter(p => p.conversation_id === conversationId);
+          
+          const mergedMap = new Map<string, ChatMessage>();
+          cachedMsgs.forEach(m => mergedMap.set(m.client_message_id || m.id, m));
+          pendingForConv.forEach(p => {
+            if (!mergedMap.has(p.client_message_id)) {
+              mergedMap.set(p.client_message_id, {
+                id: p.client_message_id,
+                client_message_id: p.client_message_id,
+                conversation_id: p.conversation_id,
+                institution_id: p.institution_id,
+                sender_id: p.sender_id,
+                sender_name: p.sender_name,
+                class_name: p.class_name,
+                message: p.message,
+                message_type: p.message_type,
+                attachment_url: p.attachment_url,
+                attachment_name: p.attachment_name,
+                attachment_size: p.attachment_size,
+                voice_duration: p.voice_duration,
+                created_at: p.created_at,
+                status: p.status,
+                synced: 0
+              });
+            }
+          });
+          
+          setMessages(Array.from(mergedMap.values()));
+        } else {
+          setLoading(true);
         }
-      }
-    } catch {}
+      })
+      .catch(() => {
+        setLoading(true);
+      });
 
-    if (!hasCache) {
-      setLoading(true);
-    }
     setError(null);
 
+    // 2. Query Supabase in background & merge seamlessly
     ChatService.getMessages(conversationId, institutionId || undefined)
       .then(res => {
         if (isMounted) {
           if (res.messages && res.messages.length > 0) {
             setMessages(res.messages);
-            try {
-              localStorage.setItem(localKey, JSON.stringify(res.messages));
-            } catch {}
           }
           if (res.error) setError(res.error);
           setLoading(false);
@@ -74,9 +125,8 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     if (!conversationId || !institutionId) return;
 
     const channelName = `chat_realtime_${institutionId}_${conversationId}`;
-    console.log(`[useChatRealtime] Subscribing to realtime channel: ${channelName}`);
 
-    const handleIncoming = (rawMsg: any) => {
+    const handleIncoming = async (rawMsg: any) => {
       if (!rawMsg) return;
       const newMsg = formatRowToChatMessage(rawMsg, activeConvRef.current);
       if (!newMsg || (!newMsg.message && !newMsg.attachment_url)) return;
@@ -97,6 +147,9 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
 
       if (!isMatch) return;
 
+      // Persist to local IndexedDB store
+      await ChatLocalStore.saveMessage(newMsg);
+
       // Play chime & send push notification for incoming message
       playNotificationSound();
       sendPushNotification(
@@ -110,7 +163,7 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
           m => m.id === newMsg.id || (newMsg.client_message_id && m.client_message_id === newMsg.client_message_id)
         );
         if (exists) {
-          return prev.map(m => (m.client_message_id && m.client_message_id === newMsg.client_message_id ? { ...m, ...newMsg } : m));
+          return prev.map(m => ((m.client_message_id && m.client_message_id === newMsg.client_message_id) || m.id === newMsg.id ? { ...m, ...newMsg } : m));
         }
         return [...prev, newMsg];
       });
@@ -125,10 +178,6 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
           console.log(`[useChatRealtime] SUBSCRIBED to ${channelName}`);
         } else if (status === 'CHANNEL_ERROR') {
           console.error(`[useChatRealtime] CHANNEL_ERROR for ${channelName}:`, err);
-        } else if (status === 'TIMED_OUT') {
-          console.warn(`[useChatRealtime] TIMED_OUT for ${channelName}`);
-        } else if (status === 'CLOSED') {
-          console.log(`[useChatRealtime] CLOSED ${channelName}`);
         }
       });
 
@@ -151,7 +200,6 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     }, 4000);
 
     return () => {
-      console.log(`[useChatRealtime] Cleaning up realtime channel: ${channelName}`);
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
@@ -189,6 +237,8 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       attachment_size: attachmentSize,
       voice_duration: voiceDuration,
       created_at: new Date().toISOString(),
+      status: 'pending',
+      synced: 0,
       sender_profile: {
         id: senderId,
         institution_id: institutionId,
@@ -223,16 +273,38 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       );
     } catch (err: any) {
       console.error('[useChatRealtime] Send error:', err);
-      // Remove failed optimistic message and set user-visible error
-      setMessages(prev => prev.filter(m => m.client_message_id !== clientMsgId));
-      setError(err?.message || 'মেসেজ পাঠানো সম্ভব হয়নি');
+      // Mark as failed in UI so user can retry rather than silently deleting it
+      setMessages(prev =>
+        prev.map(m => (m.client_message_id === clientMsgId ? { ...m, status: 'failed', error: err?.message || 'পাঠানো যায়নি' } : m))
+      );
+      setError(err?.message || 'মেসেজ পাঠানো সম্ভব হয়নি (অফলাইনে সেভ করা হয়েছে)');
     }
   }, [conversationId, institutionId]);
+
+  // Function to retry a failed message
+  const retryMessage = useCallback(async (clientMessageId: string) => {
+    setMessages(prev =>
+      prev.map(m => (m.client_message_id === clientMessageId ? { ...m, status: 'sending', error: undefined } : m))
+    );
+
+    const result = await ChatService.retryPendingMessage(clientMessageId);
+    if (result) {
+      setMessages(prev =>
+        prev.map(m => (m.client_message_id === clientMessageId ? result : m))
+      );
+    } else {
+      setMessages(prev =>
+        prev.map(m => (m.client_message_id === clientMessageId ? { ...m, status: 'failed' } : m))
+      );
+    }
+  }, []);
 
   return {
     messages,
     loading,
     error,
-    sendMessage
+    isSyncing,
+    sendMessage,
+    retryMessage
   };
 }

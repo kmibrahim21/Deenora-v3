@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { Conversation, ConversationMember, ChatMessage } from '../types';
+import { ChatLocalStore } from './chatLocalStore';
 
 export function formatRowToChatMessage(row: any, fallbackConvId?: string): ChatMessage {
   if (!row) return row;
@@ -101,6 +102,9 @@ export function formatRowToChatMessage(row: any, fallbackConvId?: string): ChatM
     is_deleted: row.is_deleted || false,
     is_parent: isParent,
     sender_role: isParent ? 'parent' : 'teacher',
+    status: row.status || (row.read_at ? 'read' : row.delivered_at ? 'delivered' : 'sent'),
+    synced: (row.synced ?? 1) as (0 | 1),
+    error: row.error,
     sender_profile: {
       id: senderId,
       institution_id: row.institution_id || '',
@@ -125,6 +129,9 @@ export class ChatService {
     userClassId?: string
   ): Promise<Conversation[]> {
     if (!institutionId) return [];
+
+    // Trigger local pruning in background on load
+    ChatLocalStore.pruneOldCache().catch(() => {});
 
     try {
       // 1. Fetch conversations from Supabase if table exists
@@ -241,16 +248,10 @@ export class ChatService {
       await Promise.all(
         finalConversations.map(async (conv) => {
           try {
-            // Check local cache first for immediate responsiveness
-            const localKey = `deenora_chat_msg_${conv.id}`;
-            const stored = localStorage.getItem(localKey);
-            if (stored) {
-              try {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  conv.last_message = parsed[parsed.length - 1];
-                }
-              } catch {}
+            // Check IndexedDB cache first for immediate responsiveness
+            const cachedMsgs = await ChatLocalStore.getCachedMessages(conv.id, 1);
+            if (cachedMsgs.length > 0) {
+              conv.last_message = cachedMsgs[cachedMsgs.length - 1];
             }
 
             const membership = userMemberships?.find((m: any) => m.conversation_id === conv.id);
@@ -274,7 +275,7 @@ export class ChatService {
             ]);
 
             if (lastMsgRes.data) {
-              conv.last_message = lastMsgRes.data as ChatMessage;
+              conv.last_message = formatRowToChatMessage(lastMsgRes.data, conv.id);
             }
             if (typeof unreadRes.count === 'number') {
               conv.unread_count = unreadRes.count;
@@ -285,14 +286,20 @@ export class ChatService {
         })
       );
 
-      // Save to local cache so next time it loads with 0 latency
+      // Save to IndexedDB local store and localStorage fallback
+      await ChatLocalStore.saveConversations(finalConversations, institutionId);
       try {
         localStorage.setItem(`cached_convs_${institutionId}_${userId}`, JSON.stringify(finalConversations));
       } catch {}
 
       return finalConversations;
     } catch (err) {
-      console.error('[ChatService] Failed to load conversations, using fallback:', err);
+      console.error('[ChatService] Failed to load conversations, using cached/fallback:', err);
+      // Try reading from IndexedDB first
+      const localCached = await ChatLocalStore.getCachedConversations(institutionId);
+      if (localCached && localCached.length > 0) {
+        return localCached;
+      }
       return this.getFallbackConversations(institutionId, classesList, userRole, userClassId);
     }
   }
@@ -300,12 +307,15 @@ export class ChatService {
   /**
    * Marks all messages in a conversation as read for a user.
    */
-  static async markAsRead(institutionId: string, conversationId: string, userId: string) {
+  static async markAsRead(institutionId: string, conversationId: string, userId: string, lastMessageId?: string) {
     if (!institutionId || !conversationId || !userId) return;
 
     const now = new Date().toISOString();
     
-    // 1. Update database if possible
+    // 1. Update IndexedDB sync state immediately
+    await ChatLocalStore.updateLastRead(conversationId, institutionId, userId, lastMessageId);
+
+    // 2. Update database if possible
     try {
       await supabase
         .from('conversation_members')
@@ -316,7 +326,7 @@ export class ChatService {
       console.warn('[ChatService] Failed to update read status in DB:', e);
     }
 
-    // 2. Local fallback
+    // 3. Local fallback
     localStorage.setItem(`chat_last_read_${userId}_${conversationId}`, now);
   }
 
@@ -442,7 +452,7 @@ export class ChatService {
   }
 
   /**
-   * Gets message history for a specific conversation.
+   * Gets message history for a specific conversation with Instant Local-First IndexedDB caching + Supabase synchronization.
    */
   static async getMessages(
     conversationId: string,
@@ -454,10 +464,15 @@ export class ChatService {
     }
 
     try {
+      // 1. Instant 0ms read from IndexedDB
+      const cachedIndexedDB = await ChatLocalStore.getCachedMessages(conversationId, limit);
+      const pendingQueue = await ChatLocalStore.getPendingMessages(institutionId);
+      const pendingForThisConv = pendingQueue.filter(p => p.conversation_id === conversationId);
+
       const isClassGroup = conversationId.startsWith('class-group-');
       const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
 
-      // 1. Query by exact conversation_id
+      // 2. Query Supabase for authoritative latest messages
       let query = supabase
         .from('messages')
         .select('*')
@@ -471,49 +486,127 @@ export class ChatService {
 
       const { data: convData, error: convErr } = await query;
 
+      let cloudMessages: ChatMessage[] = [];
+
       if (!convErr && convData && convData.length > 0) {
-        return { messages: convData.map(row => formatRowToChatMessage(row, conversationId)), error: null };
+        cloudMessages = convData.map(row => formatRowToChatMessage(row, conversationId));
+      } else {
+        // Fallback query by class_name if conversation_id query returned 0 rows
+        const queryClass = classIdRaw || conversationId;
+        let classQuery = supabase
+          .from('messages')
+          .select('*')
+          .eq('class_name', queryClass)
+          .order('created_at', { ascending: true })
+          .limit(limit);
+
+        if (institutionId) {
+          classQuery = classQuery.eq('institution_id', institutionId);
+        }
+
+        const { data: classData } = await classQuery;
+        if (classData && classData.length > 0) {
+          cloudMessages = classData.map(row => formatRowToChatMessage(row, conversationId));
+        }
       }
 
-      if (convErr) {
-        console.warn('[ChatService] Notice querying messages by conversation_id:', convErr.message);
+      // If we got cloud messages, save them into IndexedDB and merge
+      if (cloudMessages.length > 0) {
+        await ChatLocalStore.saveMessages(cloudMessages, conversationId, institutionId || '');
+        
+        // Merge cloud messages with local pending messages that have not synced yet
+        const mergedMap = new Map<string, ChatMessage>();
+        
+        cloudMessages.forEach(m => {
+          const key = m.client_message_id || m.id;
+          mergedMap.set(key, m);
+        });
+
+        pendingForThisConv.forEach(p => {
+          if (!mergedMap.has(p.client_message_id)) {
+            mergedMap.set(p.client_message_id, {
+              id: p.client_message_id,
+              client_message_id: p.client_message_id,
+              conversation_id: p.conversation_id,
+              institution_id: p.institution_id,
+              sender_id: p.sender_id,
+              sender_name: p.sender_name,
+              class_name: p.class_name,
+              message: p.message,
+              message_type: p.message_type,
+              attachment_url: p.attachment_url,
+              attachment_name: p.attachment_name,
+              attachment_size: p.attachment_size,
+              voice_duration: p.voice_duration,
+              reply_to_message_id: p.reply_to_message_id,
+              reply_to_message: p.reply_to_message,
+              created_at: p.created_at,
+              status: p.status,
+              synced: 0,
+              error: p.error
+            });
+          }
+        });
+
+        const sorted = Array.from(mergedMap.values()).sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        return { messages: sorted, error: null };
       }
 
-      // 2. Fallback query by class_name or raw class ID if conversation_id query returned 0 rows
-      const queryClass = classIdRaw || conversationId;
-      let classQuery = supabase
-        .from('messages')
-        .select('*')
-        .eq('class_name', queryClass)
-        .order('created_at', { ascending: true })
-        .limit(limit);
+      // If cloud query returned empty or failed, return IndexedDB cache + pending
+      if (cachedIndexedDB.length > 0 || pendingForThisConv.length > 0) {
+        const mergedMap = new Map<string, ChatMessage>();
+        cachedIndexedDB.forEach(m => mergedMap.set(m.client_message_id || m.id, m));
+        pendingForThisConv.forEach(p => {
+          if (!mergedMap.has(p.client_message_id)) {
+            mergedMap.set(p.client_message_id, {
+              id: p.client_message_id,
+              client_message_id: p.client_message_id,
+              conversation_id: p.conversation_id,
+              institution_id: p.institution_id,
+              sender_id: p.sender_id,
+              sender_name: p.sender_name,
+              class_name: p.class_name,
+              message: p.message,
+              message_type: p.message_type,
+              attachment_url: p.attachment_url,
+              attachment_name: p.attachment_name,
+              attachment_size: p.attachment_size,
+              voice_duration: p.voice_duration,
+              reply_to_message_id: p.reply_to_message_id,
+              reply_to_message: p.reply_to_message,
+              created_at: p.created_at,
+              status: p.status,
+              synced: 0,
+              error: p.error
+            });
+          }
+        });
 
-      if (institutionId) {
-        classQuery = classQuery.eq('institution_id', institutionId);
+        const sorted = Array.from(mergedMap.values()).sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        return { messages: sorted, error: convErr ? convErr.message : null };
       }
 
-      const { data: classData, error: classErr } = await classQuery;
-
-      if (!classErr && classData && classData.length > 0) {
-        return { messages: classData.map(row => formatRowToChatMessage(row, conversationId)), error: null };
-      }
-
-      if (classErr) {
-        console.warn('[ChatService] Notice querying messages by class_name:', classErr.message);
-      }
-
-      // 3. Fallback to localStorage cache
+      // 3. Fallback to localStorage cache if IndexedDB was empty
       const localKey = `deenora_chat_msg_${conversationId}`;
       const stored = localStorage.getItem(localKey);
       const cached = stored ? JSON.parse(stored) : [];
 
-      const queryError = convErr || classErr;
       return {
         messages: Array.isArray(cached) ? cached.map(row => formatRowToChatMessage(row, conversationId)) : [],
-        error: queryError ? queryError.message : null
+        error: convErr ? convErr.message : null
       };
     } catch (err: any) {
       console.error('[ChatService] Exception in getMessages:', err);
+      const cachedIndexedDB = await ChatLocalStore.getCachedMessages(conversationId, limit);
+      if (cachedIndexedDB.length > 0) {
+        return { messages: cachedIndexedDB, error: null };
+      }
       const localKey = `deenora_chat_msg_${conversationId}`;
       const stored = localStorage.getItem(localKey);
       const cached = stored ? JSON.parse(stored) : [];
@@ -535,7 +628,7 @@ export class ChatService {
     clientMessageId?: string,
     senderName?: string,
     className?: string,
-    messageType: 'text' | 'image' | 'document' | 'voice' = 'text',
+    messageType: 'text' | 'image' | 'document' | 'voice' | 'system_event' = 'text',
     attachmentUrl?: string,
     voiceDuration?: number,
     attachmentName?: string,
@@ -601,14 +694,16 @@ export class ChatService {
         })
       : defaultText;
 
+    const cleanClientMsgId = clientMessageId || `client-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
     const newMessage: ChatMessage = {
-      id: clientMessageId || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      id: cleanClientMsgId,
       conversation_id: cleanConversationId,
       institution_id: cleanInstitutionId,
       sender_id: cleanSenderId,
       sender_name: cleanSenderName,
       class_name: className || cleanConversationId,
-      client_message_id: clientMessageId,
+      client_message_id: cleanClientMsgId,
       message: defaultText,
       message_type: messageType,
       attachment_url: finalAttachmentUrl,
@@ -620,6 +715,8 @@ export class ChatService {
       is_deleted: false,
       is_parent: isSenderParent,
       sender_role: isSenderParent ? 'parent' : 'teacher',
+      status: 'pending',
+      synced: 0,
       sender_profile: {
         id: cleanSenderId,
         institution_id: cleanInstitutionId,
@@ -630,14 +727,33 @@ export class ChatService {
       } as any
     };
 
+    // 1. Optimistically save to IndexedDB & enqueue to pending messages
+    await ChatLocalStore.saveMessage(newMessage);
+    await ChatLocalStore.enqueuePendingMessage({
+      client_message_id: cleanClientMsgId,
+      conversation_id: cleanConversationId,
+      institution_id: cleanInstitutionId,
+      sender_id: cleanSenderId,
+      sender_name: cleanSenderName,
+      class_name: className || undefined,
+      message: defaultText,
+      message_type: messageType,
+      attachment_url: finalAttachmentUrl,
+      attachment_name: attachmentName,
+      attachment_size: attachmentSize,
+      voice_duration: voiceDuration,
+      created_at: newMessage.created_at,
+      status: 'pending',
+      retry_count: 0
+    });
+
     if (finalAttachmentUrl && (messageType === 'voice' || finalAttachmentUrl.startsWith('data:audio') || finalAttachmentUrl.includes('chat-audio'))) {
       try {
-        if (clientMessageId) localStorage.setItem(`chat_audio_${clientMessageId}`, finalAttachmentUrl);
-        if (newMessage.id) localStorage.setItem(`chat_audio_${newMessage.id}`, finalAttachmentUrl);
+        localStorage.setItem(`chat_audio_${cleanClientMsgId}`, finalAttachmentUrl);
       } catch {}
     }
 
-    // 1. Ensure conversation row exists in Supabase DB
+    // 2. Ensure conversation row exists in Supabase DB
     try {
       await supabase.from('conversations').upsert([
         {
@@ -653,7 +769,7 @@ export class ChatService {
       console.warn('[ChatService] Conversation upsert notice:', e);
     }
 
-    // 2. Database Insertion with multi-schema resilience
+    // 3. Database Insertion with multi-schema resilience
     let isSavedToDB = false;
     
     // Attempt 1: Full chat payload
@@ -665,7 +781,7 @@ export class ChatService {
         sender_name: cleanSenderName,
         title: cleanSenderName || 'Chat Message',
         class_name: className || cleanConversationId,
-        client_message_id: clientMessageId || newMessage.id,
+        client_message_id: cleanClientMsgId,
         message: dbMessageField,
         message_type: messageType,
         attachment_url: finalAttachmentUrl,
@@ -682,7 +798,10 @@ export class ChatService {
 
       if (!dbError1 && dbData1) {
         newMessage.id = dbData1.id;
+        newMessage.status = 'sent';
+        newMessage.synced = 1;
         isSavedToDB = true;
+        await ChatLocalStore.markMessageSynced(cleanClientMsgId, dbData1.id);
       }
     } catch (e) {
       console.warn('[ChatService] Primary schema notice:', e);
@@ -712,7 +831,10 @@ export class ChatService {
 
         if (!dbError2 && dbData2) {
           newMessage.id = dbData2.id;
+          newMessage.status = 'sent';
+          newMessage.synced = 1;
           isSavedToDB = true;
+          await ChatLocalStore.markMessageSynced(cleanClientMsgId, dbData2.id);
         }
       } catch (e) {
         console.warn('[ChatService] Secondary schema notice:', e);
@@ -736,14 +858,23 @@ export class ChatService {
           .select()
           .maybeSingle();
 
-        if (!dbError3 && dbData3) {
-          newMessage.id = dbData3.id;
-          isSavedToDB = true;
-        } else if (dbError3) {
+        if (!dbData3 && dbError3) {
           console.error('[ChatService] Tertiary schema insert error:', dbError3.message);
+          await ChatLocalStore.markMessageFailed(cleanClientMsgId, dbError3.message);
+          newMessage.status = 'failed';
+          newMessage.error = dbError3.message;
+        } else if (dbData3) {
+          newMessage.id = dbData3.id;
+          newMessage.status = 'sent';
+          newMessage.synced = 1;
+          isSavedToDB = true;
+          await ChatLocalStore.markMessageSynced(cleanClientMsgId, dbData3.id);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('[ChatService] Tertiary schema exception:', e);
+        await ChatLocalStore.markMessageFailed(cleanClientMsgId, e?.message || 'Network error');
+        newMessage.status = 'failed';
+        newMessage.error = e?.message;
       }
     }
 
@@ -753,7 +884,7 @@ export class ChatService {
       } catch {}
     }
 
-    // 3. Deterministic Realtime Broadcast (Broadcasts to active room & global notification subscribers)
+    // 4. Deterministic Realtime Broadcast (Broadcasts to active room & global notification subscribers)
     try {
       const roomChannelName = `chat_realtime_${cleanInstitutionId}_${cleanConversationId}`;
       const globalChannelName = `global_notifs_${cleanInstitutionId}`;
@@ -798,13 +929,13 @@ export class ChatService {
       }
     } catch (e) {}
 
-    // 4. Persist to localStorage for offline cache
+    // 5. Persist to localStorage for offline cache fallback
     try {
       const localKey = `deenora_chat_msg_${cleanConversationId}`;
       const stored = localStorage.getItem(localKey);
       const existing: ChatMessage[] = stored ? JSON.parse(stored) : [];
 
-      if (!existing.some(m => m.id === newMessage.id || (clientMessageId && m.client_message_id === clientMessageId))) {
+      if (!existing.some(m => m.id === newMessage.id || (cleanClientMsgId && m.client_message_id === cleanClientMsgId))) {
         existing.push(newMessage);
         localStorage.setItem(localKey, JSON.stringify(existing));
       }
@@ -813,6 +944,80 @@ export class ChatService {
     }
 
     return newMessage;
+  }
+
+  /**
+   * Syncs all pending unsent messages in IndexedDB to Supabase when back online.
+   */
+  static async syncPendingMessages(institutionId?: string): Promise<number> {
+    try {
+      const pendingList = await ChatLocalStore.getPendingMessages(institutionId);
+      if (pendingList.length === 0) return 0;
+
+      let syncedCount = 0;
+
+      for (const pending of pendingList) {
+        try {
+          await ChatLocalStore.updateMessageStatus(pending.client_message_id, 'sending');
+          
+          await this.sendMessage(
+            pending.institution_id,
+            pending.conversation_id,
+            pending.sender_id,
+            pending.message,
+            pending.client_message_id,
+            pending.sender_name,
+            pending.class_name,
+            pending.message_type,
+            pending.attachment_url,
+            pending.voice_duration,
+            pending.attachment_name,
+            pending.attachment_size
+          );
+
+          syncedCount++;
+        } catch (err: any) {
+          console.warn(`[ChatService] Failed to sync pending message ${pending.client_message_id}:`, err);
+          await ChatLocalStore.markMessageFailed(pending.client_message_id, err?.message || 'Sync failed');
+        }
+      }
+
+      return syncedCount;
+    } catch (err) {
+      console.error('[ChatService] Error in syncPendingMessages:', err);
+      return 0;
+    }
+  }
+
+  /**
+   * Retries an individual failed pending message.
+   */
+  static async retryPendingMessage(clientMessageId: string): Promise<ChatMessage | null> {
+    try {
+      const pendingList = await ChatLocalStore.getPendingMessages();
+      const target = pendingList.find(p => p.client_message_id === clientMessageId);
+      if (!target) return null;
+
+      await ChatLocalStore.updateMessageStatus(clientMessageId, 'sending');
+
+      return await this.sendMessage(
+        target.institution_id,
+        target.conversation_id,
+        target.sender_id,
+        target.message,
+        target.client_message_id,
+        target.sender_name,
+        target.class_name,
+        target.message_type,
+        target.attachment_url,
+        target.voice_duration,
+        target.attachment_name,
+        target.attachment_size
+      );
+    } catch (err) {
+      console.error('[ChatService] Retry message failed:', err);
+      return null;
+    }
   }
 
   /**

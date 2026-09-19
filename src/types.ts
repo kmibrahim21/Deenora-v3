@@ -176,6 +176,7 @@ export interface Profile {
   id: string;
   institution_id: string;
   full_name: string;
+  email?: string;
   role: UserRole;
   class_id?: string;
   is_active: boolean;
@@ -600,6 +601,9 @@ export interface ChatMessage {
   created_at: string;
   updated_at?: string;
   sender_profile?: Profile;
+  status?: 'pending' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  synced?: 0 | 1;
+  error?: string;
 }
 
 export interface ConversationSettings {
@@ -611,6 +615,96 @@ export interface ConversationSettings {
   wallpaper?: 'default' | 'light' | 'dark' | 'mint' | 'emerald' | 'amber';
   isArchived?: boolean;
   isBlocked?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// DEENORA CHAT V3: AUTOMATIC ARCHIVING & SUPABASE STORAGE OPTIMIZATION TYPES
+// ---------------------------------------------------------------------------
+
+export type ArchiveStatus = 'created' | 'verified' | 'cleaned_up' | 'failed';
+
+export interface ChatArchiveMetadata {
+  id: string; // archive_id (UUID)
+  institution_id: string;
+  conversation_id?: string; // specific conversation ID or 'all'
+  conversation_name?: string;
+  date_start: string; // ISO date string
+  date_end: string; // ISO date string
+  message_count: number;
+  archive_size_bytes: number;
+  compressed_size_bytes?: number;
+  checksum: string; // SHA-256 hex string of encrypted payload
+  encryption_version: string; // e.g. 'AES-256-GCM-V3'
+  storage_location: 'supabase_storage' | 'local_encrypted' | 'google_drive';
+  storage_path?: string;
+  status: ArchiveStatus;
+  crypto_metadata?: any;
+  encrypted_package_url?: string;
+  created_by?: string;
+  verified_at?: string;
+  cleaned_up_at?: string;
+  created_at: string;
+}
+
+export interface ChatRetentionPolicy {
+  institution_id: string;
+  hot_retention_days: number; // default: 90 (0-90 days hot in Supabase)
+  announcement_retention_mode: 'permanent' | 'days'; // default: 'permanent'
+  announcement_retention_days?: number; // if mode is 'days', e.g. 365
+  protect_pinned_messages: boolean; // default: true
+  protect_starred_messages: boolean; // default: true
+  auto_archive_enabled: boolean; // default: true
+  archive_granularity: 'per_conversation_month' | 'per_institution_month' | 'per_academic_year';
+  storage_destination: 'supabase_storage_cold' | 'local_encrypted' | 'google_drive';
+  last_archive_run_at?: string;
+  last_cleanup_run_at?: string;
+  updated_at?: string;
+}
+
+export type ArchiveAuditAction =
+  | 'archive_created'
+  | 'archive_verified'
+  | 'cleanup_started'
+  | 'cleanup_completed'
+  | 'cleanup_failed'
+  | 'restore_performed';
+
+export interface ChatArchiveAuditLog {
+  id: string;
+  institution_id: string;
+  archive_id?: string;
+  action: ArchiveAuditAction;
+  affected_message_count?: number;
+  date_range?: { start: string; end: string };
+  details?: string;
+  performed_by: string;
+  created_at: string;
+}
+
+export interface ArchiveCandidateStats {
+  total_supabase_messages: number;
+  hot_messages_count: number;
+  archive_candidate_count: number;
+  oldest_message_date?: string;
+  newest_message_date?: string;
+  estimated_storage_bytes: number;
+  verified_archives_count: number;
+  cleaned_up_archives_count: number;
+}
+
+export interface ArchiveExecutionStep {
+  step: 'identification' | 'packaging' | 'compression' | 'encryption' | 'checksum_verification' | 'metadata_recording' | 'cloud_cleanup';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  details?: string;
+}
+
+export interface ArchiveExecutionResult {
+  success: boolean;
+  archive_metadata?: ChatArchiveMetadata;
+  verified: boolean;
+  cleaned_up_count: number;
+  error?: string;
+  steps: ArchiveExecutionStep[];
 }
 
 export interface Donation {
