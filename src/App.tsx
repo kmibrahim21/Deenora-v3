@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import React, { useState, useEffect, Suspense, lazy, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { OfflineService } from "services/OfflineService";
@@ -24,6 +24,7 @@ import { AcademicYearSetupRequired } from "components/AcademicYearSetupRequired"
 import { useGlobalUpdate } from "hooks/useGlobalUpdate";
 import { useGlobalNotifications } from "hooks/useGlobalNotifications";
 import { requestManager } from "services/RequestManager";
+import { useVoiceCall } from "context/CallContext";
 
 const Auth = React.lazy(() => import("pages/Auth"));
 const Home = React.lazy(() => import("pages/Home"));
@@ -135,12 +136,34 @@ const App: React.FC = () => {
     return false;
   }, [madrasah]);
 
+  const isLiveChatEnabled = useMemo(() => {
+    let config = madrasah?.config_json as any;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (e) {
+        config = {};
+      }
+    }
+    const configModules = config?.modules || {};
+    return configModules.live_chat === true || profile?.role === 'super_admin';
+  }, [madrasah, profile?.role]);
+
   // Mount global real-time notifications for institution staff/admins
   useGlobalNotifications({
     institutionId: madrasah?.id,
     userId: profile?.id,
     userRole: profile?.role
   });
+
+  const { initSignaling: initVoiceSignaling } = useVoiceCall();
+
+  // Initialize Voice Call signaling for admin/teacher only if live_chat is enabled
+  useEffect(() => {
+    if (isLiveChatEnabled && madrasah?.id && profile?.id) {
+      initVoiceSignaling(madrasah.id, profile.id);
+    }
+  }, [isLiveChatEnabled, madrasah?.id, profile?.id, initVoiceSignaling]);
 
   const triggerRefresh = () => {
     // Instead of total invalidation, we increment dataVersion to trigger targeted effect hooks
@@ -937,6 +960,29 @@ const App: React.FC = () => {
           />
         );
       case "chat":
+        if (!isLiveChatEnabled) {
+          return (
+            <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-xl font-black text-slate-800">
+                {lang === 'bn' ? 'অনুমতি নেই' : 'Permission Required'}
+              </h2>
+              <p className="text-slate-500 max-w-md text-sm">
+                {lang === 'bn' 
+                  ? 'আপনার প্রতিষ্ঠানের জন্য লাইভ চ্যাট ও ভয়েস কল ফিচারটি সক্রিয় নয়। সুপার এডমিনের সাথে যোগাযোগ করুন।' 
+                  : 'Live Chat & Voice Call is not enabled for your institution. Please contact Super Admin.'}
+              </p>
+              <button 
+                onClick={() => setView('home')} 
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all"
+              >
+                {lang === 'bn' ? 'ড্যাশবোর্ডে ফিরে যান' : 'Back to Dashboard'}
+              </button>
+            </div>
+          );
+        }
         return (
           <ChatApp
             institution={madrasah}

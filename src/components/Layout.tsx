@@ -66,6 +66,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         id_cards: configObj.modules?.id_cards ?? false,
         exam_routine: configObj.modules?.exam_routine ?? true,
         donations: configObj.modules?.donations === true,
+        live_chat: configObj.modules?.live_chat === true || isSuperAdmin,
       },
       result_engine: configObj.result_engine || 'school',
       result_system: configObj.result_system || 'grading',

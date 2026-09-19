@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save, Camera, MapPin, School, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Edit3, User as UserIcon, Smartphone, PhoneCall, UserCheck, MessageCircle, BookOpen, Phone, Trash2, AlertTriangle, Loader2, X, Zap, Calendar, Banknote, FileText, Check, Save, Camera, MapPin, School, ShieldCheck, Mic } from 'lucide-react';
 import { Student, Language, Institution } from 'types';
 import { supabase } from 'supabase';
 import { SupabaseWrapper } from 'services/supabaseWrapper';
@@ -8,6 +8,7 @@ import { requestManager } from 'services/RequestManager';
 import { CacheService } from 'services/cacheService';
 import { t } from 'translations';
 import { extractStudentExtraFields, packStudentNotesWithExtra, getDisplayNotes } from 'utils/studentExtraFields';
+import { useVoiceCall } from '../context/CallContext';
 
 interface StudentDetailsProps {
   student: Student;
@@ -101,6 +102,38 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPhotoDeleteConfirm, setShowPhotoDeleteConfirm] = useState(false);
   const [photoAlert, setPhotoAlert] = useState<{ show: boolean; type: 'success' | 'error'; message: string } | null>(null);
+  
+  const { startCall } = useVoiceCall();
+
+  const isLiveChatEnabled = React.useMemo(() => {
+    let config = madrasah?.config_json as any;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const configModules = config?.modules || {};
+    return configModules.live_chat === true;
+  }, [madrasah]);
+
+  const handleStartVoiceCall = (phoneToCall?: string) => {
+    if (!isLiveChatEnabled) return;
+    startCall(
+      {
+        id: student.id,
+        name: student.student_name,
+        roll: student.roll,
+        photo_url: student.photo_url,
+        class_name: student.classes?.class_name,
+        guardian_name: student.guardian_name,
+        guardian_phone: phoneToCall || student.guardian_phone,
+      },
+      {
+        id: profile?.id || madrasah?.id || 'admin',
+        name: profile?.full_name || madrasah?.name || 'শিক্ষক / এডমিন',
+        role: role || 'teacher',
+      },
+      institutionId || madrasah?.id
+    );
+  };
   
   const isDark = madrasah?.theme === 'dark';
   const isPhotoModuleEnabled = madrasah?.config_json?.modules?.student_photo === true;
@@ -655,7 +688,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 </div>
               </div>
               
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className={`grid ${isLiveChatEnabled ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5`}>
                 <button 
                   onClick={() => window.location.href = `tel:${student.guardian_phone}`}
                   className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
@@ -674,6 +707,15 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                 >
                   <PhoneCall size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'ওয়াটসঅ্যাপ' : 'WhatsApp'}
                 </button>
+                {isLiveChatEnabled && (
+                  <button 
+                    onClick={() => handleStartVoiceCall(student.guardian_phone)}
+                    className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-indigo-600/20 active:scale-95 transition-all group"
+                    title="ইন্টারনেট ভয়েস কল"
+                  >
+                    <Mic size={18} className="opacity-90 group-hover:scale-110 transition-transform" /> {lang === 'bn' ? 'ভয়েস কল' : 'Voice Call'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -691,7 +733,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className={`grid ${isLiveChatEnabled ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5`}>
                   <button 
                     onClick={() => window.location.href = `tel:${student.guardian_phone_2}`}
                     className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-blue-400/20 active:scale-95 transition-all"
@@ -710,6 +752,15 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
                   >
                     <PhoneCall size={18} fill="currentColor" className="opacity-90" /> {lang === 'bn' ? 'ওয়াটসঅ্যাপ' : 'WhatsApp'}
                   </button>
+                  {isLiveChatEnabled && (
+                    <button 
+                      onClick={() => handleStartVoiceCall(student.guardian_phone_2)}
+                      className="flex flex-col items-center justify-center gap-0.5 py-2.5 bg-gradient-to-br from-indigo-500 to-violet-600 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-indigo-500/20 active:scale-95 transition-all group"
+                      title="ইন্টারনেট ভয়েস কল"
+                    >
+                      <Mic size={18} className="opacity-90 group-hover:scale-110 transition-transform" /> {lang === 'bn' ? 'ভয়েস কল' : 'Voice Call'}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

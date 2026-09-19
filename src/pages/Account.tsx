@@ -229,6 +229,7 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
       certificates: configObj.modules?.certificates ?? true,
       id_cards: configObj.modules?.id_cards ?? false,
       exam_routine: configObj.modules?.exam_routine ?? true,
+      live_chat: configObj.modules?.live_chat === true,
     };
   }, [madrasah]);
 
@@ -1733,14 +1734,16 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
         )}
 
         {/* Live Chat Card */}
-        <ActionCard
-          icon={MessageSquareText}
-          title={lang === 'bn' ? 'লাইভ চ্যাট' : 'Live Chat'}
-          subtitle={lang === 'bn' ? 'গ্রুপ ও ডিরেক্ট মেসেজ' : 'Group & Direct Chat'}
-          colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-          onClick={() => setView('chat')}
-          dark={madrasah?.theme === 'dark'}
-        />
+        {(modules.live_chat || isSuperAdmin) && (
+          <ActionCard
+            icon={MessageSquareText}
+            title={lang === 'bn' ? 'লাইভ চ্যাট' : 'Live Chat'}
+            subtitle={lang === 'bn' ? 'গ্রুপ ও ডিরেক্ট মেসেজ' : 'Group & Direct Chat'}
+            colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+            onClick={() => setView('chat')}
+            dark={madrasah?.theme === 'dark'}
+          />
+        )}
 
         {/* Message Card */}
         {(isAdmin || canSendMessages) && modules.messages && (

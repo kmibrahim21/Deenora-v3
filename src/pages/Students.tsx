@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX } from 'lucide-react';
+import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX, Mic } from 'lucide-react';
 import { supabase, offlineApi, smsApi } from 'supabase';
 import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
@@ -10,6 +10,7 @@ import { CacheService } from 'services/cacheService';
 import { openWhatsAppChooser } from '../utils/whatsapp';
 import { requestManager, CACHE_TTLS } from 'services/RequestManager';
 import { extractStudentExtraFields } from 'utils/studentExtraFields';
+import { useVoiceCall } from '../context/CallContext';
 
 interface StudentsProps {
   selectedClass: Class;
@@ -47,6 +48,45 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const [sending, setSending] = useState(false);
   const isSendingRef = useRef(false);
   const [statusModal, setStatusModal] = useState<{ show: boolean; type: 'success' | 'error' | 'balance'; title: string; message: string }>({ show: false, type: 'success', title: '', message: '' });
+  const { startCall } = useVoiceCall();
+
+  const isLiveChatEnabled = useMemo(() => {
+    let config = madrasah?.config_json as any;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    const configModules = config?.modules || {};
+    return configModules.live_chat === true;
+  }, [madrasah]);
+
+  const handleVoiceCall = useCallback((student: Student) => {
+    if (!isLiveChatEnabled) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'লাইভ চ্যাট পারমিশন প্রয়োজন' : 'Permission Required',
+        message: lang === 'bn' ? 'আপনার মাদ্রাসার জন্য লাইভ চ্যাট ও ভয়েস কল ফিচারটি সক্রিয় নয়।' : 'Live Chat and Voice Call feature is not enabled for your institution.'
+      });
+      return;
+    }
+    startCall(
+      {
+        id: student.id,
+        name: student.student_name,
+        roll: student.roll,
+        photo_url: student.photo_url,
+        class_name: selectedClass?.class_name || student.classes?.class_name,
+        guardian_name: student.guardian_name,
+        guardian_phone: student.guardian_phone,
+      },
+      {
+        id: madrasah?.id || 'admin',
+        name: madrasah?.name || 'মাদ্রাসা কর্তৃপক্ষ',
+        role: 'teacher',
+      },
+      institutionId || madrasah?.id
+    );
+  }, [startCall, selectedClass, madrasah, institutionId, isLiveChatEnabled, lang]);
 
   // Fetch Templates (Cached)
   const fetchTemplates = useCallback(async () => {
@@ -402,19 +442,30 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
               </div>
             </div>
             {!isSelectionMode && (
-              <div className="flex items-center gap-2 shrink-0 ml-3">
+              <div className="flex items-center gap-1.5 shrink-0 ml-2 md:ml-3">
                 <button 
                   onClick={(e) => { e.stopPropagation(); window.location.href = `tel:${student.guardian_phone}`; }} 
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-slate-50 text-[#2563EB] border-slate-100'}`}
+                  title="সাধারণ ফোন কল"
+                  className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center border-2 shadow-sm active:scale-90 transition-all hover:bg-[#2563EB] hover:text-white hover:border-[#2563EB] hover:shadow-[#2563EB]/20 ${isDark ? 'bg-slate-800 text-blue-400 border-slate-700' : 'bg-slate-50 text-[#2563EB] border-slate-100'}`}
                 >
-                  <Phone size={18} fill="currentColor" />
+                  <Phone size={16} fill="currentColor" />
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); openWhatsAppChooser(student.guardian_phone); }} 
-                  className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
+                  title="হোয়াটসঅ্যাপ চ্যাট / কল"
+                  className="w-9 h-9 md:w-10 md:h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-emerald-200 active:scale-90 transition-all hover:rotate-6 hover:shadow-emerald-300"
                 >
-                  <PhoneCall size={18} fill="currentColor" />
+                  <PhoneCall size={16} fill="currentColor" />
                 </button>
+                {isLiveChatEnabled && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleVoiceCall(student); }} 
+                    title={lang === 'bn' ? 'অ্যাপ ভয়েস কল (গার্ডিয়ান অ্যাপে সরাসরি কথা বলুন)' : 'Direct In-App Voice Call to Guardian'}
+                    className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-indigo-200 active:scale-90 transition-all hover:scale-105 hover:shadow-indigo-400 group"
+                  >
+                    <Mic size={16} className="group-hover:scale-110 transition-transform" />
+                  </button>
+                )}
               </div>
             )}
           </div>

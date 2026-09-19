@@ -45,11 +45,14 @@ if (typeof window !== 'undefined') {
 }
 
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { CallProvider } from './context/CallContext';
 
 const root = createRoot(rootElement);
 root.render(
   <ErrorBoundary>
-    <App />
+    <CallProvider>
+      <App />
+    </CallProvider>
   </ErrorBoundary>
 );
 

@@ -106,6 +106,7 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
     return {
       class_routine: configObj.modules?.class_routine ?? false,
       messages: configObj.modules?.messages ?? true,
+      live_chat: configObj.modules?.live_chat === true,
       teacher_attendance: configObj.teacher_attendance || {}
     };
   }, [madrasah?.config_json]);
@@ -877,14 +878,16 @@ const TeacherAccount: React.FC<TeacherAccountProps> = ({
                   )}
 
                   {/* Live Chat Card */}
-                  <ActionCard
-                    icon={MessageSquareText}
-                    title={lang === 'bn' ? 'লাইভ চ্যাট' : 'Live Chat'}
-                    subtitle={lang === 'bn' ? 'ক্লাস ও অভিভাবক চ্যাট' : 'Group & Direct Chat'}
-                    colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                    onClick={() => setView('chat')}
-                    dark={isDark}
-                  />
+                  {modules.live_chat && (
+                    <ActionCard
+                      icon={MessageSquareText}
+                      title={lang === 'bn' ? 'লাইভ চ্যাট' : 'Live Chat'}
+                      subtitle={lang === 'bn' ? 'ক্লাস ও অভিভাবক চ্যাট' : 'Group & Direct Chat'}
+                      colorClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                      onClick={() => setView('chat')}
+                      dark={isDark}
+                    />
+                  )}
 
                   {/* Tutorials Card */}
                   <ActionCard

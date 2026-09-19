@@ -46,8 +46,10 @@ import {
   Sun,
   TrendingDown,
   MessageSquareText,
+  Mic,
 } from 'lucide-react';
 import { ChatApp } from './ChatApp';
+import { useVoiceCall } from '../context/CallContext';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
 import { 
   requestPushNotificationPermission, 
@@ -154,10 +156,19 @@ interface ParentPortalProps {
 const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'attendance' | 'results' | 'fees' | 'notices' | 'chat' | 'profile'>('home');
   const [isMobileChatActive, setIsMobileChatActive] = useState(false);
-  const modules = useMemo(() => madrasah?.config_json?.modules || {} as any, [madrasah]);
   const [activeNoticeTab, setActiveNoticeTab] = useState<'notice' | 'diary' | 'syllabus' | 'suggestion' | 'routine'>('notice');
   const [student, setStudent] = useState<any>(null);
   const [currentInstitution, setCurrentInstitution] = useState<Institution | null>(madrasah);
+
+  const modules = useMemo(() => {
+    let config: any = currentInstitution?.config_json || madrasah?.config_json;
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (e) { config = {}; }
+    }
+    return (config?.modules || {}) as any;
+  }, [currentInstitution, madrasah]);
+
+  const isLiveChatEnabled = modules.live_chat === true;
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
   const [feeStructures, setFeeStructures] = useState<any[]>([]);
@@ -181,6 +192,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
   const [showNotifBanner, setShowNotifBanner] = useState<boolean>(false);
   const [notifToast, setNotifToast] = useState<string | null>(null);
+  
+  const { initSignaling, startCall } = useVoiceCall();
+
+  // Initialize Voice Call Signaling listener for Guardian app only if live chat & voice call module is active
+  useEffect(() => {
+    if (!isLiveChatEnabled) return;
+    const activeInstId = currentInstitution?.id || madrasah?.id;
+    if (activeInstId && studentId) {
+      initSignaling(activeInstId, studentId);
+    }
+  }, [currentInstitution?.id, madrasah?.id, studentId, isLiveChatEnabled, initSignaling]);
 
   useEffect(() => {
     const perm = getNotificationPermissionState();
@@ -741,6 +763,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
            {[
              { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড', visible: true },
+             { id: 'chat', icon: MessageSquareText, label: 'লাইভ চ্যাট', visible: isLiveChatEnabled },
              { id: 'attendance', icon: ClipboardList, label: 'উপস্থিতি', visible: modules.attendance !== false },
              { id: 'results', icon: GraduationCap, label: 'ফলাফল', visible: (modules.results !== false || modules.exam !== false) },
              { id: 'fees', icon: Banknote, label: 'ফি ও বকেয়া', visible: modules.accounting !== false },
@@ -957,23 +980,25 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             </div>
 
             {/* Live Chat Prominent Banner Card */}
-            <div 
-              onClick={() => setActiveTab('chat')}
-              className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-4 sm:p-5 rounded-[2rem] flex items-center justify-between cursor-pointer shadow-lg shadow-emerald-600/20 hover:scale-[1.01] transition-all"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shrink-0">
-                  <MessageSquareText size={22} />
+            {isLiveChatEnabled && (
+              <div 
+                onClick={() => setActiveTab('chat')}
+                className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-4 sm:p-5 rounded-[2rem] flex items-center justify-between cursor-pointer shadow-lg shadow-emerald-600/20 hover:scale-[1.01] transition-all"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white shrink-0">
+                    <MessageSquareText size={22} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-xs sm:text-sm text-white leading-tight">শিক্ষক ও প্রতিষ্ঠান লাইভ চ্যাট</h3>
+                    <p className="text-[10px] sm:text-[11px] text-emerald-100 font-medium">শ্রেণি শিক্ষক ও অভিভাবক চ্যাট গ্রুপে যুক্ত হন</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-black text-xs sm:text-sm text-white leading-tight">শিক্ষক ও প্রতিষ্ঠান লাইভ চ্যাট</h3>
-                  <p className="text-[10px] sm:text-[11px] text-emerald-100 font-medium">শ্রেণি শিক্ষক ও অভিভাবক চ্যাট গ্রুপে যুক্ত হন</p>
+                <div className="px-3 py-1.5 bg-white text-emerald-700 font-black text-[11px] rounded-xl shadow-sm shrink-0 flex items-center gap-1">
+                  চ্যাট করুন <ChevronRight size={13} />
                 </div>
               </div>
-              <div className="px-3 py-1.5 bg-white text-emerald-700 font-black text-[11px] rounded-xl shadow-sm shrink-0 flex items-center gap-1">
-                চ্যাট করুন <ChevronRight size={13} />
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -2731,14 +2756,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         >
         <nav className={`backdrop-blur-[25px] border py-2 sm:py-2.5 rounded-[2.5rem] shadow-2xl flex justify-between items-end px-1 sm:px-2 overflow-visible relative gap-0.5 sm:gap-1 ${madrasah?.theme === 'dark' ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200'}`}>
           {[
-            { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড' },
-            { id: 'chat', icon: MessageSquareText, label: 'চ্যাট' },
-            { id: 'attendance', icon: Calendar, label: 'হাজিরা' },
-            { id: 'results', icon: GraduationCap, label: 'পরীক্ষা' },
-            { id: 'fees', icon: CreditCard, label: 'ফি' },
-            { id: 'notices', icon: Bell, label: 'নোটিশ' },
-            { id: 'profile', icon: User, label: 'প্রোফাইল' }
-          ].map((item) => {
+            { id: 'home', icon: LayoutDashboard, label: 'ড্যাশবোর্ড', visible: true },
+            { id: 'chat', icon: MessageSquareText, label: 'চ্যাট', visible: isLiveChatEnabled },
+            { id: 'attendance', icon: Calendar, label: 'হাজিরা', visible: modules.attendance !== false },
+            { id: 'results', icon: GraduationCap, label: 'পরীক্ষা', visible: (modules.results !== false || modules.exam !== false) },
+            { id: 'fees', icon: CreditCard, label: 'ফি', visible: modules.accounting !== false },
+            { id: 'notices', icon: Bell, label: 'নোটিশ', visible: true },
+            { id: 'profile', icon: User, label: 'প্রোফাইল', visible: true }
+          ].filter(t => t.visible).map((item) => {
             const active = isTabActive(item.id);
             const IconComponent = item.icon;
             return (
