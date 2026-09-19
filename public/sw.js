@@ -124,17 +124,20 @@ self.addEventListener('notificationclick', (event) => {
 
       // 2. If user clicked "📞 রিসিভ করুন" or clicked the main notification card on mobile screen
       for (const client of windowClients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.focus();
+        if (client.url.includes(self.location.origin)) {
+          if ('focus' in client) {
+            client.focus();
+          }
           client.postMessage({
-            type: 'ACCEPT_CALL_FROM_NOTIFICATION',
-            callId: notifData.callId
+            type: action === 'answer' ? 'ACCEPT_CALL_FROM_NOTIFICATION' : 'ACCEPT_CALL_FROM_NOTIFICATION',
+            callId: notifData.callId,
+            action: action || 'incoming_call'
           });
           return;
         }
       }
 
-      // 3. If app was not open in any active window, open window directly to call accept
+      // 3. If app was not open in any active window, open window directly to call screen
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

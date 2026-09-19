@@ -59,15 +59,44 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
+  // Listen for Service Worker incoming call actions & cross-tab events
+  useEffect(() => {
+    // Check if there is an active incoming call already in memory or localStorage
+    const existingCall = voiceCallService.getActiveCall();
+    if (existingCall && callStatus === 'idle') {
+      setActiveCall(existingCall);
+      setCallStatus('incoming');
+    }
+
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const bc = new BroadcastChannel('deenora_call_events');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'INCOMING_CALL' && event.data.payload) {
+          setActiveCall(event.data.payload);
+          setIsCaller(false);
+          setCallStatus('incoming');
+        }
+      };
+      return () => {
+        bc.close();
+      };
+    }
+  }, []);
+
   // Listen for Service Worker incoming call actions (Tap "📞 রিসিভ করুন" or "❌ কেটে দিন" on mobile screen / lock screen)
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
-    const handleSwMessage = (event: MessageEvent) => {
+    const handleSwMessage = async (event: MessageEvent) => {
       if (!event.data) return;
       if (event.data.type === 'ACCEPT_CALL_FROM_NOTIFICATION') {
         console.log('[CallContext] Received ACCEPT_CALL_FROM_NOTIFICATION from SW');
-        voiceCallService.acceptCall();
+        const currentActive = activeCall || voiceCallService.getActiveCall();
+        if (currentActive) {
+          setActiveCall(currentActive);
+          setCallStatus('connected');
+        }
+        await voiceCallService.acceptCall();
       } else if (event.data.type === 'REJECT_CALL_FROM_NOTIFICATION') {
         console.log('[CallContext] Received REJECT_CALL_FROM_NOTIFICATION from SW');
         voiceCallService.rejectCall('মোবাইলের নোটিফিকেশন থেকে কল বাতিল করা হয়েছে।');
@@ -78,19 +107,26 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleSwMessage);
     };
-  }, []);
+  }, [activeCall]);
 
-  // Auto-answer if user unlocked phone / opened app directly from lock screen notification
+  // Auto-answer or open call screen if user unlocked phone / opened app directly from lock screen notification
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action');
     const targetCallId = params.get('call_id');
 
-    if (action === 'accept_call' && callStatus === 'incoming') {
-      if (!targetCallId || (activeCall && activeCall.callId === targetCallId)) {
-        console.log('[CallContext] Auto-answering call from URL parameter');
-        voiceCallService.acceptCall();
+    if (action === 'accept_call' || action === 'incoming_call') {
+      const pendingCall = activeCall || voiceCallService.getActiveCall();
+      if (pendingCall && (!targetCallId || pendingCall.callId === targetCallId)) {
+        setActiveCall(pendingCall);
+        if (action === 'accept_call') {
+          console.log('[CallContext] Auto-answering call from URL parameter');
+          setCallStatus('connected');
+          voiceCallService.acceptCall();
+        } else {
+          setCallStatus('incoming');
+        }
 
         // Clean query parameter from URL without reload
         const url = new URL(window.location.href);
@@ -100,7 +136,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
       }
     }
-  }, [callStatus, activeCall]);
+  }, [activeCall, callStatus]);
 
   // Duration timer during connected call
   useEffect(() => {

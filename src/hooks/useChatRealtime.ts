@@ -172,7 +172,17 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     // Single deterministic channel subscription
     const channel = supabase.channel(channelName)
       .on('broadcast', { event: 'new_message' }, (p) => p?.payload && handleIncoming(p.payload))
+      .on('broadcast', { event: 'message_read' }, (p) => {
+        if (p?.payload?.conversation_id === activeConvRef.current) {
+          setMessages(prev => prev.map(m => ({ ...m, status: 'read' })));
+        }
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => p?.new && handleIncoming(p.new))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (p) => {
+        if (p?.new) {
+          setMessages(prev => prev.map(m => m.id === p.new.id ? { ...m, ...formatRowToChatMessage(p.new, activeConvRef.current) } : m));
+        }
+      })
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           console.log(`[useChatRealtime] SUBSCRIBED to ${channelName}`);
@@ -188,11 +198,21 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
         .then(res => {
           if (res.messages && res.messages.length > 0) {
             setMessages(prev => {
-              const newItems = res.messages.filter(
-                lm => !prev.some(pm => pm.id === lm.id || (lm.client_message_id && pm.client_message_id === lm.client_message_id))
+              if (prev.length === 0) return res.messages;
+              const map = new Map<string, ChatMessage>();
+              prev.forEach(m => map.set(m.client_message_id || m.id, m));
+              res.messages.forEach(m => {
+                const key = m.client_message_id || m.id;
+                const existing = map.get(key);
+                if (!existing || existing.status === 'pending') {
+                  map.set(key, m);
+                } else {
+                  map.set(key, { ...existing, ...m });
+                }
+              });
+              return Array.from(map.values()).sort(
+                (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
               );
-              if (newItems.length === 0) return prev;
-              return [...prev, ...newItems];
             });
           }
         })

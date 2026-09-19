@@ -305,7 +305,7 @@ export class ChatService {
   }
 
   /**
-   * Marks all messages in a conversation as read for a user.
+   * Marks all messages in a conversation as read for a user and broadcasts the read receipt in real-time.
    */
   static async markAsRead(institutionId: string, conversationId: string, userId: string, lastMessageId?: string) {
     if (!institutionId || !conversationId || !userId) return;
@@ -315,7 +315,7 @@ export class ChatService {
     // 1. Update IndexedDB sync state immediately
     await ChatLocalStore.updateLastRead(conversationId, institutionId, userId, lastMessageId);
 
-    // 2. Update database if possible
+    // 2. Update database conversation_members and message status
     try {
       await supabase
         .from('conversation_members')
@@ -326,8 +326,39 @@ export class ChatService {
       console.warn('[ChatService] Failed to update read status in DB:', e);
     }
 
+    try {
+      await supabase
+        .from('messages')
+        .update({ status: 'read', is_read: true } as any)
+        .eq('conversation_id', conversationId)
+        .neq('sender_id', userId);
+    } catch {}
+
     // 3. Local fallback
     localStorage.setItem(`chat_last_read_${userId}_${conversationId}`, now);
+
+    // 4. Real-time broadcast read event to active room & global channels
+    try {
+      const roomChannelName = `chat_realtime_${institutionId}_${conversationId}`;
+      const channel = supabase.channel(roomChannelName);
+      channel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          channel.send({
+            type: 'broadcast',
+            event: 'message_read',
+            payload: {
+              conversation_id: conversationId,
+              user_id: userId,
+              read_at: now,
+              last_message_id: lastMessageId
+            }
+          });
+          setTimeout(() => supabase.removeChannel(channel), 2000);
+        }
+      });
+    } catch (broadcastErr) {
+      console.warn('[ChatService] markAsRead broadcast warning:', broadcastErr);
+    }
   }
 
   /**

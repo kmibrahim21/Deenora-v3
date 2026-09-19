@@ -66,12 +66,29 @@ export class VoiceCallService {
   private isSubscribed: boolean = false;
   private subscribePromise: Promise<boolean> | null = null;
   private subscribeResolver: ((val: boolean) => void) | null = null;
+  private disconnectTimer: NodeJS.Timeout | null = null;
+  private pingInterval: NodeJS.Timeout | null = null;
+  private lastPingReceived: number = Date.now();
 
   // Listeners
   public onStatusChange?: (status: CallStatus, data?: CallPayload) => void;
   public onIncomingCall?: (call: CallPayload) => void;
   public onRemoteStreamReady?: (stream: MediaStream) => void;
   public onError?: (errMessage: string) => void;
+
+  public getActiveCall(): CallPayload | null {
+    if (this.activeCallData) return this.activeCallData;
+    try {
+      const stored = localStorage.getItem('deenora_active_call_payload');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && Date.now() - (parsed.timestamp || 0) < 60000) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  }
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -157,6 +174,11 @@ export class VoiceCallService {
         .on('broadcast', { event: 'call:end' }, ({ payload }: { payload: CallPayload }) => {
           if (this.activeCallData && this.activeCallData.callId === payload.callId) {
             this.handleCallEndedRemotely();
+          }
+        })
+        .on('broadcast', { event: 'call:ping' }, ({ payload }: { payload: { callId: string } }) => {
+          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+            this.lastPingReceived = Date.now();
           }
         });
     };
@@ -341,23 +363,66 @@ export class VoiceCallService {
     };
 
     pc.ontrack = (event) => {
-      console.log('[VoiceCall] Received remote audio track', event.streams);
+      console.log('[VoiceCall] Received remote audio track', event.streams, event.track);
+      let remoteStream: MediaStream;
       if (event.streams && event.streams[0]) {
-        const remoteStream = event.streams[0];
-        if (this.remoteAudioElement) {
-          this.remoteAudioElement.srcObject = remoteStream;
-          this.remoteAudioElement.play().catch(() => {});
-        }
-        this.onRemoteStreamReady?.(remoteStream);
+        remoteStream = event.streams[0];
+      } else if (event.track) {
+        remoteStream = new MediaStream([event.track]);
+      } else {
+        return;
       }
+
+      if (this.remoteAudioElement) {
+        try {
+          this.remoteAudioElement.srcObject = remoteStream;
+          this.remoteAudioElement.muted = false;
+          this.remoteAudioElement.volume = 1.0;
+          const playPromise = this.remoteAudioElement.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((err) => {
+              console.warn('[VoiceCall] remoteAudioElement.play() warning, auto-resuming on user interaction:', err);
+            });
+          }
+        } catch (e) {
+          console.warn('[VoiceCall] remoteAudioElement setup error:', e);
+        }
+      }
+      this.onRemoteStreamReady?.(remoteStream);
     };
 
     pc.onconnectionstatechange = () => {
       console.log('[VoiceCall] Connection state:', pc.connectionState);
       if (pc.connectionState === 'connected') {
+        if (this.disconnectTimer) {
+          clearTimeout(this.disconnectTimer);
+          this.disconnectTimer = null;
+        }
         callSoundService.playConnectChime();
         this.onStatusChange?.('connected', this.activeCallData || undefined);
-      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+
+        // Start periodic ping heartbeat to keep WebRTC channel active
+        if (!this.pingInterval) {
+          this.pingInterval = setInterval(() => {
+            if (this.activeCallData) {
+              this.broadcastSignaling('call:ping', {
+                callId: this.activeCallData.callId,
+              });
+            }
+          }, 3000);
+        }
+      } else if (pc.connectionState === 'disconnected') {
+        // Mobile network jitter grace period: allow 7 seconds for automatic ICE reconnect
+        console.warn('[VoiceCall] Peer connection disconnected, waiting 7s grace period before ending...');
+        if (!this.disconnectTimer) {
+          this.disconnectTimer = setTimeout(() => {
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+              console.warn('[VoiceCall] Connection did not recover, ending call.');
+              this.endCall();
+            }
+          }, 7000);
+        }
+      } else if (pc.connectionState === 'failed') {
         this.endCall();
       }
     };
@@ -488,6 +553,15 @@ export class VoiceCallService {
 
     this.isCaller = false;
     this.activeCallData = payload;
+
+    try {
+      localStorage.setItem('deenora_active_call_payload', JSON.stringify(payload));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('deenora_call_events');
+        bc.postMessage({ type: 'INCOMING_CALL', payload });
+        setTimeout(() => bc.close(), 1000);
+      }
+    } catch {}
 
     // Start incoming ringtone
     callSoundService.startIncomingRingtone();
@@ -687,6 +761,18 @@ export class VoiceCallService {
    */
   private cleanup() {
     dismissIncomingCallNotification();
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    try {
+      localStorage.removeItem('deenora_active_call_payload');
+    } catch {}
+
     if (this.peerConnection) {
       try {
         this.peerConnection.close();

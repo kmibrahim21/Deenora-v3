@@ -5,7 +5,7 @@ import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ChatWindow } from '../components/chat/ChatWindow';
 import { ClassGroupInfoModal } from '../components/chat/ClassGroupInfoModal';
 import { ChatBackupModal } from '../components/chat/ChatBackupModal';
-import { ChatService } from '../services/chatService';
+import { ChatService, formatRowToChatMessage } from '../services/chatService';
 import { ChatLocalStore } from '../services/chatLocalStore';
 import { useChatRealtime } from '../hooks/useChatRealtime';
 
@@ -195,37 +195,85 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   useEffect(() => {
     if (!institutionId) return;
 
+    const handleGlobalIncoming = (msg: ChatMessage) => {
+      if (!msg) return;
+
+      setConversations(prev => {
+        let matched = false;
+        const updated = prev.map(conv => {
+          // Match conversation ID or class group ID
+          const isMatch = conv.id === msg.conversation_id || 
+                        conv.class_id === msg.class_name ||
+                        (conv.id.startsWith('class-group-') && msg.class_name && conv.id.includes(msg.class_name));
+
+          if (isMatch) {
+            matched = true;
+            const isNotActive = conv.id !== activeConversationId;
+            const isNotMe = msg.sender_id !== currentUserId;
+            
+            return {
+              ...conv,
+              last_message: msg,
+              unread_count: (isNotActive && isNotMe) ? (conv.unread_count || 0) + 1 : 0
+            };
+          }
+          return conv;
+        });
+
+        // If conversation is brand new and not yet in list, prepend it
+        if (!matched && msg.conversation_id) {
+          const isNotMe = msg.sender_id !== currentUserId;
+          const newConv = {
+            id: msg.conversation_id,
+            institution_id: institutionId,
+            type: msg.conversation_id.startsWith('class-group-') ? ('class_group' as const) : ('direct' as const),
+            name: msg.sender_name || (msg.sender_profile as any)?.full_name || 'নতুন কথোপকথন',
+            last_message: msg,
+            unread_count: isNotMe ? 1 : 0,
+            created_at: msg.created_at,
+            updated_at: msg.created_at
+          };
+          return [newConv, ...updated];
+        }
+
+        // Sort conversations with most recent last_message on top
+        return updated.sort((a, b) => {
+          const timeA = a.last_message?.created_at ? new Date(a.last_message.created_at).getTime() : new Date(a.created_at || 0).getTime();
+          const timeB = b.last_message?.created_at ? new Date(b.last_message.created_at).getTime() : new Date(b.created_at || 0).getTime();
+          return timeB - timeA;
+        });
+      });
+    };
+
     const channelName = `global_notifs_${institutionId}`;
     const channel = supabase.channel(channelName)
-      .on('broadcast', { event: 'new_message' }, (p) => {
-        const msg = p.payload as ChatMessage;
-        if (!msg) return;
-
-        setConversations(prev => {
-          return prev.map(conv => {
-            // Match conversation ID or class group ID
-            const isMatch = conv.id === msg.conversation_id || 
-                          conv.class_id === msg.class_name ||
-                          (conv.id.startsWith('class-group-') && msg.class_name && conv.id.includes(msg.class_name));
-
-            if (isMatch) {
-              const isNotActive = conv.id !== activeConversationId;
-              const isNotMe = msg.sender_id !== currentUserId;
-              
-              return {
-                ...conv,
-                last_message: msg,
-                unread_count: (isNotActive && isNotMe) ? (conv.unread_count || 0) + 1 : 0
-              };
-            }
-            return conv;
-          });
-        });
+      .on('broadcast', { event: 'new_message' }, (p) => p.payload && handleGlobalIncoming(p.payload as ChatMessage))
+      .on('broadcast', { event: 'message_read' }, (p) => {
+        if (p?.payload?.conversation_id) {
+          setConversations(prev => prev.map(c => c.id === p.payload.conversation_id ? { ...c, unread_count: 0 } : c));
+        }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
+        if (p?.new) {
+          handleGlobalIncoming(formatRowToChatMessage(p.new));
+        }
       })
       .subscribe();
 
+    // Cross-tab broadcast listener
+    let bc: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      bc = new BroadcastChannel(`deenora_msg_channel_${institutionId}`);
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'NEW_MESSAGE' && event.data.payload) {
+          handleGlobalIncoming(event.data.payload);
+        }
+      };
+    }
+
     return () => {
       supabase.removeChannel(channel);
+      if (bc) bc.close();
     };
   }, [institutionId, activeConversationId, currentUserId]);
 
