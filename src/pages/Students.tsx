@@ -51,12 +51,13 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const { startCall } = useVoiceCall();
 
   const isLiveChatEnabled = useMemo(() => {
+    if (madrasah?.is_super_admin) return true;
     let config = madrasah?.config_json as any;
     if (typeof config === 'string') {
       try { config = JSON.parse(config); } catch (e) { config = {}; }
     }
     const configModules = config?.modules || {};
-    return configModules.live_chat === true;
+    return configModules.live_chat === true || (madrasah as any)?.live_chat === true || (config as any)?.live_chat === true;
   }, [madrasah]);
 
   const handleVoiceCall = useCallback((student: Student) => {

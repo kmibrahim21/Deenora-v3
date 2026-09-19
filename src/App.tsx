@@ -508,6 +508,7 @@ const App: React.FC = () => {
         return (
           <Students
             selectedClass={selectedClass}
+            madrasah={madrasah}
             onStudentClick={(s) => {
               setSelectedStudent(s);
               setView("student-details");
