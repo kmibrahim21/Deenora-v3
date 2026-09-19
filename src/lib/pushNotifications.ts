@@ -209,3 +209,148 @@ export function playNotificationSound() {
     // Ignore audio context errors if blocked by browser policy
   }
 }
+
+let wakeLockSentinel: any = null;
+
+export async function requestScreenWakeLock() {
+  if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && (navigator as any).wakeLock) {
+    try {
+      wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+      wakeLockSentinel.addEventListener('release', () => {
+        wakeLockSentinel = null;
+      });
+    } catch {}
+  }
+}
+
+export function releaseScreenWakeLock() {
+  if (wakeLockSentinel) {
+    try {
+      wakeLockSentinel.release().catch(() => {});
+    } catch {}
+    wakeLockSentinel = null;
+  }
+}
+
+export interface IncomingCallNotificationOptions {
+  callId: string;
+  callerName: string;
+  studentName?: string;
+  photoUrl?: string;
+}
+
+/**
+ * Display WhatsApp-style persistent incoming call notification on mobile screen / lock screen
+ */
+export async function showIncomingCallNotification({
+  callId,
+  callerName,
+  studentName,
+  photoUrl
+}: IncomingCallNotificationOptions) {
+  if (typeof window === 'undefined') return;
+
+  // 1. Keep mobile screen awake
+  requestScreenWakeLock();
+
+  // 2. Vibrate phone immediately
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate([800, 400, 800, 400, 1000]);
+    }
+  } catch {}
+
+  const title = `📞 ইনকামিং ভয়েস কল: ${callerName || 'মাদ্রাসা শিক্ষক / এডমিন'}`;
+  const body = studentName ? `শিক্ষার্থী: ${studentName} | কল রিসিভ করতে ট্যাপ করুন` : 'কল রিসিভ করতে ট্যাপ করুন';
+  const icon = photoUrl || '/Deenora192.png';
+
+  // 3. Post to Service Worker to display full persistent lock-screen notification
+  if ('serviceWorker' in navigator) {
+    try {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_INCOMING_CALL',
+          callId,
+          callerName,
+          studentName,
+          icon
+        });
+      }
+
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, {
+          body,
+          icon,
+          badge: '/Deenora192.png',
+          tag: 'incoming-voice-call',
+          renotify: true,
+          requireInteraction: true,
+          vibrate: [800, 400, 800, 400, 1000],
+          data: {
+            type: 'incoming_call',
+            callId,
+            url: `/?action=accept_call&call_id=${callId}&t=${Date.now()}`
+          },
+          actions: [
+            { action: 'answer', title: '📞 রিসিভ করুন' },
+            { action: 'decline', title: '❌ কেটে দিন' }
+          ]
+        } as any);
+        return;
+      }
+    } catch (e) {
+      console.warn('[PushNotifications] SW showIncomingCallNotification notice:', e);
+    }
+  }
+
+  // 4. Desktop native notification fallback if SW not ready
+  try {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const notif = new Notification(title, {
+        body,
+        icon,
+        tag: 'incoming-voice-call',
+        requireInteraction: true,
+      } as any);
+      notif.onclick = () => {
+        window.focus();
+        notif.close();
+      };
+    }
+  } catch {}
+}
+
+/**
+ * Dismiss incoming call notification and silence device vibration
+ */
+export function dismissIncomingCallNotification() {
+  releaseScreenWakeLock();
+
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(0);
+    } catch {}
+  }
+
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'DISMISS_CALL_NOTIFICATION'
+        });
+      }
+
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg) {
+          reg.getNotifications({ tag: 'incoming-voice-call' }).then((notifications) => {
+            notifications.forEach((n) => {
+              try { n.close(); } catch {}
+            });
+          });
+        }
+      }).catch(() => {});
+    } catch {}
+  }
+}
+

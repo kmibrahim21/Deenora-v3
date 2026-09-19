@@ -72,7 +72,22 @@ class CallSoundService {
    */
   startIncomingRingtone() {
     this.stopAll();
+
+    // Trigger immediate phone vibration (WhatsApp incoming call pattern)
+    try {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([800, 400, 800, 400, 1000]);
+      }
+    } catch {}
+
     const playMelody = () => {
+      // Repeat vibration with each ring cycle
+      try {
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([800, 400, 800, 400, 1000]);
+        }
+      } catch {}
+
       const ctx = this.getAudioContext();
       if (!ctx) return;
 
@@ -181,6 +196,11 @@ class CallSoundService {
       clearInterval(this.ringtoneTimer);
       this.ringtoneTimer = null;
     }
+    try {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(0);
+      }
+    } catch {}
   }
 }
 

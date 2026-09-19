@@ -102,16 +102,14 @@ export const MessageSettingsModal: React.FC<MessageSettingsModalProps> = ({
       <div className="absolute inset-0" onClick={onClose} />
 
       <div 
-        className={`relative z-10 w-full sm:w-64 flex flex-col bg-white dark:bg-[#233138] border-t sm:border border-slate-200 dark:border-slate-700 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-top-4 duration-200 ${
-          isDark ? 'text-[#E9EDEF]' : 'text-[#111B21]'
-        }`}
+        className={`relative z-10 w-full sm:w-72 flex flex-col bg-white dark:bg-slate-800 border-t sm:border border-slate-200 dark:border-slate-700 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-top-4 duration-200 text-slate-800 dark:text-slate-100`}
       >
         <div className="p-2 space-y-0.5">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={item.onClick}
-              className="w-full flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-[#182229] transition-colors rounded-xl text-sm font-medium"
+              className="w-full flex items-center gap-3.5 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors rounded-xl text-sm font-medium"
             >
               <div className="shrink-0">{item.icon}</div>
               <span>{item.label}</span>
@@ -122,7 +120,7 @@ export const MessageSettingsModal: React.FC<MessageSettingsModalProps> = ({
         <div className="p-2 pt-0 border-t border-slate-100 dark:border-slate-700/50">
           <button
             onClick={() => updateSetting('isBlocked', !settings.isBlocked)}
-            className="w-full flex items-center gap-4 px-4 py-3 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 transition-colors rounded-xl text-sm font-bold"
+            className="w-full flex items-center gap-3.5 px-4 py-3 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 transition-colors rounded-xl text-sm font-bold"
           >
             <ShieldAlert className="w-5 h-5" />
             <span>{settings.isBlocked ? (lang === 'bn' ? 'আনব্লক করুন' : 'Unblock') : (lang === 'bn' ? 'ব্লক করুন' : 'Block')}</span>

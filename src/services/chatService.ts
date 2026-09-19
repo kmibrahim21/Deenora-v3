@@ -1,6 +1,117 @@
 import { supabase } from '../supabase';
 import { Conversation, ConversationMember, ChatMessage } from '../types';
 
+export function formatRowToChatMessage(row: any, fallbackConvId?: string): ChatMessage {
+  if (!row) return row;
+
+  let parsedPayload: any = null;
+  if (typeof row.message === 'string') {
+    const trimmed = row.message.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        parsedPayload = JSON.parse(trimmed);
+      } catch {}
+    }
+  }
+
+  const isAudio = (u?: any) => typeof u === 'string' && (
+    u.startsWith('data:audio') ||
+    u.includes('chat-audio') ||
+    u.includes('.webm') ||
+    u.includes('.mp3') ||
+    u.includes('.ogg') ||
+    u.includes('.wav') ||
+    u.includes('.m4a')
+  );
+
+  let rawAttachmentUrl =
+    row.attachment_url ||
+    parsedPayload?.attachment_url ||
+    parsedPayload?.voice_url ||
+    parsedPayload?.audio_url ||
+    undefined;
+
+  const rawVoiceDuration =
+    row.voice_duration ??
+    parsedPayload?.voice_duration ??
+    parsedPayload?.duration ??
+    undefined;
+
+  const messageType =
+    parsedPayload?.message_type ||
+    row.message_type ||
+    (
+      isAudio(rawAttachmentUrl) ||
+      (rawVoiceDuration && Number(rawVoiceDuration) > 0) ||
+      (row.message && typeof row.message === 'string' && (row.message.includes('🎤 ভয়েস মেসেজ') || row.message.includes('🎤 Voice')))
+        ? 'voice'
+        : (rawAttachmentUrl || row.attachment_name || parsedPayload?.attachment_name ? 'document' : 'text')
+    );
+
+  const msgId = String(row.id || parsedPayload?.client_message_id || '');
+  if (!rawAttachmentUrl && msgId && messageType === 'voice') {
+    try {
+      const localAudio = localStorage.getItem(`chat_audio_${msgId}`);
+      if (localAudio) rawAttachmentUrl = localAudio;
+    } catch {}
+  }
+
+  const attachmentName =
+    row.attachment_name ||
+    parsedPayload?.attachment_name ||
+    undefined;
+
+  const attachmentSize =
+    row.attachment_size ||
+    parsedPayload?.attachment_size ||
+    undefined;
+
+  let textMessage = '';
+  if (parsedPayload) {
+    textMessage = parsedPayload.text || parsedPayload.desc || (messageType === 'voice' ? '🎤 ভয়েস মেসেজ' : '');
+  } else if (typeof row.message === 'string') {
+    textMessage = row.message;
+  }
+
+  const senderId =
+    row.sender_id ||
+    parsedPayload?.sender_id ||
+    (row.sender_name?.includes('অভিভাবক') ? 'parent-user' : 'teacher-user');
+
+  const isParent =
+    row.is_parent ??
+    (row.sender_name?.includes('অভিভাবক') || (senderId && senderId.startsWith('parent')));
+
+  return {
+    id: msgId || `msg-${Date.now()}`,
+    conversation_id: row.conversation_id || parsedPayload?.conversation_id || row.class_name || fallbackConvId || '',
+    institution_id: row.institution_id || parsedPayload?.institution_id || '',
+    sender_id: senderId,
+    sender_name: row.sender_name || row.title || parsedPayload?.sender_name || (isParent ? 'অভিভাবক' : 'শিক্ষক / এডমিন'),
+    class_name: row.class_name || parsedPayload?.class_name,
+    client_message_id: row.client_message_id || parsedPayload?.client_message_id,
+    message: textMessage || (messageType === 'voice' ? '🎤 ভয়েস মেসেজ' : ''),
+    message_type: messageType,
+    attachment_url: rawAttachmentUrl,
+    attachment_name: attachmentName,
+    attachment_size: attachmentSize,
+    voice_duration: rawVoiceDuration ? Number(rawVoiceDuration) : undefined,
+    created_at: row.created_at || new Date().toISOString(),
+    is_edited: row.is_edited || false,
+    is_deleted: row.is_deleted || false,
+    is_parent: isParent,
+    sender_role: isParent ? 'parent' : 'teacher',
+    sender_profile: {
+      id: senderId,
+      institution_id: row.institution_id || '',
+      full_name: row.sender_name || row.title || (isParent ? 'অভিভাবক' : 'শিক্ষক / এডমিন'),
+      role: isParent ? 'parent' : 'teacher',
+      is_active: true,
+      created_at: row.created_at || new Date().toISOString()
+    } as any
+  };
+}
+
 export class ChatService {
   /**
    * Fetches or initializes all conversations accessible by a user in an institution.
@@ -126,16 +237,160 @@ export class ChatService {
         });
       }
 
-      // Fetch last message for each conversation
-      for (const conv of finalConversations) {
-        conv.last_message = await this.getLastMessage(conv.id);
-      }
+      // Fetch last message & calculate unread count for each conversation concurrently in parallel
+      await Promise.all(
+        finalConversations.map(async (conv) => {
+          try {
+            // Check local cache first for immediate responsiveness
+            const localKey = `deenora_chat_msg_${conv.id}`;
+            const stored = localStorage.getItem(localKey);
+            if (stored) {
+              try {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  conv.last_message = parsed[parsed.length - 1];
+                }
+              } catch {}
+            }
+
+            const membership = userMemberships?.find((m: any) => m.conversation_id === conv.id);
+            const lastReadAt = membership?.last_read_at || localStorage.getItem(`chat_last_read_${userId}_${conv.id}`) || conv.created_at;
+
+            // Concurrently query last message and unread count
+            const [lastMsgRes, unreadRes] = await Promise.all([
+              supabase
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', conv.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+              supabase
+                .from('messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('conversation_id', conv.id)
+                .gt('created_at', lastReadAt)
+                .neq('sender_id', userId),
+            ]);
+
+            if (lastMsgRes.data) {
+              conv.last_message = lastMsgRes.data as ChatMessage;
+            }
+            if (typeof unreadRes.count === 'number') {
+              conv.unread_count = unreadRes.count;
+            }
+          } catch (e) {
+            console.warn('[ChatService] Metadata fetch warning for conv:', conv.id, e);
+          }
+        })
+      );
+
+      // Save to local cache so next time it loads with 0 latency
+      try {
+        localStorage.setItem(`cached_convs_${institutionId}_${userId}`, JSON.stringify(finalConversations));
+      } catch {}
 
       return finalConversations;
     } catch (err) {
       console.error('[ChatService] Failed to load conversations, using fallback:', err);
       return this.getFallbackConversations(institutionId, classesList, userRole, userClassId);
     }
+  }
+
+  /**
+   * Marks all messages in a conversation as read for a user.
+   */
+  static async markAsRead(institutionId: string, conversationId: string, userId: string) {
+    if (!institutionId || !conversationId || !userId) return;
+
+    const now = new Date().toISOString();
+    
+    // 1. Update database if possible
+    try {
+      await supabase
+        .from('conversation_members')
+        .update({ last_read_at: now })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId);
+    } catch (e) {
+      console.warn('[ChatService] Failed to update read status in DB:', e);
+    }
+
+    // 2. Local fallback
+    localStorage.setItem(`chat_last_read_${userId}_${conversationId}`, now);
+  }
+
+  /**
+   * Attempts to upload audio (blob or base64 data URI) to Supabase Storage.
+   * Returns public URL if successful, or null if storage is not available.
+   */
+  static async uploadAudioAttachment(
+    blobOrBase64: string | Blob,
+    institutionId: string,
+    conversationId: string
+  ): Promise<string | null> {
+    try {
+      let audioBlob: Blob;
+      let extension = 'webm';
+      let mimeType = 'audio/webm';
+
+      if (typeof blobOrBase64 === 'string' && blobOrBase64.startsWith('data:')) {
+        const parts = blobOrBase64.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        mimeType = mimeMatch ? mimeMatch[1] : 'audio/webm';
+        if (mimeType.includes('mp4')) extension = 'mp4';
+        else if (mimeType.includes('ogg')) extension = 'ogg';
+        else if (mimeType.includes('aac')) extension = 'aac';
+        else if (mimeType.includes('wav')) extension = 'wav';
+
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        audioBlob = new Blob([u8arr], { type: mimeType });
+      } else if (blobOrBase64 instanceof Blob) {
+        audioBlob = blobOrBase64;
+        mimeType = blobOrBase64.type || 'audio/webm';
+        if (mimeType.includes('mp4')) extension = 'mp4';
+      } else {
+        return null;
+      }
+
+      const bucketsToTry = ['madrasah-assets', 'voice-templates'];
+      const cleanFileName = `chat-audio/${institutionId}/${conversationId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}.${extension}`;
+
+      for (const bucketName of bucketsToTry) {
+        try {
+          await supabase.storage.createBucket(bucketName, { public: true }).catch(() => {});
+          const { error: uploadError } = await supabase.storage
+            .from(bucketName)
+            .upload(cleanFileName, audioBlob, {
+              contentType: mimeType,
+              cacheControl: '3600',
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+              .from(bucketName)
+              .getPublicUrl(cleanFileName);
+
+            if (publicUrlData?.publicUrl) {
+              return publicUrlData.publicUrl;
+            }
+          } else {
+            console.warn(`[ChatService] Upload notice for bucket ${bucketName}:`, uploadError.message);
+          }
+        } catch (bucketErr) {
+          console.warn(`[ChatService] Bucket ${bucketName} exception:`, bucketErr);
+        }
+      }
+    } catch (e) {
+      console.warn('[ChatService] Storage audio upload notice:', e);
+    }
+    return null;
   }
 
   /**
@@ -152,19 +407,35 @@ export class ChatService {
         .single();
 
       if (error || !data) {
+        // Fallback: try by class_name
+        const isClassGroup = conversationId.startsWith('class-group-');
+        const classIdRaw = isClassGroup ? conversationId.replace('class-group-', '') : '';
+        if (classIdRaw) {
+          const { data: classLast } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('class_name', classIdRaw)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          if (classLast) {
+            return formatRowToChatMessage(classLast, conversationId);
+          }
+        }
+
         // Check local storage fallback
         const localKey = `deenora_chat_msg_${conversationId}`;
         const stored = localStorage.getItem(localKey);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed[parsed.length - 1];
+            return formatRowToChatMessage(parsed[parsed.length - 1], conversationId);
           }
         }
         return undefined;
       }
 
-      return data as ChatMessage;
+      return formatRowToChatMessage(data, conversationId);
     } catch {
       return undefined;
     }
@@ -201,11 +472,11 @@ export class ChatService {
       const { data: convData, error: convErr } = await query;
 
       if (!convErr && convData && convData.length > 0) {
-        return { messages: convData as ChatMessage[], error: null };
+        return { messages: convData.map(row => formatRowToChatMessage(row, conversationId)), error: null };
       }
 
       if (convErr) {
-        console.error('[ChatService] Error querying messages by conversation_id:', convErr);
+        console.warn('[ChatService] Notice querying messages by conversation_id:', convErr.message);
       }
 
       // 2. Fallback query by class_name or raw class ID if conversation_id query returned 0 rows
@@ -224,11 +495,11 @@ export class ChatService {
       const { data: classData, error: classErr } = await classQuery;
 
       if (!classErr && classData && classData.length > 0) {
-        return { messages: classData as ChatMessage[], error: null };
+        return { messages: classData.map(row => formatRowToChatMessage(row, conversationId)), error: null };
       }
 
       if (classErr) {
-        console.error('[ChatService] Error querying messages by class_name:', classErr);
+        console.warn('[ChatService] Notice querying messages by class_name:', classErr.message);
       }
 
       // 3. Fallback to localStorage cache
@@ -238,15 +509,16 @@ export class ChatService {
 
       const queryError = convErr || classErr;
       return {
-        messages: cached,
+        messages: Array.isArray(cached) ? cached.map(row => formatRowToChatMessage(row, conversationId)) : [],
         error: queryError ? queryError.message : null
       };
     } catch (err: any) {
       console.error('[ChatService] Exception in getMessages:', err);
       const localKey = `deenora_chat_msg_${conversationId}`;
       const stored = localStorage.getItem(localKey);
+      const cached = stored ? JSON.parse(stored) : [];
       return {
-        messages: stored ? JSON.parse(stored) : [],
+        messages: Array.isArray(cached) ? cached.map(row => formatRowToChatMessage(row, conversationId)) : [],
         error: err?.message || 'মেসেজ লোড করার সময় সমস্যা হয়েছে'
       };
     }
@@ -262,7 +534,12 @@ export class ChatService {
     messageText: string,
     clientMessageId?: string,
     senderName?: string,
-    className?: string
+    className?: string,
+    messageType: 'text' | 'image' | 'document' | 'voice' = 'text',
+    attachmentUrl?: string,
+    voiceDuration?: number,
+    attachmentName?: string,
+    attachmentSize?: number
   ): Promise<ChatMessage> {
     // Fail safely if institutionId or required parameters are missing
     if (!institutionId || !institutionId.trim()) {
@@ -275,7 +552,7 @@ export class ChatService {
       throw new Error('কনভারসেশন আইডি (Conversation ID) পাওয়া যায়নি।');
     }
 
-    if (!messageText || !messageText.trim()) {
+    if (!messageText && messageType === 'text' && !attachmentUrl) {
       throw new Error('মেসেজের লেখা খালি হতে পারে না।');
     }
 
@@ -286,6 +563,44 @@ export class ChatService {
 
     const isSenderParent = cleanSenderId.startsWith('parent') || (senderName && senderName.includes('অভিভাবক'));
 
+    // If audio is base64 data URI, attempt to upload to storage for efficient delivery
+    let finalAttachmentUrl = attachmentUrl;
+    if (attachmentUrl && attachmentUrl.startsWith('data:audio')) {
+      try {
+        const uploadedUrl = await ChatService.uploadAudioAttachment(attachmentUrl, cleanInstitutionId, cleanConversationId);
+        if (uploadedUrl) {
+          finalAttachmentUrl = uploadedUrl;
+        }
+      } catch (uploadErr) {
+        console.warn('[ChatService] Audio upload fallback:', uploadErr);
+      }
+    }
+
+    const hasSpecialPayload = Boolean(
+      finalAttachmentUrl ||
+      messageType === 'voice' ||
+      messageType === 'document' ||
+      attachmentName ||
+      voiceDuration
+    );
+
+    const defaultText = messageText ? messageText.trim() : (messageType === 'voice' ? '🎤 ভয়েস মেসেজ' : (attachmentName || 'ডকুমেন্ট'));
+
+    const dbMessageField = hasSpecialPayload
+      ? JSON.stringify({
+          text: defaultText,
+          message_type: messageType,
+          attachment_url: finalAttachmentUrl,
+          attachment_name: attachmentName,
+          attachment_size: attachmentSize,
+          voice_duration: voiceDuration,
+          conversation_id: cleanConversationId,
+          sender_id: cleanSenderId,
+          sender_name: cleanSenderName,
+          client_message_id: clientMessageId || `client-${Date.now()}`
+        })
+      : defaultText;
+
     const newMessage: ChatMessage = {
       id: clientMessageId || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       conversation_id: cleanConversationId,
@@ -294,8 +609,12 @@ export class ChatService {
       sender_name: cleanSenderName,
       class_name: className || cleanConversationId,
       client_message_id: clientMessageId,
-      message: messageText.trim(),
-      message_type: 'text',
+      message: defaultText,
+      message_type: messageType,
+      attachment_url: finalAttachmentUrl,
+      attachment_name: attachmentName,
+      attachment_size: attachmentSize,
+      voice_duration: voiceDuration,
       created_at: new Date().toISOString(),
       is_edited: false,
       is_deleted: false,
@@ -310,6 +629,13 @@ export class ChatService {
         created_at: new Date().toISOString()
       } as any
     };
+
+    if (finalAttachmentUrl && (messageType === 'voice' || finalAttachmentUrl.startsWith('data:audio') || finalAttachmentUrl.includes('chat-audio'))) {
+      try {
+        if (clientMessageId) localStorage.setItem(`chat_audio_${clientMessageId}`, finalAttachmentUrl);
+        if (newMessage.id) localStorage.setItem(`chat_audio_${newMessage.id}`, finalAttachmentUrl);
+      } catch {}
+    }
 
     // 1. Ensure conversation row exists in Supabase DB
     try {
@@ -340,8 +666,12 @@ export class ChatService {
         title: cleanSenderName || 'Chat Message',
         class_name: className || cleanConversationId,
         client_message_id: clientMessageId || newMessage.id,
-        message: messageText.trim(),
-        message_type: 'text'
+        message: dbMessageField,
+        message_type: messageType,
+        attachment_url: finalAttachmentUrl,
+        attachment_name: attachmentName,
+        attachment_size: attachmentSize,
+        voice_duration: voiceDuration
       };
 
       const { data: dbData1, error: dbError1 } = await supabase
@@ -353,14 +683,12 @@ export class ChatService {
       if (!dbError1 && dbData1) {
         newMessage.id = dbData1.id;
         isSavedToDB = true;
-      } else if (dbError1) {
-        console.warn('[ChatService] Primary schema insert notice:', dbError1.message);
       }
     } catch (e) {
-      console.warn('[ChatService] Primary schema exception:', e);
+      console.warn('[ChatService] Primary schema notice:', e);
     }
 
-    // Attempt 2: Standard Deenora messages schema (institution_id, class_name, title, message, sender_name)
+    // Attempt 2: Standard Deenora messages schema with extra columns
     if (!isSavedToDB) {
       try {
         const standardPayload: any = {
@@ -368,7 +696,12 @@ export class ChatService {
           class_name: className || cleanConversationId,
           title: cleanSenderName || 'Chat Message',
           sender_name: cleanSenderName || 'Admin',
-          message: messageText.trim()
+          message: dbMessageField,
+          message_type: messageType,
+          attachment_url: finalAttachmentUrl,
+          attachment_name: attachmentName,
+          attachment_size: attachmentSize,
+          voice_duration: voiceDuration
         };
 
         const { data: dbData2, error: dbError2 } = await supabase
@@ -380,12 +713,44 @@ export class ChatService {
         if (!dbError2 && dbData2) {
           newMessage.id = dbData2.id;
           isSavedToDB = true;
-        } else if (dbError2) {
-          console.error('[ChatService] Secondary schema insert error:', dbError2.message);
         }
       } catch (e) {
-        console.error('[ChatService] Secondary schema exception:', e);
+        console.warn('[ChatService] Secondary schema notice:', e);
       }
+    }
+
+    // Attempt 3: Core Deenora schema (Guaranteed to match any Supabase messages table)
+    if (!isSavedToDB) {
+      try {
+        const basePayload: any = {
+          institution_id: cleanInstitutionId,
+          class_name: className || cleanConversationId,
+          title: cleanSenderName || 'Chat Message',
+          sender_name: cleanSenderName || 'Admin',
+          message: dbMessageField
+        };
+
+        const { data: dbData3, error: dbError3 } = await supabase
+          .from('messages')
+          .insert([basePayload])
+          .select()
+          .maybeSingle();
+
+        if (!dbError3 && dbData3) {
+          newMessage.id = dbData3.id;
+          isSavedToDB = true;
+        } else if (dbError3) {
+          console.error('[ChatService] Tertiary schema insert error:', dbError3.message);
+        }
+      } catch (e) {
+        console.error('[ChatService] Tertiary schema exception:', e);
+      }
+    }
+
+    if (isSavedToDB && finalAttachmentUrl && messageType === 'voice') {
+      try {
+        localStorage.setItem(`chat_audio_${newMessage.id}`, finalAttachmentUrl);
+      } catch {}
     }
 
     // 3. Deterministic Realtime Broadcast (Broadcasts to active room & global notification subscribers)

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
-import { sendPushNotification, playNotificationSound } from '../lib/pushNotifications';
+import { sendPushNotification, playNotificationSound, showIncomingCallNotification } from '../lib/pushNotifications';
 
 export function isForStudentClass(
   targetClass: string | null | undefined,
@@ -114,6 +114,28 @@ export function useGlobalNotifications({
 
       // Don't notify if sent by current user
       if (userId && (newMsg.sender_id === userId || newMsg.sender_id === `parent-${userId}`)) {
+        return;
+      }
+
+      // Special handling for incoming voice calls (WhatsApp-like full screen notification)
+      if (newMsg.type === 'incoming_voice_call') {
+        const myId = String(userId || '').trim().toLowerCase();
+        const targetStudentId = String(newMsg.student_id || '').trim().toLowerCase();
+        const myPhone = String(studentClassId || '').replace(/\D/g, '');
+        const targetPhone = String(newMsg.guardian_phone || '').replace(/\D/g, '');
+
+        const isMatch = (myId && (myId === targetStudentId || myId.includes(targetStudentId) || targetStudentId.includes(myId))) ||
+                        (targetPhone && myId.includes(targetPhone)) ||
+                        (myPhone && targetPhone && myPhone === targetPhone);
+
+        if (isMatch) {
+          console.log('[useGlobalNotifications] Incoming voice call notification trigger:', newMsg);
+          showIncomingCallNotification({
+            callId: newMsg.callId,
+            callerName: newMsg.caller_name || 'মাদ্রাসা শিক্ষক / এডমিন',
+            studentName: newMsg.student_name,
+          });
+        }
         return;
       }
 

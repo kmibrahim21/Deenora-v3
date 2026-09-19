@@ -59,6 +59,49 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
+  // Listen for Service Worker incoming call actions (Tap "📞 রিসিভ করুন" or "❌ কেটে দিন" on mobile screen / lock screen)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const handleSwMessage = (event: MessageEvent) => {
+      if (!event.data) return;
+      if (event.data.type === 'ACCEPT_CALL_FROM_NOTIFICATION') {
+        console.log('[CallContext] Received ACCEPT_CALL_FROM_NOTIFICATION from SW');
+        voiceCallService.acceptCall();
+      } else if (event.data.type === 'REJECT_CALL_FROM_NOTIFICATION') {
+        console.log('[CallContext] Received REJECT_CALL_FROM_NOTIFICATION from SW');
+        voiceCallService.rejectCall('মোবাইলের নোটিফিকেশন থেকে কল বাতিল করা হয়েছে।');
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+    };
+  }, []);
+
+  // Auto-answer if user unlocked phone / opened app directly from lock screen notification
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const targetCallId = params.get('call_id');
+
+    if (action === 'accept_call' && callStatus === 'incoming') {
+      if (!targetCallId || (activeCall && activeCall.callId === targetCallId)) {
+        console.log('[CallContext] Auto-answering call from URL parameter');
+        voiceCallService.acceptCall();
+
+        // Clean query parameter from URL without reload
+        const url = new URL(window.location.href);
+        url.searchParams.delete('action');
+        url.searchParams.delete('call_id');
+        url.searchParams.delete('t');
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      }
+    }
+  }, [callStatus, activeCall]);
+
   // Duration timer during connected call
   useEffect(() => {
     let timer: any = null;

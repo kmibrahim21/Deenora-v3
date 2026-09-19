@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../supabase';
 import { ChatMessage } from '../types';
-import { ChatService } from '../services/chatService';
+import { ChatService, formatRowToChatMessage } from '../services/chatService';
 import { sendPushNotification, playNotificationSound } from '../lib/pushNotifications';
 
 export function useChatRealtime(conversationId: string | null, institutionId: string | null) {
@@ -23,13 +23,35 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     }
 
     let isMounted = true;
-    setLoading(true);
+
+    // Check local cache first so user sees messages immediately with 0ms delay!
+    const localKey = `deenora_chat_msg_${conversationId}`;
+    let hasCache = false;
+    try {
+      const cached = localStorage.getItem(localKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          hasCache = true;
+        }
+      }
+    } catch {}
+
+    if (!hasCache) {
+      setLoading(true);
+    }
     setError(null);
 
     ChatService.getMessages(conversationId, institutionId || undefined)
       .then(res => {
         if (isMounted) {
-          setMessages(res.messages || []);
+          if (res.messages && res.messages.length > 0) {
+            setMessages(res.messages);
+            try {
+              localStorage.setItem(localKey, JSON.stringify(res.messages));
+            } catch {}
+          }
           if (res.error) setError(res.error);
           setLoading(false);
         }
@@ -54,8 +76,10 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     const channelName = `chat_realtime_${institutionId}_${conversationId}`;
     console.log(`[useChatRealtime] Subscribing to realtime channel: ${channelName}`);
 
-    const handleIncoming = (newMsg: ChatMessage) => {
-      if (!newMsg || !newMsg.message) return;
+    const handleIncoming = (rawMsg: any) => {
+      if (!rawMsg) return;
+      const newMsg = formatRowToChatMessage(rawMsg, activeConvRef.current);
+      if (!newMsg || (!newMsg.message && !newMsg.attachment_url)) return;
 
       const currentActive = activeConvRef.current;
       if (!currentActive) return;
@@ -77,7 +101,7 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       playNotificationSound();
       sendPushNotification(
         newMsg.sender_profile?.full_name || (newMsg as any).sender_name || 'Deenora Chat',
-        newMsg.message || 'নতুন মেসেজ এসেছে',
+        newMsg.message || (newMsg.message_type === 'voice' ? '🎤 ভয়েস মেসেজ' : 'নতুন মেসেজ এসেছে'),
         '/Deenora192.png'
       );
 
@@ -94,8 +118,8 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
 
     // Single deterministic channel subscription
     const channel = supabase.channel(channelName)
-      .on('broadcast', { event: 'new_message' }, (p) => p?.payload && handleIncoming(p.payload as ChatMessage))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => p?.new && handleIncoming(p.new as ChatMessage))
+      .on('broadcast', { event: 'new_message' }, (p) => p?.payload && handleIncoming(p.payload))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => p?.new && handleIncoming(p.new))
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           console.log(`[useChatRealtime] SUBSCRIBED to ${channelName}`);
@@ -134,8 +158,18 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
   }, [conversationId, institutionId]);
 
   // Function to send a message
-  const sendMessage = useCallback(async (senderId: string, text: string, senderName?: string, className?: string) => {
-    if (!conversationId || !institutionId || !text.trim()) return;
+  const sendMessage = useCallback(async (
+    senderId: string, 
+    text: string, 
+    senderName?: string, 
+    className?: string,
+    messageType: 'text' | 'image' | 'document' | 'voice' = 'text',
+    attachmentUrl?: string,
+    voiceDuration?: number,
+    attachmentName?: string,
+    attachmentSize?: number
+  ) => {
+    if (!conversationId || !institutionId || (!text.trim() && messageType === 'text' && !attachmentUrl)) return;
 
     const clientMsgId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     
@@ -148,8 +182,12 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
       sender_name: senderName || 'User',
       class_name: className || undefined,
       client_message_id: clientMsgId,
-      message: text.trim(),
-      message_type: 'text',
+      message: text ? text.trim() : (messageType === 'voice' ? '🎤 ভয়েস মেসেজ' : (messageType === 'document' ? (attachmentName || 'ডকুমেন্ট') : '')),
+      message_type: messageType,
+      attachment_url: attachmentUrl,
+      attachment_name: attachmentName,
+      attachment_size: attachmentSize,
+      voice_duration: voiceDuration,
       created_at: new Date().toISOString(),
       sender_profile: {
         id: senderId,
@@ -164,7 +202,20 @@ export function useChatRealtime(conversationId: string | null, institutionId: st
     setMessages(prev => [...prev, optimisticMsg]);
 
     try {
-      const sentMsg = await ChatService.sendMessage(institutionId, conversationId, senderId, text, clientMsgId, senderName, className);
+      const sentMsg = await ChatService.sendMessage(
+        institutionId, 
+        conversationId, 
+        senderId, 
+        text, 
+        clientMsgId, 
+        senderName, 
+        className,
+        messageType,
+        attachmentUrl,
+        voiceDuration,
+        attachmentName,
+        attachmentSize
+      );
       
       // Reconcile optimistic message with server response
       setMessages(prev =>

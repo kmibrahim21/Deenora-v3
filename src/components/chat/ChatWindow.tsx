@@ -36,12 +36,20 @@ import {
   Video,
   Download,
   File,
+  FileText,
   ExternalLink,
   MicOff,
   Square,
   Bell,
   BellRing,
-  Send
+  Send,
+  Play,
+  Pause,
+  Mic,
+  Volume2,
+  VolumeX,
+  Loader2,
+  MessageSquare
 } from 'lucide-react';
 
 interface ChatWindowProps {
@@ -51,13 +59,156 @@ interface ChatWindowProps {
   loading?: boolean;
   currentUser: Profile | null;
   userRole?: string;
-  onSendMessage: (text: string, replyToMessageId?: string) => void;
+  onSendMessage: (
+    text: string, 
+    replyToMessageId?: string,
+    messageType?: 'text' | 'image' | 'document' | 'voice',
+    attachmentUrl?: string,
+    voiceDuration?: number,
+    attachmentName?: string,
+    attachmentSize?: number
+  ) => void;
   onOpenInfo?: () => void;
   onBackMobile?: () => void;
   onStartVoiceCall?: () => void;
   lang?: 'bn' | 'en';
   isDark?: boolean;
 }
+
+const AudioPlayer: React.FC<{ url: string; duration?: number; isDark?: boolean; lang?: string; isMe?: boolean }> = ({ url, duration, isDark, lang, isMe }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [totalDur, setTotalDur] = useState<number>(duration && duration > 0 ? duration : 0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (duration && duration > 0) {
+      setTotalDur(duration);
+    }
+  }, [duration]);
+
+  const togglePlay = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!audioRef.current || !url) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      try {
+        await audioRef.current.play();
+        setIsPlaying(true);
+      } catch (err) {
+        console.warn("Audio play error:", err);
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const effectiveDuration = totalDur || (audioRef.current?.duration && isFinite(audioRef.current.duration) ? audioRef.current.duration : 1);
+  const progressRatio = Math.min(1, Math.max(0, currentTime / effectiveDuration));
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (!audioRef.current || !effectiveDuration || effectiveDuration <= 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    const newTime = ratio * effectiveDuration;
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
+  // 16 stylized waveform bar heights
+  const waveformBars = [40, 65, 30, 85, 95, 55, 75, 45, 90, 60, 35, 80, 100, 70, 50, 65];
+
+  if (!url) {
+    return (
+      <div className={`flex items-center gap-2 p-2 rounded-xl text-xs ${
+        isMe ? 'bg-white/10 text-white/70' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+      }`}>
+        <VolumeX className="w-4 h-4 text-slate-400" />
+        <span>{lang === 'bn' ? 'অডিও ফাইল উপলব্ধ নয়' : 'Audio unavailable'}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-center gap-2.5 p-2 sm:p-2.5 rounded-2xl min-w-[180px] sm:min-w-[240px] max-w-full overflow-hidden select-none ${
+      isMe ? 'bg-white/15 text-white' : 'bg-slate-100/90 dark:bg-slate-700/60 text-slate-800 dark:text-slate-100'
+    }`}>
+      <button 
+        type="button"
+        onClick={togglePlay}
+        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+          isMe 
+            ? 'bg-white text-blue-600' 
+            : 'bg-blue-600 text-white'
+        }`}
+        title={isPlaying ? 'Pause' : 'Play voice message'}
+      >
+        {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+      </button>
+
+      <div className="flex-1 min-w-0 space-y-1.5 cursor-pointer" onClick={handleSeek}>
+        {/* Waveform Visualization Bars */}
+        <div className="flex items-center gap-0.5 sm:gap-1 h-6">
+          {waveformBars.map((heightPercent, idx) => {
+            const barProgress = idx / waveformBars.length;
+            const isFilled = barProgress <= progressRatio;
+            return (
+              <div
+                key={idx}
+                className={`flex-1 rounded-full transition-all duration-150 ${
+                  isMe
+                    ? isFilled ? 'bg-white' : 'bg-white/40'
+                    : isFilled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
+                style={{ height: `${heightPercent}%`, minWidth: '2px' }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Time duration indicator */}
+        <div className={`flex justify-between text-[10px] font-medium font-mono ${
+          isMe ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'
+        }`}>
+          <span>{formatTime(currentTime)}</span>
+          <span>{formatTime(totalDur || (audioRef.current?.duration && isFinite(audioRef.current.duration) ? audioRef.current.duration : 0))}</span>
+        </div>
+      </div>
+
+      <audio 
+        ref={audioRef} 
+        src={url} 
+        onTimeUpdate={(e) => setCurrentTime((e.target as any).currentTime)}
+        onLoadedMetadata={(e) => {
+          const d = (e.target as any).duration;
+          if (d && isFinite(d) && d > 0) {
+            setTotalDur(Math.round(d));
+          }
+        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false);
+          setCurrentTime(0);
+        }}
+        onError={() => setIsPlaying(false)}
+        className="hidden"
+        preload="metadata"
+      />
+    </div>
+  );
+};
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   conversation,
@@ -134,13 +285,71 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingDurationRef = useRef<number>(0);
 
-  const startRecording = () => {
-    setIsRecording(true);
-    setRecordingDuration(0);
-    recordingTimerRef.current = setInterval(() => {
-      setRecordingDuration(prev => prev + 1);
-    }, 1000);
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      let mimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+          mimeType = 'audio/ogg;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        }
+      }
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || mimeType });
+        const finalDuration = recordingDurationRef.current || 1;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64Audio = reader.result as string;
+          onSendMessage(
+            lang === 'bn' ? '🎤 ভয়েস মেসেজ' : '🎤 Voice message',
+            undefined,
+            'voice',
+            base64Audio,
+            finalDuration
+          );
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start(250);
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingDurationRef.current = 0;
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => {
+          const next = prev + 1;
+          recordingDurationRef.current = next;
+          return next;
+        });
+      }, 1000);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      setToastMessage(lang === 'bn' ? 'মাইক্রোফোন এক্সেস করা সম্ভব হয়নি' : 'Could not access microphone');
+    }
   };
 
   const stopRecording = (cancel = false) => {
@@ -149,9 +358,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
-    if (!cancel && recordingDuration > 0) {
-      onSendMessage(lang === 'bn' ? `🎤 ভয়েস মেসেজ (${recordingDuration}s)` : `🎤 Voice message (${recordingDuration}s)`);
-      setToastMessage(lang === 'bn' ? 'ভয়েস মেসেজ পাঠানো হয়েছে' : 'Voice message sent');
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      if (cancel) {
+        mediaRecorderRef.current.onstop = null;
+      } else {
+        try {
+          if (typeof mediaRecorderRef.current.requestData === 'function') {
+            mediaRecorderRef.current.requestData();
+          }
+        } catch {}
+      }
+      mediaRecorderRef.current.stop();
     }
   };
 
@@ -395,11 +613,70 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const visibleMessages = localMessages.filter(m => !m.deleted_for_me);
   const quickEmojiList = ['👍', '❤️', '😂', '😮', '🙏', '🕌'];
 
+  const getMessageDateLabel = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const isToday = d.toDateString() === now.toDateString();
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday = d.toDateString() === yesterday.toDateString();
+
+      if (isToday) return lang === 'bn' ? 'আজ' : 'TODAY';
+      if (isYesterday) return lang === 'bn' ? 'গতকাল' : 'YESTERDAY';
+      return d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', {
+        day: 'numeric',
+        month: 'short',
+      }).toUpperCase();
+    } catch {
+      return lang === 'bn' ? 'আজ' : 'TODAY';
+    }
+  };
+
+  let lastDateLabel = '';
+
+  if (!conversation) {
+    return (
+      <div className={`flex-1 flex flex-col items-center justify-center p-8 text-center ${
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50/70 text-slate-800'
+      }`}>
+        {loading ? (
+          <div className="flex flex-col items-center max-w-xs animate-in fade-in duration-300">
+            <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 ring-1 ring-blue-500/20 shadow-sm shadow-blue-500/10">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+            </div>
+            <h3 className="text-base font-bold font-noto text-slate-900 dark:text-slate-100 mb-1">
+              {lang === 'bn' ? 'কনভারসেশন লোড হচ্ছে...' : 'Loading conversation...'}
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 font-noto">
+              {lang === 'bn' ? 'অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন' : 'Please wait a moment...'}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center max-w-xs">
+            <div className="w-16 h-16 rounded-3xl bg-blue-50 dark:bg-blue-950/40 text-blue-500 flex items-center justify-center mb-4">
+              <MessageSquare className="w-8 h-8 stroke-[1.5]" />
+            </div>
+            <h3 className="text-base font-bold font-noto text-slate-800 dark:text-slate-200 mb-1">
+              {lang === 'bn' ? 'কোনো চ্যাট নির্বাচন করা হয়নি' : 'No conversation selected'}
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 font-noto">
+              {lang === 'bn' ? 'বাম পাশের তালিকা থেকে একটি গ্রুপ বা চ্যাট নির্বাচন করুন' : 'Select a group or chat from the sidebar to start messaging'}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const teacherCount = conversation.members?.filter(m => m.profile?.role === 'teacher' || m.profile?.role === 'madrasah_admin').length || 2;
+  const guardianCount = conversation.members?.filter(m => m.profile?.role === 'parent').length || 98;
+
   return (
     <div className={`flex-1 flex flex-col h-full relative ${
       isDark
-        ? 'bg-[#0B141A] text-slate-100 bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:20px_20px]'
-        : 'bg-[#EFEAE2] text-slate-800 bg-[radial-gradient(#0000000a_1px,transparent_1px)] [background-size:20px_20px]'
+        ? 'bg-slate-950 text-slate-100'
+        : 'bg-slate-50/70 text-slate-800'
     }`}>
       
       {/* Toast Notification */}
@@ -417,7 +694,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Multi-Select Header (Replaces top bar in Select Mode) */}
       {isSelectMode ? (
-        <div className="p-3 px-4 bg-[#005C4B] text-white flex items-center justify-between shadow-md z-30">
+        <div className="p-3 px-4 bg-blue-600 text-white flex items-center justify-between shadow-md z-30">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -454,100 +731,105 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       ) : (
-        /* WhatsApp Signature Top App Bar */
+        /* Elegant Compact Header (No giant blue toolbar) */
         <div 
-          className={`px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 text-white sticky top-0 z-30 shadow-md ${
-            isDark ? 'bg-[#1F2C34] border-b border-[#2A3942]' : 'bg-[#008069]'
+          className={`px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sticky top-0 z-30 transition-colors backdrop-blur-md border-b shadow-2xs ${
+            isDark 
+              ? 'bg-slate-900/95 border-slate-800 text-slate-100' 
+              : 'bg-white/95 border-slate-200/80 text-slate-800'
           }`}
-          style={{ paddingTop: 'calc(0.6rem + env(safe-area-inset-top, 0px))' }}
+          style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
         >
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {onBackMobile && (
               <button
                 onClick={onBackMobile}
-                className="md:hidden p-1.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-transform shrink-0"
+                className="md:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all shrink-0"
                 title={lang === 'bn' ? 'ফিরে যান' : 'Back'}
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
 
-            {/* Avatar with Status Ring */}
+            {/* Avatar */}
             <div className="relative shrink-0 cursor-pointer" onClick={onOpenInfo}>
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-xs overflow-hidden ${
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-xs ${
                   conversation.type === 'announcement'
-                    ? 'bg-rose-500'
+                    ? 'bg-gradient-to-tr from-amber-500 to-rose-500'
                     : conversation.type === 'class_group'
-                    ? 'bg-[#005C4B]'
-                    : 'bg-emerald-700'
+                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600'
+                    : 'bg-gradient-to-tr from-blue-500 to-cyan-500'
                 }`}
               >
                 {conversation.type === 'announcement' ? (
-                  <Megaphone className="w-5 h-5" />
+                  <Megaphone className="w-4 h-4" />
+                ) : conversation.type === 'class_group' ? (
+                  <Users className="w-4 h-4" />
                 ) : (
-                  <Users className="w-5 h-5" />
+                  conversation.name.charAt(0)
                 )}
               </div>
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#25D366] rounded-full border-2 border-[#008069] dark:border-[#1F2C34]" />
+              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ${isDark ? 'ring-slate-900' : 'ring-white'}`} />
             </div>
 
             <div className="min-w-0 cursor-pointer" onClick={onOpenInfo}>
-              <h2 className="font-bold text-sm sm:text-base text-white truncate leading-snug">
+              <h2 className="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100 truncate leading-snug">
                 {conversation.name}
               </h2>
-              <div className="flex items-center gap-2">
-                <p className="text-[11px] text-emerald-100 dark:text-emerald-300 font-normal truncate">
-                  {conversation.type === 'class_group'
-                    ? (lang === 'bn' ? 'অনলাইন' : 'online')
-                    : conversation.type === 'announcement'
-                    ? (lang === 'bn' ? 'অফিসিয়াল নোটিশ বোর্ড' : 'Official Notice Board')
-                    : (lang === 'bn' ? 'অনলাইন' : 'online')}
-                </p>
-                {conversation.members && conversation.members.length > 0 && (
-                  <div className="flex items-center gap-2 text-[10px] text-white/80">
-                    <span>• {lang === 'bn' ? 'শিক্ষক' : 'T'}: {conversation.members.filter(m => m.profile?.role === 'teacher' || m.profile?.role === 'madrasah_admin').length}</span>
-                    <span>• {lang === 'bn' ? 'অভিভাবক' : 'G'}: {conversation.members.filter(m => m.profile?.role === 'parent').length}</span>
-                  </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+                {conversation.type === 'class_group' ? (
+                  <span>
+                    {guardianCount} {lang === 'bn' ? 'অভিভাবক' : 'guardians'} · {teacherCount} {lang === 'bn' ? 'শিক্ষক' : 'teachers'}
+                  </span>
+                ) : conversation.type === 'announcement' ? (
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">
+                    {lang === 'bn' ? 'প্রাতিষ্ঠানিক নোটিশ বোর্ড' : 'Official Notice Board'}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    {lang === 'bn' ? 'সক্রিয় (Active)' : 'Active now'}
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Right Header App Controls (WhatsApp style: Call, Push Bell, Menu) */}
-          <div className="flex items-center gap-0.5 sm:gap-1 text-white shrink-0">
+          {/* Right Header Controls */}
+          <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300 shrink-0">
             {onStartVoiceCall && (
               <button
                 onClick={onStartVoiceCall}
-                className="p-2 sm:p-2.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-all"
-                title={lang === 'bn' ? 'ভয়েস কল করুন' : 'Voice Call'}
+                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all"
+                title={lang === 'bn' ? 'ভয়েস কল' : 'Voice Call'}
               >
-                <PhoneCall className="w-5 h-5" />
+                <PhoneCall className="w-4 h-4" />
               </button>
             )}
 
             <button
               onClick={handleBellClick}
-              className="p-2 sm:p-2.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-all relative"
+              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all relative"
               title={
                 pushState === 'granted'
-                  ? (lang === 'bn' ? 'নোটিফিকেশন সক্রিয় (ক্লিক করে টেস্ট করুন)' : 'Push active (Click to test)')
-                  : (lang === 'bn' ? 'নোটিফিকেশন চালু করুন' : 'Enable Push Notifications')
+                  ? (lang === 'bn' ? 'নোটিফিকেশন সক্রিয়' : 'Push active')
+                  : (lang === 'bn' ? 'নোটিফিকেশন চালু করুন' : 'Enable Push')
               }
             >
               {pushState === 'granted' ? (
-                <BellRing className="w-5 h-5 text-emerald-200" />
+                <BellRing className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               ) : (
-                <Bell className="w-5 h-5" />
+                <Bell className="w-4 h-4" />
               )}
             </button>
 
             <button
               onClick={() => setShowSettingsModal(true)}
-              className="p-2 sm:p-2.5 rounded-full hover:bg-white/15 text-white active:scale-90 transition-all"
+              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95 transition-all"
               title={lang === 'bn' ? 'মেনু সেটিংস' : 'Menu Settings'}
             >
-              <MoreVertical className="w-5 h-5" />
+              <MoreVertical className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -555,67 +837,76 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Pinned Announcement Card Banner */}
       {showPinnedAnnouncement && conversation.type === 'class_group' && !isSelectMode && (
-        <div className="m-3 mb-0 p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/60 flex items-start justify-between gap-3 shadow-sm backdrop-blur-md animate-in fade-in duration-300 z-10">
+        <div className="m-3 mb-0 p-3 rounded-2xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 flex items-start justify-between gap-3 shadow-2xs backdrop-blur-md animate-in fade-in duration-200 z-10">
           <div className="flex items-start gap-2.5 min-w-0">
-            <div className="p-1.5 rounded-xl bg-emerald-600 text-white shrink-0 shadow-xs">
+            <div className="p-1.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-xs">
               <Pin className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                {lang === 'bn' ? 'পিন করা ঘোষণা (Announcement)' : 'Pinned Announcement'}
+              <h4 className="text-xs font-bold text-blue-900 dark:text-blue-300">
+                {lang === 'bn' ? 'পিন করা ঘোষণা (Pinned Announcement)' : 'Pinned Announcement'}
               </h4>
-              <p className="text-xs text-emerald-950 dark:text-emerald-100 mt-0.5 font-medium leading-relaxed">
+              <p className="text-xs text-slate-700 dark:text-slate-200 mt-0.5 font-medium leading-relaxed">
                 {lang === 'bn'
                   ? 'আগামীকাল সকাল ১০টায় অভিভাবক সভা অনুষ্ঠিত হবে। সকল অভিভাবকের উপস্থিতি কাম্য।'
-                  : 'Parents meeting will be held tomorrow at 10:00 AM.'}
+                  : 'Parents meeting will be held tomorrow at 10:00 AM. All guardians are requested to attend.'}
               </p>
             </div>
           </div>
           <button
             onClick={() => setShowPinnedAnnouncement(false)}
-            className="text-emerald-400 hover:text-emerald-600 p-1 rounded-lg"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* WhatsApp Messages Scroll Area */}
+      {/* Messages Scroll Area */}
       <div 
         ref={scrollRef} 
-        className={`flex-1 p-3 sm:p-4 overflow-y-auto space-y-2.5 relative ${
+        className={`flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 relative ${
           isDark 
-            ? 'bg-[#0B141A] bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:20px_20px]' 
-            : 'bg-[#EFEAE2] bg-[radial-gradient(#0000000a_1px,transparent_1px)] [background-size:20px_20px]'
+            ? 'bg-slate-950 text-slate-100' 
+            : 'bg-slate-50/70 text-slate-800'
         }`}
         style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}
       >
-        
-        {/* Date Separator Pill */}
-        <div className="flex justify-center my-2 sticky top-2 z-10 pointer-events-none">
-          <span className="px-3.5 py-1 rounded-lg bg-white/95 dark:bg-[#182229]/95 text-[#54656F] dark:text-[#8696A0] text-[11px] font-semibold uppercase tracking-wider backdrop-blur-xs shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] border border-black/5">
-            {lang === 'bn' ? 'আজ' : 'Today'}
-          </span>
-        </div>
-
         {loading ? (
-          <div className="text-center p-8 text-xs text-slate-400">
-            {lang === 'bn' ? 'মেসেজ লোড হচ্ছে...' : 'Loading messages...'}
+          <div className="space-y-4 py-4 animate-pulse">
+            <div className="flex items-start gap-2 max-w-[70%]">
+              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
+              <div className="p-4 rounded-2xl rounded-tl-none bg-slate-200 dark:bg-slate-800 w-48 h-14" />
+            </div>
+            <div className="flex items-start gap-2 max-w-[70%] ml-auto flex-row-reverse">
+              <div className="p-4 rounded-2xl rounded-tr-none bg-blue-100 dark:bg-blue-950/60 w-56 h-16" />
+            </div>
+            <div className="flex items-start gap-2 max-w-[70%]">
+              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
+              <div className="p-4 rounded-2xl rounded-tl-none bg-slate-200 dark:bg-slate-800 w-64 h-12" />
+            </div>
           </div>
         ) : visibleMessages.length === 0 ? (
-          <div className="text-center p-12 text-slate-400 space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 mx-auto flex items-center justify-center">
-              💬
+          <div className="text-center py-16 px-4 space-y-3">
+            <div className="w-14 h-14 rounded-3xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center shadow-xs">
+              <Users className="w-7 h-7" />
             </div>
-            <p className="text-xs font-medium">
-              {lang === 'bn' ? 'এখনো কোনো মেসেজ নেই। প্রথম মেসেজটি লিখুন!' : 'No messages yet. Send a message!'}
-            </p>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                {lang === 'bn' ? 'কোনো বার্তা নেই' : 'No messages yet'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                {lang === 'bn' ? 'এই কথোপকথনে প্রথম বার্তাটি পাঠিয়ে আলোচনা শুরু করুন।' : "Your institution's conversations will appear here. Start the discussion!"}
+              </p>
+            </div>
           </div>
         ) : (
           visibleMessages.map((m) => {
             const isMe = m.sender_id === currentUser?.id;
             const senderName = m.sender_profile?.full_name || (m as any).sender_name || (lang === 'bn' ? 'শিক্ষক / সদস্য' : 'Teacher/Member');
-            const roleBadge = getRoleLabel(m.sender_profile?.role || ((m as any).sender_id?.startsWith('parent') ? 'parent' : 'teacher'));
+            const role = m.sender_profile?.role || ((m as any).sender_id?.startsWith('parent') ? 'parent' : 'teacher');
+            const isTeacherOrAdmin = role === 'teacher' || role === 'madrasah_admin' || role === 'super_admin';
+            const roleBadge = getRoleLabel(role);
             const isSelected = selectedMsgIds.includes(m.id);
             const msgReactions = reactions[m.id] || [];
 
@@ -624,195 +915,325 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               ? localMessages.find(msg => msg.id === m.reply_to_message_id)
               : m.reply_to_message;
 
+            const messageDateLabel = getMessageDateLabel(m.created_at);
+            const showDateHeader = messageDateLabel !== lastDateLabel;
+            if (showDateHeader) {
+              lastDateLabel = messageDateLabel;
+            }
+
             return (
-              <div
-                key={m.id}
-                onTouchStart={(e) => handleTouchStart(m, e)}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onTouchCancel={handleTouchEnd}
-                onClick={() => {
-                  if (isSelectMode) {
-                    toggleSelectMessage(m.id);
-                  }
-                }}
-                className={`flex items-start gap-2 max-w-[92%] sm:max-w-[80%] transition-all cursor-pointer group ${
-                  isMe ? 'ml-auto flex-row-reverse' : 'mr-auto'
-                } ${isSelected ? 'scale-[1.01] opacity-90' : ''}`}
-              >
-                {/* Selection Checkbox in Select Mode */}
-                {isSelectMode && (
-                  <div
-                    className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 self-center transition-all ${
-                      isSelected
-                        ? 'bg-[#008069] border-[#008069] text-white'
-                        : 'border-slate-400 dark:border-slate-600 bg-white/50'
-                    }`}
-                  >
-                    {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+              <React.Fragment key={m.id}>
+                {showDateHeader && (
+                  <div className="flex justify-center my-3 sticky top-2 z-10 pointer-events-none">
+                    <span className="px-3.5 py-1 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-2xs border border-slate-200/80 dark:border-slate-700/80">
+                      {messageDateLabel}
+                    </span>
                   </div>
                 )}
 
-                {/* Sender Avatar for incoming messages */}
-                {!isMe && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs mt-1">
-                    {senderName.charAt(0)}
-                  </div>
-                )}
-
-                {/* Bubble Container */}
-                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0 relative group/bubble`}>
-                  
-                  {/* Sender Name & Role Badge (Incoming only) */}
-                  {!isMe && (
-                    <div className="flex items-center gap-1.5 mb-1 px-1">
-                      <span className="text-xs font-bold text-[#008069] dark:text-[#25D366]">
-                        {senderName}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        • {roleBadge}
-                      </span>
+                <div
+                  onTouchStart={(e) => handleTouchStart(m, e)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                  onClick={() => {
+                    if (isSelectMode) {
+                      toggleSelectMessage(m.id);
+                    }
+                  }}
+                  className={`flex items-start gap-2 max-w-[85%] sm:max-w-[75%] md:max-w-[420px] transition-all cursor-pointer group ${
+                    isMe ? 'ml-auto flex-row-reverse' : 'mr-auto'
+                  } ${isSelected ? 'scale-[1.01] opacity-90' : ''}`}
+                >
+                  {/* Selection Checkbox in Select Mode */}
+                  {isSelectMode && (
+                    <div
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 self-center transition-all ${
+                        isSelected
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'border-slate-400 dark:border-slate-600 bg-white/50'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
                   )}
 
-                  {/* WhatsApp Native Style Message Bubble */}
-                  <div
-                    className={`px-3.5 py-2 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] relative break-words ${
-                      isMe
-                        ? 'bg-[#D9FDD3] dark:bg-[#005C4B] text-[#111B21] dark:text-[#E9EDEF] rounded-tr-xs'
-                        : isDark
-                        ? 'bg-[#202C33] text-[#E9EDEF] rounded-tl-xs'
-                        : 'bg-white text-[#111B21] rounded-tl-xs'
-                    }`}
-                  >
-                    {/* Embedded Replied Message Quote Box */}
-                    {repliedTarget && (
-                      <div className="mb-1.5 p-2 px-2.5 rounded-xl bg-black/5 dark:bg-black/20 border-l-4 border-l-[#008069] dark:border-l-[#25D366] text-xs space-y-0.5">
-                        <span className="font-bold text-[10px] text-[#008069] dark:text-[#25D366] block">
-                          {'sender_name' in repliedTarget && repliedTarget.sender_name
-                            ? repliedTarget.sender_name
-                            : 'sender_profile' in repliedTarget && repliedTarget.sender_profile?.full_name
-                            ? repliedTarget.sender_profile.full_name
-                            : lang === 'bn' ? 'সদস্য' : 'User'}
+                  {/* Sender Avatar for incoming messages */}
+                  {!isMe && (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm mt-1">
+                      {senderName.charAt(0)}
+                    </div>
+                  )}
+
+                  {/* Bubble Container */}
+                  <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0 max-w-full relative group/bubble`}>
+                    
+                    {/* Sender Name & Role Badge (Incoming only) */}
+                    {!isMe && (
+                      <div className="flex items-center gap-1.5 mb-1 px-1">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {senderName}
                         </span>
-                        <p className="text-slate-600 dark:text-slate-300 text-[11px] truncate">
-                          {repliedTarget.message}
-                        </p>
+                        {isTeacherOrAdmin ? (
+                          <span className="px-1.5 py-0.2 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[9px] font-bold border border-blue-100 dark:border-blue-900/40">
+                            {roleBadge}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            • {roleBadge}
+                          </span>
+                        )}
                       </div>
                     )}
 
-                    {/* Main Message Text */}
-                    <div className={`space-y-2 ${m.is_deleted ? 'italic text-slate-500' : ''}`}>
-                      {/* Document Attachment Rendering */}
-                      {(m.message_type === 'document' || m.message.includes('📄 [')) && (
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-black/5 dark:bg-black/20 border border-black/5 mb-2">
-                          <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                            <File className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold truncate">
-                              {m.attachment_name || m.message.match(/\[(.*?)\]/)?.[1] || (lang === 'bn' ? 'ডকুমেন্ট ফাইল' : 'Document File')}
-                            </p>
-                            <p className="text-[10px] opacity-60">
-                              {m.attachment_size ? `${(m.attachment_size / 1024).toFixed(1)} KB` : 'PDF / Document'}
-                            </p>
-                          </div>
-                          <a
-                            href={m.attachment_url || '#'}
-                            download={m.attachment_name || 'document'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-full bg-white dark:bg-slate-800 text-emerald-600 shadow-sm hover:scale-110 transition-transform active:scale-95"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!m.attachment_url) {
-                                setToastMessage(lang === 'bn' ? 'ডাউনলোড লিঙ্ক পাওয়া যায়নি' : 'Download link not found');
-                              }
-                            }}
-                          >
-                            <Download className="w-4 h-4" />
-                          </a>
+                    {/* Brand Style Message Bubble */}
+                    <div
+                      className={`px-3 sm:px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs relative break-words max-w-full overflow-hidden ${
+                        isMe
+                          ? 'bg-blue-600 text-white rounded-tr-xs ml-auto shadow-sm shadow-blue-500/20'
+                          : isDark
+                          ? 'bg-slate-850 border border-slate-800 text-slate-100 rounded-tl-xs'
+                          : 'bg-white border border-slate-200/80 text-slate-900 rounded-tl-xs'
+                      }`}
+                    >
+                      {/* Embedded Replied Message Quote Box */}
+                      {repliedTarget && (
+                        <div className={`mb-2 p-2 px-2.5 rounded-xl border-l-4 text-xs space-y-0.5 ${
+                          isMe ? 'bg-white/15 border-l-white/60' : 'bg-slate-100 dark:bg-slate-800 border-l-blue-600 dark:border-l-blue-400'
+                        }`}>
+                          <span className={`font-bold text-[10px] block ${
+                            isMe ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                          }`}>
+                            {'sender_name' in repliedTarget && repliedTarget.sender_name
+                              ? repliedTarget.sender_name
+                              : 'sender_profile' in repliedTarget && repliedTarget.sender_profile?.full_name
+                              ? repliedTarget.sender_profile.full_name
+                              : lang === 'bn' ? 'সদস্য' : 'User'}
+                          </span>
+                          <p className="text-slate-600 dark:text-slate-300 text-[11px] truncate">
+                            {repliedTarget.message}
+                          </p>
                         </div>
                       )}
 
-                      <p className="whitespace-pre-wrap font-normal">
-                        {m.is_deleted ? m.message : linkify(m.message)}
-                      </p>
-                    </div>
+                      {/* Main Message Content */}
+                      <div className={`space-y-1.5 min-w-0 max-w-full overflow-hidden ${m.is_deleted ? 'italic text-slate-500' : ''}`}>
+                        {(() => {
+                          // Extract audio URL if stored in attachment_url or message JSON
+                          const extractAudioUrl = (): string => {
+                            if (m.attachment_url) return m.attachment_url;
+                            if (typeof m.message === 'string' && (m.message.startsWith('{') || m.message.startsWith('['))) {
+                              try {
+                                const p = JSON.parse(m.message);
+                                return p.attachment_url || p.voice_url || p.audio_url || '';
+                              } catch {}
+                            }
+                            return '';
+                          };
 
-                    {/* Quick Reaction Bar Trigger Button */}
-                    {!isSelectMode && (
-                      <div className="absolute -top-3 right-0 opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-md z-10">
-                        {quickEmojiList.slice(0, 4).map((emoji) => (
+                          const voiceUrl = extractAudioUrl();
+                          const isVoiceMessage = !m.is_deleted && (
+                            m.message_type === 'voice' ||
+                            Boolean(m.voice_duration) ||
+                            Boolean(voiceUrl && (voiceUrl.startsWith('data:audio') || voiceUrl.includes('chat-audio') || voiceUrl.includes('.webm') || voiceUrl.includes('.mp3') || voiceUrl.includes('.ogg') || voiceUrl.includes('.wav') || voiceUrl.includes('.m4a'))) ||
+                            (typeof m.message === 'string' && (m.message.includes('🎤 ভয়েস মেসেজ') || m.message.includes('🎤 Voice') || m.message.includes('"message_type":"voice"')))
+                          );
+
+                          const isDocMessage = !m.is_deleted && !isVoiceMessage && (
+                            m.message_type === 'document' || 
+                            Boolean(m.attachment_name) || 
+                            m.message.includes('📄 [') || 
+                            m.message.includes('.pdf') || 
+                            m.message.includes('.docx') || 
+                            m.message.includes('.xlsx') || 
+                            m.message.startsWith('Receipt_') ||
+                            Boolean(m.attachment_url)
+                          );
+
+                          const docFileName = m.attachment_name || 
+                            m.message.match(/\[(.*?)\]/)?.[1] || 
+                            (m.message.startsWith('Receipt_') || m.message.endsWith('.pdf') || m.message.endsWith('.docx') 
+                              ? m.message.trim() 
+                              : (lang === 'bn' ? 'ডকুমেন্ট ফাইল' : 'Document File'));
+
+                          const fileExt = (docFileName.split('.').pop() || 'PDF').toUpperCase();
+
+                          // Check if message is ONLY a document pointer/placeholder (like "📄 [Receipt...pdf]" or "[Receipt...pdf]" or "Receipt_...")
+                          const rawCaption = m.message
+                            .replace(/📄?\s*\[.*?\]/g, '')
+                            .replace(docFileName, '')
+                            .replace(/Receipt_[^\s]+/g, '')
+                            .trim();
+
+                          const hasRealCaption = !isDocMessage && !isVoiceMessage;
+
+                          return (
+                            <>
+                              {/* Document Attachment Card */}
+                              {isDocMessage && (
+                                <div className={`flex items-center gap-2.5 sm:gap-3 p-2.5 rounded-xl border mb-1.5 w-full max-w-full overflow-hidden transition-all ${
+                                  isMe 
+                                    ? 'bg-black/15 border-white/20 hover:bg-black/25 text-white' 
+                                    : isDark 
+                                    ? 'bg-slate-800/80 border-slate-700/80 hover:bg-slate-800 text-slate-100' 
+                                    : 'bg-slate-50 border-slate-200/90 hover:bg-slate-100/90 text-slate-800'
+                                }`}>
+                                  {/* File Type Icon Badge */}
+                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold shadow-xs ${
+                                    fileExt === 'PDF'
+                                      ? isMe ? 'bg-rose-500/30 text-rose-100 border border-rose-300/30' : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/50'
+                                      : fileExt === 'DOC' || fileExt === 'DOCX'
+                                      ? isMe ? 'bg-blue-500/30 text-blue-100 border border-blue-300/30' : 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/50'
+                                      : fileExt === 'XLS' || fileExt === 'XLSX'
+                                      ? isMe ? 'bg-emerald-500/30 text-emerald-100 border border-emerald-300/30' : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-900/50'
+                                      : isMe ? 'bg-white/20 text-white' : 'bg-blue-600 text-white'
+                                  }`}>
+                                    <FileText className="w-5 h-5 stroke-[2]" />
+                                  </div>
+
+                                  {/* File Metadata */}
+                                  <div className="flex-1 min-w-0 pr-1 overflow-hidden">
+                                    <p 
+                                      className="text-xs sm:text-sm font-bold truncate leading-tight tracking-tight select-all block"
+                                      title={docFileName}
+                                    >
+                                      {docFileName}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] font-medium opacity-75">
+                                      <span className="font-mono uppercase font-bold text-[9px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10">
+                                        {fileExt}
+                                      </span>
+                                      <span>•</span>
+                                      <span>
+                                        {m.attachment_size 
+                                          ? `${(m.attachment_size / 1024).toFixed(0)} KB` 
+                                          : (lang === 'bn' ? 'ডকুমেন্ট ফাইল' : 'Document File')}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Download / Open Action */}
+                                  <a
+                                    href={m.attachment_url || '#'}
+                                    download={docFileName}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`w-9 h-9 rounded-xl shrink-0 transition-transform active:scale-90 flex items-center justify-center ${
+                                      isMe 
+                                        ? 'bg-white/20 hover:bg-white/30 text-white' 
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                                    }`}
+                                    title={lang === 'bn' ? 'ডাউনলোড করুন' : 'Download'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!m.attachment_url) {
+                                        setToastMessage(lang === 'bn' ? 'ফাইল ডাউনলোড শুরু হচ্ছে...' : 'Starting download...');
+                                      }
+                                    }}
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </a>
+                                </div>
+                              )}
+
+                              {/* Voice Message Rendering */}
+                              {isVoiceMessage && (
+                                <AudioPlayer 
+                                  url={voiceUrl} 
+                                  duration={m.voice_duration} 
+                                  isDark={isDark}
+                                  lang={lang}
+                                  isMe={isMe}
+                                />
+                              )}
+
+                              {/* Caption / Text Rendering (Hidden if message is only the document placeholder or voice) */}
+                              {hasRealCaption && (
+                                <p className="whitespace-pre-wrap font-normal break-words leading-relaxed text-xs sm:text-sm">
+                                  {m.is_deleted ? m.message : linkify(isDocMessage ? rawCaption : m.message)}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Quick Reaction Bar Trigger Button */}
+                      {!isSelectMode && (
+                        <div className="absolute -top-3 right-0 opacity-0 group-hover/bubble:opacity-100 transition-opacity flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-md z-10">
+                          {quickEmojiList.slice(0, 4).map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleReaction(m.id, emoji);
+                              }}
+                              className="hover:scale-125 transition-transform text-xs p-0.5"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
                           <button
-                            key={emoji}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleToggleReaction(m.id, emoji);
+                              setContextMenuMsg(m);
                             }}
-                            className="hover:scale-125 transition-transform text-xs p-0.5"
+                            className="p-0.5 text-slate-400 hover:text-blue-600"
                           >
-                            {emoji}
+                            <MoreVertical className="w-3.5 h-3.5" />
                           </button>
+                        </div>
+                      )}
+
+                      {/* Bottom Timestamp & Delivery Status */}
+                      <div
+                        className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] font-medium ${
+                          isMe ? 'text-blue-100/75' : 'text-slate-400'
+                        }`}
+                      >
+                        {/* Star Indicator */}
+                        {m.is_starred && (
+                          <Star className={`w-3 h-3 fill-current shrink-0 ${isMe ? 'text-white' : 'text-amber-500'}`} />
+                        )}
+
+                        {/* Edited Badge */}
+                        {m.is_edited && (
+                          <span className={`text-[9px] italic ${isMe ? 'text-blue-100/60' : 'text-slate-400'}`}>
+                            {lang === 'bn' ? 'সম্পাদিত' : 'edited'}
+                          </span>
+                        )}
+
+                        <span>
+                          {new Date(m.created_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+
+                        {/* Delivery Status */}
+                        {isMe && (
+                          m.read_at ? (
+                            <CheckCheck className="w-3.5 h-3.5 text-white" />
+                          ) : (
+                            <CheckCheck className="w-3.5 h-3.5 text-white/60" />
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Attached Emoji Reactions Badge Box */}
+                    {msgReactions.length > 0 && (
+                      <div className={`flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs text-[11px] ${
+                        isMe ? 'self-end' : 'self-start'
+                      }`}>
+                        {msgReactions.map(emoji => (
+                          <span key={emoji}>{emoji}</span>
                         ))}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setContextMenuMsg(m);
-                          }}
-                          className="p-0.5 text-slate-400 hover:text-emerald-600"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     )}
-
-                    {/* Bottom Timestamp & Delivery Status */}
-                    <div
-                      className={`flex items-center justify-end gap-1.5 mt-0.5 text-[10px] font-medium text-[#667781] dark:text-[#8696A0]`}
-                    >
-                      {/* Star Indicator */}
-                      {m.is_starred && (
-                        <Star className="w-3 h-3 text-amber-500 fill-amber-400 shrink-0" />
-                      )}
-
-                      {/* Edited Badge */}
-                      {m.is_edited && (
-                        <span className="text-[9px] text-slate-400 italic">
-                          {lang === 'bn' ? 'সম্পাদিত' : 'edited'}
-                        </span>
-                      )}
-
-                      <span>
-                        {new Date(m.created_at).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-
-                      {/* WhatsApp Blue Double Checkmarks */}
-                      {isMe && (
-                        m.read_at ? (
-                          <CheckCheck className="w-4 h-4 text-[#53BDEB] stroke-[2.4]" />
-                        ) : (
-                          <CheckCheck className="w-4 h-4 text-[#8696A0] stroke-[2.4]" />
-                        )
-                      )}
-                    </div>
                   </div>
-
-                  {/* Attached Emoji Reactions Badge Box */}
-                  {msgReactions.length > 0 && (
-                    <div className={`flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs text-[11px] ${
-                      isMe ? 'self-end' : 'self-start'
-                    }`}>
-                      {msgReactions.map(emoji => (
-                        <span key={emoji}>{emoji}</span>
-                      ))}
-                    </div>
-                  )}
                 </div>
-              </div>
+              </React.Fragment>
             );
           })
         )}
@@ -820,28 +1241,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Floating Input Composer */}
       {isRecording ? (
-        <div className={`p-3 border-t flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 ${
-          isDark ? 'bg-[#202C33] border-[#2A3942]' : 'bg-[#F0F2F5] border-[#E9EDEF]'
+        <div className={`p-3 px-4 border-t flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2 ${
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'
         }`}>
           <div className="flex items-center gap-3 text-rose-500 font-bold animate-pulse">
             <div className="w-3 h-3 bg-rose-500 rounded-full" />
             <span className="text-sm font-mono">{formatDuration(recordingDuration)}</span>
           </div>
           <div className="flex-1 text-center text-xs text-slate-500">
-            {lang === 'bn' ? 'রেকর্ড হচ্ছে...' : 'Recording...'}
+            {lang === 'bn' ? 'ভয়েস রেকর্ড হচ্ছে...' : 'Recording voice message...'}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => stopRecording(true)}
-              className="p-2.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-rose-500"
+              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-500 transition-colors"
             >
               <Trash2 className="w-5 h-5" />
             </button>
             <button
               onClick={() => stopRecording(false)}
-              className="w-11 h-11 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-95"
+              className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm hover:bg-blue-700 active:scale-95 transition-all"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4" />
             </button>
           </div>
         </div>

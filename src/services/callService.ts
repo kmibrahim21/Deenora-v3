@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { callSoundService } from './callSoundService';
+import { showIncomingCallNotification, dismissIncomingCallNotification } from '../lib/pushNotifications';
 
 export interface CallParticipantInfo {
   id: string;
@@ -493,6 +494,14 @@ export class VoiceCallService {
     this.onStatusChange?.('incoming', payload);
     this.onIncomingCall?.(payload);
 
+    // Show WhatsApp-style persistent lock-screen / mobile screen notification
+    showIncomingCallNotification({
+      callId: payload.callId,
+      callerName: payload.caller.name || 'মাদ্রাসা শিক্ষক / এডমিন',
+      studentName: payload.student.name,
+      photoUrl: payload.student.photo_url,
+    });
+
     // Notify caller that phone is ringing
     this.broadcastSignaling('call:ringing', {
       callId: payload.callId,
@@ -510,6 +519,7 @@ export class VoiceCallService {
 
     try {
       callSoundService.stopAll();
+      dismissIncomingCallNotification();
       const callId = this.activeCallData.callId;
       const pc = this.createPeerConnection(callId);
 
@@ -600,6 +610,7 @@ export class VoiceCallService {
    */
   public rejectCall(reason: string = 'কলটি কেটে দেওয়া হয়েছে।') {
     callSoundService.stopAll();
+    dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
 
     if (this.activeCallData) {
@@ -619,6 +630,7 @@ export class VoiceCallService {
    */
   private handleCallRejected(reason?: string) {
     callSoundService.stopAll();
+    dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
     this.cleanup();
     this.onStatusChange?.('rejected', this.activeCallData || undefined);
@@ -632,6 +644,7 @@ export class VoiceCallService {
    */
   public endCall() {
     callSoundService.stopAll();
+    dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
 
     if (this.activeCallData) {
@@ -650,6 +663,7 @@ export class VoiceCallService {
    */
   private handleCallEndedRemotely() {
     callSoundService.stopAll();
+    dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
     this.cleanup();
     this.onStatusChange?.('ended', this.activeCallData || undefined);
@@ -672,6 +686,7 @@ export class VoiceCallService {
    * Cleanup connections and media tracks
    */
   private cleanup() {
+    dismissIncomingCallNotification();
     if (this.peerConnection) {
       try {
         this.peerConnection.close();
@@ -700,6 +715,7 @@ export class VoiceCallService {
    * Full destruction
    */
   public destroy() {
+    dismissIncomingCallNotification();
     this.cleanup();
     callSoundService.stopAll();
     if (this.channel) {

@@ -895,8 +895,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 <BellRing className="w-4 h-4 text-white animate-bounce" />
               </div>
               <div className="text-left">
-                <p className="font-black text-xs font-noto">নোটিফিকেশন সুবিধা চালু করুন 🔔</p>
-                <p className="text-[10px] text-blue-100 font-noto">ক্লাসের নোটিশ, চ্যাট মেসেজ ও ফলের আপডেট সাথে সাথে পাবেন।</p>
+                <p className="font-black text-xs font-noto">মোবাইল স্ক্রিনে সরাসরি কল ও নোটিশ পেতে নোটিফিকেশন চালু করুন 📞🔔</p>
+                <p className="text-[10px] text-blue-100 font-noto">হোয়াটসঅ্যাপের মতো সরাসরি মোবাইল স্ক্রিনে কল আসা এবং ক্লাসের নোটিশ পাবেন।</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { Institution, Profile, Class, Conversation } from '../types';
+import { Institution, Profile, Class, Conversation, ChatMessage } from '../types';
 import { ChatSidebar } from '../components/chat/ChatSidebar';
 import { ChatWindow } from '../components/chat/ChatWindow';
 import { ClassGroupInfoModal } from '../components/chat/ClassGroupInfoModal';
@@ -28,8 +28,52 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   onMobileChatStateChange,
   onStartVoiceCall,
 }) => {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  // Ensure institutionId, currentUserId, and userRole are always reliably resolved
+  const institutionId = institution?.id || profile?.institution_id || null;
+  const currentUserId = profile?.id || (profile as any)?.user_id || institution?.id || 'admin-user';
+  const userRole = profile?.role || 'madrasah_admin';
+  const userClassId = (profile as any)?.class_id || (classes && classes[0]?.id) || null;
+
+  // Instant local cache initialization for 0-latency startup
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    if (institutionId) {
+      try {
+        const cached = localStorage.getItem(`cached_convs_${institutionId}_${currentUserId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const [conversationsLoading, setConversationsLoading] = useState<boolean>(() => {
+    if (institutionId) {
+      const cached = localStorage.getItem(`cached_convs_${institutionId}_${currentUserId}`);
+      return !cached;
+    }
+    return true;
+  });
+
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
+    if (institutionId) {
+      try {
+        const cached = localStorage.getItem(`cached_convs_${institutionId}_${currentUserId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const parentClassGroup = userRole === 'parent' ? parsed.find((c: any) => c.type === 'class_group') : null;
+            return parentClassGroup ? parentClassGroup.id : parsed[0].id;
+          }
+        }
+      } catch {}
+    }
+    return null;
+  });
+
   const [showGroupInfo, setShowGroupInfo] = useState<boolean>(false);
   const [showMobileChat, setShowMobileChat] = useState<boolean>(false);
 
@@ -38,38 +82,56 @@ export const ChatApp: React.FC<ChatAppProps> = ({
     onMobileChatStateChange?.(showMobileChat);
   }, [showMobileChat, onMobileChatStateChange]);
 
-  // Ensure institutionId, currentUserId, and userRole are always reliably resolved
-  const institutionId = institution?.id || profile?.institution_id || null;
-  const currentUserId = profile?.id || (profile as any)?.user_id || institution?.id || 'admin-user';
-  const userRole = profile?.role || 'madrasah_admin';
-  const userClassId = (profile as any)?.class_id || (classes && classes[0]?.id) || null;
-
   // Load conversations on mount or institution change
   useEffect(() => {
     if (!institutionId) return;
 
+    let isMounted = true;
+
     const loadData = async () => {
       let activeClasses = classes;
 
-      // Fetch official classes list from database to ensure identical class IDs across all roles
-      if (institutionId) {
+      // 1. Check local cache for classes first to avoid redundant network query
+      if ((!activeClasses || activeClasses.length === 0) && institutionId) {
+        try {
+          const cachedCls = localStorage.getItem(`cached_classes_${institutionId}`);
+          if (cachedCls) {
+            const parsed = JSON.parse(cachedCls);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              activeClasses = parsed as Class[];
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Fetch classes from DB if not available
+      if ((!activeClasses || activeClasses.length === 0) && institutionId) {
         try {
           const { data } = await supabase
             .from('classes')
             .select('*')
             .eq('institution_id', institutionId);
-          if (data && data.length > 0) activeClasses = data as Class[];
+          if (data && data.length > 0) {
+            activeClasses = data as Class[];
+            try {
+              localStorage.setItem(`cached_classes_${institutionId}`, JSON.stringify(data));
+            } catch {}
+          }
         } catch (err) {
           console.warn('[ChatApp] Class list fetch fallback:', err);
         }
       }
 
-      const classList = activeClasses.map((c) => ({
+      const classList = (activeClasses || []).map((c) => ({
         id: c.id,
         name: c.class_name || (c as any).name || 'ক্লাস',
       }));
 
       try {
+        if (conversations.length === 0) {
+          setConversationsLoading(true);
+        }
+
         const convs = await ChatService.getConversations(
           institutionId,
           currentUserId,
@@ -77,18 +139,29 @@ export const ChatApp: React.FC<ChatAppProps> = ({
           userRole || undefined,
           userClassId || undefined
         );
-        setConversations(convs);
-        if (convs.length > 0 && !activeConversationId) {
-          // If parent, prioritize selecting their student's class group first
-          const parentClassGroup = userRole === 'parent' ? convs.find(c => c.type === 'class_group') : null;
-          setActiveConversationId(parentClassGroup ? parentClassGroup.id : convs[0].id);
+
+        if (isMounted) {
+          setConversations(convs);
+          if (convs.length > 0 && !activeConversationId) {
+            // If parent, prioritize selecting their student's class group first
+            const parentClassGroup = userRole === 'parent' ? convs.find(c => c.type === 'class_group') : null;
+            setActiveConversationId(parentClassGroup ? parentClassGroup.id : convs[0].id);
+          }
         }
       } catch (err) {
         console.error('[ChatApp] Conversations load error:', err);
+      } finally {
+        if (isMounted) {
+          setConversationsLoading(false);
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [institutionId, currentUserId, userRole, userClassId]);
 
   // Hook into Realtime chat for active conversation
@@ -99,13 +172,73 @@ export const ChatApp: React.FC<ChatAppProps> = ({
   const handleSelectConversation = (convId: string) => {
     setActiveConversationId(convId);
     setShowMobileChat(true);
+    
+    // Mark as read
+    if (institutionId && currentUserId) {
+      ChatService.markAsRead(institutionId, convId, currentUserId);
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, unread_count: 0 } : c));
+    }
   };
 
-  const handleSendMessage = (text: string) => {
+  // Mark active conversation as read when messages change
+  useEffect(() => {
+    if (activeConversationId && messages.length > 0 && institutionId && currentUserId) {
+      ChatService.markAsRead(institutionId, activeConversationId, currentUserId);
+      setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, unread_count: 0 } : c));
+    }
+  }, [activeConversationId, messages.length, institutionId, currentUserId]);
+
+  // Global Realtime listener for all conversations to update unread counts & last messages
+  useEffect(() => {
+    if (!institutionId) return;
+
+    const channelName = `global_notifs_${institutionId}`;
+    const channel = supabase.channel(channelName)
+      .on('broadcast', { event: 'new_message' }, (p) => {
+        const msg = p.payload as ChatMessage;
+        if (!msg) return;
+
+        setConversations(prev => {
+          return prev.map(conv => {
+            // Match conversation ID or class group ID
+            const isMatch = conv.id === msg.conversation_id || 
+                          conv.class_id === msg.class_name ||
+                          (conv.id.startsWith('class-group-') && msg.class_name && conv.id.includes(msg.class_name));
+
+            if (isMatch) {
+              const isNotActive = conv.id !== activeConversationId;
+              const isNotMe = msg.sender_id !== currentUserId;
+              
+              return {
+                ...conv,
+                last_message: msg,
+                unread_count: (isNotActive && isNotMe) ? (conv.unread_count || 0) + 1 : 0
+              };
+            }
+            return conv;
+          });
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [institutionId, activeConversationId, currentUserId]);
+
+  const handleSendMessage = (
+    text: string, 
+    replyToId?: string, 
+    messageType: 'text' | 'image' | 'document' | 'voice' = 'text',
+    attachmentUrl?: string,
+    voiceDuration?: number,
+    attachmentName?: string,
+    attachmentSize?: number
+  ) => {
     const senderId = currentUserId || 'admin-user';
     const senderName = profile?.full_name || (profile as any)?.name || (userRole === 'parent' ? 'অভিভাবক' : 'এডমিন / শিক্ষক');
     const className = activeConversation?.class_id || undefined;
-    sendMessage(senderId, text, senderName, className);
+    sendMessage(senderId, text, senderName, className, messageType, attachmentUrl, voiceDuration, attachmentName, attachmentSize);
   };
 
   return (
@@ -119,6 +252,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             onSelectConversation={handleSelectConversation}
             lang={lang}
             isDark={isDark}
+            loading={conversationsLoading}
           />
         </div>
 
@@ -128,7 +262,7 @@ export const ChatApp: React.FC<ChatAppProps> = ({
             conversation={activeConversation}
             conversations={conversations}
             messages={messages}
-            loading={loading}
+            loading={loading || (conversationsLoading && !activeConversation)}
             currentUser={profile}
             userRole={profile?.role}
             onSendMessage={handleSendMessage}
