@@ -433,66 +433,116 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
   const handleGeneratePreview = async () => {
     if (!isPromotionActive) return;
+    if (!newYearName || !startDate || !endDate) {
+      alert(
+        lang === "bn"
+          ? "অনুগ্রহ করে নতুন শিক্ষাবর্ষের নাম, শুরুর তারিখ এবং শেষের তারিখ লিখুন।"
+          : "Please enter new year name, start date, and end date.",
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const promotions: any[] = [];
 
       // Fetch all students
-      const { data: students } = await supabase
+      const { data: students, error: stdErr } = await supabase
         .from("students")
         .select("*")
         .eq("institution_id", institution.id);
 
-      if (!students) return;
+      if (stdErr) throw stdErr;
+      if (!students) {
+        setPreviewData([]);
+        setStep("preview");
+        return;
+      }
 
-      // Fetch all marks for selected exams
+      // Collect selected exam IDs
       const selectedExamIds = Object.values(promotionMap)
         .map((m) => m.examId)
-        .filter((id) => id);
-      const { data: marks } = await supabase
-        .from("exam_marks")
-        .select("*")
-        .in("exam_id", selectedExamIds);
+        .filter((id) => id && id.trim() !== "");
 
-      // Fetch exam subjects to calculate percentages
-      const { data: subjects } = await supabase
-        .from("exam_subjects")
-        .select("*")
-        .in("exam_id", selectedExamIds);
+      let marks: any[] = [];
+      let subjects: any[] = [];
+
+      if (selectedExamIds.length > 0) {
+        const { data: marksData } = await supabase
+          .from("exam_marks")
+          .select("*")
+          .in("exam_id", selectedExamIds);
+        marks = marksData || [];
+
+        const { data: subjectsData } = await supabase
+          .from("exam_subjects")
+          .select("*")
+          .in("exam_id", selectedExamIds);
+        subjects = subjectsData || [];
+      }
 
       // Process each class
       for (const cls of classes) {
         const config = promotionMap[cls.id];
-        if (!config || !config.examId) continue;
-
+        const targetNextClassId = config?.nextClassId || cls.id;
         const classStudents = students.filter((s) => s.class_id === cls.id);
-        const examSubjects =
-          subjects?.filter((s) => s.exam_id === config.examId) || [];
+
+        const hasExam = Boolean(config?.examId && config.examId.trim() !== "");
+        const passMarkVal =
+          config?.passMark !== undefined &&
+          config?.passMark !== null &&
+          !isNaN(config.passMark)
+            ? Number(config.passMark)
+            : 0;
+
+        const examSubjects = hasExam
+          ? subjects.filter((s) => s.exam_id === config.examId)
+          : [];
 
         for (const student of classStudents) {
-          // Calculate Result
-          const studentMarks =
-            marks?.filter(
-              (m) => m.student_id === student.id && m.exam_id === config.examId,
-            ) || [];
-
-          let totalObtained = 0;
-          let totalFull = 0;
+          let isPassed = true;
+          let percentageStr = "-";
           let failedSubjects = 0;
 
-          examSubjects.forEach((sub) => {
-            const mark = studentMarks.find((m) => m.subject_id === sub.id);
-            const obtained = mark ? mark.marks_obtained : 0;
-            totalObtained += obtained;
-            totalFull += sub.full_marks;
+          if (hasExam) {
+            const studentMarks = marks.filter(
+              (m) => m.student_id === student.id && m.exam_id === config.examId,
+            );
 
-            if (obtained < sub.pass_marks) failedSubjects++;
-          });
+            let totalObtained = 0;
+            let totalFull = 0;
 
-          const percentage =
-            totalFull > 0 ? (totalObtained / totalFull) * 100 : 0;
-          const isPassed =
-            failedSubjects === 0 && percentage >= config.passMark;
+            examSubjects.forEach((sub) => {
+              const mark = studentMarks.find((m) => m.subject_id === sub.id);
+              const obtained = mark ? Number(mark.marks_obtained || 0) : 0;
+              totalObtained += obtained;
+              totalFull += Number(sub.full_marks || 0);
+
+              if (sub.pass_marks && obtained < Number(sub.pass_marks)) {
+                failedSubjects++;
+              }
+            });
+
+            const percentage =
+              totalFull > 0 ? (totalObtained / totalFull) * 100 : 0;
+            percentageStr = percentage.toFixed(2);
+
+            if (failedSubjects > 0 || (passMarkVal > 0 && percentage < passMarkVal)) {
+              isPassed = false;
+            }
+          }
+
+          const finalNextClassId = isPassed ? targetNextClassId : cls.id;
+          let nextClassName = cls.class_name;
+          if (isPassed) {
+            if (targetNextClassId === "graduated") {
+              nextClassName = lang === "bn" ? "বিদায় (গ্র্যাজুয়েট)" : "Graduated";
+            } else {
+              nextClassName =
+                classes.find((c) => c.id === targetNextClassId)?.class_name ||
+                cls.class_name;
+            }
+          }
 
           promotions.push({
             student_id: student.id,
@@ -500,24 +550,32 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
             roll: student.roll,
             current_class_id: cls.id,
             current_class_name: cls.class_name,
-            next_class_id: isPassed ? config.nextClassId : cls.id, // Fail -> Retain
-            next_class_name: isPassed
-              ? config.nextClassId === "graduated"
-                ? "Graduated"
-                : classes.find((c) => c.id === config.nextClassId)?.class_name
-              : cls.class_name,
-            result_status: isPassed ? "promoted" : "retained",
-            percentage: percentage.toFixed(2),
+            next_class_id: finalNextClassId,
+            next_class_name: nextClassName,
+            result_status: isPassed
+              ? targetNextClassId === "graduated"
+                ? "graduated"
+                : targetNextClassId === cls.id
+                  ? "retained"
+                  : "promoted"
+              : "retained",
+            percentage: percentageStr,
             failed_subjects: failedSubjects,
+            has_exam: hasExam,
           });
         }
       }
 
       setPreviewData(promotions);
       setStep("preview");
-    } catch (error) {
-      console.error(error);
-      alert("Error generating preview");
+    } catch (error: any) {
+      console.error("Error generating promotion preview:", error);
+      alert(
+        error.message ||
+          (lang === "bn"
+            ? "প্রিভিউ তৈরি করতে সমস্যা হয়েছে"
+            : "Error generating preview"),
+      );
     } finally {
       setLoading(false);
     }
@@ -530,9 +588,10 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       type: "promotion",
       yearId: "",
       title: lang === "bn" ? "প্রমোশন নিশ্চিত করুন" : "Confirm Promotion",
-      message: lang === "bn"
-        ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষার্থীদের প্রমোশন দিতে চান? এই কাজটি বাতিল করা যাবে না।"
-        : "Are you sure you want to promote these students? This action cannot be undone.",
+      message:
+        lang === "bn"
+          ? "আপনি কি নিশ্চিত যে আপনি এই শিক্ষার্থীদের প্রমোশন দিতে চান? এই কাজটি বাতিল করা যাবে না।"
+          : "Are you sure you want to promote these students? This action cannot be undone.",
     });
   };
 
@@ -547,17 +606,68 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
     ]);
 
     try {
-      // Filter out graduated students from update list (or handle them separately)
-      // For now, we only promote those who have a valid next_class_id (not 'graduated')
-      // Actually, 'graduated' students should probably be moved to a 'Alumni' class or just kept in current class with status 'graduated'?
-      // The RPC expects a UUID for next_class_id.
-      // If 'graduated', we might need to handle it.
-      // For simplicity, let's assume 'graduated' means we don't update their class_id in this batch, OR we have an 'Alumni' class.
-      // Let's filter out 'graduated' for the RPC update for now, or create a dummy class.
-      // Better: The user should have created an 'Alumni' class if they want to move them there.
-      // If nextClassId is 'graduated', we skip the update or set to null?
-      // Let's skip 'graduated' for now to avoid UUID error.
+      // Step 1: Ensure new academic year record exists and is set to active
+      let newYearId = "";
+      
+      const { data: existingYears } = await supabase
+        .from("academic_years")
+        .select("*")
+        .eq("institution_id", institution.id)
+        .eq("year_name", newYearName);
 
+      if (existingYears && existingYears.length > 0) {
+        newYearId = existingYears[0].id;
+        // Archive all other years
+        await supabase
+          .from("academic_years")
+          .update({ status: "archived" })
+          .eq("institution_id", institution.id);
+
+        // Activate matching year
+        await supabase
+          .from("academic_years")
+          .update({
+            status: "active",
+            start_date: startDate,
+            end_date: endDate,
+            hijri_start_date: hijriStartDate || null,
+            hijri_end_date: hijriEndDate || null,
+          })
+          .eq("id", newYearId);
+      } else {
+        // Archive all existing years first
+        await supabase
+          .from("academic_years")
+          .update({ status: "archived" })
+          .eq("institution_id", institution.id);
+
+        // Insert new active year
+        const { data: createdYear, error: createError } = await supabase
+          .from("academic_years")
+          .insert({
+            institution_id: institution.id,
+            year_name: newYearName,
+            start_date: startDate,
+            end_date: endDate,
+            hijri_start_date: hijriStartDate || null,
+            hijri_end_date: hijriEndDate || null,
+            status: "active",
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        if (createdYear) newYearId = createdYear.id;
+      }
+
+      setExecutingLog((prev) => [
+        ...prev,
+        lang === "bn"
+          ? `নতুন শিক্ষাবর্ষ "${newYearName}" তৈরি ও সক্রিয় করা হয়েছে।`
+          : `New academic year "${newYearName}" created and activated.`,
+      ]);
+
+      // Step 2: Prepare promotions payload (filter non-graduated)
       const validPromotions = previewData.filter(
         (p) => p.next_class_id !== "graduated",
       );
@@ -572,26 +682,63 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       setExecutingLog((prev) => [
         ...prev,
         lang === "bn"
-          ? `${payload.length} জন শিক্ষার্থীর প্রমোশন করা হচ্ছে...`
-          : `Promoting ${payload.length} students...`,
+          ? `${payload.length} জন শিক্ষার্থীর তথ্য আপডেট করা হচ্ছে...`
+          : `Updating ${payload.length} students...`,
       ]);
 
-      const { error } = await supabase.rpc("promote_students", {
-        p_institution_id: institution.id,
-        p_new_year_name: newYearName,
-        p_start_date: startDate,
-        p_end_date: endDate,
-        p_hijri_start_date: hijriStartDate || null,
-        p_hijri_end_date: hijriEndDate || null,
-        p_promotions: payload,
-      });
+      // Attempt RPC first
+      let rpcSuccess = false;
+      try {
+        const { error: rpcErr } = await supabase.rpc("promote_students", {
+          p_institution_id: institution.id,
+          p_new_year_name: newYearName,
+          p_start_date: startDate,
+          p_end_date: endDate,
+          p_hijri_start_date: hijriStartDate || null,
+          p_hijri_end_date: hijriEndDate || null,
+          p_promotions: payload,
+        });
 
-      if (error) throw error;
+        if (!rpcErr) {
+          rpcSuccess = true;
+        } else {
+          console.warn("promote_students RPC error, using direct table updates:", rpcErr);
+        }
+      } catch (e) {
+        console.warn("promote_students RPC call failed, using direct table updates:", e);
+      }
 
-      // Update institution config_json with new academic_year_start
+      // Direct fallback update if RPC didn't process
+      if (!rpcSuccess) {
+        // Update promoted students class_id & academic_year_id
+        for (const promo of validPromotions) {
+          const updateObj: any = { class_id: promo.next_class_id };
+          if (newYearId) updateObj.academic_year_id = newYearId;
+
+          await supabase
+            .from("students")
+            .update(updateObj)
+            .eq("id", promo.student_id);
+        }
+
+        // Handle graduated students
+        const graduatedPromotions = previewData.filter(
+          (p) => p.next_class_id === "graduated",
+        );
+        for (const promo of graduatedPromotions) {
+          const noteText = lang === "bn" ? `বিদায়ী শিক্ষার্থী (${newYearName})` : `Graduated (${newYearName})`;
+          await supabase
+            .from("students")
+            .update({ notes: noteText })
+            .eq("id", promo.student_id);
+        }
+      }
+
+      // Step 3: Update institution config_json with active_academic_year_id & academic_year_start
       const updatedConfig = {
         ...(institution.config_json || {}),
         academic_year_start: startDate,
+        ...(newYearId ? { active_academic_year_id: newYearId } : {}),
       };
 
       const { error: configError } = await supabase
@@ -599,38 +746,27 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
         .update({ config_json: updatedConfig })
         .eq("id", institution.id);
 
-      if (configError) throw configError;
+      if (configError) console.warn("Error updating institution config:", configError);
 
-      // Invalidate everything after promotion
+      // Step 4: Clear caches
       requestManager.invalidatePattern(`academic_years:${institution.id}`);
       requestManager.invalidatePattern(`students:${institution.id}`);
       requestManager.invalidatePattern(`fees:${institution.id}`);
       requestManager.invalidatePattern(`stats:${institution.id}`);
       requestManager.invalidatePattern(`dashboard_`);
+      requestManager.invalidatePattern(`fetch:ledger:`);
 
       setExecutingLog((prev) => [
         ...prev,
         lang === "bn"
-          ? "প্রমোশন সফলভাবে সম্পন্ন হয়েছে!"
-          : "Promotion completed successfully!",
-      ]);
-      setExecutingLog((prev) => [
-        ...prev,
-        lang === "bn"
-          ? "নতুন শিক্ষাবর্ষ তৈরি করা হয়েছে।"
-          : "New academic year created.",
-      ]);
-      setExecutingLog((prev) => [
-        ...prev,
-        lang === "bn"
-          ? "পুরানো শিক্ষাবর্ষ আর্কাইভ করা হয়েছে।"
-          : "Old academic year archived.",
+          ? "প্রমোশন ও সকল ডেটা আপডেট সফলভাবে সম্পন্ন হয়েছে!"
+          : "Promotion and data update completed successfully!",
       ]);
 
       setTimeout(() => {
         onClose();
-        hardReload(); // Refresh to show changes
-      }, 2000);
+        hardReload(); // Refresh app to load new active academic year
+      }, 1500);
     } catch (error: any) {
       console.error(error);
       setExecutingLog((prev) => [...prev, `Error: ${error.message}`]);
@@ -638,17 +774,16 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   };
 
   return (
-    <div
-      className={`min-h-screen flex flex-col animate-in fade-in duration-300 ${isDark ? "bg-slate-950" : "bg-blue-50"}`}
-    >
+    <div className={`w-full max-w-7xl mx-auto space-y-6 pb-12 ${isDark ? "text-white" : "text-slate-900"}`}>
       {/* Header */}
       <div
-        className={`p-4 md:p-6 border-b flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-10 ${isDark ? "bg-slate-900/80 border-slate-800 backdrop-blur-md" : "bg-white/80 border-slate-200 backdrop-blur-md"}`}
+        className={`p-4 md:p-5 rounded-3xl border flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-2 z-20 shadow-sm ${isDark ? "bg-slate-900/95 border-slate-800" : "bg-white/95 border-slate-200"}`}
       >
         <div className="flex items-center gap-3 md:gap-4">
           <button
+            type="button"
             onClick={onClose}
-            className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-colors shadow-sm border ${
+            className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-colors shadow-sm border touch-manipulation ${
               isDark
                 ? "bg-slate-800 text-slate-400 hover:text-white border-slate-700"
                 : "bg-white text-slate-500 hover:text-slate-900 border-slate-200"
@@ -674,27 +809,30 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0 touch-pan-x">
           <div
             className={`flex p-1 rounded-xl md:rounded-2xl border min-w-max ${isDark ? "bg-slate-900 border-slate-700" : "bg-slate-100 border-slate-200"}`}
           >
             <button
+              type="button"
               onClick={() => setActiveTab("years")}
-              className={`px-3 md:px-4 py-2 rounded-lg md:rounded-xl text-[10px] font-black transition-all flex items-center gap-2 ${activeTab === "years" ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-[#2563EB] shadow-sm") : "text-slate-400"}`}
+              className={`px-3 md:px-4 py-2 rounded-lg md:rounded-xl text-[10px] font-black transition-all touch-manipulation flex items-center gap-2 ${activeTab === "years" ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-[#2563EB] shadow-sm") : "text-slate-400"}`}
             >
               <List size={14} />{" "}
               {lang === "bn" ? "শিক্ষাবর্ষ তালিকা" : "Years List"}
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab("promotion")}
-              className={`px-3 md:px-4 py-2 rounded-lg md:rounded-xl text-[10px] font-black transition-all flex items-center gap-2 ${activeTab === "promotion" ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-[#2563EB] shadow-sm") : "text-slate-400"}`}
+              className={`px-3 md:px-4 py-2 rounded-lg md:rounded-xl text-[10px] font-black transition-all touch-manipulation flex items-center gap-2 ${activeTab === "promotion" ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-[#2563EB] shadow-sm") : "text-slate-400"}`}
             >
               <GraduationCap size={14} />{" "}
               {lang === "bn" ? "প্রমোশন উইজার্ড" : "Promotion"}
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab("reports")}
-              className={`px-3 md:px-4 py-2 rounded-lg md:rounded-xl text-[10px] font-black transition-all flex items-center gap-2 ${activeTab === "reports" ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-[#2563EB] shadow-sm") : "text-slate-400"}`}
+              className={`px-3 md:px-4 py-2 rounded-lg md:rounded-xl text-[10px] font-black transition-all touch-manipulation flex items-center gap-2 ${activeTab === "reports" ? (isDark ? "bg-slate-800 text-blue-400 shadow-sm" : "bg-white text-[#2563EB] shadow-sm") : "text-slate-400"}`}
             >
               <BarChart3 size={14} /> {lang === "bn" ? "রিপোর্ট" : "Reports"}
             </button>
@@ -703,7 +841,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar w-full max-w-7xl mx-auto">
+      <div className="space-y-6 w-full">
         {!isPromotionActive && (
           <div className={`mb-6 p-5 rounded-[2rem] border flex flex-col sm:flex-row sm:items-center gap-4 ${isDark ? "bg-amber-950/20 border-amber-900/40 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
             <AlertTriangle className="shrink-0" size={24} />
@@ -1245,8 +1383,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                   </div>
 
                   <div className="w-full md:w-1/4">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block md:hidden">
-                      {lang === "bn" ? "পরীক্ষা" : "Exam"}
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                      {lang === "bn" ? "পরীক্ষা (ঐচ্ছিক)" : "Exam (Optional)"}
                     </label>
                     <select
                       className={`w-full h-10 border rounded-lg px-3 text-xs font-bold outline-none ${
@@ -1267,8 +1405,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                     >
                       <option value="">
                         {lang === "bn"
-                          ? "পরীক্ষা নির্বাচন করুন"
-                          : "Select Exam"}
+                          ? "পরীক্ষা ছাড়া (সরাসরি প্রমোশন)"
+                          : "Without Exam (Direct Promotion)"}
                       </option>
                       {exams
                         .filter((e) => e.class_id === cls.id)
@@ -1281,8 +1419,8 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                   </div>
 
                   <div className="w-full md:w-1/6">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block md:hidden">
-                      {lang === "bn" ? "পাস মার্ক" : "Pass Mark"}
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                      {lang === "bn" ? "পাস মার্ক % (ঐচ্ছিক)" : "Pass Mark % (Optional)"}
                     </label>
                     <div className="relative">
                       <input
@@ -1293,13 +1431,13 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                             : "bg-white border-slate-200 text-slate-700"
                         }`}
                         placeholder="Pass %"
-                        value={promotionMap[cls.id]?.passMark || ""}
+                        value={promotionMap[cls.id]?.passMark ?? ""}
                         onChange={(e) =>
                           setPromotionMap({
                             ...promotionMap,
                             [cls.id]: {
                               ...promotionMap[cls.id],
-                              passMark: parseFloat(e.target.value),
+                              passMark: e.target.value === "" ? 0 : parseFloat(e.target.value),
                             },
                           })
                         }
@@ -1421,16 +1559,34 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                       </td>
                       <td className="p-4">
                         <div
-                          className={`text-xs font-black ${p.result_status === "promoted" ? "text-emerald-500" : "text-red-500"}`}
+                          className={`text-xs font-black ${
+                            !p.has_exam
+                              ? "text-blue-500"
+                              : p.result_status === "promoted" || p.result_status === "graduated"
+                                ? "text-emerald-500"
+                                : "text-red-500"
+                          }`}
                         >
-                          {p.percentage}% ({p.failed_subjects} failed)
+                          {p.has_exam
+                            ? `${p.percentage}% (${p.failed_subjects} ${lang === "bn" ? "টি ফেল" : "failed"})`
+                            : (lang === "bn" ? "পরীক্ষা ছাড়া" : "Without Exam")}
                         </div>
                       </td>
                       <td className="p-4">
                         <span
-                          className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${p.result_status === "promoted" ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"}`}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
+                            p.result_status === "promoted"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
+                              : p.result_status === "graduated"
+                                ? "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400"
+                                : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                          }`}
                         >
-                          {p.result_status}
+                          {p.result_status === "promoted"
+                            ? (lang === "bn" ? "প্রমোশন" : "Promoted")
+                            : p.result_status === "graduated"
+                              ? (lang === "bn" ? "বিদায়" : "Graduated")
+                              : (lang === "bn" ? "পুনরাবৃত্তি" : "Retained")}
                         </span>
                       </td>
                       <td

@@ -113,6 +113,53 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [activeCall]);
 
+  // Listen for Android Native Bridge (MainActivity.kt / CallService.kt -> window.onNativeCallAction)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    (window as any).onNativeCallAction = async (action: string, callId?: string) => {
+      console.log('[CallContext] Received onNativeCallAction from Android Native:', action, callId);
+      const cleanAction = String(action || '').toLowerCase().trim();
+
+      if (cleanAction === 'accept_call' || cleanAction === 'answer' || cleanAction === 'accept') {
+        const currentActive = activeCall || voiceCallService.getActiveCall();
+        if (currentActive) {
+          setActiveCall(currentActive);
+          setCallStatus('connected');
+        }
+        await voiceCallService.acceptCall();
+      } else if (cleanAction === 'reject_call' || cleanAction === 'decline' || cleanAction === 'reject') {
+        voiceCallService.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।');
+      } else if (cleanAction === 'end_call' || cleanAction === 'hangup') {
+        voiceCallService.endCall();
+      }
+    };
+
+    (window as any).setDeviceFcmToken = async (token: string, phone?: string) => {
+      console.log('[CallContext] Received setDeviceFcmToken from Android:', token ? `${token.substring(0, 15)}...` : '');
+      if (!token) return;
+      try {
+        localStorage.setItem('deenora_fcm_token', token);
+        const resolvedPhone = phone || (activeCall?.calleePhone) || (typeof window !== 'undefined' ? localStorage.getItem('parent_phone') : null);
+        await fetch('/api/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register_token',
+            token,
+            phone: resolvedPhone || undefined,
+          }),
+        });
+      } catch (err) {
+        console.warn('[CallContext] register_token error:', err);
+      }
+    };
+
+    return () => {
+      delete (window as any).onNativeCallAction;
+    };
+  }, [activeCall]);
+
   // Auto-answer or open call screen if user unlocked phone / opened app directly from lock screen notification
   useEffect(() => {
     if (typeof window === 'undefined') return;

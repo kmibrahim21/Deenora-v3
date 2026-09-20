@@ -276,6 +276,26 @@ export class VoiceCallService {
         }
       });
     }
+
+    // Auto-register Device FCM Token for Android background call wake-up
+    try {
+      const storedToken = typeof window !== 'undefined' ? localStorage.getItem('deenora_fcm_token') : null;
+      const bridgeToken = typeof window !== 'undefined' ? (window as any).AndroidBridge?.getFcmToken?.() : null;
+      const effectiveToken = storedToken || bridgeToken;
+      if (effectiveToken && (cleanPhone || cleanUserId)) {
+        fetch('/api/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register_token',
+            token: effectiveToken,
+            phone: cleanPhone || undefined,
+            student_id: cleanUserId || undefined,
+            institution_id: cleanInstId || undefined,
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
   }
 
   /**
@@ -536,6 +556,26 @@ export class VoiceCallService {
       // Broadcast offer on all channels
       await this.broadcastSignaling('call:initiate', payload);
       console.log('[VoiceCall] Broadcasted call:initiate:', callId);
+
+      // Trigger High-Priority FCM Push Notification for Android Fcmservice.kt & CallService.kt
+      fetch('/api/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'initiate_call_push',
+          payload: {
+            type: 'incoming_call',
+            call_id: callId,
+            caller_name: payload.institutionName || payload.caller.institutionName || payload.caller.name || 'মাদরাসা এডমিন',
+            student_name: student.name,
+            student_id: student.id,
+            institution_id: institutionId,
+            callee_phone: student.guardian_phone || '',
+          },
+        }),
+      }).catch((fcmErr) => {
+        console.warn('[VoiceCall] FCM call push trigger notice:', fcmErr);
+      });
 
       // Send a second pulse after 450ms to ensure delivery even during initial network handshake
       setTimeout(() => {

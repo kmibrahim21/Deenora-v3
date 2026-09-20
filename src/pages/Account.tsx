@@ -69,8 +69,9 @@ const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 300): Pr
 
 const ActionCard = ({ icon: Icon, title, subtitle, colorClass, onClick, dark }: any) => (
   <button 
+    type="button"
     onClick={onClick}
-    className={`w-full p-4 sm:p-5 rounded-[2rem] border shadow-sm transition-all flex flex-col items-center justify-center text-center gap-3 active:scale-95 duration-300 hover:scale-[1.03] hover:shadow-md ${
+    className={`w-full p-4 sm:p-5 rounded-[2rem] border shadow-sm transition-transform flex flex-col items-center justify-center text-center gap-3 active:scale-95 duration-150 hover:shadow-md touch-manipulation ${
       dark 
         ? 'bg-slate-800/80 border-slate-700/60 hover:border-slate-600 hover:bg-slate-800' 
         : 'bg-white border-slate-100 hover:bg-slate-50/50 hover:border-slate-200 shadow-slate-100'
