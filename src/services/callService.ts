@@ -127,28 +127,6 @@ export class VoiceCallService {
       this.remoteAudioElement = new Audio();
       this.remoteAudioElement.autoplay = true;
       (this.remoteAudioElement as any).playsInline = true;
-
-      // Re-establish signaling connections when app regains focus or comes back online
-      const reconnectSignaling = () => {
-        if (this.currentInstitutionId || this.currentUserId || this.currentPhone) {
-          const inst = this.currentInstitutionId;
-          const user = this.currentUserId;
-          const phone = this.currentPhone;
-          // Reset cached current state to force fresh channel subscription
-          this.currentInstitutionId = '';
-          this.currentUserId = '';
-          this.currentPhone = '';
-          this.initSignaling(inst, user, phone);
-        }
-      };
-
-      window.addEventListener('focus', reconnectSignaling);
-      window.addEventListener('online', reconnectSignaling);
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          reconnectSignaling();
-        }
-      });
     }
   }
 
