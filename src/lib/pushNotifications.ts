@@ -260,13 +260,29 @@ export async function showIncomingCallNotification({
     }
   } catch {}
 
-  const title = `📞 ইনকামিং ভয়েস কল: ${callerName || 'মাদ্রাসা শিক্ষক / এডমিন'}`;
-  const body = studentName ? `শিক্ষার্থী: ${studentName} | কল রিসিভ করতে ট্যাপ করুন` : 'কল রিসিভ করতে ট্যাপ করুন';
+  // Auto-request permission if in 'default' state
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    try {
+      await Notification.requestPermission();
+    } catch {}
+  }
+
+  const title = `📞 Incoming Call: ${callerName || 'Institution Admin'}`;
+  const body = studentName 
+    ? `Student: ${studentName}\nTap to answer or open call` 
+    : 'Deenora Voice Call | Tap to answer';
   const icon = photoUrl || '/Deenora192.png';
 
   // 3. Post to Service Worker to display full persistent lock-screen notification
   if ('serviceWorker' in navigator) {
     try {
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        try {
+          reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        } catch {}
+      }
+
       if (navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SHOW_INCOMING_CALL',
@@ -277,7 +293,6 @@ export async function showIncomingCallNotification({
         });
       }
 
-      const reg = await navigator.serviceWorker.getRegistration();
       if (reg && reg.showNotification) {
         await reg.showNotification(title, {
           body,
@@ -286,15 +301,16 @@ export async function showIncomingCallNotification({
           tag: 'incoming-voice-call',
           renotify: true,
           requireInteraction: true,
-          vibrate: [800, 400, 800, 400, 1000],
+          vibrate: [1000, 400, 1000, 400, 1000, 400, 1200],
+          timestamp: Date.now(),
           data: {
             type: 'incoming_call',
             callId,
             url: `/?action=accept_call&call_id=${callId}&t=${Date.now()}`
           },
           actions: [
-            { action: 'answer', title: '📞 রিসিভ করুন' },
-            { action: 'decline', title: '❌ কেটে দিন' }
+            { action: 'answer', title: '📞 Answer' },
+            { action: 'decline', title: '❌ Decline' }
           ]
         } as any);
         return;

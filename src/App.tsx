@@ -25,6 +25,7 @@ import { useGlobalUpdate } from "hooks/useGlobalUpdate";
 import { useGlobalNotifications } from "hooks/useGlobalNotifications";
 import { requestManager } from "services/RequestManager";
 import { useVoiceCall } from "context/CallContext";
+import { NotificationPermissionBanner } from "components/NotificationPermissionBanner";
 
 const Auth = React.lazy(() => import("pages/Auth"));
 const Home = React.lazy(() => import("pages/Home"));
@@ -1046,6 +1047,7 @@ const App: React.FC = () => {
       isMobileChatActive={isMobileChatActive}
     >
       <OfflineIndicator />
+      <NotificationPermissionBanner />
       <Suspense
         fallback={
           <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">

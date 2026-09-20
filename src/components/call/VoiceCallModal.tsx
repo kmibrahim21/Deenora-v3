@@ -6,6 +6,7 @@ import {
   Mic, 
   MicOff, 
   Volume2, 
+  VolumeX,
   User, 
   GraduationCap, 
   ShieldCheck, 
@@ -19,10 +20,12 @@ interface VoiceCallModalProps {
   isCaller: boolean;
   duration: number;
   isMuted: boolean;
+  isSpeakerOn?: boolean;
   onAccept: () => void;
   onReject: () => void;
   onEnd: () => void;
   onToggleMute: () => void;
+  onToggleSpeaker?: () => void;
 }
 
 export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
@@ -31,10 +34,12 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   isCaller,
   duration,
   isMuted,
+  isSpeakerOn = true,
   onAccept,
   onReject,
   onEnd,
   onToggleMute,
+  onToggleSpeaker,
 }) => {
   const [waveHeights, setWaveHeights] = useState<number[]>([40, 65, 30, 80, 50, 90, 45, 70, 35, 60]);
 
@@ -59,8 +64,65 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   const caller = callData.caller;
   const isIncoming = status === 'incoming' && !isCaller;
 
+  // Clean caller and institution name logic: ensure no 'user', email, or generic strings are shown
+  const isGenericOrEmail = (str?: string) => {
+    if (!str) return true;
+    const s = str.trim().toLowerCase();
+    return s === 'user' || s === 'user-caller' || s === 'admin-user' || s === 'parent-user' || s === 'admin' || s === 'teacher' || s.includes('@') || s.includes('gmail') || s.includes('.com');
+  };
+
+  const rawInstName = callData.institutionName || caller?.institutionName || '';
+  const displayInstName = isGenericOrEmail(rawInstName) ? 'শিক্ষা প্রতিষ্ঠান' : rawInstName.trim();
+  const callerPersonName = !isGenericOrEmail(caller?.name) ? caller?.name?.trim() : '';
+
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+    <>
+      {/* Top Floating Lock-Screen Style Pop-Up Banner for Incoming Calls */}
+      {isIncoming && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] w-[94%] max-w-sm bg-slate-900/95 border-2 border-blue-500/80 shadow-[0_20px_50px_rgba(0,0,0,0.8)] rounded-3xl p-4 backdrop-blur-2xl ring-4 ring-blue-500/20 animate-in slide-in-from-top-12 duration-300">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="relative shrink-0">
+                <div className="absolute -inset-1 rounded-full bg-blue-500/40 animate-ping" />
+                <div className="w-12 h-12 rounded-2xl bg-blue-600 border border-blue-400 flex items-center justify-center text-white shadow-md">
+                  <PhoneCall size={22} className="animate-bounce" />
+                </div>
+              </div>
+              <div className="text-left overflow-hidden">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1">
+                  <ShieldCheck size={11} />
+                  <span>ইনকামিং ভয়েস কল</span>
+                </div>
+                <h4 className="text-sm font-bold text-white truncate font-noto">
+                  {displayInstName}
+                </h4>
+                <p className="text-xs text-slate-300 truncate font-noto">
+                  {student.name ? `শিক্ষার্থী: ${student.name}` : 'মাদরাসা যোগাযোগ'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={onReject}
+                className="w-10 h-10 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg hover:bg-rose-700 active:scale-90 transition-all border border-rose-400/40"
+                title="কেটে দিন"
+              >
+                <PhoneOff size={18} />
+              </button>
+              <button
+                onClick={onAccept}
+                className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg hover:bg-emerald-600 active:scale-90 transition-all border border-emerald-300/40 animate-pulse"
+                title="রিসিভ করুন"
+              >
+                <PhoneCall size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
       {/* Background ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full blur-[120px] transition-all duration-700 ${
@@ -71,13 +133,13 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
       <div className="relative w-full max-w-sm rounded-[2.5rem] bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800/80 shadow-2xl p-6 md:p-8 flex flex-col items-center text-center overflow-hidden">
         
         {/* Top Status Pill */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-slate-300 text-xs font-semibold tracking-wide mb-6">
-          <span className={`w-2 h-2 rounded-full ${
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-slate-200 text-xs font-semibold tracking-wide mb-6 shadow-inner">
+          <span className={`w-2.5 h-2.5 rounded-full shadow-sm ${
             status === 'connected' ? 'bg-emerald-400 animate-ping' : isIncoming ? 'bg-blue-400 animate-pulse' : 'bg-amber-400 animate-ping'
           }`} />
-          <span>
+          <span className="font-noto">
             {status === 'connected'
-              ? 'কথা বলা হচ্ছে (Active Voice Call)'
+              ? 'কথা বলা হচ্ছে (HD Voice Active)'
               : status === 'calling'
               ? 'কল বাজছে (Ringing...)'
               : isIncoming
@@ -88,21 +150,25 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
           </span>
         </div>
 
-        {/* Avatar / Photo with pulsating rings */}
+        {/* Avatar / Photo with pulsating multi-layer rings */}
         <div className="relative mb-6">
-          {/* Animated ripple rings */}
+          {/* Animated multi-layer ripple rings for incoming call */}
           {(status === 'calling' || status === 'incoming') && (
             <>
-              <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping" />
-              <div className="absolute -inset-3 rounded-full border border-blue-500/30 animate-pulse" />
+              <div className="absolute -inset-4 rounded-full bg-blue-500/20 animate-ping duration-1000" />
+              <div className="absolute -inset-8 rounded-full border border-blue-400/30 animate-pulse duration-700" />
+              <div className="absolute -inset-12 rounded-full border border-indigo-500/15 animate-pulse duration-1000" />
             </>
           )}
 
           {status === 'connected' && (
-            <div className="absolute -inset-2 rounded-full border-2 border-emerald-500/40 animate-pulse" />
+            <>
+              <div className="absolute -inset-3 rounded-full border-2 border-emerald-500/40 animate-pulse" />
+              <div className="absolute -inset-6 rounded-full border border-emerald-500/20 animate-ping duration-1000" />
+            </>
           )}
 
-          <div className="relative w-24 h-24 rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl overflow-hidden flex items-center justify-center">
+          <div className="relative w-28 h-28 rounded-full bg-slate-800 border-2 border-slate-600 shadow-2xl overflow-hidden flex items-center justify-center ring-4 ring-slate-900/80">
             {student.photo_url ? (
               <img
                 src={student.photo_url}
@@ -111,8 +177,8 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center text-white text-2xl font-bold font-noto">
-                {student.name ? student.name.charAt(0) : <User size={36} />}
+              <div className="w-full h-full bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 flex items-center justify-center text-white text-3xl font-black font-noto">
+                {student.name ? student.name.charAt(0) : <User size={40} />}
               </div>
             )}
           </div>
@@ -143,7 +209,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
             {isIncoming ? (
               <p className="flex items-center justify-center gap-1.5 text-blue-300">
                 <ShieldCheck size={14} className="text-blue-400 shrink-0" />
-                <span>মাদ্রাসা থেকে কল: <strong>{caller.name || 'শিক্ষক / এডমিন'}</strong></span>
+                <span>প্রতিষ্ঠান থেকে কল: <strong>{displayInstName}{callerPersonName ? ` (${callerPersonName})` : ''}</strong></span>
               </p>
             ) : (
               <p className="text-slate-400">
@@ -173,11 +239,17 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
               ))}
             </div>
 
-            {isMuted && (
-              <span className="text-[11px] text-amber-400 font-medium flex items-center gap-1">
-                <MicOff size={12} /> আপনার মাইক্রোফোন মিউট করা আছে
+            <div className="flex items-center gap-3 text-[11px] font-medium">
+              {isMuted && (
+                <span className="text-amber-400 flex items-center gap-1">
+                  <MicOff size={12} /> মাইক্রোফোন মিউট
+                </span>
+              )}
+              <span className={`flex items-center gap-1 ${isSpeakerOn ? 'text-blue-400 font-semibold' : 'text-slate-400'}`}>
+                {isSpeakerOn ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                {isSpeakerOn ? 'স্পিকার অন' : 'স্পিকার অফ'}
               </span>
-            )}
+            </div>
           </div>
         ) : (
           <div className="mb-8 flex items-center gap-2 text-slate-400 text-xs animate-pulse">
@@ -192,39 +264,55 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
           <div className="grid grid-cols-2 gap-4 w-full">
             <button
               onClick={onReject}
-              className="flex flex-col items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-rose-600/20 text-rose-300 border border-rose-500/30 font-bold text-xs hover:bg-rose-600/30 active:scale-95 transition-all"
+              className="flex flex-col items-center justify-center gap-2 py-4 px-4 rounded-3xl bg-slate-900/80 text-rose-300 border border-rose-500/30 font-bold text-xs hover:bg-rose-950/40 active:scale-95 transition-all shadow-lg"
             >
-              <div className="w-12 h-12 rounded-full bg-rose-600 flex items-center justify-center text-white shadow-lg shadow-rose-600/30">
-                <PhoneOff size={22} />
+              <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-rose-700 to-red-500 flex items-center justify-center text-white shadow-xl shadow-rose-600/40 border border-rose-400/40">
+                <PhoneOff size={24} />
               </div>
-              <span>কেটে দিন (Decline)</span>
+              <span className="font-noto text-rose-200">কেটে দিন</span>
             </button>
 
             <button
               onClick={onAccept}
-              className="flex flex-col items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-bold text-xs hover:bg-emerald-600/30 active:scale-95 transition-all"
+              className="flex flex-col items-center justify-center gap-2 py-4 px-4 rounded-3xl bg-slate-900/80 text-emerald-300 border border-emerald-500/30 font-bold text-xs hover:bg-emerald-950/40 active:scale-95 transition-all shadow-lg"
             >
-              <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/40 animate-bounce">
-                <PhoneCall size={22} />
+              <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-xl shadow-emerald-500/50 border border-emerald-300/40 animate-bounce">
+                <PhoneCall size={24} />
               </div>
-              <span>রিসিভ করুন (Answer)</span>
+              <span className="font-noto text-emerald-200">রিসিভ করুন</span>
             </button>
           </div>
         ) : (
-          /* Active Call or Outgoing Actions: Mute & End */
-          <div className="flex items-center justify-center gap-6 w-full">
+          /* Active Call or Outgoing Actions: Mute, Speaker & End */
+          <div className="flex items-center justify-center gap-5 w-full">
             {status === 'connected' && (
-              <button
-                onClick={onToggleMute}
-                className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all border active:scale-90 ${
-                  isMuted
-                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/20'
-                    : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                }`}
-                title={isMuted ? 'আনমিউট করুন' : 'মিউট করুন'}
-              >
-                {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
-              </button>
+              <>
+                <button
+                  onClick={onToggleMute}
+                  className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all border active:scale-90 ${
+                    isMuted
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/20'
+                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                  }`}
+                  title={isMuted ? 'আনমিউট করুন' : 'মিউট করুন'}
+                >
+                  {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+                  <span className="text-[9px] font-bold mt-0.5">{isMuted ? 'মিউট' : 'মাইক'}</span>
+                </button>
+
+                <button
+                  onClick={onToggleSpeaker}
+                  className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all border active:scale-90 ${
+                    isSpeakerOn
+                      ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-600/30 ring-2 ring-blue-500/30'
+                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+                  }`}
+                  title={isSpeakerOn ? 'স্পিকার বন্ধ করুন' : 'স্পিকার চালু করুন'}
+                >
+                  {isSpeakerOn ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                  <span className="text-[9px] font-bold mt-0.5">{isSpeakerOn ? 'স্পিকার অন' : 'স্পিকার অফ'}</span>
+                </button>
+              </>
             )}
 
             <button
@@ -238,5 +326,6 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
         )}
       </div>
     </div>
-  );
+  </>
+);
 };

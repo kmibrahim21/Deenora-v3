@@ -7,6 +7,7 @@ export interface CallParticipantInfo {
   name: string;
   role?: string;
   phone?: string;
+  institutionName?: string;
 }
 
 export interface CallStudentInfo {
@@ -22,6 +23,7 @@ export interface CallStudentInfo {
 export interface CallPayload {
   callId: string;
   institutionId: string;
+  institutionName?: string;
   caller: CallParticipantInfo;
   calleePhone?: string;
   student: CallStudentInfo;
@@ -60,6 +62,7 @@ export class VoiceCallService {
   private currentInstitutionId: string = '';
   private currentUserId: string = '';
   private currentPhone: string = '';
+  private cachedInstitutionName: string = '';
   private activeCallData: CallPayload | null = null;
   private isCaller: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
@@ -69,6 +72,35 @@ export class VoiceCallService {
   private disconnectTimer: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
   private lastPingReceived: number = Date.now();
+  private isSpeakerOn: boolean = true;
+
+  public setSpeaker(enabled: boolean): void {
+    this.isSpeakerOn = enabled;
+    if (this.remoteAudioElement) {
+      this.remoteAudioElement.volume = enabled ? 1.0 : 0.3;
+      if ('setSinkId' in this.remoteAudioElement) {
+        try {
+          if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+            navigator.mediaDevices.enumerateDevices().then((devices) => {
+              const audioOutputs = devices.filter((d) => d.kind === 'audiooutput');
+              if (audioOutputs.length > 0) {
+                const target = enabled
+                  ? audioOutputs.find((d) => d.label.toLowerCase().includes('speaker') || d.label.toLowerCase().includes('loudspeaker')) || audioOutputs[0]
+                  : audioOutputs.find((d) => d.label.toLowerCase().includes('earpiece') || d.label.toLowerCase().includes('receiver')) || audioOutputs[0];
+                if (target && target.deviceId) {
+                  (this.remoteAudioElement as any).setSinkId(target.deviceId).catch(() => {});
+                }
+              }
+            });
+          }
+        } catch {}
+      }
+    }
+  }
+
+  public getIsSpeakerOn(): boolean {
+    return this.isSpeakerOn;
+  }
 
   // Listeners
   public onStatusChange?: (status: CallStatus, data?: CallPayload) => void;
@@ -185,6 +217,20 @@ export class VoiceCallService {
 
     // 1. Institution-wide channel
     if (cleanInstId) {
+      // Fetch and cache institution name asynchronously if available
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('institutions')
+            .select('name')
+            .eq('id', cleanInstId)
+            .maybeSingle();
+          if (data?.name) {
+            this.cachedInstitutionName = data.name;
+          }
+        } catch {}
+      })();
+
       const channelName = `institution-calls-${cleanInstId}`;
       this.channel = supabase.channel(channelName, {
         config: { broadcast: { self: false } },
@@ -552,6 +598,15 @@ export class VoiceCallService {
     }
 
     this.isCaller = false;
+
+    // Ensure institutionName is filled
+    if (!payload.institutionName && !payload.caller?.institutionName) {
+      if (this.cachedInstitutionName) {
+        payload.institutionName = this.cachedInstitutionName;
+        if (payload.caller) payload.caller.institutionName = this.cachedInstitutionName;
+      }
+    }
+
     this.activeCallData = payload;
 
     try {
@@ -568,10 +623,16 @@ export class VoiceCallService {
     this.onStatusChange?.('incoming', payload);
     this.onIncomingCall?.(payload);
 
+    // Format clean caller name for notification (avoiding raw email strings)
+    const rawCaller = payload.institutionName || payload.caller.institutionName || payload.caller.name || '';
+    const cleanCallerName = (rawCaller.includes('@') || rawCaller.toLowerCase().includes('gmail') || rawCaller.toLowerCase().includes('.com'))
+      ? (payload.institutionName || payload.caller.institutionName || 'Institution Admin')
+      : (rawCaller || 'Institution Admin');
+
     // Show WhatsApp-style persistent lock-screen / mobile screen notification
     showIncomingCallNotification({
       callId: payload.callId,
-      callerName: payload.caller.name || 'মাদ্রাসা শিক্ষক / এডমিন',
+      callerName: cleanCallerName,
       studentName: payload.student.name,
       photoUrl: payload.student.photo_url,
     });

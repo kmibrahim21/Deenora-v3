@@ -8,12 +8,14 @@ interface CallContextType {
   isCaller: boolean;
   duration: number;
   isMuted: boolean;
+  isSpeakerOn: boolean;
   initSignaling: (institutionId: string, userId: string, phone?: string) => void;
   startCall: (student: CallStudentInfo, caller?: CallParticipantInfo, institutionId?: string) => Promise<boolean>;
   acceptCall: () => Promise<boolean>;
   rejectCall: (reason?: string) => void;
   endCall: () => void;
   toggleMute: () => void;
+  toggleSpeaker: () => void;
 }
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
@@ -24,6 +26,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isCaller, setIsCaller] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
 
   // Initialize service listeners once
   useEffect(() => {
@@ -40,6 +43,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setActiveCall(null);
           setDuration(0);
           setIsMuted(false);
+          setIsSpeakerOn(true);
         }, 1200);
       }
     };
@@ -194,6 +198,14 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, []);
 
+  const toggleSpeaker = useCallback(() => {
+    setIsSpeakerOn((prev) => {
+      const next = !prev;
+      voiceCallService.setSpeaker(next);
+      return next;
+    });
+  }, []);
+
   return (
     <CallContext.Provider
       value={{
@@ -202,12 +214,14 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isCaller,
         duration,
         isMuted,
+        isSpeakerOn,
         initSignaling,
         startCall,
         acceptCall,
         rejectCall,
         endCall,
         toggleMute,
+        toggleSpeaker,
       }}
     >
       {children}
@@ -217,10 +231,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isCaller={isCaller}
         duration={duration}
         isMuted={isMuted}
+        isSpeakerOn={isSpeakerOn}
         onAccept={acceptCall}
         onReject={rejectCall}
         onEnd={endCall}
         onToggleMute={toggleMute}
+        onToggleSpeaker={toggleSpeaker}
       />
     </CallContext.Provider>
   );

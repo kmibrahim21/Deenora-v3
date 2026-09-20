@@ -131,6 +131,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, madrasah, onEd
         id: profile?.id || madrasah?.id || 'admin',
         name: profile?.full_name || madrasah?.name || 'শিক্ষক / এডমিন',
         role: role || 'teacher',
+        institutionName: madrasah?.name || '',
       },
       institutionId || madrasah?.id
     );

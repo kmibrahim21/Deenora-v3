@@ -15,11 +15,14 @@ self.addEventListener('activate', (event) => {
 
 // Helper to display incoming call notification on lock screen / mobile screen
 function showCallNotification(payload) {
-  const callerName = payload.callerName || payload.caller || 'মাদ্রাসা শিক্ষক / এডমিন';
+  const callerName = payload.callerName || payload.caller || 'শিক্ষা প্রতিষ্ঠান';
   const studentName = payload.studentName ? `শিক্ষার্থী: ${payload.studentName}` : '';
   const callId = payload.callId || '';
-  const title = `📞 ইনকামিং ভয়েস কল: ${callerName}`;
-  const body = studentName ? `${studentName} | কল রিসিভ করতে ট্যাপ করুন` : 'কল রিসিভ করতে ট্যাপ করুন (Tap to answer)';
+  
+  const title = `📞 ইনকামিং কল: ${callerName}`;
+  const body = studentName 
+    ? `${studentName}\nরিসিভ করতে এখানে ট্যাপ করুন` 
+    : 'প্রতিষ্ঠান থেকে ভয়েস কল আসছে | রিসিভ করতে ট্যাপ করুন';
 
   const options = {
     body,
@@ -28,7 +31,11 @@ function showCallNotification(payload) {
     tag: 'incoming-voice-call',
     renotify: true,
     requireInteraction: true, // Remains on mobile screen / lock screen until answered
-    vibrate: [800, 400, 800, 400, 1000],
+    vibrate: [1000, 400, 1000, 400, 1000, 400, 1200],
+    timestamp: Date.now(),
+    silent: false,
+    importance: 'high',
+    priority: 2,
     data: {
       type: 'incoming_call',
       callId,
