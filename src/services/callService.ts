@@ -127,6 +127,28 @@ export class VoiceCallService {
       this.remoteAudioElement = new Audio();
       this.remoteAudioElement.autoplay = true;
       (this.remoteAudioElement as any).playsInline = true;
+
+      // Re-establish signaling connections when app regains focus or comes back online
+      const reconnectSignaling = () => {
+        if (this.currentInstitutionId || this.currentUserId || this.currentPhone) {
+          const inst = this.currentInstitutionId;
+          const user = this.currentUserId;
+          const phone = this.currentPhone;
+          // Reset cached current state to force fresh channel subscription
+          this.currentInstitutionId = '';
+          this.currentUserId = '';
+          this.currentPhone = '';
+          this.initSignaling(inst, user, phone);
+        }
+      };
+
+      window.addEventListener('focus', reconnectSignaling);
+      window.addEventListener('online', reconnectSignaling);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          reconnectSignaling();
+        }
+      });
     }
   }
 
@@ -574,8 +596,12 @@ export class VoiceCallService {
     const isIdMatch = Boolean(myId && targetStudentId && (myId === targetStudentId || myId.includes(targetStudentId) || targetStudentId.includes(myId)));
     const isPhoneMatch = Boolean(myPhone && targetPhone && myPhone === targetPhone);
     const isParentPrefix = myId.startsWith('parent') && (myId.includes(targetStudentId) || (targetPhone && myId.includes(targetPhone)));
+    
+    // Check if recipient is an institution admin/teacher receiving a call for their institution
+    const isInstMatch = Boolean(this.currentInstitutionId && payload.institutionId && String(this.currentInstitutionId) === String(payload.institutionId));
+    const isStaffOrAdmin = isInstMatch && (myId.startsWith('admin') || myId.startsWith('teacher') || myId === 'admin' || myId === 'teacher' || !myId.startsWith('parent'));
 
-    const isForMe = isIdMatch || isPhoneMatch || isParentPrefix;
+    const isForMe = isIdMatch || isPhoneMatch || isParentPrefix || isStaffOrAdmin;
 
     if (!isForMe) {
       return;

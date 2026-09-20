@@ -160,13 +160,13 @@ const App: React.FC = () => {
 
   const { initSignaling: initVoiceSignaling } = useVoiceCall();
 
-  // Initialize Voice Call signaling for admin/teacher only if live_chat is enabled
+  // Initialize Voice Call signaling for admin/teacher
   useEffect(() => {
-    if (isLiveChatEnabled && madrasah?.id && profile?.id) {
+    if (madrasah?.id && profile?.id) {
       const userPhone = (profile as any)?.phone || (profile as any)?.guardian_phone;
       initVoiceSignaling(madrasah.id, profile.id, userPhone);
     }
-  }, [isLiveChatEnabled, madrasah?.id, profile?.id, profile, initVoiceSignaling]);
+  }, [madrasah?.id, profile?.id, profile, initVoiceSignaling]);
 
   const triggerRefresh = () => {
     // Instead of total invalidation, we increment dataVersion to trigger targeted effect hooks

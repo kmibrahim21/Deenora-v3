@@ -260,6 +260,21 @@ export async function showIncomingCallNotification({
     }
   } catch {}
 
+  // Try Android Native JavascriptInterface bridge if app is running in Android Studio WebView wrapper
+  const win = window as any;
+  const androidBridge = win.Android || win.AndroidInterface || win.NativeApp || win.NotificationBridge;
+  if (androidBridge) {
+    try {
+      if (typeof androidBridge.showIncomingCall === 'function') {
+        androidBridge.showIncomingCall(callId, callerName || '', studentName || '');
+      } else if (typeof androidBridge.showNotification === 'function') {
+        androidBridge.showNotification(`📞 Incoming Call: ${callerName || 'Institution'}`, studentName ? `Student: ${studentName}` : 'Incoming Voice Call');
+      }
+    } catch (err) {
+      console.warn('[PushNotifications] Android JS Bridge invoke notice:', err);
+    }
+  }
+
   // Auto-request permission if in 'default' state
   if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
     try {
