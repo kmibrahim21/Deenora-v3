@@ -76,53 +76,7 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   const callerPersonName = !isGenericOrEmail(caller?.name) ? caller?.name?.trim() : '';
 
   return (
-    <>
-      {/* Top Floating Lock-Screen Style Pop-Up Banner for Incoming Calls */}
-      {isIncoming && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] w-[94%] max-w-sm bg-slate-900/95 border-2 border-blue-500/80 shadow-[0_20px_50px_rgba(0,0,0,0.8)] rounded-3xl p-4 backdrop-blur-2xl ring-4 ring-blue-500/20 animate-in slide-in-from-top-12 duration-300">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="relative shrink-0">
-                <div className="absolute -inset-1 rounded-full bg-blue-500/40 animate-ping" />
-                <div className="w-12 h-12 rounded-2xl bg-blue-600 border border-blue-400 flex items-center justify-center text-white shadow-md">
-                  <PhoneCall size={22} className="animate-bounce" />
-                </div>
-              </div>
-              <div className="text-left overflow-hidden">
-                <div className="text-[10px] uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1">
-                  <ShieldCheck size={11} />
-                  <span>ইনকামিং ভয়েস কল</span>
-                </div>
-                <h4 className="text-sm font-bold text-white truncate font-noto">
-                  {displayInstName}
-                </h4>
-                <p className="text-xs text-slate-300 truncate font-noto">
-                  {student.name ? `শিক্ষার্থী: ${student.name}` : 'মাদরাসা যোগাযোগ'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={onReject}
-                className="w-10 h-10 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg hover:bg-rose-700 active:scale-90 transition-all border border-rose-400/40"
-                title="কেটে দিন"
-              >
-                <PhoneOff size={18} />
-              </button>
-              <button
-                onClick={onAccept}
-                className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg hover:bg-emerald-600 active:scale-90 transition-all border border-emerald-300/40 animate-pulse"
-                title="রিসিভ করুন"
-              >
-                <PhoneCall size={18} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
       {/* Background ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full blur-[120px] transition-all duration-700 ${
@@ -326,6 +280,5 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
         )}
       </div>
     </div>
-  </>
-);
+  );
 };
