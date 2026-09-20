@@ -1243,7 +1243,8 @@ export const generateFinalResultPDF = async (
     students: any[],
     madrasah: any,
     lang: 'en' | 'bn' = 'en',
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    includeBreakdown: boolean = false
 ) => {
     onProgress?.(5);
     const container = document.createElement('div');
@@ -1257,7 +1258,7 @@ export const generateFinalResultPDF = async (
     await new Promise<void>((resolve) => {
         root.render(
             <div id="pdf-wrapper">
-                <FinalResultTemplate title={title} className={className} subjects={subjects} students={students} madrasah={madrasah} lang={lang} />
+                <FinalResultTemplate title={title} className={className} subjects={subjects} students={students} madrasah={madrasah} lang={lang} includeBreakdown={includeBreakdown} />
             </div>
         );
         setTimeout(resolve, 800);
@@ -1429,6 +1430,135 @@ export const generateFinalIndividualResultPDF = async (
     document.body.removeChild(container);
     
     doc.save(finalMarksheetFileName);
+    onProgress?.(100);
+};
+
+// --- FINAL MASS MARKSHEETS GENERATOR ---
+export const generateFinalMassMarksheetsPDF = async (
+    students: any[],
+    title: string,
+    subjects: string[],
+    madrasah: any,
+    lang: 'en' | 'bn' = 'en',
+    onProgress?: (progress: number) => void
+) => {
+    onProgress?.(5);
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '794px';
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const exam = { exam_name: title };
+
+    const preppedStudents = students.map(student => {
+        const marks = subjects.map(sub => {
+            const obtained = student.marks[sub];
+            const val = parseFloat(obtained) || 0;
+            let gp = '0.00';
+            let grade = 'F';
+            if (val >= 80) { gp = '5.00'; grade = 'A+'; }
+            else if (val >= 70) { gp = '4.00'; grade = 'A'; }
+            else if (val >= 60) { gp = '3.50'; grade = 'A-'; }
+            else if (val >= 50) { gp = '3.00'; grade = 'B'; }
+            else if (val >= 40) { gp = '2.00'; grade = 'C'; }
+            else if (val >= 33) { gp = '1.00'; grade = 'D'; }
+
+            return {
+                subject_name: sub,
+                full_marks: 100,
+                pass_marks: 33,
+                marks_obtained: obtained,
+                grade: grade,
+                grade_point: gp
+            };
+        });
+
+        const studentWithFinalData = {
+            ...student,
+            gpa: student.gpa,
+            grade: student.grade,
+            merit_position: student.rank
+        };
+
+        return { studentWithFinalData, marks };
+    });
+
+    await new Promise<void>((resolve) => {
+        root.render(
+            <div id="pdf-wrapper">
+                {preppedStudents.map((item, idx) => (
+                    <div key={idx} className="pdf-page-container">
+                        <ResultSheetTemplate 
+                            student={item.studentWithFinalData} 
+                            exam={exam} 
+                            marks={item.marks} 
+                            madrasah={madrasah} 
+                            lang={lang} 
+                        />
+                    </div>
+                ))}
+            </div>
+        );
+        setTimeout(resolve, 1500);
+    });
+    onProgress?.(25);
+
+    const wrapper = container.querySelector('#pdf-wrapper');
+    const massFileName = `All_Final_Marksheets_${title.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+
+    if (wrapper) {
+        try {
+            const fullHtml = wrapHtmlForPdf(wrapper.innerHTML, massFileName, 'portrait');
+            const serverSuccess = await downloadServerPdf({
+                html: fullHtml,
+                format: 'a4',
+                orientation: 'portrait',
+                entity_type: 'final_mass_marksheets',
+                entity_id: `${title}_all_marksheets`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                filename: massFileName
+            });
+            if (serverSuccess) {
+                onProgress?.(100);
+                root.unmount();
+                document.body.removeChild(container);
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server PDF generation failed for mass final marksheets, falling back to client:', serverErr);
+        }
+    }
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    if (wrapper && wrapper.children.length > 0) {
+        const pages = Array.from(wrapper.children);
+        for (let i = 0; i < pages.length; i++) {
+            const pageElement = (pages[i].querySelector('.pdf-page-container') || pages[i]) as HTMLElement;
+            const imgData = await toJpeg(pageElement, {
+                pixelRatio: 2,
+                quality: 0.95,
+                backgroundColor: '#ffffff',
+                width: 794,
+                height: 1123,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
+            });
+
+            if (i > 0) doc.addPage('a4', 'p');
+            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+            onProgress?.(25 + Math.floor(((i + 1) / pages.length) * 70));
+        }
+    }
+
+    onProgress?.(98);
+    root.unmount();
+    document.body.removeChild(container);
+
+    doc.save(massFileName);
     onProgress?.(100);
 };
 

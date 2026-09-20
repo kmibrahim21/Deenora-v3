@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from 'supabase';
 import { Institution, Class, Exam, FinalResult, FinalResultExam, Language, UserRole, Student, Profile } from 'types';
-import { ArrowLeft, Plus, Save, Trash2, Download, Loader2, Calculator, Check, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2, Download, Loader2, Calculator, Check, X, AlertCircle, SlidersHorizontal, Info, Eye, Sparkles } from 'lucide-react';
 import { t } from 'translations';
-import { generateFinalResultPDF, generateFinalIndividualResultPDF } from '../../../../utils/pdfGenerator';
+import { generateFinalResultPDF, generateFinalIndividualResultPDF, generateFinalMassMarksheetsPDF } from '../../../../utils/pdfGenerator';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { FileText } from 'lucide-react';
 
@@ -36,7 +36,11 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [subjects, setSubjects] = useState<string[]>([]);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
+  const [downloadModalType, setDownloadModalType] = useState<'resultlist' | 'marksheet' | 'single_marksheet'>('resultlist');
+  const [pdfFormatSelection, setPdfFormatSelection] = useState<'compact' | 'breakdown'>('compact');
+  const [selectedStudentForDownload, setSelectedStudentForDownload] = useState<any>(null);
   const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => Promise<void>) | null>(null);
 
   // Dynamic config helper
@@ -120,6 +124,39 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
     const { data } = await query;
     if (data) setAvailableExams(data);
+  };
+
+  const applyPreset = (pattern: '20_20_60' | '25_25_50' | '50_50' | 'equal') => {
+    if (availableExams.length === 0) return;
+    if (pattern === '20_20_60') {
+      const weights = [20, 20, 60];
+      const selected = availableExams.slice(0, 3).map((ex, i) => ({
+        examId: ex.id,
+        weight: weights[i] || 33.33
+      }));
+      setSelectedExams(selected);
+    } else if (pattern === '25_25_50') {
+      const weights = [25, 25, 50];
+      const selected = availableExams.slice(0, 3).map((ex, i) => ({
+        examId: ex.id,
+        weight: weights[i] || 33.33
+      }));
+      setSelectedExams(selected);
+    } else if (pattern === '50_50') {
+      const weights = [50, 50];
+      const selected = availableExams.slice(0, 2).map((ex, i) => ({
+        examId: ex.id,
+        weight: weights[i] || 50
+      }));
+      setSelectedExams(selected);
+    } else if (pattern === 'equal') {
+      const equalWeight = Math.round((100 / availableExams.length) * 10) / 10;
+      const selected = availableExams.map(ex => ({
+        examId: ex.id,
+        weight: equalWeight
+      }));
+      setSelectedExams(selected);
+    }
   };
 
   const handleSave = async () => {
@@ -229,6 +266,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         
         return {
           examId: config.exam_id,
+          examName: config.exam?.exam_name || 'Exam',
           weight: config.weight,
           marks: marks || []
         };
@@ -250,6 +288,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
       // Calculate for each student
       const processed = students.map(student => {
         const studentMarks: any = {};
+        const termBreakdown: any = {};
         let totalWeightedSum = 0;
         let overallMaxMarks = 0;
         let hasFailedAny = false;
@@ -262,6 +301,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           let subjectMaxMarks = 0;
           let subjectPassMarks = 0;
           let isOptional = false;
+          const subTerms: any[] = [];
 
           examsData.forEach(exam => {
             const subjectMarkEntryFromAnyStudent = exam.marks.find((m: any) => m.exam_subjects?.subject_name === sub);
@@ -291,6 +331,14 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
             
             const contribution = obtained * (exam.weight / 100);
             weightedSum += contribution;
+
+            subTerms.push({
+              examName: exam.examName,
+              weight: exam.weight,
+              rawMark: obtained,
+              fullMarks: fullMarks,
+              weightedMark: contribution.toFixed(1)
+            });
           });
 
           if (subjectMaxMarks > 0) {
@@ -321,6 +369,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           }
 
           studentMarks[sub] = weightedSum.toFixed(1);
+          termBreakdown[sub] = subTerms;
           if (resultSystem === 'grading_optional') {
             if (!isOptional) {
               totalWeightedSum += weightedSum;
@@ -372,6 +421,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         return {
           ...student,
           marks: studentMarks,
+          termBreakdown,
           total: totalWeightedSum.toFixed(1),
           average: finalPercentage.toFixed(1),
           gpa: finalGpa,
@@ -434,7 +484,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     return { gpa: '0.00', grade: 'F' };
   };
 
-  const handleDownloadPDF = async (downloadLang: 'en' | 'bn' = lang) => {
+  const handleDownloadPDF = async (downloadLang: 'en' | 'bn' = lang, withBreakdown: boolean = false) => {
     if (!viewResult || !madrasah) return;
 
     setIsDownloading(true);
@@ -447,7 +497,8 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           calculatedData,
           madrasah,
           downloadLang,
-          (p) => setDownloadProgress(p)
+          (p) => setDownloadProgress(p),
+          withBreakdown
       );
     } catch (error) {
       console.error('Download error:', error);
@@ -487,21 +538,17 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     setIsDownloading(true);
     setDownloadProgress(0);
     try {
-      for (let i = 0; i < calculatedData.length; i++) {
-        const student = calculatedData[i];
-        setDownloadProgress(Math.floor((i / calculatedData.length) * 100));
-        await generateFinalIndividualResultPDF(
-          student,
-          viewResult.title,
-          subjects,
-          madrasah,
-          downloadLang,
-          () => {} // Don't update individual progress for mass download
-        );
-      }
+      await generateFinalMassMarksheetsPDF(
+        calculatedData,
+        viewResult.title,
+        subjects,
+        madrasah,
+        downloadLang,
+        (p) => setDownloadProgress(p)
+      );
     } catch (error) {
       console.error('Mass Download error:', error);
-      alert('Error during mass download');
+      alert('Error downloading Mark Sheets');
     } finally {
       setIsDownloading(false);
       setDownloadProgress(0);
@@ -512,7 +559,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       {/* Loading Overlay */}
       {(resultLoading || isDownloading) && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[3000] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
             <div className="relative w-24 h-24 mx-auto mb-6">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
@@ -553,14 +600,21 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between px-2">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 px-1">
         <div className="flex items-center gap-3">
-          <button onClick={viewResult ? () => setViewResult(null) : onBack} className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-blue-50 border-blue-100 text-[#2563EB]'}`}>
+          <button onClick={viewResult ? () => setViewResult(null) : onBack} className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-blue-50 border-blue-100 text-[#2563EB] hover:bg-blue-100'}`}>
             <ArrowLeft size={20}/>
           </button>
-          <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
-            {viewResult ? viewResult.title : 'Final Results'}
-          </h1>
+          <div>
+            <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
+              {viewResult ? viewResult.title : 'Final Results'}
+            </h1>
+            {viewResult && (
+              <p className="text-xs text-slate-400 font-bold">
+                {classes.find(c => c.id === viewResult.class_id)?.class_name} • {viewResult.exams?.length} {lang === 'bn' ? 'টি পরীক্ষা' : 'Exams'}
+              </p>
+            )}
+          </div>
         </div>
         {!viewResult && (
           <button onClick={() => setShowCreate(true)} className="w-10 h-10 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all">
@@ -568,23 +622,44 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           </button>
         )}
         {viewResult && (
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full md:w-auto">
+            <button 
+              onClick={() => setShowBreakdown(!showBreakdown)}
+              className={`h-11 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-2 font-black text-xs transition-all border ${
+                showBreakdown 
+                  ? 'bg-purple-600 text-white border-purple-600 shadow-md' 
+                  : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-purple-400 border-slate-700 hover:bg-slate-700' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 shadow-sm')
+              }`}
+              title="Toggle Term Breakdown View"
+            >
+              <SlidersHorizontal size={16} />
+              <span className="truncate">{showBreakdown ? (lang === 'bn' ? 'সংক্ষিপ্ত ভিউ' : 'Compact View') : (lang === 'bn' ? 'টার্মভিত্তিক ব্রেকডাউন' : 'Term Breakdown')}</span>
+            </button>
+
             <button 
               onClick={() => {
-                setDownloadAction(() => (l: 'en' | 'bn') => handleMassDownloadMarksheets(l));
+                setDownloadModalType('marksheet');
                 setShowDownloadLangModal(true);
               }} 
-              className={`h-10 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-xs transition-all ${madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm'}`}
+              className={`h-11 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-2 font-black text-xs transition-all border ${
+                madrasah?.theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 shadow-sm'
+              }`}
               title="Download All Marksheets"
             >
-              <FileText size={18} />
-              <span className="hidden sm:inline">{lang === 'bn' ? 'সকল মার্কশীট' : 'All Marksheets'}</span>
+              <FileText size={16} />
+              <span className="truncate">{lang === 'bn' ? 'সকল মার্কশীট' : 'All Marksheets'}</span>
             </button>
-            <button onClick={() => {
-                setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadPDF(l));
+
+            <button 
+              onClick={() => {
+                setDownloadModalType('resultlist');
                 setShowDownloadLangModal(true);
-            }} className="w-10 h-10 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all" title="Download Result List">
-              <Download size={20}/>
+              }} 
+              className="h-11 px-4 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center gap-2 font-black text-xs active:scale-95 transition-all hover:bg-blue-700"
+              title="Download Result List PDF"
+            >
+              <Download size={16}/>
+              <span className="truncate">{lang === 'bn' ? 'রেজাল্ট শীট PDF' : 'Result Sheet PDF'}</span>
             </button>
           </div>
         )}
@@ -595,14 +670,16 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           {loading ? (
             <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-[#2563EB]" /></div>
           ) : results.length === 0 ? (
-            <div className="col-span-full text-center py-20 text-slate-400">No final results created yet.</div>
+            <div className="col-span-full text-center py-20 text-slate-400">
+              {lang === 'bn' ? 'এখনো কোনো চূড়ান্ত ফলাফল তৈরি করা হয়নি।' : 'No final results created yet.'}
+            </div>
           ) : (
             results.map(result => (
               <div key={result.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2rem] border shadow-bubble flex items-center justify-between`}>
                 <div>
                   <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{result.title}</h3>
                   <p className="text-xs text-slate-400 font-bold mt-1">
-                    {classes.find(c => c.id === result.class_id)?.class_name} • {result.exams?.length} Exams
+                    {classes.find(c => c.id === result.class_id)?.class_name} • {result.exams?.length} {lang === 'bn' ? 'টি পরীক্ষা' : 'Exams'}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -631,7 +708,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                     <th className="py-4 text-[10px] font-black text-slate-400 uppercase pr-4">Rank</th>
                     <th className="py-4 text-[10px] font-black text-slate-400 uppercase pr-4">Roll/Name</th>
                     {subjects.map(s => (
-                      <th key={s} className="py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px]">{s}</th>
+                      <th key={s} className="py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[100px]">{s}</th>
                     ))}
                     <th className="py-4 text-[10px] font-black text-blue-400 uppercase text-center">Total</th>
                     <th className="py-4 text-[10px] font-black text-purple-400 uppercase text-center">GPA</th>
@@ -650,8 +727,25 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                         </div>
                       </td>
                       {subjects.map(sub => (
-                        <td key={sub} className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} text-xs`}>
-                          {student.marks[sub] || '-'}
+                        <td key={sub} className="py-3 px-2 text-center align-top">
+                          {showBreakdown ? (
+                            <div className="space-y-1 text-[11px] bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-100 dark:border-slate-800 min-w-[110px]">
+                              {student.termBreakdown?.[sub]?.map((tb: any, i: number) => (
+                                <div key={i} className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400">
+                                  <span className="truncate max-w-[65px]" title={tb.examName}>{tb.examName} ({tb.weight}%):</span>
+                                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{tb.weightedMark}</span>
+                                </div>
+                              ))}
+                              <div className="pt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between font-black text-[#2563EB] text-xs">
+                                <span>মোট:</span>
+                                <span>{student.marks[sub] || '-'}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'} text-xs`}>
+                              {student.marks[sub] || '-'}
+                            </span>
+                          )}
                         </td>
                       ))}
                       <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} text-xs`}>{student.total}</td>
@@ -660,10 +754,11 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
                       <td className="py-4 px-2 text-center">
                         <button 
                           onClick={() => {
-                            setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadIndividualPDF(student, l));
+                            setSelectedStudentForDownload(student);
+                            setDownloadModalType('single_marksheet');
                             setShowDownloadLangModal(true);
                           }}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all mx-auto ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-100'}`}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all mx-auto ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-blue-50 hover:text-blue-600'}`}
                           title="Download Mark Sheet"
                         >
                           <FileText size={16} />
@@ -678,45 +773,111 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
         </div>
       )}
 
-      {/* CREATE MODAL */}
       {/* Modals */}
       {showDownloadLangModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1100] flex items-center justify-center p-4">
-              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} rounded-[2.5rem] p-8 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200`}>
-                  <div className={`w-16 h-16 ${madrasah?.theme === 'dark' ? 'bg-blue-500/10' : 'bg-blue-50'} rounded-full flex items-center justify-center mx-auto mb-6`}>
-                      <Download className="text-blue-600" size={32} />
-                  </div>
-                  <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} mb-2 text-center`}>Select Language</h3>
-                  <p className="text-slate-400 text-center text-sm font-bold mb-8">ভাষা নির্বাচন করুন</p>
-                  
-                  <div className="space-y-4">
-                      <button 
-                          onClick={async () => {
-                              if (downloadAction) await downloadAction('en');
-                              setShowDownloadLangModal(false);
-                          }}
-                          className="w-full py-4 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-                      >
-                          English
-                      </button>
-                      <button 
-                          onClick={async () => {
-                              if (downloadAction) await downloadAction('bn');
-                              setShowDownloadLangModal(false);
-                          }}
-                          className="w-full py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-                      >
-                          বাংলা (Bengali)
-                      </button>
-                      <button 
-                          onClick={() => setShowDownloadLangModal(false)}
-                          className="w-full py-3 text-slate-400 font-black text-sm hover:text-slate-600 transition-colors mt-2"
-                      >
-                          Cancel / বাতিল
-                      </button>
-                  </div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[1100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} rounded-[2.5rem] p-6 sm:p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200`}>
+            <div className={`w-14 h-14 ${madrasah?.theme === 'dark' ? 'bg-blue-500/10' : 'bg-blue-50'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+              <Download className="text-blue-600" size={28} />
+            </div>
+            
+            <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} mb-1 text-center`}>
+              {downloadModalType === 'resultlist' 
+                ? (lang === 'bn' ? 'রেজাল্ট শীট PDF ডাউনলোড' : 'Download Result Sheet PDF')
+                : downloadModalType === 'marksheet'
+                ? (lang === 'bn' ? 'সকল মার্কশীট ডাউনলোড' : 'Download All Marksheets')
+                : (lang === 'bn' ? 'মার্কশীট ডাউনলোড' : 'Download Marksheet')}
+            </h3>
+            <p className="text-slate-400 text-center text-xs font-bold mb-6">
+              {lang === 'bn' ? 'অপশন ও ভাষা নির্বাচন করুন' : 'Select options and language'}
+            </p>
+
+            {/* Format selection if downloading result list */}
+            {downloadModalType === 'resultlist' && (
+              <div className="mb-6 space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">
+                  {lang === 'bn' ? '১. PDF ফরমেট সিলেক্ট করুন:' : '1. Select PDF Format:'}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPdfFormatSelection('compact')}
+                    className={`p-3 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
+                      pdfFormatSelection === 'compact'
+                        ? 'bg-blue-50/80 border-blue-500 text-blue-900 dark:bg-blue-950/50 dark:border-blue-500 dark:text-blue-200 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-400'
+                    }`}
+                  >
+                    <span className="font-black text-xs">{lang === 'bn' ? 'সংক্ষিপ্ত ভিউ' : 'Compact Summary'}</span>
+                    <span className="text-[10px] text-slate-400">{lang === 'bn' ? 'শুধুমাত্র মোট নম্বর' : 'Subject totals only'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPdfFormatSelection('breakdown')}
+                    className={`p-3 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
+                      pdfFormatSelection === 'breakdown'
+                        ? 'bg-purple-50/80 border-purple-500 text-purple-900 dark:bg-purple-950/50 dark:border-purple-500 dark:text-purple-200 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-400'
+                    }`}
+                  >
+                    <span className="font-black text-xs">{lang === 'bn' ? 'টার্মভিত্তিক বিস্তৃত' : 'Term Breakdown'}</span>
+                    <span className="text-[10px] text-slate-400">{lang === 'bn' ? 'পরীক্ষাভিত্তিক বিস্তারিত' : 'Term-wise detail'}</span>
+                  </button>
+                </div>
               </div>
+            )}
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-1">
+                {downloadModalType === 'resultlist' ? (lang === 'bn' ? '২. ভাষা নির্বাচন করুন:' : '2. Select Language:') : (lang === 'bn' ? 'ভাষা নির্বাচন করুন:' : 'Select Language:')}
+              </label>
+              
+              <button 
+                onClick={async () => {
+                  setShowDownloadLangModal(false);
+                  setTimeout(async () => {
+                    if (downloadModalType === 'resultlist') {
+                      await handleDownloadPDF('en', pdfFormatSelection === 'breakdown');
+                    } else if (downloadModalType === 'marksheet') {
+                      await handleMassDownloadMarksheets('en');
+                    } else if (downloadModalType === 'single_marksheet' && selectedStudentForDownload) {
+                      await handleDownloadIndividualPDF(selectedStudentForDownload, 'en');
+                    }
+                  }, 50);
+                }}
+                className="w-full py-3.5 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-200 dark:shadow-none hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                English
+              </button>
+
+              <button 
+                onClick={async () => {
+                  setShowDownloadLangModal(false);
+                  setTimeout(async () => {
+                    if (downloadModalType === 'resultlist') {
+                      await handleDownloadPDF('bn', pdfFormatSelection === 'breakdown');
+                    } else if (downloadModalType === 'marksheet') {
+                      await handleMassDownloadMarksheets('bn');
+                    } else if (downloadModalType === 'single_marksheet' && selectedStudentForDownload) {
+                      await handleDownloadIndividualPDF(selectedStudentForDownload, 'bn');
+                    }
+                  }, 50);
+                }}
+                className="w-full py-3.5 bg-emerald-600 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 dark:shadow-none hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                বাংলা (Bengali)
+              </button>
+
+              <button 
+                onClick={() => setShowDownloadLangModal(false)}
+                className="w-full py-2.5 text-slate-400 font-bold text-xs hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-1"
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+            </div>
           </div>
+        </div>
       )}
 
       {showCreate && (
@@ -743,7 +904,50 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
               {selectedClassId && (
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1 block">Select Exams & Weights</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 block">
+                      {lang === 'bn' ? 'পরীক্ষা ও ওয়েটেজ (Weightage) সিলেক্ট করুন' : 'Select Exams & Weights'}
+                    </label>
+                  </div>
+
+                  {/* Preset Shortcuts */}
+                  <div className="p-3 bg-blue-50/70 dark:bg-slate-800/80 rounded-2xl border border-blue-100 dark:border-slate-700 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-black text-[#2563EB] dark:text-blue-400">
+                      <Sparkles size={14} />
+                      <span>{lang === 'bn' ? 'দ্রুত ওয়েটেজ সেটআপ (Quick Presets):' : 'Quick Weightage Presets:'}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('20_20_60')}
+                        className="py-2 px-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs hover:border-blue-400 hover:text-blue-600 active:scale-95 transition-all text-center"
+                      >
+                        ২০% + ২০% + ৬০%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('25_25_50')}
+                        className="py-2 px-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs hover:border-blue-400 hover:text-blue-600 active:scale-95 transition-all text-center"
+                      >
+                        ২৫% + ২৫% + ৫০%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('50_50')}
+                        className="py-2 px-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs hover:border-blue-400 hover:text-blue-600 active:scale-95 transition-all text-center"
+                      >
+                        ৫০% + ৫০%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('equal')}
+                        className="py-2 px-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs hover:border-blue-400 hover:text-blue-600 active:scale-95 transition-all text-center"
+                      >
+                        {lang === 'bn' ? 'সমান ভাগে' : 'Equal Shares'}
+                      </button>
+                    </div>
+                  </div>
+
                   {availableExams.map(exam => {
                     const isSelected = selectedExams.some(e => e.examId === exam.id);
                     const weight = selectedExams.find(e => e.examId === exam.id)?.weight || 0;

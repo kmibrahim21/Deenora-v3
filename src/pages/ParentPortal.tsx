@@ -724,27 +724,6 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             </button>
           </div>
         </motion.div>
-      ) : loading ? (
-        <motion.div
-          key="loading-screen"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="min-h-screen flex flex-col items-center justify-center bg-[#0F172A] relative overflow-hidden text-center p-6"
-        >
-          <div className="flex flex-col items-center gap-4 z-10">
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shadow-lg">
-              <BookOpen size={26} className="text-blue-400 animate-pulse" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }}></span>
-            </div>
-            <p className="text-xs text-slate-400 font-noto tracking-wide">অভিভাবক পোর্টাল প্রস্তুত হচ্ছে...</p>
-          </div>
-        </motion.div>
       ) : (
         <motion.div
           key="main-portal"
