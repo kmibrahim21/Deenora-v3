@@ -346,7 +346,7 @@ export const PremiumResultSheetTemplate: React.FC<PremiumResultSheetProps> = ({
 
                   {/* Center: Institution Details */}
                   <div className="text-center flex-1 px-3">
-                    <h1 className="text-3xl font-black text-[#1E3A8A] uppercase tracking-tight font-serif drop-shadow-sm leading-normal">
+                    <h1 className="text-[21px] font-black text-[#1E3A8A] uppercase tracking-tight font-serif drop-shadow-sm leading-tight max-w-[520px] mx-auto break-words">
                       {madrasah?.name || 'AL HIKMAH ISLAMIC ACADEMY'}
                     </h1>
                     <p className="text-[12px] font-bold text-slate-600 mt-1 leading-tight">

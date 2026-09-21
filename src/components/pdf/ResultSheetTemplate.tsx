@@ -178,7 +178,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
             {/* School Name & Transcript Title */}
             <div className="flex-1 text-center px-3 min-w-0">
-              <h1 className="text-[28px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1 uppercase drop-shadow-sm">
+              <h1 className="text-[21px] font-black text-[#1E3A8A] font-noto-serif leading-tight mb-1 uppercase drop-shadow-sm max-w-[520px] mx-auto break-words">
                 {madrasah.name}
               </h1>
               <p className="text-[13.5px] font-bold text-slate-600 mb-1.5 leading-tight max-w-[520px] mx-auto">
