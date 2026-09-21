@@ -66,64 +66,69 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
         >
           <div>
             {/* Header Section */}
-            <div className="text-center border-b-2 border-double border-slate-800 pb-3 mb-5">
-              <h1 className="text-3xl font-black text-slate-900 mb-1.5 leading-tight break-words px-2">
+            <div className="text-center border-b-2 border-double border-slate-800 pb-2 mb-3">
+              <h1 className="text-2xl font-black text-slate-900 mb-1 leading-tight break-words px-2">
                 {madrasah?.name || 'মাদরাসা নাম'}
               </h1>
               {examName && (
-                <div className="text-lg font-black text-[#2563EB] mb-2 leading-tight text-center">
+                <div className="text-base font-black text-[#2563EB] mb-1.5 leading-tight text-center">
                   {examName}
                 </div>
               )}
-              <div className="inline-block bg-slate-900 text-white px-5 py-1 rounded-full text-xs font-black tracking-widest uppercase mb-2 text-center">
-                {t.title}
-              </div>
-              <div className="flex justify-center items-center gap-4 text-base font-black text-slate-700">
-                <span className="bg-slate-100 px-4 py-1 rounded-lg border border-slate-200">
+              <div className="flex justify-center items-center gap-3 text-xs font-black text-slate-700 mb-1">
+                <span className="bg-slate-900 text-white px-4 py-0.5 rounded-full text-[11px] font-black tracking-widest uppercase">
+                  {t.title}
+                </span>
+                <span className="bg-slate-100 px-3 py-0.5 rounded-lg border border-slate-200">
                   {t.room}: {page.roomName}
                 </span>
               </div>
             </div>
             
             {templateId === 'grid' ? (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 {page.students.map((a: any, idx: number) => (
                   <div 
                     key={a.id || idx} 
-                    className="relative border-2 border-slate-300 rounded-2xl p-3 flex flex-col justify-between h-[185px] bg-white shadow-xs overflow-hidden box-border"
+                    className="relative border-2 border-slate-300 rounded-2xl p-2.5 flex flex-col justify-between h-[195px] bg-white shadow-xs box-border"
                   >
-                    {/* Top Header Row with Institution Name and Seat Badge */}
-                    <div className="border-b border-dashed border-slate-200 pb-2 flex items-start justify-between gap-2 shrink-0">
-                      <div className="flex-1 min-w-0 pr-1 text-center">
-                        <div className="text-[12.5px] font-black text-slate-950 leading-tight break-words text-center">
-                          {madrasah?.name || 'মাদরাসা নাম'}
-                        </div>
-                        <div className="text-[10px] font-black text-[#2563EB] leading-tight break-words mt-0.5 text-center">
-                          {examName || t.seatCard}
-                        </div>
-                      </div>
-                      <div className="bg-slate-900 text-white px-2.5 py-1 rounded-lg text-[10.5px] font-black shrink-0 whitespace-nowrap shadow-xs">
+                    {/* Top Meta Bar: Seat Card Tag & Seat Number */}
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1 shrink-0">
+                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">{t.seatCard}</span>
+                      <span className="bg-slate-900 text-white px-2.5 py-0.5 rounded-md text-[10.5px] font-black shadow-xs">
                         {isBangla ? `আসন ${a.seat_number}` : `Seat ${a.seat_number}`}
+                      </span>
+                    </div>
+
+                    {/* Center: Institution Name & Exam Name (Centered, Full Width) */}
+                    <div className="text-center pb-1.5 border-b border-dashed border-slate-200 shrink-0">
+                      <div className="text-[12px] font-black text-slate-950 leading-tight break-words px-1">
+                        {madrasah?.name || 'মাদরাসা নাম'}
+                      </div>
+                      <div className="text-[10px] font-black text-[#2563EB] leading-tight break-words mt-0.5 px-1">
+                        {examName || t.seatCard}
                       </div>
                     </div>
                     
-                    {/* Student Name Middle Section */}
-                    <div className="my-1.5 flex-1 flex flex-col justify-center min-h-0">
-                      <div className="text-[8px] uppercase font-black text-slate-400 tracking-wider mb-0.5">{t.name}</div>
-                      <div className="text-[13px] font-black text-slate-900 leading-tight break-words max-h-[42px] overflow-hidden">
+                    {/* Student Name Middle Section - Guaranteed visibility, no clipping */}
+                    <div className="flex-1 flex flex-col justify-center py-1 px-0.5 min-h-[44px]">
+                      <div className="text-[7.5px] uppercase font-bold text-slate-400 tracking-wider mb-0.5 leading-none">
+                        {t.name}
+                      </div>
+                      <div className="text-[13px] font-black text-slate-950 leading-snug break-words">
                         {a.student_name}
                       </div>
                     </div>
 
                     {/* Bottom Class & Roll Row */}
-                    <div className="grid grid-cols-2 gap-1.5 border-t border-slate-200 pt-1.5 shrink-0">
-                      <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 min-w-0">
-                        <div className="text-[7px] uppercase font-black text-slate-400 tracking-wider">{t.class}</div>
-                        <div className="text-[11px] font-black text-slate-800 truncate">{a.class_name}</div>
+                    <div className="grid grid-cols-2 gap-1.5 border-t border-slate-200 pt-1 shrink-0">
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 min-w-0">
+                        <div className="text-[7px] uppercase font-black text-slate-400 tracking-wider leading-none mb-0.5">{t.class}</div>
+                        <div className="text-[11px] font-black text-slate-800 truncate leading-tight">{a.class_name}</div>
                       </div>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 text-right min-w-0">
-                        <div className="text-[7px] uppercase font-black text-blue-400 tracking-wider">{t.roll}</div>
-                        <div className="text-[12px] font-black font-mono text-[#2563EB] truncate">{a.roll}</div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg px-2 py-0.5 text-right min-w-0">
+                        <div className="text-[7px] uppercase font-black text-blue-400 tracking-wider leading-none mb-0.5">{t.roll}</div>
+                        <div className="text-[12px] font-black font-mono text-[#2563EB] truncate leading-tight">{a.roll}</div>
                       </div>
                     </div>
                   </div>
