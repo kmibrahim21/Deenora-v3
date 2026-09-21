@@ -67,11 +67,16 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
           <div>
             {/* Header Section */}
             <div className="text-center border-b-2 border-double border-slate-800 pb-3 mb-5">
-              <h1 className="text-3xl font-black text-slate-900 mb-2 leading-tight break-words px-2">
+              <h1 className="text-3xl font-black text-slate-900 mb-1.5 leading-tight break-words px-2">
                 {madrasah?.name || 'মাদরাসা নাম'}
               </h1>
+              {examName && (
+                <div className="text-lg font-black text-[#2563EB] mb-2 leading-tight text-center">
+                  {examName}
+                </div>
+              )}
               <div className="inline-block bg-slate-900 text-white px-5 py-1 rounded-full text-xs font-black tracking-widest uppercase mb-2 text-center">
-                {t.title} {examName ? ` - ${examName}` : ''}
+                {t.title}
               </div>
               <div className="flex justify-center items-center gap-4 text-base font-black text-slate-700">
                 <span className="bg-slate-100 px-4 py-1 rounded-lg border border-slate-200">
@@ -89,11 +94,11 @@ export const SeatPlanTemplate: React.FC<SeatPlanProps> = ({ assignments, madrasa
                   >
                     {/* Top Header Row with Institution Name and Seat Badge */}
                     <div className="border-b border-dashed border-slate-200 pb-2 flex items-start justify-between gap-2 shrink-0">
-                      <div className="flex-1 min-w-0 pr-1">
-                        <div className="text-[13.5px] font-black text-slate-950 leading-tight break-words">
+                      <div className="flex-1 min-w-0 pr-1 text-center">
+                        <div className="text-[12.5px] font-black text-slate-950 leading-tight break-words text-center">
                           {madrasah?.name || 'মাদরাসা নাম'}
                         </div>
-                        <div className="text-[9.5px] font-black text-[#2563EB] leading-tight break-words mt-0.5">
+                        <div className="text-[10px] font-black text-[#2563EB] leading-tight break-words mt-0.5 text-center">
                           {examName || t.seatCard}
                         </div>
                       </div>
