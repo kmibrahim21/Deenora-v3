@@ -2358,12 +2358,19 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         <h4 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{room.room_name}</h4>
                                         <span className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400 bg-slate-800' : 'text-slate-400 bg-slate-50'} px-2 py-1 rounded-lg`}>{roomAssignments.length} / {room.capacity}</span>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 font-solaiman">
                                         {roomAssignments.map(sa => (
-                                            <div key={sa.student_id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'} p-2 rounded-xl border text-center`}>
-                                                <div className={`text-[10px] font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} mb-0.5`}>Seat {sa.seat_number}</div>
-                                                <div className={`text-[9px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-600'} truncate`}>{sa.student_name}</div>
-                                                <div className="text-[8px] font-bold text-slate-400">{sa.class_name} (Roll: {sa.roll})</div>
+                                            <div key={sa.student_id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} p-2.5 rounded-xl border flex flex-col justify-between text-left h-[90px]`}>
+                                                <div className="flex items-center justify-between gap-1 mb-1 border-b border-slate-200/50 pb-1">
+                                                    <span className={`text-[10px] font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'}`}>আসন {sa.seat_number}</span>
+                                                    <span className="text-[9px] font-mono font-bold text-slate-400">রোল {sa.roll}</span>
+                                                </div>
+                                                <div className={`text-[11px] font-black leading-tight ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} break-words line-clamp-2 my-auto`}>
+                                                    {sa.student_name}
+                                                </div>
+                                                <div className="text-[9px] font-extrabold text-slate-400 truncate mt-1 pt-0.5 border-t border-slate-200/40">
+                                                    {sa.class_name}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
