@@ -1747,7 +1747,10 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
     if (method === 'bkash') {
       if (isAndroid) {
-        window.location.href = 'intent://#Intent;scheme=bkash;package=com.bKash.customerapp;end';
+        window.location.href = 'bkash://';
+        setTimeout(() => {
+          window.location.href = 'intent://#Intent;package=com.bKash.customerapp;end';
+        }, 800);
       } else if (isIOS) {
         window.location.href = 'bkash://';
         setTimeout(() => {

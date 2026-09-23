@@ -349,7 +349,10 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
           ? `বিকাশ নম্বর (${cleanNum || adminBkash}) কপি করা হয়েছে! বিকাশ অ্যাপ ওপেন হচ্ছে... অ্যাপ ওপেন না হলে USSD (*247#) ডায়াল করুন।`
           : `bKash number (${cleanNum || adminBkash}) copied! Opening bKash app... If not opened, dial *247#.`
         );
-        window.location.href = 'intent://#Intent;scheme=bkash;package=com.bKash.customerapp;end';
+        window.location.href = 'bkash://';
+        setTimeout(() => {
+          window.location.href = 'intent://#Intent;package=com.bKash.customerapp;end';
+        }, 800);
       } else if (isIOS) {
         setAppNotice(lang === 'bn'
           ? `বিকাশ নম্বর (${cleanNum || adminBkash}) কপি করা হয়েছে! বিকাশ অ্যাপ ওপেন হচ্ছে...`
