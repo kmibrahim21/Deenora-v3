@@ -11,7 +11,8 @@ import {
   ArrowRight,
   ExternalLink,
   ShieldCheck,
-  History
+  History,
+  PhoneCall
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
@@ -52,6 +53,7 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
   const [adminNagad, setAdminNagad] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appNotice, setAppNotice] = useState<string | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const pollingInterval = useRef<any>(null);
 
@@ -320,19 +322,72 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
 
   const handleCopyNumber = (num: string) => {
     const cleanNum = num.replace(/[^0-9]/g, '');
-    navigator.clipboard.writeText(cleanNum);
+    navigator.clipboard.writeText(cleanNum).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 3000);
   };
 
   const handleOpenApp = () => {
+    const targetNumber = paymentMethod === 'bkash' ? adminBkash : paymentMethod === 'nagad' ? adminNagad : '';
+    const cleanNum = targetNumber.replace(/[^0-9]/g, '');
+    
+    // 1. Auto-copy receiver number to clipboard
+    if (cleanNum) {
+      navigator.clipboard.writeText(cleanNum).catch(() => {});
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    }
+
+    const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
+    const isAndroid = /android/i.test(ua);
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+    const isMobile = isAndroid || isIOS || /mobile/i.test(ua);
+
     if (paymentMethod === 'bkash') {
-      window.location.href = 'bkash://';
-      setTimeout(() => {
+      if (isAndroid) {
+        setAppNotice(lang === 'bn' 
+          ? `বিকাশ নম্বর (${cleanNum || adminBkash}) কপি করা হয়েছে! বিকাশ অ্যাপ ওপেন হচ্ছে... অ্যাপ ওপেন না হলে USSD (*247#) ডায়াল করুন।`
+          : `bKash number (${cleanNum || adminBkash}) copied! Opening bKash app... If not opened, dial *247#.`
+        );
         window.location.href = 'intent://#Intent;scheme=bkash;package=com.bKash.customerapp;end';
-      }, 500);
+      } else if (isIOS) {
+        setAppNotice(lang === 'bn'
+          ? `বিকাশ নম্বর (${cleanNum || adminBkash}) কপি করা হয়েছে! বিকাশ অ্যাপ ওপেন হচ্ছে...`
+          : `bKash number (${cleanNum || adminBkash}) copied! Opening bKash app...`
+        );
+        window.location.href = 'bkash://';
+        setTimeout(() => {
+          window.location.href = 'https://apps.apple.com/app/bkash/id1454522436';
+        }, 2000);
+      } else {
+        // Desktop / PC / Laptop
+        setAppNotice(lang === 'bn'
+          ? `বিকাশ পার্সোনাল নম্বর (${cleanNum || adminBkash}) ক্লিপবোর্ডে কপি করা হয়েছে! আপনার মোবাইল থেকে বিকাশ অ্যাপ অথবা *247# ডায়াল করে Send Money সম্পন্ন করুন।`
+          : `bKash personal number (${cleanNum || adminBkash}) copied to clipboard! Please send money from your mobile bKash app or dial *247#.`
+        );
+      }
     } else if (paymentMethod === 'nagad') {
-      window.location.href = 'intent://#Intent;scheme=nagad;package=com.konasl.nagad;end';
+      if (isAndroid) {
+        setAppNotice(lang === 'bn'
+          ? `নগদ নম্বর (${cleanNum || adminNagad}) কপি করা হয়েছে! নগদ অ্যাপ ওপেন হচ্ছে... অ্যাপ ওপেন না হলে USSD (*167#) ডায়াল করুন।`
+          : `Nagad number (${cleanNum || adminNagad}) copied! Opening Nagad app... If not opened, dial *167#.`
+        );
+        window.location.href = 'intent://#Intent;scheme=nagad;package=com.konasl.nagad;end';
+      } else if (isIOS) {
+        setAppNotice(lang === 'bn'
+          ? `নগদ নম্বর (${cleanNum || adminNagad}) কপি করা হয়েছে! নগদ অ্যাপ ওপেন হচ্ছে...`
+          : `Nagad number (${cleanNum || adminNagad}) copied! Opening Nagad app...`
+        );
+        window.location.href = 'nagad://';
+        setTimeout(() => {
+          window.location.href = 'https://apps.apple.com/app/nagad/id1471844877';
+        }, 2000);
+      } else {
+        setAppNotice(lang === 'bn'
+          ? `নগদ নম্বর (${cleanNum || adminNagad}) ক্লিপবোর্ডে কপি করা হয়েছে! আপনার মোবাইল থেকে নগদ অ্যাপ অথবা *167# ডায়াল করে Send Money সম্পন্ন করুন।`
+          : `Nagad number (${cleanNum || adminNagad}) copied to clipboard! Please send money from your mobile Nagad app or dial *167#.`
+        );
+      }
     }
   };
 
@@ -602,6 +657,13 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
               </div>
 
               <div className="space-y-4">
+                {/* Notice Alert Banner */}
+                {appNotice && (
+                  <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-2xl text-xs font-bold text-center animate-in fade-in slide-in-from-top-2">
+                    {appNotice}
+                  </div>
+                )}
+
                 {/* Modern live status / loader card */}
                 <div className="flex flex-col items-center justify-center bg-slate-50 border border-slate-100 rounded-[2rem] p-6 space-y-4">
                   <div className="relative">
@@ -625,17 +687,36 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
                 </div>
 
                 {/* Gateway open or simulate buttons */}
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2.5">
                   {paymentMethod !== 'test' ? (
-                    <button 
-                      onClick={handleOpenApp}
-                      className={`w-full h-14 text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-base transition-all active:scale-95 ${
-                        paymentMethod === 'bkash' ? 'bg-[#D12053]' : 'bg-[#F7941D]'
-                      }`}
-                    >
-                      {lang === 'bn' ? `${paymentMethod === 'bkash' ? 'বিকাশ' : 'নগদ'} অ্যাপ ওপেন করুন` : `Open ${paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} App`}
-                      <ExternalLink size={18} />
-                    </button>
+                    <>
+                      <button 
+                        onClick={handleOpenApp}
+                        className={`w-full h-14 text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-base transition-all active:scale-95 cursor-pointer ${
+                          paymentMethod === 'bkash' ? 'bg-[#D12053] hover:bg-[#b51a46]' : 'bg-[#F7941D] hover:bg-[#e08316]'
+                        }`}
+                      >
+                        <ExternalLink size={18} />
+                        <span>{lang === 'bn' ? `${paymentMethod === 'bkash' ? 'বিকাশ' : 'নগদ'} অ্যাপ ওপেন করুন` : `Open ${paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} App`}</span>
+                      </button>
+
+                      <a 
+                        href={paymentMethod === 'bkash' ? 'tel:*247#' : 'tel:*167#'}
+                        onClick={() => {
+                          const targetNumber = paymentMethod === 'bkash' ? adminBkash : paymentMethod === 'nagad' ? adminNagad : '';
+                          const cleanNum = targetNumber.replace(/[^0-9]/g, '');
+                          if (cleanNum) {
+                            navigator.clipboard.writeText(cleanNum).catch(() => {});
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 3000);
+                          }
+                        }}
+                        className="w-full h-12 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-black rounded-full shadow-sm flex items-center justify-center gap-2 text-xs transition-all active:scale-95 cursor-pointer"
+                      >
+                        <PhoneCall size={15} className="text-emerald-600" />
+                        <span>{lang === 'bn' ? `USSD ডায়াল করুন (${paymentMethod === 'bkash' ? '*247#' : '*167#'})` : `Dial USSD (${paymentMethod === 'bkash' ? '*247#' : '*167#'})`}</span>
+                      </a>
+                    </>
                   ) : (
                     <button
                       onClick={async () => {

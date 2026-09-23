@@ -143,12 +143,18 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
   const [dailyAbsentees, setDailyAbsentees] = useState<any[]>([]);
   const [attendanceNotTaken, setAttendanceNotTaken] = useState(false);
 
-  const onlyAbsents = dailyAbsentees.filter(a => a.final_status === 'absent');
+  const onlyAbsents = dailyAbsentees.filter(a => a.final_status === 'absent' || a.final_status === 'half_day');
   const lateCount = dailyAbsentees.filter(a => a.final_status === 'late').length;
   const leaveCount = dailyAbsentees.filter(a => a.final_status === 'leave').length;
+  const halfDayCount = dailyAbsentees.filter(a => a.final_status === 'half_day').length;
   
   const [loading, setLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   const [sendingAlerts, setSendingAlerts] = useState(false);
   const isSendingAlertsRef = useRef(false);
   const [downloadingReport, setDownloadingReport] = useState(false);
@@ -575,10 +581,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                query = query.eq('class_id', cid);
             }
             
-            // Safety check for session UUID
-            const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-            
-            if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily' && isUuid(selectedSession)) {
+            if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
                query = query.eq('session', selectedSession);
             }
             return query.limit(1);
@@ -634,7 +637,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
            }
            
            const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily' && isUuid(selectedSession)) {
+           if (selectedSession && selectedSession !== 'all' && selectedSession !== 'daily') {
              attQuery = attQuery.eq('session', selectedSession);
            }
            const { data: attData, error: attError } = await attQuery;
@@ -660,15 +663,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                return null;
              }
              
-             if (statuses.includes('present')) {
+             if (statuses.every(st => st === 'present')) {
                finalStatus = 'present';
-             } else if (statuses.includes('late')) {
-               finalStatus = 'late';
+             } else if (statuses.every(st => st === 'absent')) {
+               finalStatus = 'absent';
+             } else if (statuses.includes('absent') && (statuses.includes('present') || statuses.includes('late'))) {
+               finalStatus = 'half_day';
              } else if (statuses.includes('half_day')) {
                finalStatus = 'half_day';
              } else if (statuses.includes('leave')) {
                finalStatus = 'leave';
-             } else if (statuses.includes('absent')) {
+             } else if (statuses.includes('late')) {
+               finalStatus = 'late';
+             } else if (statuses.includes('present')) {
+               finalStatus = 'present';
+             } else {
                finalStatus = 'absent';
              }
 
@@ -688,8 +697,8 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
              };
            }).filter(Boolean) || [];
 
-           // Filter for absents, lates, and leaves for the list
-           const absents = (mappedDailyDetails as any[]).filter((r: any) => r.final_status === 'absent' || r.final_status === 'late' || r.final_status === 'leave').map((r: any) => ({
+           // Filter for absents, lates, leaves, and half_days for the list
+           const absents = (mappedDailyDetails as any[]).filter((r: any) => r.final_status === 'absent' || r.final_status === 'late' || r.final_status === 'leave' || r.final_status === 'half_day').map((r: any) => ({
              ...r,
              students: { student_name: r.student_name, roll: r.roll, guardian_phone: r.guardian_phone },
              classes: { class_name: r.class_name }
@@ -847,15 +856,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                 counts.absent++;
               } else {
                 let finalStatus = 'absent';
-                if (statuses.includes('present')) {
+                if (statuses.every(st => st === 'present')) {
                   finalStatus = 'present';
-                } else if (statuses.includes('late')) {
-                  finalStatus = 'late';
+                } else if (statuses.every(st => st === 'absent')) {
+                  finalStatus = 'absent';
+                } else if (statuses.includes('absent') && (statuses.includes('present') || statuses.includes('late'))) {
+                  finalStatus = 'half_day';
                 } else if (statuses.includes('half_day')) {
                   finalStatus = 'half_day';
                 } else if (statuses.includes('leave')) {
                   finalStatus = 'leave';
-                } else if (statuses.includes('absent')) {
+                } else if (statuses.includes('late')) {
+                  finalStatus = 'late';
+                } else if (statuses.includes('present')) {
+                  finalStatus = 'present';
+                } else {
                   finalStatus = 'absent';
                 }
 
@@ -2109,19 +2124,25 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           {lang === 'bn' ? 'হাজিরা ওভারভিউ' : 'Attendance Overview'}
                         </h3>
                         <div className="h-64 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), [lang === 'bn' ? 'উপস্থিত' : 'Present']: d.present_days, [lang === 'bn' ? 'অনুপস্থিত' : 'Absent']: d.absent_days, [lang === 'bn' ? 'বিলম্ব' : 'Late']: d.late_days || 0, [lang === 'bn' ? 'ছুটি' : 'Leave']: d.leave_days || 0 }))}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
-                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                              <Tooltip cursor={{ fill: isDark ? '#1e293b' : '#f8fafc' }} contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#f1f5f9' : '#1e293b' }} />
-                              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
-                              <Bar dataKey={lang === 'bn' ? 'উপস্থিত' : 'Present'} stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-                              <Bar dataKey={lang === 'bn' ? 'ছুটি' : 'Leave'} stackId="a" fill="#6366f1" />
-                              <Bar dataKey={lang === 'bn' ? 'বিলম্ব' : 'Late'} stackId="a" fill="#f59e0b" />
-                              <Bar dataKey={lang === 'bn' ? 'অনুপস্থিত' : 'Absent'} stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
+                          {isMounted ? (
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={180}>
+                              <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), [lang === 'bn' ? 'উপস্থিত' : 'Present']: d.present_days, [lang === 'bn' ? 'অনুপস্থিত' : 'Absent']: d.absent_days, [lang === 'bn' ? 'বিলম্ব' : 'Late']: d.late_days || 0, [lang === 'bn' ? 'ছুটি' : 'Leave']: d.leave_days || 0 }))}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                                <Tooltip cursor={{ fill: isDark ? '#1e293b' : '#f8fafc' }} contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#f1f5f9' : '#1e293b' }} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
+                                <Bar dataKey={lang === 'bn' ? 'উপস্থিত' : 'Present'} stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
+                                <Bar dataKey={lang === 'bn' ? 'ছুটি' : 'Leave'} stackId="a" fill="#6366f1" />
+                                <Bar dataKey={lang === 'bn' ? 'বিলম্ব' : 'Late'} stackId="a" fill="#f59e0b" />
+                                <Bar dataKey={lang === 'bn' ? 'অনুপস্থিত' : 'Absent'} stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center">
+                              <Loader2 className="animate-spin text-[#2563EB]" size={20} />
+                            </div>
+                          )}
                         </div>
                       </div>
 

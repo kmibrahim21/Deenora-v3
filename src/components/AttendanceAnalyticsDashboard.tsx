@@ -28,6 +28,7 @@ interface AttendanceReportEntry {
 const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, madrasah }) => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [reportData, setReportData] = useState<AttendanceReportEntry[]>([]);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
@@ -38,6 +39,7 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    setIsMounted(true);
     fetchClasses();
   }, []);
 
@@ -192,19 +194,25 @@ const AttendanceAnalyticsDashboard: React.FC<Props> = ({ institutionId, lang, ma
               {lang === 'bn' ? 'হাজিরা ওভারভিউ' : 'Attendance Overview'}
             </h3>
             <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0, Leave: d.leave_days || 0 }))}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={madrasah?.theme === 'dark' ? '#334155' : '#f1f5f9'} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
-                  <Tooltip cursor={{ fill: madrasah?.theme === 'dark' ? '#1e293b' : '#f8fafc' }} contentStyle={{ borderRadius: '1rem', border: 'none', backgroundColor: madrasah?.theme === 'dark' ? '#0f172a' : '#fff', color: madrasah?.theme === 'dark' ? '#fff' : '#000', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                  <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-                  <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
-                  <Bar dataKey="Leave" stackId="a" fill="#6366f1" />
-                  <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {isMounted ? (
+                <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={180}>
+                  <BarChart data={reportData.map(d => ({ name: d.roll || d.student_name.substring(0, 5), Present: d.present_days, Absent: d.absent_days, Late: d.late_days || 0, Leave: d.leave_days || 0 }))}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={madrasah?.theme === 'dark' ? '#334155' : '#f1f5f9'} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                    <Tooltip cursor={{ fill: madrasah?.theme === 'dark' ? '#1e293b' : '#f8fafc' }} contentStyle={{ borderRadius: '1rem', border: 'none', backgroundColor: madrasah?.theme === 'dark' ? '#0f172a' : '#fff', color: madrasah?.theme === 'dark' ? '#fff' : '#000', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                    <Bar dataKey="Present" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
+                    <Bar dataKey="Late" stackId="a" fill="#f59e0b" />
+                    <Bar dataKey="Leave" stackId="a" fill="#6366f1" />
+                    <Bar dataKey="Absent" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full flex items-center justify-center">
+                  <Loader2 className="animate-spin text-[#2563EB]" size={20} />
+                </div>
+              )}
             </div>
           </div>
 

@@ -192,6 +192,9 @@ export default defineConfig(({ mode }) => {
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'import.meta.env.VITE_VERCEL_URL': JSON.stringify(env.VERCEL_URL || env.VITE_VERCEL_URL)
       },
+      optimizeDeps: {
+        include: ['react', 'react-dom', 'recharts', 'lucide-react']
+      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, './src'),
@@ -207,8 +210,7 @@ export default defineConfig(({ mode }) => {
               'vendor-react': ['react', 'react-dom', 'react-router-dom'],
               'vendor-supabase': ['@supabase/supabase-js'],
               'vendor-icons': ['lucide-react'],
-              'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'uuid'],
-              'vendor-ui': ['motion', 'recharts']
+              'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'uuid']
             }
           }
         }

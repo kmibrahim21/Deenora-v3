@@ -271,15 +271,44 @@ const Account: React.FC<AccountProps> = ({ lang, setLang, onProfileUpdate, setVi
   };
 
   const handleOpenApp = (method: 'bkash' | 'nagad') => {
+    const targetNum = method === 'bkash' ? adminBkash : adminNagad;
+    const cleanNum = targetNum.replace(/[^0-9]/g, '');
+    if (cleanNum) {
+      navigator.clipboard.writeText(cleanNum).catch(() => {});
+    }
+
+    const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
+    const isAndroid = /android/i.test(ua);
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+
     if (method === 'bkash') {
-      // Standard deep link for bKash
-      window.location.href = 'bkash://';
-      // Fallback for Android intent if standard fails
-      setTimeout(() => {
+      if (isAndroid) {
         window.location.href = 'intent://#Intent;scheme=bkash;package=com.bKash.customerapp;end';
-      }, 500);
+      } else if (isIOS) {
+        window.location.href = 'bkash://';
+        setTimeout(() => {
+          window.location.href = 'https://apps.apple.com/app/bkash/id1454522436';
+        }, 2000);
+      } else {
+        alert(lang === 'bn' 
+          ? `বিকাশ পার্সোনাল নম্বর (${cleanNum || adminBkash}) কপি করা হয়েছে! আপনার মোবাইল থেকে বিকাশ অ্যাপ অথবা *247# ডায়াল করে Send Money করুন।`
+          : `bKash personal number (${cleanNum || adminBkash}) copied! Please send money from your mobile app or dial *247#.`
+        );
+      }
     } else {
-      window.location.href = 'intent://#Intent;scheme=nagad;package=com.konasl.nagad;end';
+      if (isAndroid) {
+        window.location.href = 'intent://#Intent;scheme=nagad;package=com.konasl.nagad;end';
+      } else if (isIOS) {
+        window.location.href = 'nagad://';
+        setTimeout(() => {
+          window.location.href = 'https://apps.apple.com/app/nagad/id1471844877';
+        }, 2000);
+      } else {
+        alert(lang === 'bn'
+          ? `নগদ নম্বর (${cleanNum || adminNagad}) কপি করা হয়েছে! আপনার মোবাইল থেকে নগদ অ্যাপ অথবা *167# ডায়াল করে Send Money করুন।`
+          : `Nagad number (${cleanNum || adminNagad}) copied! Please send money from your mobile app or dial *167#.`
+        );
+      }
     }
   };
 

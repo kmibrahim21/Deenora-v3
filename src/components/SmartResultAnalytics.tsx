@@ -81,6 +81,7 @@ const localT = {
 const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institutionId, lang, madrasah }) => {
   const isDark = madrasah?.theme === 'dark';
   const [loading, setLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   
   // Filter States
   const [showClassFilter, setShowClassFilter] = useState(false);
@@ -93,6 +94,10 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
   
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [selectedExamId, setSelectedExamId] = useState<string>('all');
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const [analytics, setAnalytics] = useState<{
     classPerformance: any[];
@@ -1143,26 +1148,32 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
               <div className={`p-5 rounded-[2rem] border shadow-bubble h-64 ${
                   isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'
               }`}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analytics.examTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
-                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
-                          <Tooltip 
-                              contentStyle={{ 
-                                  borderRadius: '16px', 
-                                  border: 'none', 
-                                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', 
-                                  fontWeight: 'bold', 
-                                  fontSize: '12px',
-                                  backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                                  color: isDark ? '#f1f5f9' : '#1e293b'
-                              }}
-                              itemStyle={{ color: isDark ? '#60a5fa' : '#1E3A8A' }}
-                          />
-                          <Line type="monotone" dataKey="average" stroke="#2563EB" strokeWidth={4} dot={{ r: 6, fill: '#2563EB', strokeWidth: 2, stroke: isDark ? '#1e293b' : '#fff' }} activeDot={{ r: 8 }} />
-                      </LineChart>
-                  </ResponsiveContainer>
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={180}>
+                        <LineChart data={analytics.examTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
+                            <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
+                            <Tooltip 
+                                contentStyle={{ 
+                                    borderRadius: '16px', 
+                                    border: 'none', 
+                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', 
+                                    fontWeight: 'bold', 
+                                    fontSize: '12px',
+                                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                                    color: isDark ? '#f1f5f9' : '#1e293b'
+                                }}
+                                itemStyle={{ color: isDark ? '#60a5fa' : '#1E3A8A' }}
+                            />
+                            <Line type="monotone" dataKey="average" stroke="#2563EB" strokeWidth={4} dot={{ r: 6, fill: '#2563EB', strokeWidth: 2, stroke: isDark ? '#1e293b' : '#fff' }} activeDot={{ r: 8 }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Loader2 className="animate-spin text-[#2563EB]" size={20} />
+                    </div>
+                  )}
               </div>
             </div>
         )}
@@ -1177,31 +1188,37 @@ const SmartResultAnalytics: React.FC<SmartResultAnalyticsProps> = ({ institution
               <div className={`p-5 rounded-[2rem] border shadow-bubble h-72 ${
                   isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'
               }`}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={analytics.subjectPerformance} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
-                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
-                          <Tooltip 
-                              cursor={{ fill: isDark ? '#334155' : '#f8fafc' }}
-                              formatter={(value: any, name: string) => [
-                                `${value}%`, 
-                                name === 'average' ? (lang === 'bn' ? 'গড় স্কোর' : 'Avg Score') : (lang === 'bn' ? 'পাসের হার' : 'Pass Rate')
-                              ]}
-                              contentStyle={{ 
-                                  borderRadius: '16px', 
-                                  border: 'none', 
-                                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', 
-                                  fontWeight: 'bold', 
-                                  fontSize: '12px',
-                                  backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                                  color: isDark ? '#f1f5f9' : '#1e293b'
-                              }}
-                          />
-                          <Bar dataKey="average" name="average" fill="#818cf8" radius={[6, 6, 0, 0]} barSize={26} />
-                          <Bar dataKey="passRate" name="passRate" fill="#34d399" radius={[6, 6, 0, 0]} barSize={26} />
-                      </BarChart>
-                  </ResponsiveContainer>
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={180}>
+                        <BarChart data={analytics.subjectPerformance} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#f1f5f9'} />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
+                            <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} />
+                            <Tooltip 
+                                cursor={{ fill: isDark ? '#334155' : '#f8fafc' }}
+                                formatter={(value: any, name: string) => [
+                                  `${value}%`, 
+                                  name === 'average' ? (lang === 'bn' ? 'গড় স্কোর' : 'Avg Score') : (lang === 'bn' ? 'পাসের হার' : 'Pass Rate')
+                                ]}
+                                contentStyle={{ 
+                                    borderRadius: '16px', 
+                                    border: 'none', 
+                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', 
+                                    fontWeight: 'bold', 
+                                    fontSize: '12px',
+                                    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+                                    color: isDark ? '#f1f5f9' : '#1e293b'
+                                }}
+                            />
+                            <Bar dataKey="average" name="average" fill="#818cf8" radius={[6, 6, 0, 0]} barSize={26} />
+                            <Bar dataKey="passRate" name="passRate" fill="#34d399" radius={[6, 6, 0, 0]} barSize={26} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Loader2 className="animate-spin text-[#2563EB]" size={20} />
+                    </div>
+                  )}
               </div>
             </div>
         )}
