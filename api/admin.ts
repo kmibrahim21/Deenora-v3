@@ -1014,7 +1014,32 @@ export default async function handler(req, res) {
         insertInstId = sysId;
       }
 
-      const finalFileUrl = file_url || preview_url || '';
+      let finalFileUrl = (file_url || preview_url || '').trim();
+
+      // Fallback: If URL was missing, fetch latest URL from Awaj Digital API directly
+      if (!finalFileUrl && voice_id) {
+        try {
+          const token = (process.env.AWAJ_API_TOKEN || '').trim();
+          if (token) {
+            const awajRes = await fetch('https://api.awajdigital.com/api/voices', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+              }
+            });
+            if (awajRes.ok) {
+              const awajData = await awajRes.json();
+              const voiceList = Array.isArray(awajData) ? awajData : (awajData.voices || awajData.data || []);
+              const matched = voiceList.find((v: any) => v.id?.toString() === voice_id.toString() || v.name?.toLowerCase() === (voice_name || '').toLowerCase());
+              if (matched) {
+                finalFileUrl = (matched.previewUrl || matched.preview_url || matched.file_url || matched.url || '').trim();
+              }
+            }
+          }
+        } catch (e: any) {
+          console.warn('Fallback voice lookup in assign_voice failed:', e.message);
+        }
+      }
 
       const { data, error } = await supabase.from('voice_templates').insert({
         institution_id: insertInstId,

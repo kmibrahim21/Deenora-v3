@@ -500,6 +500,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Determine effective voice name or provider ID for standard broadcast
         const effectiveVoiceKey = dbResolvedVoiceId || dbResolvedVoiceName || body.provider_voice_id || body.provider_voice_name || body.voice || body.voice_name || body.title || '';
 
+        // If voicesList is still empty, live fallback: fetch Awaj /voices list to resolve CDN audio URL
+        if (voicesList.length === 0 && (vKey || effectiveVoiceKey)) {
+          try {
+            const token = (process.env.AWAJ_API_TOKEN || '').trim();
+            if (token) {
+              const awajRes = await fetch(`${AWAJ_BASE_URL}/voices`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Accept': 'application/json'
+                }
+              });
+              if (awajRes.ok) {
+                const awajData = await awajRes.json();
+                const list = Array.isArray(awajData) ? awajData : (awajData.voices || awajData.data || []);
+                const match = list.find((v: any) => 
+                  (vKey && v.id?.toString() === String(vKey).trim()) ||
+                  (dbResolvedVoiceId && v.id?.toString() === String(dbResolvedVoiceId).trim()) ||
+                  (effectiveVoiceKey && (v.name?.toLowerCase() === effectiveVoiceKey.toLowerCase() || v.id?.toString() === effectiveVoiceKey))
+                );
+                if (match) {
+                  const resolvedUrl = (match.previewUrl || match.preview_url || match.file_url || match.url || '').trim();
+                  if (resolvedUrl.startsWith('http')) {
+                    voicesList = [resolvedUrl];
+                    console.log('Successfully fetched live audio URL from Awaj API during broadcast:', resolvedUrl);
+                    if (vKey) {
+                      await supabase.from('voice_templates').update({ file_url: resolvedUrl, provider_status: 'approved' }).or(`id.eq.${String(vKey).trim()},provider_voice_id.eq.${String(vKey).trim()}`);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e: any) {
+            console.warn('Live voice URL resolution failed in awaj broadcast handler:', e.message);
+          }
+        }
+
         // 2. Generate unique request_id (16-64 chars required by Awaj Direct API)
         let requestId = (body.request_id || body.requestId || '').toString().trim();
         if (!requestId || requestId.length < 16) {

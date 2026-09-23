@@ -270,11 +270,20 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
 
   const handleAssignVoice = async () => {
     if (!assigningVoice || !assignInstitutionId) return;
+    const vUrl = (assigningVoice.file_url || assigningVoice.previewUrl || assigningVoice.preview_url || assigningVoice.url || '').trim();
+    if (!vUrl || (!vUrl.startsWith('http://') && !vUrl.startsWith('https://') && !vUrl.startsWith('/'))) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'অডিও ইউআরএল প্রস্তুত হয়নি',
+        message: 'এই ভয়েসটির অডিও লিঙ্ক এখনো সার্ভারে প্রস্তুত হয়নি। অনুগ্রহ করে লিঙ্ক তৈরি হওয়া পর্যন্ত অপেক্ষা করুন।'
+      });
+      return;
+    }
     setIsAssigning(true);
     try {
       const token = await getAuthToken();
       const vName = assigningVoice.title || assigningVoice.name || assigningVoice.provider_voice_name || 'Assigned Voice';
-      const vUrl = assigningVoice.file_url || assigningVoice.previewUrl || assigningVoice.preview_url || assigningVoice.url || '';
       const response = await fetch('/api/admin', {
         method: 'POST',
         headers: {
@@ -398,8 +407,8 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
     }
   };
 
-  const fetchData = async (retryCount = 0) => {
-    if (retryCount === 0) setRefreshing(true);
+  const fetchData = async (retryCount = 0, isSilent = false) => {
+    if (retryCount === 0 && !isSilent) setRefreshing(true);
     setApiError(null);
     try {
       const fetchJson = async (url: string) => {
@@ -508,13 +517,15 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       console.error("Error fetching Awaj data:", error);
       if (retryCount < 2 && (error.message.includes('Failed to connect') || error.message.includes('Failed to fetch'))) {
         console.log(`Retrying fetch... (${retryCount + 1})`);
-        setTimeout(() => fetchData(retryCount + 1), 2000);
+        setTimeout(() => fetchData(retryCount + 1, isSilent), 2000);
         return;
       }
       setApiError(error.message || "Failed to fetch Awaj data");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!isSilent) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -952,8 +963,10 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
                 {filteredVoices.length > 0 ? (
                   filteredVoices.map((voice) => {
-                    const isApproved = voice.status === 'approved';
-                    const isPending = voice.status === 'pending';
+                    const audioUrl = (voice.previewUrl || voice.preview_url || voice.file_url || voice.url || '').trim();
+                    const isAudioReady = Boolean(audioUrl && (audioUrl.startsWith('http://') || audioUrl.startsWith('https://') || audioUrl.startsWith('/')));
+                    const isApproved = voice.status === 'approved' && isAudioReady;
+                    const isPending = voice.status === 'pending' || !isAudioReady;
                     const isRejected = voice.status === 'rejected';
 
                     return (
@@ -969,11 +982,9 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
-                              isApproved 
+                              isAudioReady 
                                 ? (isDark ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600')
-                                : isPending
-                                  ? (isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600')
-                                  : (isDark ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600')
+                                : (isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600')
                             }`}>
                               <Mic size={22} />
                             </div>
@@ -1001,19 +1012,18 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                           </div>
 
                           {/* Status Badge */}
-                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${
-                            isApproved 
+                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 flex items-center gap-1 ${
+                            isAudioReady 
                               ? (isDark ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200')
-                              : isPending
-                                ? (isDark ? 'bg-amber-950/40 text-amber-400 border-amber-800/60' : 'bg-amber-50 text-amber-700 border-amber-200')
-                                : (isDark ? 'bg-rose-950/40 text-rose-400 border-rose-800/60' : 'bg-rose-50 text-rose-700 border-rose-200')
+                              : (isDark ? 'bg-amber-950/40 text-amber-400 border-amber-800/60' : 'bg-amber-50 text-amber-700 border-amber-200')
                           }`}>
-                            {voice.status}
+                            {!isAudioReady ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle2 size={10} />}
+                            {isAudioReady ? (voice.status || 'Ready') : 'Processing URL'}
                           </span>
                         </div>
 
                         {/* Middle: Audio Player */}
-                        {(voice.previewUrl || voice.preview_url || voice.file_url || voice.url) ? (
+                        {isAudioReady ? (
                           <div className={`p-2.5 rounded-2xl border ${
                             isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200/70'
                           }`}>
@@ -1039,7 +1049,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                             <audio 
                               controls 
                               preload="none"
-                              src={getProxiedAudioUrl(voice.previewUrl || voice.preview_url || voice.file_url || voice.url)} 
+                              src={getProxiedAudioUrl(audioUrl)} 
                               className="w-full h-8 outline-none" 
                               onLoadedMetadata={(e) => {
                                 const secs = Math.round(e.currentTarget.duration);
@@ -1050,16 +1060,20 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                             />
                           </div>
                         ) : (
-                          <div className={`p-2.5 rounded-2xl border text-[11px] font-bold text-slate-400 flex items-center gap-2 ${
-                            isDark ? 'bg-slate-800/30 border-slate-800' : 'bg-slate-50 border-slate-200/60'
+                          <div className={`p-3 rounded-2xl border flex items-center gap-2.5 ${
+                            isDark ? 'bg-amber-950/20 border-amber-900/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'
                           }`}>
-                            <Info size={14} /> অডিও প্রিভিউ লিংক উপলব্ধ নেই
+                            <Loader2 size={16} className="animate-spin text-amber-500 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-black leading-tight">অডিও URL প্রসেসিং হচ্ছে...</p>
+                              <p className="text-[9.5px] font-medium text-slate-400 mt-0.5">সার্ভার থেকে লিঙ্ক পাওয়া মাত্রই এসাইন বাটন দৃশ্যমান হবে</p>
+                            </div>
                           </div>
                         )}
 
                         {/* Bottom Actions */}
                         <div className="flex items-center justify-between gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                          {isApproved ? (
+                          {isAudioReady ? (
                             <button
                               onClick={() => {
                                 setAssigningVoice(voice);
@@ -1070,9 +1084,19 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
                               <Building2 size={15} /> <span>Assign</span>
                             </button>
                           ) : (
-                            <span className="text-[11px] font-bold text-amber-500 flex items-center gap-1 px-1">
-                              <Clock size={12} /> অনুমোদনের পর বরাদ্দযোগ্য
-                            </span>
+                            <button
+                              onClick={() => fetchData(0, false)}
+                              disabled={refreshing}
+                              className={`flex-1 h-10 px-3 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                                isDark 
+                                  ? 'bg-amber-950/40 hover:bg-amber-900/60 border-amber-900/60 text-amber-300 active:scale-95' 
+                                  : 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-800 active:scale-95'
+                              }`}
+                              title="অডিও URL তৈরি হয়েছে কিনা চেক করতে ক্লিক করুন"
+                            >
+                              <RefreshCw size={13} className={refreshing ? 'animate-spin text-amber-500' : 'text-amber-500'} />
+                              <span>{refreshing ? 'চেক করা হচ্ছে...' : 'URL চেক করুন'}</span>
+                            </button>
                           )}
 
                           <button
