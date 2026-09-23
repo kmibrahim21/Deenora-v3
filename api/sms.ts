@@ -284,6 +284,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           109: 'API Access Not Allowed',
           110: 'গ্রাহকের সিমে DND সার্ভিস অন করা আছে (Do Not Disturb)',
           111: 'বার্তায় নিষিদ্ধ শব্দ (Spam Word) পাওয়া গেছে',
+          600: 'অপারেটর বা গেটওয়ে রুট ট্রাফিকে সমস্যা (Automos Carrier Error 600)',
           1000: 'Automas গেটওয়েতে পর্যাপ্ত এসএমএস ব্যালেন্স নেই (Insufficient Balance)',
           2300: 'Destination Route Issue',
           2400: 'Destination Route Not Permitted',
