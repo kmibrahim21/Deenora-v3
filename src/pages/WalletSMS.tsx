@@ -77,6 +77,65 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<SMSTemplate | null>(null);
   const [smsHistory, setSmsHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
+  const [searchRecipientQuery, setSearchRecipientQuery] = useState<string>('');
+
+  const smsCampaigns = useMemo(() => {
+    if (!smsHistory || smsHistory.length === 0) return [];
+    
+    const campaigns: Array<{
+      id: string;
+      date: string;
+      message: string;
+      sms_type: string;
+      provider: string;
+      total_recipients: number;
+      sent_count: number;
+      failed_count: number;
+      pending_count: number;
+      total_parts: number;
+      classes: string[];
+      logs: typeof smsHistory;
+    }> = [];
+
+    smsHistory.forEach((item) => {
+      const itemTime = new Date(item.date).getTime();
+      const existing = campaigns.find(c => 
+        c.message === item.message && 
+        Math.abs(new Date(c.date).getTime() - itemTime) <= 60000
+      );
+
+      if (existing) {
+        existing.logs.push(item);
+        existing.total_recipients += 1;
+        existing.total_parts += (item.parts || 1);
+        if (item.status === 'sent' || item.status === 'delivered') existing.sent_count += 1;
+        else if (item.status === 'pending') existing.pending_count += 1;
+        else existing.failed_count += 1;
+
+        if (item.class_name && !existing.classes.includes(item.class_name)) {
+          existing.classes.push(item.class_name);
+        }
+      } else {
+        campaigns.push({
+          id: `campaign_${itemTime}_${Math.random().toString(36).substring(2, 7)}`,
+          date: item.date,
+          message: item.message,
+          sms_type: item.sms_type || 'masking',
+          provider: item.provider || 'reve',
+          total_recipients: 1,
+          sent_count: (item.status === 'sent' || item.status === 'delivered') ? 1 : 0,
+          failed_count: (item.status === 'failed' || item.status === 'rejected') ? 1 : 0,
+          pending_count: item.status === 'pending' ? 1 : 0,
+          total_parts: item.parts || 1,
+          classes: item.class_name ? [item.class_name] : [],
+          logs: [item]
+        });
+      }
+    });
+
+    return campaigns;
+  }, [smsHistory]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
@@ -960,83 +1019,221 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
         {activeTab === 'history' && (
           <div className="space-y-5 animate-in slide-in-from-bottom-5">
             <div className="flex items-center justify-between px-2">
-              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('sms_history', lang)}</h2>
-              <button onClick={fetchSmsHistory} className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest flex items-center gap-1.5 hover:opacity-80 transition-all">
+              <div>
+                <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('sms_history', lang)}</h2>
+                {smsCampaigns.length > 0 && (
+                  <p className="text-xs font-bold text-slate-500 font-noto">
+                    {lang === 'bn' ? `মোট ${smsCampaigns.length} টি এসএমএস ক্যাম্পেইন` : `Total ${smsCampaigns.length} SMS Campaigns`}
+                  </p>
+                )}
+              </div>
+              <button onClick={fetchSmsHistory} className="text-[10px] font-black text-[#2563EB] uppercase tracking-widest flex items-center gap-1.5 hover:opacity-80 transition-all bg-blue-50 px-3.5 py-1.5 rounded-xl border border-blue-100 shadow-sm">
                 <History size={14} /> {lang === 'bn' ? 'রিফ্রেশ' : 'Refresh'}
               </button>
             </div>
 
-            <div className="bg-white rounded-[2.5rem] shadow-bubble border border-slate-100 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/50 border-b border-slate-100">
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('date', lang)}</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('recipient', lang)}</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('message', lang)}</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('status', lang)}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {loadingHistory ? (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-20 text-center">
-                          <Loader2 className="animate-spin text-[#2563EB] mx-auto" size={30} />
-                        </td>
-                      </tr>
-                    ) : smsHistory.length > 0 ? (
-                      smsHistory.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="text-xs font-black text-slate-700">{new Date(item.date).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US')}</span>
-                              <span className="text-[10px] font-bold text-slate-400">{new Date(item.date).toLocaleTimeString(lang === 'bn' ? 'bn-BD' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-black text-[#1E3A8A]">{item.recipient}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-xs font-bold text-slate-500 line-clamp-2 max-w-xs font-noto">{item.message}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              {item.status === 'sent' || item.status === 'delivered' ? (
-                                <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-600 rounded-full border border-green-100">
-                                  <CheckCircle2 size={12} />
-                                  <span className="text-[10px] font-black uppercase tracking-wider">{t('sent', lang)}</span>
-                                </div>
-                              ) : item.status === 'pending' ? (
-                                <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 rounded-full border border-amber-100">
-                                  <Clock size={12} />
-                                  <span className="text-[10px] font-black uppercase tracking-wider">{t('pending', lang)}</span>
-                                </div>
-                              ) : (
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 rounded-full border border-red-100 w-fit">
-                                    <XCircle size={12} />
-                                    <span className="text-[10px] font-black uppercase tracking-wider">{t('failed', lang)}</span>
-                                  </div>
-                                  {item.reason && (
-                                    <span className="text-[9px] font-bold text-red-400 px-1">{item.reason}</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-20 text-center">
-                          <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">{t('no_history', lang)}</p>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            {loadingHistory ? (
+              <div className="bg-white p-12 rounded-[2.5rem] shadow-bubble border border-slate-100 text-center">
+                <Loader2 className="animate-spin text-[#2563EB] mx-auto mb-2" size={32} />
+                <p className="text-xs font-bold text-slate-400 font-noto">{lang === 'bn' ? 'এসএমএস ইতিহাস লোড হচ্ছে...' : 'Loading SMS History...'}</p>
               </div>
-            </div>
+            ) : smsCampaigns.length > 0 ? (
+              <div className="space-y-4">
+                {smsCampaigns.map((c) => {
+                  const isExpanded = expandedCampaignId === c.id;
+                  const filteredLogs = c.logs.filter(l => {
+                    if (!searchRecipientQuery) return true;
+                    const q = searchRecipientQuery.toLowerCase();
+                    return (
+                      (l.student_name && l.student_name.toLowerCase().includes(q)) ||
+                      (l.class_name && l.class_name.toLowerCase().includes(q)) ||
+                      (l.recipient && l.recipient.includes(q))
+                    );
+                  });
+
+                  return (
+                    <div 
+                      key={c.id} 
+                      className="bg-white rounded-[2.2rem] border border-slate-100 shadow-bubble overflow-hidden transition-all duration-300 hover:border-blue-100"
+                    >
+                      {/* Card Header (Click to expand/collapse) */}
+                      <div 
+                        onClick={() => setExpandedCampaignId(isExpanded ? null : c.id)}
+                        className="p-5 sm:p-6 cursor-pointer hover:bg-slate-50/50 transition-colors select-none"
+                      >
+                        <div className="flex items-start justify-between gap-4 mb-3">
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center border border-blue-100 shrink-0 shadow-sm">
+                              <Send size={20} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-slate-800">
+                                  {new Date(c.date).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400">
+                                  • {new Date(c.date).toLocaleTimeString(lang === 'bn' ? 'bn-BD' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {c.sms_type && (
+                                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                                    {c.sms_type === 'masking' ? (lang === 'bn' ? 'মাস্কিং' : 'Masking') : (lang === 'bn' ? 'নন-মাস্কিং' : 'Non-Masking')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm font-black text-[#1E3A8A] font-noto line-clamp-1 mt-1">
+                                {c.message}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                              <ChevronDown size={18} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#2563EB]' : ''}`} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Stats Summary */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-slate-100/80">
+                          <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">{lang === 'bn' ? 'প্রাপক সংখ্যা' : 'Recipients'}</span>
+                            <span className="text-xs font-black text-[#1E3A8A] font-noto">{c.total_recipients} {lang === 'bn' ? 'জন' : 'Persons'}</span>
+                          </div>
+
+                          <div className="bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
+                            <span className="text-[9px] font-black text-emerald-500 uppercase tracking-wider block">{lang === 'bn' ? 'সফল (Sent)' : 'Success'}</span>
+                            <span className="text-xs font-black text-emerald-700 font-noto">{c.sent_count} {lang === 'bn' ? 'টি' : ''}</span>
+                          </div>
+
+                          <div className={`px-3 py-2 rounded-xl border ${c.failed_count > 0 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                            <span className={`text-[9px] font-black uppercase tracking-wider block ${c.failed_count > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                              {lang === 'bn' ? 'ব্যর্থ (Failed)' : 'Failed'}
+                            </span>
+                            <span className={`text-xs font-black font-noto ${c.failed_count > 0 ? 'text-red-700' : 'text-slate-500'}`}>
+                              {c.failed_count} {lang === 'bn' ? 'টি' : ''}
+                            </span>
+                          </div>
+
+                          <div className="bg-blue-50 px-3 py-2 rounded-xl border border-blue-100">
+                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-wider block">{lang === 'bn' ? 'টার্গেট শ্রেণি' : 'Classes'}</span>
+                            <span className="text-xs font-black text-[#2563EB] font-noto line-clamp-1">
+                              {c.classes.length > 0 ? c.classes.join(', ') : (lang === 'bn' ? 'সাধারণ/সকল' : 'All')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded Details View */}
+                      {isExpanded && (
+                        <div className="bg-slate-50/80 p-5 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                          {/* Full Message Box */}
+                          <div className="mb-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                              <MessageSquare size={12} className="text-[#2563EB]" /> {lang === 'bn' ? 'সম্পূর্ণ মেসেজ বিষয়বস্তু:' : 'Full Message Content:'}
+                            </p>
+                            <p className="text-xs font-bold text-slate-700 font-noto whitespace-pre-wrap leading-relaxed">
+                              {c.message}
+                            </p>
+                          </div>
+
+                          {/* Recipient Details & Filter */}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+                            <h4 className="text-[11px] font-black text-[#1E3A8A] uppercase tracking-wider flex items-center gap-1.5">
+                              <Users size={14} className="text-[#2563EB]" /> {lang === 'bn' ? 'প্রাপকদের তালিকা ও ডেলিভারি স্ট্যাটাস:' : 'Recipient List & Delivery Status:'}
+                            </h4>
+                            <input 
+                              type="text" 
+                              placeholder={lang === 'bn' ? 'খুঁজুন (নাম/শ্রেণি/নম্বর)...' : 'Search name/class/phone...'} 
+                              value={searchRecipientQuery} 
+                              onChange={(e) => setSearchRecipientQuery(e.target.value)}
+                              className="px-3.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-blue-400 font-noto w-full sm:w-56 shadow-sm"
+                            />
+                          </div>
+
+                          {/* Individual Recipient Cards Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                            {filteredLogs.length > 0 ? (
+                              filteredLogs.map((log, idx) => {
+                                const isSuccess = log.status === 'sent' || log.status === 'delivered';
+                                const isPending = log.status === 'pending';
+
+                                return (
+                                  <div key={idx} className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isSuccess ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : isPending ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                                        {isSuccess ? <CheckCircle2 size={18} /> : isPending ? <Clock size={18} /> : <XCircle size={18} />}
+                                      </div>
+                                      <div className="min-w-0">
+                                        {log.student_name ? (
+                                          <>
+                                            <p className="text-xs font-black text-[#1E3A8A] font-noto truncate">
+                                              {log.student_name}
+                                              {log.roll !== null && log.roll !== undefined && (
+                                                <span className="text-[10px] font-bold text-slate-400 ml-1">
+                                                  ({lang === 'bn' ? 'রোল' : 'Roll'}: {log.roll})
+                                                </span>
+                                              )}
+                                            </p>
+                                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                              {log.class_name && (
+                                                <span className="px-2 py-0.2 bg-blue-50 text-[#2563EB] text-[9px] font-black rounded border border-blue-100 font-noto">
+                                                  {log.class_name}
+                                                </span>
+                                              )}
+                                              <span className="text-[10px] font-bold text-slate-400 font-mono">{log.recipient}</span>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <p className="text-xs font-black text-[#1E3A8A] font-mono">{log.recipient}</p>
+                                            <span className="text-[9px] font-bold text-slate-400 italic font-noto">{lang === 'bn' ? 'সাধারণ প্রাপক' : 'General Recipient'}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="text-right shrink-0">
+                                      {isSuccess ? (
+                                        <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                          {lang === 'bn' ? 'সফল' : 'Sent'}
+                                        </span>
+                                      ) : isPending ? (
+                                        <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-100">
+                                          {lang === 'bn' ? 'পেন্ডিং' : 'Pending'}
+                                        </span>
+                                      ) : (
+                                        <div className="flex flex-col items-end gap-1">
+                                          <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-red-50 text-red-600 border border-red-100">
+                                            {lang === 'bn' ? 'ব্যর্থ' : 'Failed'}
+                                          </span>
+                                          {log.reason && (
+                                            <span className="text-[8px] font-bold text-red-500 max-w-[130px] truncate" title={log.reason}>
+                                              {log.reason}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="col-span-full py-8 text-center bg-white rounded-2xl border border-slate-100 text-slate-400 text-xs font-bold font-noto">
+                                {lang === 'bn' ? 'কোনো প্রাপক পাওয়া যায়নি' : 'No recipient matching query'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white p-12 rounded-[2.5rem] shadow-bubble border border-slate-100 text-center">
+                <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">{t('no_history', lang)}</p>
+              </div>
+            )}
           </div>
         )}
 

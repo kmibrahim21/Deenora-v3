@@ -759,6 +759,9 @@ export const generateClassResultPDF = async (
         
         if (sIdx % 10 === 0) onProgress?.(5 + Math.floor((sIdx / students.length) * 15));
 
+        const rawAtt = studentMarks['attendance'] || config.exam_manual_attendance?.[exam?.id]?.[student.id] || student.attendance || '0';
+        const stdAtt = parseFloat(String(rawAtt).replace(/[^0-9.]/g, '')) || 0;
+
         return {
             ...student,
             _total: hasAnyMark ? total : '',
@@ -766,9 +769,12 @@ export const generateClassResultPDF = async (
             _gpa: hasAnyMark ? gpa : '',
             _grade: hasAnyMark ? grade : '',
             _hasFailed: hasAnyMark ? hasFailed : true,
-            _hasAnyMark: hasAnyMark
+            _hasAnyMark: hasAnyMark,
+            _att: stdAtt
         };
     });
+
+    const meritMode = config.merit_ranking_mode || 'total_marks_first';
 
     // Sort by rank logic
     const validForRank = calculatedStudents.filter(s => s._hasAnyMark);
@@ -776,21 +782,70 @@ export const generateClassResultPDF = async (
         if (a._hasFailed && !b._hasFailed) return 1;
         if (!a._hasFailed && b._hasFailed) return -1;
         
-        const totalDiff = (Number(b._total) || 0) - (Number(a._total) || 0);
-        if (Math.abs(totalDiff) > 0.001) return totalDiff;
-        const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
-        const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || 0 : (b.roll || 0);
-        return rollA - rollB;
+        if (meritMode === 'gpa_first') {
+            const gpaA = parseFloat(a._gpa) || 0;
+            const gpaB = parseFloat(b._gpa) || 0;
+            const gpaDiff = gpaB - gpaA;
+            if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+
+            const totalDiff = (Number(b._total) || 0) - (Number(a._total) || 0);
+            if (Math.abs(totalDiff) > 0.001) return totalDiff;
+
+            const attA = typeof a._att === 'number' ? a._att : (parseFloat(String(a._att || '0').replace(/[^0-9.]/g, '')) || 0);
+            const attB = typeof b._att === 'number' ? b._att : (parseFloat(String(b._att || '0').replace(/[^0-9.]/g, '')) || 0);
+            const attDiff = attB - attA;
+            if (Math.abs(attDiff) > 0.001) return attDiff;
+
+            const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
+            const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || 0 : (b.roll || 0);
+            return rollA - rollB;
+        } else if (meritMode === 'total_marks_first') {
+            const totalDiff = (Number(b._total) || 0) - (Number(a._total) || 0);
+            if (Math.abs(totalDiff) > 0.001) return totalDiff;
+
+            const gpaA = parseFloat(a._gpa) || 0;
+            const gpaB = parseFloat(b._gpa) || 0;
+            const gpaDiff = gpaB - gpaA;
+            if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+
+            const attA = typeof a._att === 'number' ? a._att : (parseFloat(String(a._att || '0').replace(/[^0-9.]/g, '')) || 0);
+            const attB = typeof b._att === 'number' ? b._att : (parseFloat(String(b._att || '0').replace(/[^0-9.]/g, '')) || 0);
+            const attDiff = attB - attA;
+            if (Math.abs(attDiff) > 0.001) return attDiff;
+
+            const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
+            const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || 0 : (b.roll || 0);
+            return rollA - rollB;
+        } else {
+            const totalDiff = (Number(b._total) || 0) - (Number(a._total) || 0);
+            if (Math.abs(totalDiff) > 0.001) return totalDiff;
+            const rollA = typeof a.roll === 'string' ? parseInt(a.roll) || 0 : (a.roll || 0);
+            const rollB = typeof b.roll === 'string' ? parseInt(b.roll) || 0 : (b.roll || 0);
+            return rollA - rollB;
+        }
     });
 
     let currentRank = 1;
     validForRank.forEach((std, index) => {
         if (index > 0) {
             const prev = validForRank[index - 1];
-            const isTie = (
-                prev._hasFailed === std._hasFailed &&
-                Math.abs((Number(prev._total) || 0) - (Number(std._total) || 0)) < 0.001
-            );
+            let isTie = false;
+            if (meritMode === 'gpa_first' || meritMode === 'total_marks_first') {
+                const attPrev = typeof prev._att === 'number' ? prev._att : (parseFloat(String(prev._att || '0').replace(/[^0-9.]/g, '')) || 0);
+                const attStd = typeof std._att === 'number' ? std._att : (parseFloat(String(std._att || '0').replace(/[^0-9.]/g, '')) || 0);
+
+                isTie = (
+                    prev._hasFailed === std._hasFailed &&
+                    Math.abs((parseFloat(prev._gpa) || 0) - (parseFloat(std._gpa) || 0)) < 0.001 &&
+                    Math.abs((Number(prev._total) || 0) - (Number(std._total) || 0)) < 0.001 &&
+                    Math.abs(attPrev - attStd) < 0.001
+                );
+            } else {
+                isTie = (
+                    prev._hasFailed === std._hasFailed &&
+                    Math.abs((Number(prev._total) || 0) - (Number(std._total) || 0)) < 0.001
+                );
+            }
             if (!isTie) {
                 currentRank++;
             }

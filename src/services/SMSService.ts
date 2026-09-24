@@ -488,26 +488,91 @@ export const SMSService = {
 
   getHistory: async (institutionId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('sms_logs')
-        .select('*')
-        .eq('institution_id', institutionId)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const normalizePhoneKey = (p: any): string => {
+        if (!p) return '';
+        const digits = String(p).replace(/\D/g, '');
+        if (digits.length === 11 && digits.startsWith('01')) return digits;
+        if (digits.length === 13 && digits.startsWith('8801')) return digits.slice(2);
+        if (digits.length === 10 && digits.startsWith('1')) return '0' + digits;
+        return digits;
+      };
+
+      const [{ data, error }, { data: students }, { data: classes }, { data: teachers }] = await Promise.all([
+        supabase
+          .from('sms_logs')
+          .select('*')
+          .eq('institution_id', institutionId)
+          .order('created_at', { ascending: false })
+          .limit(100),
+        supabase
+          .from('students')
+          .select('student_name, roll, guardian_phone, guardian_phone_2, class_id')
+          .eq('institution_id', institutionId),
+        supabase
+          .from('classes')
+          .select('id, class_name')
+          .eq('institution_id', institutionId),
+        supabase
+          .from('teachers')
+          .select('name, phone')
+          .eq('institution_id', institutionId)
+      ]);
         
       if (error && error.code !== '42P01') throw error;
+
+      const classMap: Record<string, string> = {};
+      if (classes) {
+        classes.forEach(c => {
+          if (c.id && c.class_name) classMap[c.id] = c.class_name;
+        });
+      }
+
+      const phoneMap: Record<string, { name: string; class_name?: string; roll?: any; type: 'student' | 'teacher' }> = {};
+
+      if (students) {
+        students.forEach(s => {
+          const cName = s.class_id ? classMap[s.class_id] : undefined;
+          const info = { name: s.student_name, class_name: cName, roll: s.roll, type: 'student' as const };
+          if (s.guardian_phone) {
+            const k = normalizePhoneKey(s.guardian_phone);
+            if (k) phoneMap[k] = info;
+          }
+          if (s.guardian_phone_2) {
+            const k = normalizePhoneKey(s.guardian_phone_2);
+            if (k) phoneMap[k] = info;
+          }
+        });
+      }
+
+      if (teachers) {
+        teachers.forEach(t => {
+          if (t.phone) {
+            const k = normalizePhoneKey(t.phone);
+            if (k) phoneMap[k] = { name: t.name, class_name: 'শিক্ষক', type: 'teacher' };
+          }
+        });
+      }
       
       const safeData = data || [];
-      return safeData.map(log => ({
-        date: log.created_at,
-        recipient: log.recipient,
-        message: log.message,
-        status: log.status,
-        provider: log.provider || 'reve',
-        sms_type: log.sms_type || 'masking',
-        provider_message_id: log.provider_message_id || null,
-        reason: log.provider_error || null
-      }));
+      return safeData.map(log => {
+        const k = normalizePhoneKey(log.recipient);
+        const recipientInfo = phoneMap[k] || null;
+
+        return {
+          date: log.created_at,
+          recipient: log.recipient,
+          message: log.message,
+          status: log.status,
+          provider: log.provider || 'reve',
+          sms_type: log.sms_type || 'masking',
+          provider_message_id: log.provider_message_id || null,
+          reason: log.provider_error || null,
+          student_name: recipientInfo?.name || null,
+          class_name: recipientInfo?.class_name || null,
+          roll: recipientInfo?.roll || null,
+          recipient_type: recipientInfo?.type || null
+        };
+      });
     } catch (error) {
       console.error("Error in getHistory:", error);
       return [];

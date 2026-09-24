@@ -418,6 +418,9 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
            }
         }
 
+        const studentAttRaw = student.attendance || '0';
+        const parsedAtt = parseFloat(String(studentAttRaw).replace(/[^0-9.]/g, '')) || 0;
+
         return {
           ...student,
           marks: studentMarks,
@@ -425,25 +428,70 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           total: totalWeightedSum.toFixed(1),
           average: finalPercentage.toFixed(1),
           gpa: finalGpa,
-          grade: finalGradeStr
+          grade: finalGradeStr,
+          attendance: parsedAtt
         };
       });
 
-      // Sort by Pass Status, GPA, and Total Marks
+      const meritMode = (madrasah?.config_json as any)?.merit_ranking_mode || 'total_marks_first';
+
+      // Sort by Pass Status, Total Marks, GPA, and Attendance
       processed.sort((a, b) => {
         const failedA = a.grade === 'F' || parseFloat(a.gpa) === 0;
         const failedB = b.grade === 'F' || parseFloat(b.gpa) === 0;
         if (!failedA && failedB) return -1;
         if (failedA && !failedB) return 1;
 
-        // Removed GPA sort to prioritize total marks
+        if (meritMode === 'gpa_first') {
+          // 1. GPA
+          const gpaA = parseFloat(a.gpa) || 0;
+          const gpaB = parseFloat(b.gpa) || 0;
+          const gpaDiff = gpaB - gpaA;
+          if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
 
-        const totalDiff = parseFloat(b.total) - parseFloat(a.total);
-        if (Math.abs(totalDiff) > 0.001) return totalDiff;
+          // 2. Total Marks
+          const totalDiff = parseFloat(b.total) - parseFloat(a.total);
+          if (Math.abs(totalDiff) > 0.001) return totalDiff;
 
-        const rollA = parseInt(a.roll) || 0;
-        const rollB = parseInt(b.roll) || 0;
-        return rollA - rollB;
+          // 3. Attendance (Hajira)
+          const attA = typeof a.attendance === 'number' ? a.attendance : (parseFloat(String(a.attendance || '0').replace(/[^0-9.]/g, '')) || 0);
+          const attB = typeof b.attendance === 'number' ? b.attendance : (parseFloat(String(b.attendance || '0').replace(/[^0-9.]/g, '')) || 0);
+          const attDiff = attB - attA;
+          if (Math.abs(attDiff) > 0.001) return attDiff;
+
+          // 4. Roll Order
+          const rollA = parseInt(a.roll) || 0;
+          const rollB = parseInt(b.roll) || 0;
+          return rollA - rollB;
+        } else if (meritMode === 'total_marks_first') {
+          // 1. Total Marks
+          const totalDiff = parseFloat(b.total) - parseFloat(a.total);
+          if (Math.abs(totalDiff) > 0.001) return totalDiff;
+
+          // 2. GPA
+          const gpaA = parseFloat(a.gpa) || 0;
+          const gpaB = parseFloat(b.gpa) || 0;
+          const gpaDiff = gpaB - gpaA;
+          if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+
+          // 3. Attendance (Hajira)
+          const attA = typeof a.attendance === 'number' ? a.attendance : (parseFloat(String(a.attendance || '0').replace(/[^0-9.]/g, '')) || 0);
+          const attB = typeof b.attendance === 'number' ? b.attendance : (parseFloat(String(b.attendance || '0').replace(/[^0-9.]/g, '')) || 0);
+          const attDiff = attB - attA;
+          if (Math.abs(attDiff) > 0.001) return attDiff;
+
+          // 4. Roll Order
+          const rollA = parseInt(a.roll) || 0;
+          const rollB = parseInt(b.roll) || 0;
+          return rollA - rollB;
+        } else {
+          const totalDiff = parseFloat(b.total) - parseFloat(a.total);
+          if (Math.abs(totalDiff) > 0.001) return totalDiff;
+
+          const rollA = parseInt(a.roll) || 0;
+          const rollB = parseInt(b.roll) || 0;
+          return rollA - rollB;
+        }
       });
       
       // Add Rank with tie-handling (Dense Ranking)
@@ -453,10 +501,25 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
           const prev = processed[i - 1];
           const failedPrev = prev.grade === 'F' || parseFloat(prev.gpa) === 0;
           const failedP = p.grade === 'F' || parseFloat(p.gpa) === 0;
-          const isTie = (
-            failedPrev === failedP &&
-            Math.abs(parseFloat(prev.total) - parseFloat(p.total)) < 0.001
-          );
+
+          let isTie = false;
+          if (meritMode === 'gpa_first' || meritMode === 'total_marks_first') {
+            const attPrev = typeof prev.attendance === 'number' ? prev.attendance : (parseFloat(String(prev.attendance || '0').replace(/[^0-9.]/g, '')) || 0);
+            const attP = typeof p.attendance === 'number' ? p.attendance : (parseFloat(String(p.attendance || '0').replace(/[^0-9.]/g, '')) || 0);
+
+            isTie = (
+              failedPrev === failedP &&
+              Math.abs((parseFloat(prev.gpa) || 0) - (parseFloat(p.gpa) || 0)) < 0.001 &&
+              Math.abs(parseFloat(prev.total) - parseFloat(p.total)) < 0.001 &&
+              Math.abs(attPrev - attP) < 0.001
+            );
+          } else {
+            isTie = (
+              failedPrev === failedP &&
+              Math.abs(parseFloat(prev.total) - parseFloat(p.total)) < 0.001
+            );
+          }
+
           if (!isTie) {
             currentRank++;
           }

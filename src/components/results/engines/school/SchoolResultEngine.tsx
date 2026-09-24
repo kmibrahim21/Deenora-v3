@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout, Globe, Eye, EyeOff, Type } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout, Globe, Eye, EyeOff, Type, Settings, XCircle } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -77,6 +77,36 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [onConfirm, setOnConfirm] = useState<(() => void) | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const [cancelText, setCancelText] = useState('');
+  const [showExamSettingsModal, setShowExamSettingsModal] = useState(false);
+
+  const handleSetMeritRankingMode = async (mode: 'gpa_first' | 'total_marks_first' | 'off') => {
+    if (!madrasah?.id) return;
+    setIsSaving(true);
+    try {
+      const updatedConfig = {
+        ...(madrasah.config_json || {}),
+        merit_ranking_mode: mode
+      };
+      const { error } = await supabase
+        .from('institutions')
+        .update({ config_json: updatedConfig })
+        .eq('id', madrasah.id);
+
+      if (error) throw error;
+
+      if (madrasah.config_json) {
+        (madrasah.config_json as any).merit_ranking_mode = mode;
+      }
+
+      if (selectedExam) {
+        await fetchRanking(selectedExam.id, selectedExam.class_id);
+      }
+    } catch (err) {
+      console.error('Error updating merit ranking mode:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Exam Routine Feature States
   const [routineTermGroup, setRoutineTermGroup] = useState<string>('');
@@ -1073,7 +1103,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       const activeYearId = madrasah?.config_json?.active_academic_year_id;
       
       // Fetch data for ranking computation
-      const [subsRes, studentsRes, marksRes] = await Promise.all([
+      const [subsRes, studentsRes, marksRes, attStats] = await Promise.all([
         requestManager.cachedFetch('exam_subjects', (q: any) => q.select('*').eq('exam_id', examId), `exam_subjects:${examId}`),
         requestManager.cachedFetch('students', (q: any) => {
           let query = q.select('*').eq('class_id', classId);
@@ -1081,7 +1111,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           if ((window as any)._hasIsActive !== false) query = query.eq('is_active', true);
           return query;
         }, `students:${classId}:${activeYearId || 'no-year'}`),
-        requestManager.cachedFetch('exam_marks', (q: any) => q.select('*').eq('exam_id', examId), `exam_marks:${examId}`)
+        requestManager.cachedFetch('exam_marks', (q: any) => q.select('*').eq('exam_id', examId), `exam_marks:${examId}`),
+        fetchClassAttendanceStats(classId)
       ]);
 
       const subs = subsRes.data || [];
@@ -1213,36 +1244,101 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           }
         }
 
+        const manualAttMap = madrasah?.config_json?.exam_manual_attendance?.[examId] || {};
+        const stdMarksObj = marksData[student.id] || {};
+        const rawAtt = stdMarksObj['attendance'] || studentMarksObjLocal['attendance'] || manualAttMap[student.id] || attStats[student.id] || '0';
+        const attVal = parseFloat(String(rawAtt).replace(/[^0-9.]/g, '')) || 0;
+
         return {
           student_id: student.id,
           student_name: student.student_name,
           roll: student.roll,
           total_marks: totalMarks,
           pass_status: passStatus,
-          gpa: finalGpa
+          gpa: finalGpa,
+          attendance: attVal
         };
       })
       .sort((a, b) => {
         if (a.pass_status && !b.pass_status) return -1;
         if (!a.pass_status && b.pass_status) return 1;
-        
-        // Removed GPA sort to prioritize total marks
-        const marksDiff = b.total_marks - a.total_marks;
-        if (Math.abs(marksDiff) > 0.001) return marksDiff;
 
-        const rollA = parseInt(a.roll) || 0;
-        const rollB = parseInt(b.roll) || 0;
-        return rollA - rollB;
+        const meritMode = (madrasah?.config_json as any)?.merit_ranking_mode || 'total_marks_first';
+
+        if (meritMode === 'gpa_first') {
+          // 1. GPA
+          const gpaA = parseFloat(a.gpa) || 0;
+          const gpaB = parseFloat(b.gpa) || 0;
+          const gpaDiff = gpaB - gpaA;
+          if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+
+          // 2. Total Marks
+          const marksDiff = b.total_marks - a.total_marks;
+          if (Math.abs(marksDiff) > 0.001) return marksDiff;
+
+          // 3. Attendance (Hajira)
+          const attA = parseFloat(a.attendance) || 0;
+          const attB = parseFloat(b.attendance) || 0;
+          const attDiff = attB - attA;
+          if (Math.abs(attDiff) > 0.001) return attDiff;
+
+          // 4. Roll Order
+          const rollA = parseInt(a.roll) || 0;
+          const rollB = parseInt(b.roll) || 0;
+          return rollA - rollB;
+        } else if (meritMode === 'total_marks_first') {
+          // 1. Total Marks
+          const marksDiff = b.total_marks - a.total_marks;
+          if (Math.abs(marksDiff) > 0.001) return marksDiff;
+
+          // 2. GPA
+          const gpaA = parseFloat(a.gpa) || 0;
+          const gpaB = parseFloat(b.gpa) || 0;
+          const gpaDiff = gpaB - gpaA;
+          if (Math.abs(gpaDiff) > 0.001) return gpaDiff;
+
+          // 3. Attendance (Hajira)
+          const attA = parseFloat(a.attendance) || 0;
+          const attB = parseFloat(b.attendance) || 0;
+          const attDiff = attB - attA;
+          if (Math.abs(attDiff) > 0.001) return attDiff;
+
+          // 4. Roll Order
+          const rollA = parseInt(a.roll) || 0;
+          const rollB = parseInt(b.roll) || 0;
+          return rollA - rollB;
+        } else {
+          // Standard Total Marks only
+          const marksDiff = b.total_marks - a.total_marks;
+          if (Math.abs(marksDiff) > 0.001) return marksDiff;
+
+          const rollA = parseInt(a.roll) || 0;
+          const rollB = parseInt(b.roll) || 0;
+          return rollA - rollB;
+        }
       });
 
+      const currentMeritMode = (madrasah?.config_json as any)?.merit_ranking_mode || 'total_marks_first';
       let currentRank = 1;
       const ranked = sortedRanked.map((item, idx) => {
         if (idx > 0) {
           const prev = sortedRanked[idx - 1];
-          const isTie = (
-            prev.pass_status === item.pass_status &&
-            Math.abs(prev.total_marks - item.total_marks) < 0.001
-          );
+          let isTie = false;
+
+          if (currentMeritMode === 'gpa_first' || currentMeritMode === 'total_marks_first') {
+            isTie = (
+              prev.pass_status === item.pass_status &&
+              Math.abs((parseFloat(prev.gpa) || 0) - (parseFloat(item.gpa) || 0)) < 0.001 &&
+              Math.abs(prev.total_marks - item.total_marks) < 0.001 &&
+              Math.abs((parseFloat(prev.attendance) || 0) - (parseFloat(item.attendance) || 0)) < 0.001
+            );
+          } else {
+            isTie = (
+              prev.pass_status === item.pass_status &&
+              Math.abs(prev.total_marks - item.total_marks) < 0.001
+            );
+          }
+
           if (!isTie) {
             currentRank++;
           }
@@ -1970,12 +2066,24 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         await fetchMarkEntryData(selectedExam.id, selectedExam.class_id);
     }
 
+    const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
+    const manualAttMap = madrasah?.config_json?.exam_manual_attendance?.[selectedExam.id] || {};
+
+    const enrichedMarksData = { ...marksData };
+    students.forEach(st => {
+      const currentMarks = { ...(enrichedMarksData[st.id] || {}) };
+      if (!currentMarks['attendance']) {
+        currentMarks['attendance'] = manualAttMap[st.id] || attStats[st.id] || '0';
+      }
+      enrichedMarksData[st.id] = currentMarks;
+    });
+
     try {
       await generateClassResultPDF(
           selectedExam,
           subjects,
           students,
-          marksData,
+          enrichedMarksData,
           madrasah,
           downloadLang,
           (p) => setDownloadProgress(p),
@@ -1999,11 +2107,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     
     const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
     
-    // If rankingData is empty, fetch it first
-    let currentRanking = [...rankingData];
-    if (currentRanking.length === 0) {
-        currentRanking = await fetchRanking(selectedExam.id, selectedExam.class_id);
-    }
+    // Always fetch fresh ranking to guarantee active merit mode is applied to PDF marksheets
+    const currentRanking = await fetchRanking(selectedExam.id, selectedExam.class_id);
     
     const validStudents = currentRanking.filter((item: any) => students.find(st => st.id === item.student_id));
     
@@ -2179,7 +2284,18 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           )}
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+                <button
+                  onClick={() => setShowExamSettingsModal(true)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all ${
+                    madrasah?.theme === 'dark' 
+                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' 
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                  title={lang === 'bn' ? 'পরীক্ষা ও মেধা সেটিংস' : 'Exam & Merit Settings'}
+                >
+                  <Settings size={20} />
+                </button>
                 {selectedClassId && (
                     <button onClick={() => { setClassId(selectedClassId); setShowAddExam(true); }} className="w-10 h-10 bg-[#2563EB] text-white rounded-xl shadow-premium flex items-center justify-center active:scale-95 transition-all"><Plus size={20}/></button>
                 )}
@@ -4492,6 +4608,144 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             </motion.div>
           </div>
         )}
+      {/* Exam Settings Modal */}
+      {showExamSettingsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-[2.2rem] p-6 shadow-2xl border ${
+            madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'
+          } animate-in zoom-in-95 duration-200`}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] dark:text-blue-400 flex items-center justify-center border border-blue-100 dark:border-blue-800/50">
+                  <Settings size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black font-noto">
+                    {lang === 'bn' ? 'পরীক্ষা ও মেধা সেটিংস' : 'Exam & Merit Settings'}
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-400">
+                    {lang === 'bn' ? 'মেধাস্থান ও র্যাঙ্কিং নিয়মাবলি' : 'Merit position & ranking rules'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowExamSettingsModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              {/* Mode 1: GPA Priority */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                ((madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first')
+                  ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-blue-50/70 border-blue-200')
+                  : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/80' : 'bg-slate-50 border-slate-100')
+              }`}>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="pr-1">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Trophy size={15} className="text-amber-500" />
+                      <h4 className="text-xs font-black font-noto">
+                        {lang === 'bn' ? '১. জিপিএ অগ্রাধিকার (GPA Priority Mode)' : '1. GPA Priority Mode'}
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-noto leading-relaxed">
+                      {lang === 'bn' 
+                        ? 'GPA বেশি → আগে। GPA সমান হলে Total Mark বেশি → আগে। Total Mark সমান হলে Attendance বেশি → আগে।' 
+                        : 'Higher GPA → First. If GPA is equal, higher Total Marks → First. If Total Marks also equal, higher Attendance → First.'}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => handleSetMeritRankingMode(
+                      (madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first' ? 'off' : 'gpa_first'
+                    )}
+                    className={`shrink-0 px-3 py-1.5 rounded-xl font-black text-[11px] flex items-center gap-1.5 transition-all ${
+                      (madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first'
+                        ? 'bg-[#2563EB] text-white shadow-md'
+                        : madrasah?.theme === 'dark'
+                          ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {(madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first' ? (
+                      <>
+                        <CheckCircle2 size={14} />
+                        {lang === 'bn' ? 'একটিভ' : 'Active'}
+                      </>
+                    ) : (
+                      <>
+                        <XCircle size={14} />
+                        {lang === 'bn' ? 'অফ' : 'Off'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mode 2: Total Mark Priority */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                ((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode)
+                  ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-blue-50/70 border-blue-200')
+                  : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/80' : 'bg-slate-50 border-slate-100')
+              }`}>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="pr-1">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Trophy size={15} className="text-[#2563EB]" />
+                      <h4 className="text-xs font-black font-noto">
+                        {lang === 'bn' ? '২. টোটাল মার্ক অগ্রাধিকার (Total Mark Priority Mode)' : '2. Total Mark Priority Mode'}
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-noto leading-relaxed">
+                      {lang === 'bn' 
+                        ? 'Total Mark বেশি → আগে। Total Mark সমান হলে GPA বেশি → আগে। এরপর Attendance বেশি → আগে।' 
+                        : 'Higher Total Marks → First. If Total Marks equal, higher GPA → First. Then higher Attendance → First.'}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => handleSetMeritRankingMode(
+                      ((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode) ? 'off' : 'total_marks_first'
+                    )}
+                    className={`shrink-0 px-3 py-1.5 rounded-xl font-black text-[11px] flex items-center gap-1.5 transition-all ${
+                      ((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode)
+                        ? 'bg-[#2563EB] text-white shadow-md'
+                        : madrasah?.theme === 'dark'
+                          ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode) ? (
+                      <>
+                        <CheckCircle2 size={14} />
+                        {lang === 'bn' ? 'একটিভ' : 'Active'}
+                      </>
+                    ) : (
+                      <>
+                        <XCircle size={14} />
+                        {lang === 'bn' ? 'অফ' : 'Off'}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowExamSettingsModal(false)}
+                className="w-full py-3 bg-[#2563EB] hover:bg-blue-700 text-white font-black rounded-xl text-xs shadow-premium active:scale-95 transition-all"
+              >
+                {lang === 'bn' ? 'সম্পন্ন' : 'Done'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </AnimatePresence>
     </div>
   );
