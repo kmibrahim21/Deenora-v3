@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@supabase/supabase-js';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { toPng } from 'html-to-image';
+import { toPng, toJpeg } from 'html-to-image';
 // Fix: Import icons from lucide-react instead of ../supabase
 import { Loader2, Search, ChevronRight, User as UserIcon, ShieldCheck, Database, Globe, CheckCircle, XCircle, CreditCard, Save, X, Settings, Smartphone, MessageSquare, Key, Shield, ArrowLeft, ArrowRight, Copy, Check, Calendar, Users, Layers, MonitorSmartphone, Server, BarChart3, TrendingUp, RefreshCcw, Clock, Hash, History, Download, Zap, Activity, PieChart, Users2, CheckCircle2, AlertCircle, AlertTriangle, RefreshCw, Trash2, Edit2, Sliders, ToggleLeft, ToggleRight, GraduationCap, Banknote, PhoneCall, Mic, Plus, Play, Building2, Camera, MessageCircle, Send, BookOpen, Megaphone } from 'lucide-react';
 import { supabase, smsApi } from 'supabase';
@@ -15,6 +15,7 @@ import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Prof
 import { SMSService } from '../services/SMSService';
 import { generateSystemPaymentReportPDF, generateSubscriptionMatrixPDF } from '../utils/pdfGenerator';
 import { saveJsPdf, downloadBlob } from '../utils/fileDownloader';
+import { SOLAIMAN_LIPI_FONT_STYLE } from '../utils/serverPdfHelper';
 
 interface InstitutionWithStats extends Institution {
   student_count?: number;
@@ -669,9 +670,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       e.stopPropagation();
     }
     try {
+      setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'অপেক্ষা করুন' : 'Processing', message: lang === 'bn' ? 'রসিদ তৈরি করা হচ্ছে...' : 'Generating receipt...' });
+      
       const container = document.createElement('div');
       container.style.position = 'absolute';
       container.style.left = '-9999px';
+      container.style.top = '0';
       document.body.appendChild(container);
       const root = createRoot(container);
       
@@ -681,8 +685,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       const isCustomPayment = !metadata.package_name && !transaction.description?.includes('Package');
       
       return (
-      <div style={{ width: '794px', minHeight: '1123px', padding: '50px', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", color: '#1e293b', backgroundColor: '#fff' }}>
-        
+      <div className="font-solaiman" style={{ width: '794px', minHeight: '1123px', padding: '50px', color: '#1e293b', backgroundColor: '#fff', position: 'relative' }}>
+        <style dangerouslySetInnerHTML={{ __html: SOLAIMAN_LIPI_FONT_STYLE }} />
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #f1f5f9', paddingBottom: '30px', marginBottom: '40px' }}>
           <div>
@@ -691,7 +695,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Receipt</div>
-            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px', fontWeight: 600 }}>#{transaction.transaction_id}</div>
+            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px', fontWeight: 600 }}>#{transaction.transaction_id || (transaction.id && transaction.id.slice(0, 8))}</div>
             <div style={{ fontSize: '14px', color: '#64748b', marginTop: '2px' }}>{new Date(transaction.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
           </div>
         </div>
@@ -800,29 +804,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       </div>
     )};
 
-    await new Promise<void>((resolve) => {
-      root.render(<ReceiptComponent />);
-      setTimeout(resolve, 500);
-    });
+    // Render and wait for layout
+    root.render(<ReceiptComponent />);
+    
+    // Improved wait logic: fonts and layout
+    if (document.fonts) {
+      await document.fonts.ready.catch(() => {});
+    }
+    await new Promise(resolve => setTimeout(resolve, 800));
 
-    const imgData = await toPng(container.firstElementChild as HTMLElement, {
-      pixelRatio: 2,
+    const element = container.firstElementChild as HTMLElement;
+    if (!element) throw new Error("Rendering failed: element not found");
+
+    const imgData = await toJpeg(element, {
+      quality: 0.95,
+      pixelRatio: 2.5,
       backgroundColor: '#ffffff',
       width: 794,
       height: 1123,
+      fontEmbedCSS: SOLAIMAN_LIPI_FONT_STYLE
     });
 
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      
-      doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-      
-      root.unmount();
-      document.body.removeChild(container);
-      
-      const fileName = `Receipt_${(selectedUser?.name || 'User').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_${transaction.id.slice(0, 8)}.pdf`;
-      await saveJsPdf(doc, fileName);
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    
+    root.unmount();
+    document.body.removeChild(container);
+    
+    const fileName = `Receipt_${(selectedUser?.name || 'User').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_${(transaction.transaction_id || (transaction.id && transaction.id.slice(0, 8)))}.pdf`;
+    await saveJsPdf(doc, fileName);
+    setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'রসিদ সফলভাবে ডাউনলোড হয়েছে' });
     } catch(err: any) {
       console.error(err);
       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message || 'Failed to download receipt' });
