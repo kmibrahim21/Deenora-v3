@@ -15,7 +15,8 @@ import { Institution, Language, Transaction, AdminSMSStock, SystemSettings, Prof
 import { SMSService } from '../services/SMSService';
 import { generateSystemPaymentReportPDF, generateSubscriptionMatrixPDF } from '../utils/pdfGenerator';
 import { saveJsPdf, downloadBlob } from '../utils/fileDownloader';
-import { SOLAIMAN_LIPI_FONT_STYLE } from '../utils/serverPdfHelper';
+import { SOLAIMAN_LIPI_FONT_STYLE, downloadServerPdf, wrapHtmlForPdf } from '../utils/serverPdfHelper';
+import { elementToImageDataUrl } from '../utils/admissionFormPdf';
 
 interface InstitutionWithStats extends Institution {
   student_count?: number;
@@ -670,175 +671,190 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
       e.stopPropagation();
     }
     try {
-      setStatusModal({ show: true, type: 'success', title: lang === 'bn' ? 'অপেক্ষা করুন' : 'Processing', message: lang === 'bn' ? 'রসিদ তৈরি করা হচ্ছে...' : 'Generating receipt...' });
-      
-      const container = document.createElement('div');
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.top = '0';
-      document.body.appendChild(container);
-      const root = createRoot(container);
-      
-      const ReceiptComponent = () => {
+      const fileName = `Receipt_${(selectedUser?.name || 'User').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_${(transaction.transaction_id || (transaction.id && transaction.id.slice(0, 8)))}.pdf`;
+
       const metadata = transaction.metadata || {};
       const months = metadata.months || [];
       const isCustomPayment = !metadata.package_name && !transaction.description?.includes('Package');
       
-      return (
-      <div className="font-solaiman" style={{ width: '794px', minHeight: '1123px', padding: '50px', color: '#1e293b', backgroundColor: '#fff', position: 'relative' }}>
-        <style dangerouslySetInnerHTML={{ __html: SOLAIMAN_LIPI_FONT_STYLE }} />
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #f1f5f9', paddingBottom: '30px', marginBottom: '40px' }}>
+      const receiptHtml = `
+      <div class="font-solaiman" style="width: 794px; min-height: 1123px; padding: 50px; color: #1e293b; background-color: #fff; position: relative; box-sizing: border-box;">
+        <style>${SOLAIMAN_LIPI_FONT_STYLE}</style>
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #f1f5f9; padding-bottom: 30px; margin-bottom: 40px;">
           <div>
-            <div style={{ fontSize: '36px', fontWeight: 900, color: '#2563eb', letterSpacing: '-0.5px' }}>Deenora</div>
-            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>Management System</div>
+            <div style="font-size: 36px; font-weight: 900; color: #2563eb; letter-spacing: -0.5px;">Deenora</div>
+            <div style="font-size: 14px; color: #64748b; margin-top: 4px; font-weight: 500;">Management System</div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '1px' }}>Receipt</div>
-            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px', fontWeight: 600 }}>#{transaction.transaction_id || (transaction.id && transaction.id.slice(0, 8))}</div>
-            <div style={{ fontSize: '14px', color: '#64748b', marginTop: '2px' }}>{new Date(transaction.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-          </div>
-        </div>
-
-        {/* Institution Info */}
-        <div style={{ marginBottom: '40px', padding: '25px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px' }}>
-          <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#64748b', fontWeight: 700, marginBottom: '15px' }}>Billed To</div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>{selectedUser?.name || 'Institution Name'}</div>
-          <div style={{ fontSize: '15px', color: '#475569', display: 'flex', alignItems: 'center', gap: '10px' }}>
-             <span>Phone: {selectedUser?.phone || 'N/A'}</span>
+          <div style="text-align: right;">
+            <div style="font-size: 24px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 1px;">Receipt</div>
+            <div style="font-size: 14px; color: #64748b; margin-top: 4px; font-weight: 600;">#${transaction.transaction_id || (transaction.id && transaction.id.slice(0, 8))}</div>
+            <div style="font-size: 14px; color: #64748b; margin-top: 2px;">${new Date(transaction.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
           </div>
         </div>
 
-        {/* Subscription Details Table */}
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', borderBottom: '2px solid #cbd5e1', paddingBottom: '12px', marginBottom: '16px', fontWeight: 700, color: '#475569', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        <!-- Institution Info -->
+        <div style="margin-bottom: 40px; padding: 25px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px;">
+          <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; font-weight: 700; margin-bottom: 15px;">Billed To</div>
+          <div style="font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">${selectedUser?.name || 'Institution Name'}</div>
+          <div style="font-size: 15px; color: #475569; display: flex; align-items: center; gap: 10px;">
+             <span>Phone: ${selectedUser?.phone || 'N/A'}</span>
+          </div>
+        </div>
+
+        <!-- Subscription Details Table -->
+        <div style="margin-bottom: 40px;">
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; border-bottom: 2px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 16px; font-weight: 700; color: #475569; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
             <div>Description</div>
-            <div style={{ textAlign: 'center' }}>Details</div>
-            <div style={{ textAlign: 'right' }}>Amount</div>
+            <div style="text-align: center;">Details</div>
+            <div style="text-align: right;">Amount</div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', borderBottom: '1px solid #e2e8f0', paddingBottom: '16px', marginBottom: '16px', alignItems: 'start' }}>
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 16px; align-items: start;">
             <div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+              <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">
                 Subscription Payment
               </div>
-              {!isCustomPayment && metadata.package_name && (
-                <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>
-                  Package: <span style={{ color: '#0f172a', fontWeight: 600 }}>{metadata.package_name}</span>
+              ${!isCustomPayment && metadata.package_name ? `
+                <div style="font-size: 14px; color: #64748b; font-weight: 500;">
+                  Package: <span style="color: #0f172a; font-weight: 600;">${metadata.package_name}</span>
                 </div>
-              )}
-              {!isCustomPayment && metadata.subscription_type && (
-                <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
-                  Type: <span style={{ color: '#0f172a', fontWeight: 600, textTransform: 'capitalize' }}>{metadata.subscription_type}</span>
+              ` : ''}
+              ${!isCustomPayment && metadata.subscription_type ? `
+                <div style="font-size: 14px; color: #64748b; font-weight: 500; margin-top: 2px;">
+                  Type: <span style="color: #0f172a; font-weight: 600; text-transform: capitalize;">${metadata.subscription_type}</span>
                 </div>
-              )}
-              {isCustomPayment && (
-                 <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>
-                   {transaction.description}
+              ` : ''}
+              ${isCustomPayment && transaction.description ? `
+                 <div style="font-size: 14px; color: #64748b; font-weight: 500;">
+                   ${transaction.description}
                  </div>
-              )}
+              ` : ''}
             </div>
-            <div style={{ textAlign: 'center', fontSize: '15px', fontWeight: 600, color: '#475569' }}>
-               {!isCustomPayment && months.length > 0 ? `${months.length} Month${months.length > 1 ? 's' : ''}` : '-'}
+            <div style="text-align: center; font-size: 15px; font-weight: 600; color: #475569;">
+               ${!isCustomPayment && months.length > 0 ? `${months.length} Month${months.length > 1 ? 's' : ''}` : '-'}
             </div>
-            <div style={{ textAlign: 'right', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-               {metadata.base_amount ? `${metadata.base_amount.toLocaleString('bn-BD')} ৳` : `${transaction.amount.toLocaleString('bn-BD')} ৳`}
+            <div style="text-align: right; font-size: 16px; font-weight: 700; color: #0f172a;">
+               ${metadata.base_amount ? `${Number(metadata.base_amount).toLocaleString('bn-BD')} ৳` : `${Number(transaction.amount || 0).toLocaleString('bn-BD')} ৳`}
             </div>
           </div>
 
-          {months.length > 0 && !isCustomPayment && (
-            <div style={{ backgroundColor: '#f1f5f9', padding: '16px', borderRadius: '12px', marginTop: '10px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Covered Months</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {months.map((m: string) => {
+          ${months.length > 0 && !isCustomPayment ? `
+            <div style="background-color: #f1f5f9; padding: 16px; border-radius: 12px; margin-top: 10px;">
+              <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Covered Months</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${months.map((m: string) => {
                   const [year, month] = m.split('-');
                   const date = new Date(parseInt(year), parseInt(month) - 1);
-                  return (
-                    <span key={m} style={{ backgroundColor: '#fff', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
-                      {date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  return `
+                    <span style="background-color: #fff; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #334155;">
+                      ${date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                     </span>
-                  );
-                })}
+                  `;
+                }).join('')}
               </div>
             </div>
-          )}
+          ` : ''}
         </div>
 
-        {/* Totals */}
-        <div style={{ width: '350px', marginLeft: 'auto' }}>
-          {metadata.discount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '15px' }}>
+        <!-- Totals -->
+        <div style="width: 350px; margin-left: auto;">
+          ${metadata.discount > 0 ? `
+            <div style="display: flex; justify-content: space-between; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 15px;">
               <span>Subtotal</span>
-              <span style={{ fontWeight: 600 }}>{metadata.base_amount.toLocaleString('bn-BD')} ৳</span>
+              <span style="font-weight: 600;">${Number(metadata.base_amount || 0).toLocaleString('bn-BD')} ৳</span>
             </div>
-          )}
-          {metadata.discount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid #e2e8f0', color: '#ef4444', fontSize: '15px' }}>
+            <div style="display: flex; justify-content: space-between; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; color: #ef4444; font-size: 15px;">
               <span>Discount</span>
-              <span style={{ fontWeight: 600 }}>-{metadata.discount.toLocaleString('bn-BD')} ৳</span>
+              <span style="font-weight: 600;">-${Number(metadata.discount || 0).toLocaleString('bn-BD')} ৳</span>
             </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', marginTop: '10px' }}>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a' }}>Total Paid</span>
-            <span style={{ fontSize: '24px', fontWeight: 900, color: '#2563eb' }}>{transaction.amount.toLocaleString('bn-BD')} ৳</span>
+          ` : ''}
+          <div style="display: flex; justify-content: space-between; align-items: center; background-color: #eff6ff; padding: 20px; border-radius: 12px; margin-top: 10px;">
+            <span style="font-size: 18px; font-weight: 800; color: #1e3a8a;">Total Paid</span>
+            <span style="font-size: 24px; font-weight: 900; color: #2563eb;">${Number(transaction.amount || 0).toLocaleString('bn-BD')} ৳</span>
           </div>
 
-          {metadata.due_amount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 20px', marginTop: '10px', color: '#dc2626', fontSize: '15px', border: '1px dashed #fca5a5', borderRadius: '10px' }}>
-              <span style={{ fontWeight: 700 }}>Due Amount (বকেয়া)</span>
-              <span style={{ fontWeight: 800 }}>{metadata.due_amount.toLocaleString('bn-BD')} ৳</span>
+          ${metadata.due_amount > 0 ? `
+            <div style="display: flex; justify-content: space-between; padding: 12px 20px; margin-top: 10px; color: #dc2626; font-size: 15px; border: 1px dashed #fca5a5; border-radius: 10px;">
+              <span style="font-weight: 700;">Due Amount (বকেয়া)</span>
+              <span style="font-weight: 800;">${Number(metadata.due_amount).toLocaleString('bn-BD')} ৳</span>
             </div>
-          )}
+          ` : ''}
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
-            <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Payment Status</span>
-            <span style={{ fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '1px' }}>{transaction.status}</span>
+          <div style="display: flex; justify-content: space-between; margin-top: 20px; font-size: 14px; color: #64748b;">
+            <span style="font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Payment Status</span>
+            <span style="font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 1px;">${transaction.status || 'paid'}</span>
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{ position: 'absolute', bottom: '50px', left: '50px', right: '50px', textAlign: 'center', borderTop: '2px solid #f1f5f9', paddingTop: '30px' }}>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>Thank you for your business!</div>
-          <div style={{ fontSize: '14px', color: '#94a3b8' }}>This is a computer-generated receipt and requires no physical signature.</div>
+        <!-- Footer -->
+        <div style="position: absolute; bottom: 50px; left: 50px; right: 50px; text-align: center; border-top: 2px solid #f1f5f9; padding-top: 30px;">
+          <div style="font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Thank you for your business!</div>
+          <div style="font-size: 14px; color: #94a3b8;">This is a computer-generated receipt and requires no physical signature.</div>
         </div>
       </div>
-    )};
+      `;
 
-    // Render and wait for layout
-    root.render(<ReceiptComponent />);
-    
-    // Improved wait logic: fonts and layout
-    if (document.fonts) {
-      await document.fonts.ready.catch(() => {});
-    }
-    await new Promise(resolve => setTimeout(resolve, 800));
+      // Method 1: Try server-side generation via /api/pdf first
+      try {
+        const serverSuccess = await downloadServerPdf({
+          html: wrapHtmlForPdf(receiptHtml, 'Receipt'),
+          entity_type: 'subscription_receipt',
+          entity_id: transaction.id || transaction.transaction_id || 'receipt',
+          filename: fileName,
+          format: 'a4',
+          orientation: 'portrait'
+        });
 
-    const element = container.firstElementChild as HTMLElement;
-    if (!element) throw new Error("Rendering failed: element not found");
+        if (serverSuccess) {
+          return;
+        }
+      } catch (serverErr) {
+        console.warn('Server PDF generation failed, falling back to client-side:', serverErr);
+      }
 
-    const imgData = await toJpeg(element, {
-      quality: 0.95,
-      pixelRatio: 2.5,
-      backgroundColor: '#ffffff',
-      width: 794,
-      height: 1123,
-      fontEmbedCSS: SOLAIMAN_LIPI_FONT_STYLE
-    });
+      // Method 2: Client-side rendering fallback
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '0';
+      container.style.top = '0';
+      container.style.width = '794px';
+      container.style.minHeight = '1123px';
+      container.style.zIndex = '-9999';
+      container.style.opacity = '0';
+      container.style.pointerEvents = 'none';
+      document.body.appendChild(container);
+      
+      const root = createRoot(container);
 
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    
-    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-    
-    root.unmount();
-    document.body.removeChild(container);
-    
-    const fileName = `Receipt_${(selectedUser?.name || 'User').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_${(transaction.transaction_id || (transaction.id && transaction.id.slice(0, 8)))}.pdf`;
-    await saveJsPdf(doc, fileName);
-    setStatusModal({ show: true, type: 'success', title: 'সফল', message: 'রসিদ সফলভাবে ডাউনলোড হয়েছে' });
+      try {
+        root.render(<div dangerouslySetInnerHTML={{ __html: receiptHtml }} />);
+        
+        if (document.fonts) {
+          await document.fonts.ready.catch(() => {});
+        }
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const element = container.firstElementChild as HTMLElement;
+        if (!element) throw new Error("Rendering failed: element not found");
+
+        const imgData = await elementToImageDataUrl(element);
+        
+        const doc = new jsPDF('p', 'mm', 'a4');
+        doc.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+        await saveJsPdf(doc, fileName);
+      } finally {
+        try {
+          root.unmount();
+          if (container.parentNode) {
+            document.body.removeChild(container);
+          }
+        } catch (cleanupErr) {
+          console.warn('Cleanup error:', cleanupErr);
+        }
+      }
     } catch(err: any) {
-      console.error(err);
+      console.error('handleDownloadReceipt error:', err);
       setStatusModal({ show: true, type: 'error', title: 'ব্যর্থ', message: err.message || 'Failed to download receipt' });
     }
   };
