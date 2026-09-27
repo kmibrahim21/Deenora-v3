@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX, Mic } from 'lucide-react';
+import { ArrowLeft, Plus, Search, CheckCircle2, MessageSquare, X, BookOpen, ChevronDown, Check, PhoneCall, Smartphone, Loader2, ListChecks, MessageCircle, Phone, AlertCircle, AlertTriangle, Zap, UserX, Mic, Hash, Sparkles, Trash2, Eye, RefreshCw, Settings2 } from 'lucide-react';
 import { supabase, offlineApi, smsApi } from 'supabase';
 import { Class, Student, Language, Institution } from 'types';
 import { t } from 'translations';
@@ -50,6 +50,276 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
   const isSendingRef = useRef(false);
   const [statusModal, setStatusModal] = useState<{ show: boolean; type: 'success' | 'error' | 'balance'; title: string; message: string }>({ show: false, type: 'success', title: '', message: '' });
   const { startCall } = useVoiceCall();
+
+  // Registration Number Generator States
+  const [showRegNoModal, setShowRegNoModal] = useState(false);
+  const [regTab, setRegTab] = useState<'generate' | 'clear'>('generate');
+  const [regPatternInput, setRegPatternInput] = useState('Abc001');
+  const [regScope, setRegScope] = useState<'all' | 'current'>('all');
+  const [regFormatMode, setRegFormatMode] = useState<'class_serial' | 'sequential'>('class_serial');
+  const [isProcessingRegNo, setIsProcessingRegNo] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [classListForReg, setClassListForReg] = useState<any[]>([]);
+
+  // Parse pattern (e.g. Abc001 -> prefix: Abc, digits: 001, paddingLength: 3)
+  const parsedRegPattern = useMemo(() => {
+    const raw = regPatternInput.trim();
+    if (!raw) return { prefix: 'Abc', digits: '001', paddingLength: 3 };
+    const match = raw.match(/^(.*?)([0-9]+)$/);
+    if (match) {
+      return {
+        prefix: match[1],
+        digits: match[2],
+        paddingLength: Math.max(1, match[2].length)
+      };
+    }
+    return { prefix: raw, digits: '001', paddingLength: 3 };
+  }, [regPatternInput]);
+
+  // Fetch all classes for sorting serials
+  const fetchAllClassesForReg = useCallback(async () => {
+    if (!institutionId) return;
+    try {
+      const { data } = await supabase
+        .from('classes')
+        .select('id, class_name, sort_order')
+        .eq('institution_id', institutionId)
+        .order('sort_order', { ascending: true });
+      if (data) setClassListForReg(data);
+    } catch (err) {
+      console.error('Error fetching classes:', err);
+    }
+  }, [institutionId]);
+
+  useEffect(() => {
+    if (showRegNoModal) {
+      fetchAllClassesForReg();
+    }
+  }, [showRegNoModal, fetchAllClassesForReg]);
+
+  // Sample Live Preview Calculation
+  const regNoPreviewList = useMemo(() => {
+    const sampleClasses = regScope === 'current'
+      ? [{ ...selectedClass, serial: 1 }]
+      : classListForReg.length > 0 
+        ? classListForReg.map((c, idx) => ({ ...c, serial: idx + 1 }))
+        : [
+            { id: '1', class_name: 'প্লে (Play)', serial: 1 },
+            { id: '2', class_name: 'নার্সারি (Nursery)', serial: 2 },
+            { id: '3', class_name: '১ম শ্রেণি (Class 1)', serial: 3 }
+          ];
+
+    const previewItems: Array<{ class_name: string; roll: number; reg_no: string }> = [];
+    let globalSeq = 1;
+
+    sampleClasses.slice(0, 4).forEach((cls) => {
+      [1, 2].forEach((roll) => {
+        let generated = '';
+        if (regFormatMode === 'class_serial') {
+          generated = `${parsedRegPattern.prefix}${cls.serial}${String(roll).padStart(parsedRegPattern.paddingLength, '0')}`;
+        } else {
+          generated = `${parsedRegPattern.prefix}${String(globalSeq).padStart(parsedRegPattern.paddingLength, '0')}`;
+          globalSeq++;
+        }
+        previewItems.push({
+          class_name: cls.class_name,
+          roll,
+          reg_no: generated
+        });
+      });
+    });
+
+    return previewItems;
+  }, [regScope, selectedClass, classListForReg, regFormatMode, parsedRegPattern]);
+
+  // Bulk Generate Execution
+  const handleBulkGenerateRegNo = async () => {
+    if (!institutionId) return;
+    setIsProcessingRegNo(true);
+    try {
+      let targetClasses = classListForReg;
+      if (targetClasses.length === 0) {
+        const { data: clsData } = await supabase
+          .from('classes')
+          .select('id, class_name, sort_order')
+          .eq('institution_id', institutionId)
+          .order('sort_order', { ascending: true });
+        targetClasses = clsData || [];
+      }
+
+      if (regScope === 'current') {
+        targetClasses = targetClasses.filter(c => c.id === selectedClass.id);
+        if (targetClasses.length === 0) targetClasses = [selectedClass];
+      }
+
+      const classSerialMap = new Map<string, number>();
+      targetClasses.forEach((c, idx) => {
+        classSerialMap.set(c.id, idx + 1);
+      });
+
+      const classIds = targetClasses.map(c => c.id);
+      const { data: targetStudents, error: fetchErr } = await supabase
+        .from('students')
+        .select('id, class_id, roll, student_name')
+        .eq('institution_id', institutionId)
+        .in('class_id', classIds)
+        .order('roll', { ascending: true });
+
+      if (fetchErr) throw fetchErr;
+
+      if (!targetStudents || targetStudents.length === 0) {
+        setStatusModal({
+          show: true,
+          type: 'error',
+          title: 'কোনো শিক্ষার্থী পাওয়া যায়নি',
+          message: 'নির্বাচিত ক্লাসে কোনো শিক্ষার্থী পাওয়া যায়নি।'
+        });
+        setIsProcessingRegNo(false);
+        return;
+      }
+
+      const studentsByClass = new Map<string, any[]>();
+      targetStudents.forEach(s => {
+        if (!studentsByClass.has(s.class_id)) {
+          studentsByClass.set(s.class_id, []);
+        }
+        studentsByClass.get(s.class_id)!.push(s);
+      });
+
+      const updates: Array<{ id: string; registration_number: string }> = [];
+      let globalSeqCounter = 1;
+
+      targetClasses.forEach(cls => {
+        const cSerial = classSerialMap.get(cls.id) || 1;
+        const clsStudents = studentsByClass.get(cls.id) || [];
+        clsStudents.sort((a, b) => (Number(a.roll) || 9999) - (Number(b.roll) || 9999));
+
+        clsStudents.forEach((st, sIndex) => {
+          const rollNum = st.roll || (sIndex + 1);
+          let regStr = '';
+          if (regFormatMode === 'class_serial') {
+            regStr = `${parsedRegPattern.prefix}${cSerial}${String(rollNum).padStart(parsedRegPattern.paddingLength, '0')}`;
+          } else {
+            regStr = `${parsedRegPattern.prefix}${String(globalSeqCounter).padStart(parsedRegPattern.paddingLength, '0')}`;
+            globalSeqCounter++;
+          }
+          updates.push({
+            id: st.id,
+            registration_number: regStr
+          });
+        });
+      });
+
+      for (let i = 0; i < updates.length; i += 50) {
+        const chunk = updates.slice(i, i + 50);
+        const results = await Promise.all(
+          chunk.map(u =>
+            supabase
+              .from('students')
+              .update({ registration_number: u.registration_number })
+              .eq('id', u.id)
+              .eq('institution_id', institutionId)
+          )
+        );
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
+      }
+
+      requestManager.invalidatePattern(`students:${institutionId}`);
+      triggerRefresh();
+      setShowRegNoModal(false);
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'সফল!' : 'Success!',
+        message: lang === 'bn' 
+          ? `মোট ${updates.length} জন শিক্ষার্থীর রেজিষ্ট্রেশন নম্বর সফলভাবে জেনারেট করা হয়েছে।`
+          : `Successfully generated registration numbers for ${updates.length} students.`
+      });
+    } catch (err: any) {
+      console.error('Registration generation error:', err);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্যর্থ!' : 'Failed!',
+        message: err.message || 'Failed to generate registration numbers.'
+      });
+    } finally {
+      setIsProcessingRegNo(false);
+    }
+  };
+
+  // Bulk Clear Execution
+  const handleBulkClearRegNo = async () => {
+    if (!institutionId) return;
+    setIsProcessingRegNo(true);
+    try {
+      let query = supabase.from('students').select('id').eq('institution_id', institutionId);
+      if (regScope === 'current') {
+        query = query.eq('class_id', selectedClass.id);
+      }
+
+      const { data: targetStudents, error: fetchErr } = await query;
+      if (fetchErr) throw fetchErr;
+
+      if (!targetStudents || targetStudents.length === 0) {
+        setStatusModal({
+          show: true,
+          type: 'error',
+          title: 'কোনো শিক্ষার্থী পাওয়া যায়নি',
+          message: 'রিসেট করার মতো কোনো শিক্ষার্থী পাওয়া যায়নি।'
+        });
+        setIsProcessingRegNo(false);
+        setShowClearConfirm(false);
+        return;
+      }
+
+      const updates = targetStudents.map(s => ({
+        id: s.id,
+        registration_number: null
+      }));
+
+      for (let i = 0; i < updates.length; i += 50) {
+        const chunk = updates.slice(i, i + 50);
+        const results = await Promise.all(
+          chunk.map(u =>
+            supabase
+              .from('students')
+              .update({ registration_number: null })
+              .eq('id', u.id)
+              .eq('institution_id', institutionId)
+          )
+        );
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
+      }
+
+      requestManager.invalidatePattern(`students:${institutionId}`);
+      triggerRefresh();
+      setShowClearConfirm(false);
+      setShowRegNoModal(false);
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: lang === 'bn' ? 'রিসেট সফল!' : 'Reset Successful!',
+        message: lang === 'bn' 
+          ? `মোট ${updates.length} জন শিক্ষার্থীর রেজিষ্ট্রেশন নম্বর ডিলিট/রিসেট করা হয়েছে।`
+          : `Successfully cleared registration numbers for ${updates.length} students.`
+      });
+    } catch (err: any) {
+      console.error('Registration clear error:', err);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্যর্থ!' : 'Failed!',
+        message: err.message || 'Failed to clear registration numbers.'
+      });
+    } finally {
+      setIsProcessingRegNo(false);
+    }
+  };
 
   const isLiveChatEnabled = useMemo(() => {
     if (madrasah?.is_super_admin) return true;
@@ -356,6 +626,15 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
           >
             {isSelectionMode ? <X size={22} strokeWidth={3} /> : <MessageSquare size={22} strokeWidth={2.5} />}
           </button>
+          {!isSelectionMode && (
+            <button 
+              onClick={() => setShowRegNoModal(true)}
+              title={lang === 'bn' ? 'অটো রেজিষ্ট্রেশন নম্বর জেনারেটর' : 'Auto Registration Generator'}
+              className="w-11 h-11 rounded-[1.2rem] bg-white/20 backdrop-blur-2xl text-white border border-white/30 flex items-center justify-center active:scale-90 transition-all shadow-xl hover:bg-white/30"
+            >
+              <Hash size={20} strokeWidth={2.5} />
+            </button>
+          )}
           {!isSelectionMode && canAdd && (
             <button 
               onClick={() => {
@@ -432,12 +711,20 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
                     <UserX size={16} className="text-red-500 shrink-0" strokeWidth={2.5} />
                   )}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-[#2563EB]/60 transition-colors">{student.guardian_name || '-'}</p>
                   {student.section && (
                     <>
                       <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
                       <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{student.section}</p>
+                    </>
+                  )}
+                  {student.registration_number && (
+                    <>
+                      <span className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
+                      <p className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-md border border-amber-200/50 dark:border-amber-800/30">
+                        {lang === 'bn' ? 'রেজিঃ' : 'Reg:'} {student.registration_number}
+                      </p>
                     </>
                   )}
                 </div>
@@ -531,6 +818,248 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
             <p className="text-[9px] font-black text-[#2563EB] uppercase tracking-widest text-center">{selectedIds.size} {t('selected', lang)}</p>
           </div>
         </div>
+      )}
+
+      {showRegNoModal && createPortal(
+        <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[999] flex items-center justify-center p-4 animate-in fade-in duration-300 overflow-y-auto">
+          <div className={`w-full max-w-lg rounded-[2.5rem] shadow-2xl border p-6 md:p-8 my-auto relative ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-900'}`}>
+            
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowRegNoModal(false)}
+              className={`absolute top-6 right-6 w-10 h-10 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white' : 'bg-slate-50 border-slate-100 text-slate-400 hover:text-slate-800'}`}
+            >
+              <X size={20} strokeWidth={2.5} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
+                <Hash size={24} strokeWidth={2.5} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black font-noto tracking-tight">
+                  {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর জেনারেটর' : 'Registration No Manager'}
+                </h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                  {lang === 'bn' ? 'স্বয়ংক্রিয় রেজিষ্ট্রেশন নম্বর তৈরি ও রিসেট' : 'Auto Generate or Clear Registration IDs'}
+                </p>
+              </div>
+            </div>
+
+            {/* Tab Selector */}
+            <div className={`flex p-1.5 rounded-2xl border mb-6 ${isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+              <button
+                onClick={() => setRegTab('generate')}
+                className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${regTab === 'generate' ? (isDark ? 'bg-blue-600 text-white shadow-lg' : 'bg-[#2563EB] text-white shadow-lg shadow-blue-500/20') : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Sparkles size={16} />
+                {lang === 'bn' ? 'অটো-জেনারেট' : 'Auto Generate'}
+              </button>
+              <button
+                onClick={() => setRegTab('clear')}
+                className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${regTab === 'clear' ? 'bg-red-600 text-white shadow-lg shadow-red-500/20' : 'text-slate-400 hover:text-red-500'}`}
+              >
+                <Trash2 size={16} />
+                {lang === 'bn' ? 'বাল্ক রিসেট / ডিলিট' : 'Bulk Clear'}
+              </button>
+            </div>
+
+            {/* Scope Selection */}
+            <div className="space-y-2 mb-5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                {lang === 'bn' ? 'প্রভাবের এলাকা (Scope)' : 'Target Scope'}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRegScope('all')}
+                  className={`p-3.5 rounded-2xl border-2 font-black text-xs text-left transition-all ${regScope === 'all' ? (isDark ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
+                >
+                  <p className="font-black">{lang === 'bn' ? 'সকল ক্লাস (All Classes)' : 'All Classes'}</p>
+                  <p className="text-[9px] font-bold opacity-70 mt-0.5">{lang === 'bn' ? 'প্রতিষ্ঠানের সকল শিক্ষার্থী' : 'All students in institution'}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegScope('current')}
+                  className={`p-3.5 rounded-2xl border-2 font-black text-xs text-left transition-all ${regScope === 'current' ? (isDark ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-blue-50 border-blue-500 text-blue-600') : (isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-600')}`}
+                >
+                  <p className="font-black truncate">{selectedClass.class_name}</p>
+                  <p className="text-[9px] font-bold opacity-70 mt-0.5">{lang === 'bn' ? 'শুধু বর্তমান শ্রেণীর শিক্ষার্থী' : 'Current class only'}</p>
+                </button>
+              </div>
+            </div>
+
+            {regTab === 'generate' ? (
+              <div className="space-y-5">
+                {/* Pattern Example Input */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                    {lang === 'bn' ? 'প্যাটার্ন বা উদাহরণ ইনপুট (Example Input)' : 'Pattern / Example Input'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={regPatternInput}
+                      onChange={(e) => setRegPatternInput(e.target.value)}
+                      placeholder="e.g. Abc001 or REG100 or 2026-0001"
+                      className={`w-full h-14 px-5 border-2 rounded-2xl font-black text-base outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-500'}`}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-bold leading-relaxed px-1">
+                    💡 উদাহরণ লিখলে সিস্টেম স্বয়ংক্রিয়ভাবে প্রিফিক্স (<span className="text-blue-500 font-black">{parsedRegPattern.prefix}</span>) এবং ডিজিটের সংখ্যা (<span className="text-blue-500 font-black">{parsedRegPattern.paddingLength} ডিজিট</span>) চিনে নিবে।
+                  </p>
+                </div>
+
+                {/* Format Mode Option */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                    {lang === 'bn' ? 'জেনারেট করার পদ্ধতি' : 'Generation Method'}
+                  </label>
+                  <div className="space-y-2">
+                    <label className={`flex items-start gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${regFormatMode === 'class_serial' ? (isDark ? 'bg-blue-600/10 border-blue-500/50' : 'bg-blue-50/60 border-blue-200') : (isDark ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100')}`}>
+                      <input 
+                        type="radio" 
+                        name="regFormatMode" 
+                        checked={regFormatMode === 'class_serial'} 
+                        onChange={() => setRegFormatMode('class_serial')}
+                        className="mt-1"
+                      />
+                      <div>
+                        <p className="font-black text-xs">{lang === 'bn' ? 'ক্লাসের সিরিয়াল + রোল (Class Serial + Roll)' : 'Class Serial + Roll'}</p>
+                        <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                          {lang === 'bn' ? 'যেমন: প্লে (সিরিয়াল ১) রোল ১ ➔ ' : 'e.g. Play (Serial 1) Roll 1 ➔ '}
+                          <span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}1{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span>, 
+                          {lang === 'bn' ? ' নার্সারি (সিরিয়াল ২) রোল ১ ➔ ' : ' Nursery (Serial 2) Roll 1 ➔ '}
+                          <span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}2{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span>
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${regFormatMode === 'sequential' ? (isDark ? 'bg-blue-600/10 border-blue-500/50' : 'bg-blue-50/60 border-blue-200') : (isDark ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100')}`}>
+                      <input 
+                        type="radio" 
+                        name="regFormatMode" 
+                        checked={regFormatMode === 'sequential'} 
+                        onChange={() => setRegFormatMode('sequential')}
+                        className="mt-1"
+                      />
+                      <div>
+                        <p className="font-black text-xs">{lang === 'bn' ? 'ধারাবাহিক নম্বর (Sequential ID)' : 'Sequential Numbering'}</p>
+                        <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                          {lang === 'bn' ? 'যেমন: ' : 'e.g. '}
+                          <span className="font-mono text-blue-500 font-black">{parsedRegPattern.prefix}{String(1).padStart(parsedRegPattern.paddingLength, '0')}</span>, 
+                          <span className="font-mono text-blue-500 font-black"> {parsedRegPattern.prefix}{String(2).padStart(parsedRegPattern.paddingLength, '0')}</span>, 
+                          <span className="font-mono text-blue-500 font-black"> {parsedRegPattern.prefix}{String(3).padStart(parsedRegPattern.paddingLength, '0')}</span>...
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Sample Live Preview Box */}
+                <div className={`p-4 rounded-2xl border-2 space-y-2 ${isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Eye size={14} className="text-blue-500" />
+                      {lang === 'bn' ? 'নমুনা লাইভ প্রিভিউ' : 'Live Sample Preview'}
+                    </span>
+                    <span className="text-[9px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md">
+                      {regScope === 'all' ? (lang === 'bn' ? 'সকল ক্লাস' : 'All Classes') : selectedClass.class_name}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {regNoPreviewList.map((item, idx) => (
+                      <div key={idx} className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200/80 shadow-xs'}`}>
+                        <div className="truncate pr-2">
+                          <p className="font-black truncate text-[11px]">{item.class_name}</p>
+                          <p className="text-[9px] text-slate-400 font-bold">রোল: {item.roll}</p>
+                        </div>
+                        <span className="font-mono font-black text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded-lg shrink-0 border border-amber-200/50">
+                          {item.reg_no}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Submit Action */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRegNoModal(false)}
+                    className={`flex-1 h-14 font-black rounded-2xl border-2 text-xs uppercase tracking-wider active:scale-95 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
+                  >
+                    {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkGenerateRegNo}
+                    disabled={isProcessingRegNo}
+                    className="flex-1 h-14 bg-[#2563EB] text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 text-xs uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isProcessingRegNo ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                    {isProcessingRegNo ? (lang === 'bn' ? 'জেনারেট হচ্ছে...' : 'Generating...') : (lang === 'bn' ? 'জেনারেট ও সেভ করুন' : 'Generate & Save')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* Warning Box */}
+                <div className={`p-5 rounded-2xl border-2 flex items-start gap-4 ${isDark ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                  <AlertTriangle size={28} className="shrink-0 text-red-500 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-black text-sm">{lang === 'bn' ? 'সতর্কতা: রেজিষ্ট্রেশন নম্বর মুছুন' : 'Warning: Clear Registration Numbers'}</p>
+                    <p className="text-xs font-bold leading-relaxed opacity-90">
+                      {lang === 'bn'
+                        ? `এই প্রক্রিয়া পরিচালনা করলে ${regScope === 'all' ? 'সকল' : selectedClass.class_name} শিক্ষার্থীদের রেজিষ্ট্রেশন নম্বর স্থায়ীভাবে ডাটাবেস থেকে মুছে গিয়ে ফাঁকা (Null) হয়ে যাবে।`
+                        : `This will clear and reset registration numbers for ${regScope === 'all' ? 'all' : selectedClass.class_name} students to empty/null.`
+                      }
+                    </p>
+                  </div>
+                </div>
+
+                {/* Clear Confirm step */}
+                {!showClearConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowClearConfirm(true)}
+                    className="w-full h-14 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-500/20 text-xs uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={18} />
+                    {lang === 'bn' ? 'রেজিষ্ট্রেশন নম্বর মুছে ফেলুন' : 'Clear Registration Numbers'}
+                  </button>
+                ) : (
+                  <div className={`p-4 rounded-2xl border-2 space-y-3 ${isDark ? 'bg-slate-800 border-red-500/40' : 'bg-red-50/50 border-red-200'}`}>
+                    <p className="text-xs font-black text-center text-red-600">
+                      {lang === 'bn' ? 'আপনি কি নিশ্চিত যে রেজিষ্ট্রেশন নম্বর ডিলিট করতে চান?' : 'Are you sure you want to delete registration numbers?'}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowClearConfirm(false)}
+                        className={`flex-1 h-12 font-black rounded-xl text-xs uppercase transition-all ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'}`}
+                      >
+                        {lang === 'bn' ? 'না, বাতিল' : 'No, Cancel'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBulkClearRegNo}
+                        disabled={isProcessingRegNo}
+                        className="flex-1 h-12 bg-red-600 text-white font-black rounded-xl text-xs uppercase shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isProcessingRegNo ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                        {isProcessingRegNo ? (lang === 'bn' ? 'মুছে ফেলা হচ্ছে...' : 'Clearing...') : (lang === 'bn' ? 'হ্যাঁ, ডিলিট করুন' : 'Yes, Delete')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
 
       {statusModal.show && createPortal(

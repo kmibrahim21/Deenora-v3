@@ -1770,16 +1770,21 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">শিক্ষার্থী তালিকা</h4>
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">উপস্থিতি</h4>
                    </div>
-                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-3.5">
                    {students.map(s => (
-                     <div key={s.id} className={`p-3 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between group active:scale-[0.98] transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                     <div key={s.id} className={`p-3.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-3 group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700 hover:bg-slate-800' : 'bg-white border-slate-100 hover:border-blue-100'}`}>
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 pr-2">
                           <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 shadow-inner ${isDark ? 'bg-slate-900 text-blue-400 border-slate-700' : 'bg-blue-50 text-[#2563EB] border-blue-100'}`}>
                             <span className="text-[7px] sm:text-[8px] font-black opacity-40 leading-none">ROLL</span>
                             <span className="text-sm sm:text-base font-black leading-none mt-0.5 sm:mt-1">{s.roll || '-'}</span>
                           </div>
-                          <div className="min-w-0">
-                            <h5 className={`font-black font-noto text-[13px] sm:text-sm line-clamp-2 leading-tight ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{s.student_name}</h5>
+                          <div className="min-w-0 flex-1">
+                            <h5 className={`font-black font-noto text-xs sm:text-sm md:text-base leading-snug break-words ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`} title={s.student_name}>{s.student_name}</h5>
+                            {s.registration_number && (
+                              <p className="text-[10px] font-bold text-slate-400 mt-0.5 truncate">
+                                {lang === 'bn' ? 'রেজিঃ' : 'Reg:'} {s.registration_number}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-1.5 sm:gap-2 shrink-0 items-center">
@@ -1986,15 +1991,15 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                   </div>
 
                   {onlyAbsents.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-3.5">
                       {onlyAbsents.map(a => (
-                        <div key={a.student_id} className={`p-2.5 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-2.5 sm:gap-4 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
-                           <div className="flex items-center gap-4 min-w-0">
+                        <div key={a.student_id} className={`p-3 sm:p-4 rounded-[1.8rem] border shadow-bubble flex items-center justify-between gap-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
+                           <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-2">
                              <div className={`w-11 h-11 rounded-[1.1rem] flex flex-col items-center justify-center border shrink-0 ${a.final_status === 'half_day' ? (isDark ? 'bg-purple-900/30 text-purple-400 border-purple-700' : 'bg-purple-50 text-purple-600 border-purple-100') : (isDark ? 'bg-slate-900 text-red-400 border-slate-700' : 'bg-red-50 text-red-500 border-red-100')}`}>
                                <XCircle size={16} className="sm:w-5 sm:h-5" />
                              </div>
-                             <div className="min-w-0">
-                               <h5 className={`font-black font-noto text-xs sm:text-[13px] truncate ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`}>{a.students?.student_name}</h5>
+                             <div className="min-w-0 flex-1">
+                               <h5 className={`font-black font-noto text-xs sm:text-sm md:text-base leading-snug break-words ${isDark ? 'text-slate-100' : 'text-[#1E3A8A]'}`} title={a.students?.student_name}>{a.students?.student_name}</h5>
                                <div className="mt-1 space-y-0.5">
                                  <div className="flex items-center gap-1.5 flex-wrap">
                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{a.classes?.class_name || 'Class'}</p>
@@ -2345,17 +2350,17 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                           </div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
                           {filteredReportData.map((item) => {
                             const rankLabel = getRankBadgeLabel(item.rank, lang);
                             const isTop3 = item.rank <= 3;
                             return (
                               <div key={item.student_id} className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-[2rem] border shadow-bubble space-y-2.5 sm:space-y-3 relative group transition-all ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-100'}`}>
                                   <div className="flex items-start justify-between gap-2">
-                                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-1">
                                           <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center font-black border shadow-inner shrink-0 text-xs sm:text-base ${isDark ? 'bg-slate-900 text-[#A179FF] border-slate-700' : 'bg-slate-50 text-[#A179FF] border-slate-100'}`}>#{item.roll || '-'}</div>
-                                          <div className="min-w-0">
-                                              <h5 className={`font-black font-noto text-xs sm:text-[16px] truncate leading-tight mb-0.5 ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`}>{item.student_name}</h5>
+                                          <div className="min-w-0 flex-1">
+                                              <h5 className={`font-black font-noto text-xs sm:text-sm md:text-base leading-snug break-words mb-0.5 ${isDark ? 'text-slate-100' : 'text-[#2E0B5E]'}`} title={item.student_name}>{item.student_name}</h5>
                                               {selectedClass?.id === 'all' && (
                                                 <p className="text-[9px] sm:text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider truncate">{item.class_name}</p>
                                               )}
