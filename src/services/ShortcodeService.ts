@@ -382,8 +382,16 @@ export const ShortcodeService = {
          const obtained = m ? Number(m.marks_obtained || 0) : 0;
          const full = Number(sub.full_marks || 100);
          const pass = Number(sub.pass_marks || 33);
-         const isOptional = Boolean(sub.is_optional);
-         const isOptionalEffectively = isOptional && resultSystem === 'grading_optional';
+         const currentExamId = m?.exam_id || studentMarks[0]?.exam_id;
+         const studentOptSubId = (resultSystem === 'high_school')
+           ? ((currentExamId ? inst?.config_json?.exam_student_optional_subjects?.[currentExamId]?.[s.id] : undefined)
+              || inst?.config_json?.class_student_optional_subjects?.[s.class_id]?.[s.id])
+           : undefined;
+
+         const isOptional = (resultSystem === 'high_school' && studentOptSubId !== undefined)
+           ? (studentOptSubId === sub.id)
+           : Boolean(sub.is_optional);
+         const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
 
          totalObtained += obtained;
          totalFull += full;
@@ -405,7 +413,7 @@ export const ShortcodeService = {
            else gp = 1.00;
          }
 
-         if (resultSystem === 'grading_optional') {
+         if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
            if (!isOptional) {
              pointsSum += gp;
              numMainSubjects++;

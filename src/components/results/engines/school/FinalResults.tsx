@@ -309,7 +309,17 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
             const fullMarks = subjectMarkEntryFromAnyStudent.exam_subjects?.full_marks || 100;
             const passMarks = subjectMarkEntryFromAnyStudent.exam_subjects?.pass_marks || 33;
-            if (subjectMarkEntryFromAnyStudent.exam_subjects?.is_optional) {
+            if (resultSystem === 'high_school') {
+              const studentOptSubId = (madrasah?.config_json as any)?.class_student_optional_subjects?.[selectedClassId]?.[student.id];
+              if (studentOptSubId !== undefined) {
+                const subObj = examsData.flatMap((e: any) => e.subjects || []).find((s: any) => s.id === studentOptSubId);
+                if (subObj && subObj.subject_name === sub) {
+                  isOptional = true;
+                }
+              } else if (subjectMarkEntryFromAnyStudent.exam_subjects?.is_optional) {
+                isOptional = true;
+              }
+            } else if (subjectMarkEntryFromAnyStudent.exam_subjects?.is_optional) {
               isOptional = true;
             }
 

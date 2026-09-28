@@ -588,6 +588,13 @@ export const generateClassResultPDF = async (
         subjects.forEach(s => {
             if (processedSubjectIds.has(s.id)) return;
 
+            const studentOptSubId = config?.exam_student_optional_subjects?.[exam?.id]?.[student.id] 
+              || config?.class_student_optional_subjects?.[exam?.class_id]?.[student.id];
+
+            const isSubOptional = (resultSystem === 'high_school' && studentOptSubId !== undefined)
+              ? (studentOptSubId === s.id)
+              : !!s.is_optional;
+
             // Handle High School combinations
             const children = resultSystem === 'high_school' ? subjects.filter(child => child.pair_with_id === s.id) : [];
             const isParent = children.length > 0;
@@ -653,12 +660,12 @@ export const generateClassResultPDF = async (
                     else gp = 1.00;
                 }
 
-                if (combinedFailed && !s.is_optional) hasFailed = true;
+                if (combinedFailed && !isSubOptional) hasFailed = true;
 
                 total += combinedObtained;
                 totalPossible += combinedFull;
 
-                if (s.is_optional) {
+                if (isSubOptional) {
                     if (gp > 2) pointsSum += (gp - 2);
                 } else {
                     pointsSum += gp;
@@ -671,7 +678,7 @@ export const generateClassResultPDF = async (
                 const m = studentMarks[s.id];
                 const fullMarkValue = Number(s.full_marks || 100);
                 const passMarkValue = Number(s.pass_marks || Math.ceil(fullMarkValue * 0.33));
-                const isOptional = !!s.is_optional;
+                const isOptional = isSubOptional;
 
                 if (m !== undefined && m !== '') {
                     const markVal = Number(m);

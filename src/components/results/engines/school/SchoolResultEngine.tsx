@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { requestManager } from '../../../../services/RequestManager';
 import { Institution, Class, Student, Exam, ExamSubject, Language, UserRole, ExamRoom, SeatAssignment, Profile } from 'types';
-import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout, Globe, Eye, EyeOff, Type, Settings, XCircle } from 'lucide-react';
+import { GraduationCap, Plus, ChevronRight, BookOpen, Trophy, Save, X, Edit3, Trash2, HelpCircle, Loader2, ArrowLeft, Calendar, LayoutGrid, Link, CheckCircle2, FileText, Send, User, Hash, Star, AlertCircle, TrendingUp, Download, CreditCard, Grid3X3, Printer, RefreshCw, Clock, Palette, ZoomIn, ZoomOut, Maximize, Upload, Layout, Globe, Eye, EyeOff, Type, Settings, XCircle, Sparkles, Check } from 'lucide-react';
 import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
@@ -891,6 +891,151 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [sortOrder, setSortOrder] = useState('0');
   const [isOptional, setIsOptional] = useState(false);
 
+  // High School Student-wise 4th / Optional Subject State
+  const [showHighSchool4thSubModal, setShowHighSchool4thSubModal] = useState(false);
+  const [selectedExamFor4thSub, setSelectedExamFor4thSub] = useState<Exam | null>(null);
+  const [studentsFor4thSub, setStudentsFor4thSub] = useState<Student[]>([]);
+  const [subjectsFor4thSub, setSubjectsFor4thSub] = useState<ExamSubject[]>([]);
+  const [student4thSubMap, setStudent4thSubMap] = useState<Record<string, string>>({});
+  const [bulk4thSubSelect, setBulk4thSubSelect] = useState<string>('');
+  const [saving4thSub, setSaving4thSub] = useState(false);
+  const [subFilterText, setSubFilterText] = useState('');
+
+  // Helper to determine if a subject is optional for a specific student in High School
+  const getIsSubjectOptionalForStudent = (
+    studentId: string,
+    subjectId: string,
+    examId?: string,
+    classId?: string,
+    fallbackIsOptional?: boolean
+  ): boolean => {
+    if (resultSystem !== 'high_school') {
+      return resultSystem === 'grading_optional' ? !!fallbackIsOptional : false;
+    }
+    const eId = examId || selectedExam?.id;
+    const cId = classId || selectedExam?.class_id || selectedClassId;
+    const studentOptSubId = (eId ? (madrasah?.config_json as any)?.exam_student_optional_subjects?.[eId]?.[studentId] : undefined)
+      ?? (cId ? (madrasah?.config_json as any)?.class_student_optional_subjects?.[cId]?.[studentId] : undefined);
+
+    if (studentOptSubId !== undefined) {
+      return studentOptSubId === subjectId;
+    }
+    return !!fallbackIsOptional;
+  };
+
+  const handleOpen4thSubModal = async (exam: Exam) => {
+    setSelectedExamFor4thSub(exam);
+    setLoading(true);
+    try {
+      // 1. Fetch subjects if needed
+      let curSubjects = subjects;
+      if (selectedExam?.id !== exam.id || subjects.length === 0) {
+        const { data: subsData } = await supabase
+          .from('exam_subjects')
+          .select('*')
+          .eq('exam_id', exam.id)
+          .order('sort_order', { ascending: true });
+        if (subsData) {
+          curSubjects = subsData;
+        }
+      }
+      setSubjectsFor4thSub(curSubjects);
+
+      // 2. Fetch students for this exam's class
+      let curStudents = students;
+      if (!selectedClassId || selectedClassId !== exam.class_id || students.length === 0) {
+        const { data: stdData } = await supabase
+          .from('students')
+          .select('*')
+          .eq('class_id', exam.class_id)
+          .order('roll', { ascending: true });
+        if (stdData) {
+          curStudents = stdData;
+        }
+      }
+      setStudentsFor4thSub(curStudents);
+
+      // 3. Load existing mapping from madrasah.config_json
+      const examMap = (madrasah?.config_json as any)?.exam_student_optional_subjects?.[exam.id] || {};
+      const classMap = (madrasah?.config_json as any)?.class_student_optional_subjects?.[exam.class_id] || {};
+
+      const initialMap: Record<string, string> = {};
+      curStudents.forEach((std: any) => {
+        if (examMap[std.id] !== undefined) {
+          initialMap[std.id] = examMap[std.id];
+        } else if (classMap[std.id] !== undefined) {
+          initialMap[std.id] = classMap[std.id];
+        } else {
+          // If a subject already has is_optional true, set as default
+          const defaultOpt = curSubjects.find((s: any) => s.is_optional);
+          initialMap[std.id] = defaultOpt ? defaultOpt.id : '';
+        }
+      });
+
+      setStudent4thSubMap(initialMap);
+      setBulk4thSubSelect('');
+      setSubFilterText('');
+      setShowHighSchool4thSubModal(true);
+    } catch (err) {
+      console.error('Error opening 4th subject modal:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave4thSubMap = async () => {
+    if (!selectedExamFor4thSub || !madrasah) return;
+    setSaving4thSub(true);
+    try {
+      const examId = selectedExamFor4thSub.id;
+      const cId = selectedExamFor4thSub.class_id;
+
+      const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah.id).single();
+      const currentConfig = instData?.config_json || madrasah.config_json || {};
+
+      const updatedExamMap = {
+        ...(currentConfig.exam_student_optional_subjects || {}),
+        [examId]: student4thSubMap
+      };
+
+      const updatedClassMap = {
+        ...(currentConfig.class_student_optional_subjects || {}),
+        [cId]: student4thSubMap
+      };
+
+      const updatedConfig = {
+        ...currentConfig,
+        exam_student_optional_subjects: updatedExamMap,
+        class_student_optional_subjects: updatedClassMap
+      };
+
+      const { error: configError } = await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah.id);
+      if (configError) throw configError;
+
+      // Update in-memory madrasah.config_json
+      if (madrasah.config_json) {
+        (madrasah.config_json as any).exam_student_optional_subjects = updatedExamMap;
+        (madrasah.config_json as any).class_student_optional_subjects = updatedClassMap;
+      }
+
+      // If we are currently viewing this exam, re-calculate ranking and marks view
+      if (selectedExam && selectedExam.id === examId) {
+        await fetchRanking(examId, cId);
+      }
+
+      setShowHighSchool4thSubModal(false);
+      setModalMode('success');
+      setSuccessTitle(lang === 'bn' ? '৪র্থ বিষয় সংরক্ষিত হয়েছে!' : '4th Subjects Saved!');
+      setSuccessMessage(lang === 'bn' ? 'শিক্ষার্থীদের ৪র্থ বিষয় সফলভাবে নির্ধারিত হয়েছে এবং রেজাল্ট ইঞ্জিন আপডেট করা হয়েছে।' : 'Student 4th subjects have been successfully assigned and result calculations updated.');
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      console.error('Error saving 4th subject map:', err);
+      alert(lang === 'bn' ? 'সংরক্ষণে ব্যর্থ: ' + (err.message || '') : 'Failed to save: ' + (err.message || ''));
+    } finally {
+      setSaving4thSub(false);
+    }
+  };
+
   useEffect(() => {
     if (madrasah) {
       fetchClasses();
@@ -1139,6 +1284,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         subs.forEach(sub => {
           if (processedSubjectIds.has(sub.id)) return;
 
+          const isSubOptionalForStudent = getIsSubjectOptionalForStudent(student.id, sub.id, examId, classId, sub.is_optional);
+
           // Combinations for high_school
           const children = resultSystem === 'high_school' ? subs.filter(child => child.pair_with_id === sub.id) : [];
           const isChild = resultSystem === 'high_school' && !!sub.pair_with_id;
@@ -1178,12 +1325,12 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             const { gpa: gpStr } = getGradeInfo(pct, !combinedFailed);
             const gp = parseFloat(gpStr);
 
-            if (!sub.is_optional && combinedFailed) passStatus = false;
+            if (!isSubOptionalForStudent && combinedFailed) passStatus = false;
 
             totalMarks += combinedObtained;
             totalPossible += combinedFull;
 
-            if (sub.is_optional) {
+            if (isSubOptionalForStudent) {
               if (gp > 2) pointsSum += (gp - 2);
             } else {
               pointsSum += gp;
@@ -1206,7 +1353,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
               if (sub.practical_full_marks && pr < Math.ceil(sub.practical_full_marks * 0.33)) failed = true;
             }
 
-            const isOptionalEffectively = !!sub.is_optional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
+            const isOptionalEffectively = isSubOptionalForStudent && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
             if (!isOptionalEffectively && failed) passStatus = false;
 
             const pct = (score / full) * 100;
@@ -1217,7 +1364,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
             totalPossible += full;
 
             if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
-              if (!sub.is_optional) {
+              if (!isSubOptionalForStudent) {
                 pointsSum += gp;
                 numMainSubjects++;
               } else {
@@ -1383,6 +1530,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     for (const s of currentSubjects) {
       if (processedSubjectIds.has(s.id)) continue;
 
+      const isSubOptionalForStudent = getIsSubjectOptionalForStudent(studentId, s.id, selectedExam?.id, selectedExam?.class_id, s.is_optional);
+
       if (resultSystem === 'high_school' && s.pair_with_id) {
         // This is a child subject, it will be handled by its parent
         continue;
@@ -1431,7 +1580,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         totalMarks += combinedObtained;
         totalPossible += combinedFull;
         
-        if (s.is_optional) {
+        if (isSubOptionalForStudent) {
           if (gp > 2) pointsSum += (gp - 2);
         } else {
           pointsSum += gp;
@@ -1460,7 +1609,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           if (prFull > 0 && prMarks < Math.ceil(prFull * 0.33)) failed = true;
         }
 
-        const isOptionalEffectively = s.is_optional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
+        const isOptionalEffectively = isSubOptionalForStudent && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
         if (!isOptionalEffectively && failed) hasFailedSub = true;
 
         const { gpa: gpStr } = getGradeInfo(pct, !failed);
@@ -1470,7 +1619,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         totalPossible += full;
 
         if (resultSystem === 'grading_optional' || resultSystem === 'high_school') {
-          if (!s.is_optional) {
+          if (!isSubOptionalForStudent) {
             pointsSum += gp;
             numMainSubjects++;
           } else {
@@ -2148,7 +2297,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 full_marks: s.full_marks || 100,
                 pass_marks: s.pass_marks || 33,
                 class_highest: classHighest,
-                is_optional: s.is_optional,
+                is_optional: getIsSubjectOptionalForStudent(item.student_id, s.id, selectedExam.id, selectedExam.class_id, s.is_optional),
                 cq_marks: studentMarks[`${s.id}_cq`] || null,
                 mcq_marks: studentMarks[`${s.id}_mcq`] || null,
                 practical_marks: studentMarks[`${s.id}_practical`] || null,
@@ -3686,6 +3835,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     <button onClick={() => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-blue-50 text-[#2563EB] rounded-xl text-[9px] font-black uppercase tracking-widest border border-blue-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
                     <button onClick={() => { setSelectedExam(exam); setView('report'); fetchSubjects(exam.id); fetchRanking(exam.id, exam.class_id); fetchMarkEntryData(exam.id, exam.class_id); }} className="py-2.5 bg-[#2563EB] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
                 </div>
+                {resultSystem === 'high_school' && (
+                  <button 
+                    onClick={() => handleOpen4thSubModal(exam)}
+                    className="w-full py-2.5 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 rounded-xl text-[9px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-800 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <Sparkles size={14} className="text-indigo-600" />
+                    {lang === 'bn' ? '৪র্থ / ঐচ্ছিক বিষয় বণ্টন' : 'Assign 4th / Optional Subject'}
+                  </button>
+                )}
                 {modules.admit_card && (
                   <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
                       <CreditCard size={14}/> Admit Card
@@ -3703,6 +3861,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
               <button onClick={() => setShowAddSubject(true)} className={`flex-1 py-5 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} rounded-[2.2rem] text-[#2563EB] font-black flex items-center justify-center gap-3 shadow-bubble border active:scale-95 transition-all`}>
                  <Plus size={24} strokeWidth={3} /> {lang === 'bn' ? 'বিষয় যোগ করুন' : 'Add Subject'}
               </button>
+              {resultSystem === 'high_school' && selectedExam && (
+                <button 
+                  onClick={() => handleOpen4thSubModal(selectedExam)} 
+                  className={`px-6 py-5 ${madrasah?.theme === 'dark' ? 'bg-indigo-950/40 border-indigo-800 text-indigo-300' : 'bg-indigo-50 border-indigo-100 text-indigo-700'} rounded-[2.2rem] font-black flex items-center justify-center gap-2 shadow-bubble border active:scale-95 transition-all`}
+                  title={lang === 'bn' ? 'শিক্ষার্থীদের ৪র্থ বিষয় বণ্টন' : 'Assign 4th subjects'}
+                >
+                   <Sparkles size={20} className="text-indigo-600" />
+                   <span className="hidden sm:inline">{lang === 'bn' ? '৪র্থ বিষয় বণ্টন' : 'Assign 4th'}</span>
+                </button>
+              )}
               <button 
                 onClick={handleCopySubjects} 
                 disabled={isSaving}
@@ -3755,6 +3923,26 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
       {activeTab === 'exams' && view === 'marks' && (
         <div className="space-y-4">
+            {resultSystem === 'high_school' && selectedExam && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-slate-500 font-noto">
+                    {lang === 'bn' ? 'উচ্চ বিদ্যালয় ফলাফল পদ্ধতি (CQ/MCQ)' : 'High School Result System'}
+                  </span>
+                  <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-bold border border-indigo-200 dark:border-indigo-800">
+                    ৪র্থ বিষয় সক্রিয়
+                  </span>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => handleOpen4thSubModal(selectedExam)}
+                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300 text-indigo-700 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm active:scale-95 transition-all"
+                >
+                  <Sparkles size={14} className="text-indigo-600" />
+                  {lang === 'bn' ? 'শিক্ষার্থীদের ৪র্থ বিষয় নির্বাচন / পরিবর্তন' : 'Assign / Change 4th Subjects'}
+                </button>
+              </div>
+            )}
             <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border`}>
                 <div className="overflow-auto max-h-[60vh] md:max-h-[70vh] no-scrollbar">
                     <table className="w-full text-left">
@@ -3829,18 +4017,48 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     return cIdx >= 0 ? cIdx * students.length + sIndex + 1 : undefined;
                                 };
 
+                                const isOptForStudent = (subId: string) => getIsSubjectOptionalForStudent(std.id, subId, selectedExam?.id, selectedExam?.class_id, subjects.find(s => s.id === subId)?.is_optional);
+
                                 return (
                                 <tr key={std.id} className={`border-b last:border-0 ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
                                     <td className={`py-4 px-2 border-r ${madrasah?.theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'} sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]`}>
                                         <div className="flex flex-col">
                                             <span className="text-[9px] font-black text-[#2563EB] leading-none mb-0.5">#{std.roll}</span>
                                             <span className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-[10px] font-noto truncate max-w-[100px]`}>{std.student_name}</span>
+                                            {resultSystem === 'high_school' && (
+                                              <button 
+                                                type="button"
+                                                onClick={() => handleOpen4thSubModal(selectedExam!)}
+                                                className="text-[8px] font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-0.5 mt-0.5 text-left"
+                                                title={lang === 'bn' ? '৪র্থ বিষয় বণ্টন করতে ক্লিক করুন' : 'Click to assign 4th subject'}
+                                              >
+                                                {(() => {
+                                                  const optId = (madrasah?.config_json as any)?.exam_student_optional_subjects?.[selectedExam!.id]?.[std.id]
+                                                    || (madrasah?.config_json as any)?.class_student_optional_subjects?.[selectedExam!.class_id]?.[std.id];
+                                                  const optSub = subjects.find(s => s.id === optId);
+                                                  return optSub ? (
+                                                    <span className="px-1 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 rounded font-semibold truncate max-w-[95px]">
+                                                      ৪র্থ: {optSub.subject_name}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-slate-300 dark:text-slate-600 hover:underline">
+                                                      + ৪র্থ বিষয়
+                                                    </span>
+                                                  );
+                                                })()}
+                                              </button>
+                                            )}
                                         </div>
                                     </td>
                                     {subjects.map((sub, idx) => (
                                         <td key={sub.id} className={`py-4 px-2 ${idx === 0 ? 'pl-4' : ''}`}>
                                             {resultSystem === 'high_school' ? (
                                                 <div className="flex flex-col gap-1.5 min-w-[120px]">
+                                                    {isOptForStudent(sub.id) && (
+                                                        <span className="text-[8px] bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-extrabold px-1.5 py-0.5 rounded text-center border border-indigo-200/60 dark:border-indigo-800/60">
+                                                            ৪র্থ বিষয়
+                                                        </span>
+                                                    )}
                                                     <div className="flex gap-1">
                                                         <input 
                                                             id={`school-mark-${sub.id}_cq-${sIndex}`}
@@ -4001,59 +4219,10 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                         {calculateStudentResult(std.id, subjects).total}
                                     </td>
                                     <td className="py-4 px-2 text-center font-black text-[#2563EB] text-xs">
-                                        {(() => {
-                                            const total = (Object.entries(marksData[std.id] || {}).filter(([sid]) => subjects.some(s => s.id === sid)) as any[]).reduce((sum: number, [_, m]: any) => sum + (parseFloat(m) || 0), 0);
-                                            const avgValue = subjects.length > 0 ? (total / subjects.length) : 0;
-                                            return avgValue.toFixed(2);
-                                        })()}
+                                        {calculateStudentResult(std.id, subjects).average.toFixed(2)}
                                     </td>
                                     <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
-                                        {(() => {
-                                            let totalMarks = 0;
-                                            let totalPossible = 0;
-                                            let pointsSum = 0;
-                                            let numMainSubjects = 0;
-                                            let passStatus = true;
-                                            
-                                            subjects.forEach(sub => {
-                                              const score = parseFloat((marksData[std.id] || {})[sub.id] || '0');
-                                              const isOptionalEffectively = !!sub.is_optional && resultSystem === 'grading_optional';
-                                              const failed = score < (sub.pass_marks || 33);
-                                              
-                                              if (!isOptionalEffectively && failed) passStatus = false;
-                                              
-                                              const pct = (score / (sub.full_marks || 100)) * 100;
-                                              const { gpa: gpStr } = getGradeInfo(pct, !failed);
-                                              const gp = parseFloat(gpStr);
-
-                                              if (resultSystem === 'grading_optional') {
-                                                if (!sub.is_optional) {
-                                                  totalMarks += score;
-                                                  totalPossible += (sub.full_marks || 100);
-                                                  pointsSum += gp;
-                                                  numMainSubjects++;
-                                                } else {
-                                                  if (gp > 2) pointsSum += (gp - 2);
-                                                }
-                                              } else {
-                                                totalMarks += score;
-                                                totalPossible += (sub.full_marks || 100);
-                                                pointsSum += gp;
-                                                numMainSubjects++;
-                                              }
-                                            });
-
-                                            if ((resultSystem === 'grading' || resultSystem === 'grading_optional') && numMainSubjects > 0) {
-                                              if (!passStatus) return '0.00';
-                                              let avgGp = pointsSum / numMainSubjects;
-                                              if (avgGp > 5.0) avgGp = 5.0;
-                                              return avgGp.toFixed(2);
-                                            } else if (totalPossible > 0) {
-                                              const overallPct = (totalMarks / totalPossible) * 100;
-                                              return getGradeInfo(overallPct, passStatus).gpa;
-                                            }
-                                            return '0.00';
-                                        })()}
+                                        {calculateStudentResult(std.id, subjects).gpa}
                                     </td>
                                 </tr>
                                 );
@@ -4134,7 +4303,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                       full_marks: s.full_marks || 100,
                                                       pass_marks: s.pass_marks || 33,
                                                       class_highest: classHighest,
-                                                      is_optional: s.is_optional,
+                                                      is_optional: getIsSubjectOptionalForStudent(item.student_id, s.id, selectedExam?.id, selectedExam?.class_id, s.is_optional),
                                                       cq_marks: studentMarks[`${s.id}_cq`] || null,
                                                       mcq_marks: studentMarks[`${s.id}_mcq`] || null,
                                                       practical_marks: studentMarks[`${s.id}_practical`] || null,
@@ -4742,6 +4911,194 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 {lang === 'bn' ? 'সম্পন্ন' : 'Done'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* High School 4th / Optional Subject Assignment Modal */}
+      {showHighSchool4thSubModal && selectedExamFor4thSub && (
+        <div className="fixed inset-0 bg-[#080A12]/70 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-900'} w-full max-w-2xl rounded-[2.5rem] p-5 sm:p-7 space-y-5 shadow-2xl my-auto animate-in zoom-in-95 max-h-[92vh] flex flex-col border`}>
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shadow-inner">
+                  <Sparkles size={24} />
+                </div>
+                <div>
+                  <h3 className={`text-lg sm:text-xl font-black font-noto ${madrasah?.theme === 'dark' ? 'text-indigo-400' : 'text-[#1E3A8A]'}`}>
+                    {lang === 'bn' ? 'শিক্ষার্থীদের ৪র্থ / ঐচ্ছিক বিষয় বণ্টন' : 'Assign 4th / Optional Subjects'}
+                  </h3>
+                  <p className="text-xs font-bold text-slate-400 mt-0.5">
+                    {selectedExamFor4thSub.classes?.class_name || selectedExamFor4thSub.exam_name} • {selectedExamFor4thSub.exam_name}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowHighSchool4thSubModal(false)}
+                className={`w-9 h-9 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-500 hover:text-slate-800'} rounded-xl flex items-center justify-center transition-colors`}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Note banner */}
+            <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-start gap-2.5 leading-relaxed">
+              <AlertCircle size={18} className="text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-black text-indigo-700 dark:text-indigo-300">
+                  {lang === 'bn' ? 'উচ্চ বিদ্যালয় ৪র্থ বিষয় নিয়মাবলি: ' : '4th Subject Rule: '}
+                </span>
+                {lang === 'bn' 
+                  ? 'বিজ্ঞান বা অন্যান্য বিভাগে যে শিক্ষার্থী যে বিষয়কে ৪র্থ বিষয় হিসেবে নিয়েছে তা নির্বাচন করুন। ৪র্থ বিষয়ের GPA ২.০০ এর অতিরিক্ত পয়েন্ট মূল ফলাফলে যোগ হবে এবং এই বিষয়ে অকৃতকার্য হলেও সামগ্রিক ফলাফলে ফেল আসবে না।' 
+                  : 'Select which subject is taken as 4th subject by each student. GPA points above 2.00 will be added to the overall GPA, and failing this subject does not cause overall result failure.'}
+              </div>
+            </div>
+
+            {/* Bulk Apply & Search Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <select 
+                  className={`flex-1 h-11 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'} rounded-xl px-3 font-bold text-xs outline-none border focus:border-indigo-500`}
+                  value={bulk4thSubSelect}
+                  onChange={(e) => setBulk4thSubSelect(e.target.value)}
+                >
+                  <option value="">{lang === 'bn' ? '-- এক ক্লিকে সবার জন্য নির্বাচন --' : '-- Bulk select subject --'}</option>
+                  <option value="__NONE__">{lang === 'bn' ? 'সবার ৪র্থ বিষয় খালি করুন' : 'Clear 4th subject for all'}</option>
+                  {subjectsFor4thSub.map(s => (
+                    <option key={s.id} value={s.id}>{s.subject_name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!bulk4thSubSelect) return;
+                    const val = bulk4thSubSelect === '__NONE__' ? '' : bulk4thSubSelect;
+                    const updated = { ...student4thSubMap };
+                    studentsFor4thSub.forEach(st => {
+                      updated[st.id] = val;
+                    });
+                    setStudent4thSubMap(updated);
+                  }}
+                  disabled={!bulk4thSubSelect}
+                  className="px-3.5 h-11 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-sm transition-all whitespace-nowrap active:scale-95"
+                >
+                  {lang === 'bn' ? 'সকলকে দিন' : 'Apply All'}
+                </button>
+              </div>
+
+              <div className="relative">
+                <input 
+                  type="text"
+                  placeholder={lang === 'bn' ? 'শিক্ষার্থী খুঁজুন (রোল বা নাম)...' : 'Search student...'}
+                  value={subFilterText}
+                  onChange={(e) => setSubFilterText(e.target.value)}
+                  className={`w-full h-11 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'} rounded-xl pl-9 pr-3 font-bold text-xs outline-none border focus:border-indigo-500`}
+                />
+                <User size={15} className="absolute left-3 top-3 text-slate-400" />
+                {subFilterText && (
+                  <button onClick={() => setSubFilterText('')} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Student List */}
+            <div className="overflow-y-auto flex-1 max-h-[46vh] pr-1 space-y-2 no-scrollbar">
+              {studentsFor4thSub
+                .filter(st => {
+                  if (!subFilterText.trim()) return true;
+                  const query = subFilterText.toLowerCase();
+                  return (
+                    st.student_name.toLowerCase().includes(query) ||
+                    String(st.roll || '').includes(query)
+                  );
+                })
+                .map((student) => {
+                  const currentOptId = student4thSubMap[student.id] || '';
+                  const currentSubObj = subjectsFor4thSub.find(s => s.id === currentOptId);
+
+                  return (
+                    <div 
+                      key={student.id}
+                      className={`p-3 sm:p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                        currentOptId 
+                          ? (madrasah?.theme === 'dark' ? 'bg-indigo-950/20 border-indigo-900/60' : 'bg-indigo-50/40 border-indigo-100')
+                          : (madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-100')
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-8 h-8 rounded-xl bg-blue-100/80 dark:bg-blue-900/40 text-[#2563EB] dark:text-blue-400 font-black text-xs flex items-center justify-center shrink-0">
+                          {student.roll || '-'}
+                        </span>
+                        <div className="min-w-0">
+                          <h4 className="font-black text-sm truncate font-noto">
+                            {student.student_name}
+                          </h4>
+                          {currentSubObj && (
+                            <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                              <Sparkles size={11} /> ৪র্থ বিষয়: {currentSubObj.subject_name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="sm:w-60 shrink-0">
+                        <select
+                          className={`w-full h-10 ${
+                            madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+                          } rounded-xl px-3 font-bold text-xs outline-none border focus:border-indigo-500`}
+                          value={currentOptId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setStudent4thSubMap(prev => ({
+                              ...prev,
+                              [student.id]: val
+                            }));
+                          }}
+                        >
+                          <option value="">{lang === 'bn' ? '-- কোনো ৪র্থ বিষয় নেই --' : '-- No 4th Subject --'}</option>
+                          {subjectsFor4thSub.map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.subject_name} ({lang === 'bn' ? 'পূর্ণমান' : 'Full'}: {s.full_marks})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+              {studentsFor4thSub.length === 0 && (
+                <div className="text-center py-10 text-slate-400 font-bold text-sm">
+                  {lang === 'bn' ? 'কোনো শিক্ষার্থী পাওয়া যায়নি।' : 'No students found.'}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button 
+                type="button"
+                onClick={() => setShowHighSchool4thSubModal(false)}
+                className={`px-5 py-3 rounded-2xl font-black text-xs transition-all ${
+                  madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+              </button>
+              <button 
+                type="button"
+                onClick={handleSave4thSubMap}
+                disabled={saving4thSub}
+                className="px-7 py-3 bg-[#2563EB] hover:bg-blue-700 text-white rounded-2xl font-black text-xs shadow-premium flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {saving4thSub ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save Changes'}
+              </button>
+            </div>
+
           </div>
         </div>
       )}
