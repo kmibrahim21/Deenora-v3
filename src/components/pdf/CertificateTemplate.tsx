@@ -1,5 +1,6 @@
 import React from 'react';
 import { Institution, Student } from '../../types';
+import { solaimanLipiBase64 } from '../../utils/fonts';
 
 interface ExtendedStudent extends Student {
   className?: string;
@@ -56,8 +57,15 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
   const Field = ({ value, minWidth = '150px', stretch = false }: { value: string; minWidth?: string; stretch?: boolean }) => (
     <span className={`inline-block mx-2 -translate-y-1 ${stretch ? 'flex-1' : ''}`}>
       <span 
-        className={`border-b-[1.5px] border-dashed border-slate-400 px-3 text-center font-bold text-[#0f2c59] whitespace-nowrap ${stretch ? 'block w-full' : 'inline-block'}`}
-        style={{ minWidth: stretch ? undefined : minWidth, lineHeight: '1', fontFamily: isBn ? "'SolaimanLipi', 'Tiro Bangla', serif" : "'Playfair Display', serif", fontSize: '22px' }}
+        className={`border-b-[1.5px] border-slate-400 px-3 text-center font-bold text-[#0f2c59] whitespace-nowrap ${stretch ? 'block w-full' : 'inline-block'}`}
+        style={{ 
+          minWidth: stretch ? undefined : minWidth, 
+          lineHeight: '1', 
+          fontFamily: isBn 
+            ? "'SolaimanLipi', 'Noto Serif Bengali', 'Tiro Bangla', serif" 
+            : "'Playfair Display', 'SolaimanLipi', 'Noto Serif Bengali', 'Noto Sans Bengali', serif", 
+          fontSize: '22px' 
+        }}
       >
         {value || ''}
       </span>
@@ -66,11 +74,19 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
 
 
   return (
-    <div className="w-[1122px] h-[793px] bg-white relative flex flex-col overflow-hidden box-border" style={{ fontFamily: isBn ? "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" : "'Inter', sans-serif" }}>
+    <div 
+      className="w-[1122px] h-[793px] bg-white relative flex flex-col overflow-hidden box-border" 
+      style={{ 
+        fontFamily: isBn 
+          ? "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" 
+          : "'Inter', 'SolaimanLipi', 'Noto Sans Bengali', sans-serif" 
+      }}
+    >
       <style>{`
         @font-face {
           font-family: 'SolaimanLipi';
-          src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+          src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
+               url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
           font-weight: normal;
           font-style: normal;
           font-display: swap;
@@ -87,22 +103,9 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
       <div className="absolute inset-0 border border-[#d4af37] m-[38px]" />
 
       {/* --- Watermarks --- */}
-      {/* Subtle Pattern */}
-      <div className="absolute inset-[39px] z-0 opacity-[0.03]">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="islamic-pattern" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
-              <path d="M40 0 L80 40 L40 80 L0 40 Z" fill="none" stroke="#0f2c59" strokeWidth="0.5"/>
-              <path d="M20 20 L60 20 L60 60 L20 60 Z" fill="none" stroke="#0f2c59" strokeWidth="0.2"/>
-            </pattern>
-          </defs>
-          <rect x="0" y="0" width="100%" height="100%" fill="url(#islamic-pattern)"></rect>
-        </svg>
-      </div>
-      
       {/* Centered Institution Logo Watermark */}
       {madrasah?.logo_url && (
-        <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] z-0 pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] z-0 pointer-events-none">
           <img src={madrasah.logo_url} className="w-[450px] h-[450px] object-contain grayscale mix-blend-multiply" alt="watermark" />
         </div>
       )}
@@ -150,10 +153,10 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
           {madrasah?.logo_url && (
             <img src={madrasah.logo_url} className="w-[85px] h-[85px] object-contain drop-shadow-sm pb-2 mix-blend-multiply" alt="Logo" />
           )}
-          <h1 className="text-[44px] font-bold text-[#0f2c59] tracking-tight drop-shadow-sm text-center leading-tight whitespace-nowrap mt-1" style={{ fontFamily: isBn ? "'SolaimanLipi', 'Tiro Bangla', serif" : "'Playfair Display', serif" }}>
+          <h1 className="text-[44px] font-bold text-[#0f2c59] tracking-tight drop-shadow-sm text-center leading-tight whitespace-nowrap mt-1" style={{ fontFamily: isBn ? "'SolaimanLipi', 'Noto Serif Bengali', 'Tiro Bangla', serif" : "'Playfair Display', 'SolaimanLipi', 'Noto Serif Bengali', serif" }}>
             {isBn ? (madrasah?.name || 'প্রতিষ্ঠানের নাম') : (madrasah?.config_json as any)?.name_english || madrasah?.name || 'Institution Name'}
           </h1>
-          <h2 className="text-[16px] font-semibold text-[#8b1414] tracking-widest uppercase mt-1 text-center max-w-3xl">
+          <h2 className="text-[16px] font-semibold text-[#8b1414] tracking-widest uppercase mt-1 text-center max-w-3xl" style={{ fontFamily: isBn ? "'SolaimanLipi', 'Noto Sans Bengali', sans-serif" : "'Inter', 'SolaimanLipi', 'Noto Sans Bengali', sans-serif" }}>
             {madrasah?.address || (isBn ? 'ঠিকানা' : 'Address')}
           </h2>
           <div className="w-2/3 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37] to-transparent mt-3 opacity-70"></div>
@@ -165,7 +168,7 @@ export const CertificateTemplate: React.FC<CertificateTemplateProps> = ({ madras
              <div className="bg-[#0f2c59] text-white px-12 py-2">
                <h3 
                   className="text-[32px] font-black tracking-[0.15em] leading-none uppercase"
-                  style={{ fontFamily: isBn ? "'SolaimanLipi', 'Tiro Bangla', serif" : "'Playfair Display', serif" }}
+                  style={{ fontFamily: isBn ? "'SolaimanLipi', 'Noto Serif Bengali', 'Tiro Bangla', serif" : "'Playfair Display', 'SolaimanLipi', 'Noto Serif Bengali', serif" }}
                >
                  {title}
                </h3>

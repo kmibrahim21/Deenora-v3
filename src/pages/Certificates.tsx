@@ -6,8 +6,9 @@ import { t } from '../translations';
 import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import jsPDF from 'jspdf';
-import { toJpeg } from 'html-to-image';
+import { toJpeg, toPng } from 'html-to-image';
 import { CertificateTemplate } from '../components/pdf/CertificateTemplate';
+import { solaimanLipiBase64 } from '../utils/fonts';
 
 import { requestManager } from 'services/RequestManager';
 
@@ -271,14 +272,23 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
           <title>${safeStudentName}_Certificate</title>
           <script src="https://cdn.tailwindcss.com"></script>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&family=Tiro+Bangla:ital@0;1&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@400;500;600;700&display=swap');
             @font-face {
               font-family: 'SolaimanLipi';
-              src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
+                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
               font-weight: normal;
               font-style: normal;
               font-display: swap;
             }
+            @font-face {
+              font-family: 'SolaimanLipi';
+              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
+                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
+              font-weight: bold;
+              font-style: normal;
+              font-display: swap;
+            }
+            @import url('https://fonts.googleapis.com/css2?family=Charm:wght@400;700&family=Noto+Serif+Bengali:wght@400;700;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&family=Tiro+Bangla:ital@0;1&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@400;500;600;700&display=swap');
             @page {
               size: a4 landscape;
               margin: 0;
@@ -319,7 +329,8 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
           orientation: 'landscape',
           entity_type: 'certificate',
           entity_id: `${studentWithClass.id}_${selectedType}_${certLang}`,
-          filename: filename
+          filename: filename,
+          force_refresh: true
         })
       });
 
@@ -378,7 +389,21 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
           setTimeout(resolve, 800);
         });
 
-        const dataUrl = await toJpeg(container.firstElementChild as HTMLElement, { quality: 0.95, width: 1122, height: 793, backgroundColor: '#ffffff' });
+        // Wait for all fonts to be ready before rendering canvas
+        if ((document as any).fonts?.ready) {
+          try {
+            await (document as any).fonts.ready;
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        const dataUrl = await toPng(container.firstElementChild as HTMLElement, { 
+          pixelRatio: 2, 
+          width: 1122, 
+          height: 793, 
+          backgroundColor: '#ffffff' 
+        });
 
         const pdf = new jsPDF({
           orientation: 'landscape',
@@ -386,7 +411,7 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
           format: 'a4'
         });
 
-        pdf.addImage(dataUrl, 'JPEG', 0, 0, 297, 210);
+        pdf.addImage(dataUrl, 'PNG', 0, 0, 297, 210, undefined, 'FAST');
         pdf.save(filename);
 
         root.unmount();
