@@ -38,6 +38,8 @@ const SMSModal: React.FC<SMSModalProps> = ({ students, madrasah, lang, onClose, 
     { code: '{paid_amount}', label: 'Paid Amount' },
     { code: '{result_grade}', label: 'Result Grade' },
     { code: '{exam_name}', label: 'Exam Name' },
+    { code: '{total_marks}', label: 'Total Exam Marks' },
+    { code: '{obtained_marks}', label: 'Total Obtained Marks' },
     { code: '{attendance_percentage}', label: 'Attendance %' },
     { code: '{institution_name}', label: 'Institution Name' },
   ];

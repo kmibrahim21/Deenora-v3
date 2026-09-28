@@ -54,6 +54,8 @@ export const ShortcodeService = {
       merit_position: '১ম',
       exam_name: 'প্রথম সাময়িক',
       exam_subject: 'বাংলা',
+      total_marks: 500,
+      obtained_marks: 450,
       attendance_percentage: 95,
       institution_name: madrasahName
     };
@@ -79,6 +81,11 @@ export const ShortcodeService = {
       '{merit_position}': data.merit_position || '-',
       '{exam_name}': data.exam_name || '-',
       '{exam_subject}': data.exam_subject || '-',
+      '{total_marks}': data.total_marks !== undefined ? data.total_marks : (data.total_mark !== undefined ? data.total_mark : '-'),
+      '{total_mark}': data.total_marks !== undefined ? data.total_marks : (data.total_mark !== undefined ? data.total_mark : '-'),
+      '{exam_total_marks}': data.total_marks !== undefined ? data.total_marks : (data.total_mark !== undefined ? data.total_mark : '-'),
+      '{obtained_marks}': data.obtained_marks !== undefined ? data.obtained_marks : (data.obtained_mark !== undefined ? data.obtained_mark : '-'),
+      '{obtained_mark}': data.obtained_marks !== undefined ? data.obtained_marks : (data.obtained_mark !== undefined ? data.obtained_mark : '-'),
       '{attendance_percentage}': data.attendance_percentage !== undefined ? `${data.attendance_percentage}%` : '-',
       '{institution_name}': data.institution_name || '-',
       '{month}': data.month ? formatMonthToBengaliName(data.month) : '-',
@@ -486,6 +493,8 @@ export const ShortcodeService = {
         result_grade: grade || '-',
         result_gpa: gpa || '-',
         merit_position: meritPositions[s.id] ? String(meritPositions[s.id]) : '-',
+        total_marks: totalFull || 0,
+        obtained_marks: totalObtained || 0,
         attendance_percentage: attPercentage || 0,
         month: currentMonth || '-'
       };

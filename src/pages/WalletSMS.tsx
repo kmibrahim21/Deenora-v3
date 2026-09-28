@@ -160,6 +160,8 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     { code: '{gpa}', label: lang === 'bn' ? 'জিপিএ' : 'GPA' },
     { code: '{exam_name}', label: lang === 'bn' ? 'পরীক্ষার নাম' : 'Exam Name' },
     { code: '{exam_subject}', label: lang === 'bn' ? 'পরীক্ষার বিষয় ও নম্বর' : 'Exam Subjects & Marks' },
+    { code: '{total_marks}', label: lang === 'bn' ? 'পরীক্ষার মোট নম্বর' : 'Total Exam Marks' },
+    { code: '{obtained_marks}', label: lang === 'bn' ? 'প্রাপ্ত মোট নম্বর' : 'Total Obtained Marks' },
     { code: '{merit_position}', label: lang === 'bn' ? 'মেধাস্থান' : 'Merit Position' },
     { code: '{attendance_percentage}', label: lang === 'bn' ? 'উপস্থিতি হার' : 'Attendance %' },
     { code: '{institution_name}', label: lang === 'bn' ? 'প্রতিষ্ঠানের নাম' : 'Institution Name' },
