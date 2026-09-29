@@ -257,6 +257,44 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
       if (!students) throw new Error('No students found');
 
+      // Fetch fresh institution config for manual attendance overrides
+      const { data: instData } = await supabase.from('institutions').select('config_json').eq('id', madrasah?.id).single();
+      const currentConfig = instData?.config_json || madrasah?.config_json || {};
+      const manualAttendanceConfig = currentConfig?.exam_manual_attendance || {};
+
+      // Fetch class attendance stats
+      let attStatsMap: Record<string, string> = {};
+      try {
+        const studentIds = (students || []).map((s: any) => s.id).filter(Boolean);
+        let attQuery = supabase
+          .from('attendance')
+          .select('student_id, status, date')
+          .eq('institution_id', madrasah?.id);
+        if (studentIds.length > 0) {
+          attQuery = attQuery.in('student_id', studentIds);
+        } else if (result.class_id) {
+          attQuery = attQuery.eq('class_id', result.class_id);
+        }
+        const { data: attData } = await attQuery;
+        const stats: Record<string, { present: number, total: number }> = {};
+        (attData || []).forEach((record: any) => {
+          if (!record.student_id) return;
+          if (!stats[record.student_id]) stats[record.student_id] = { present: 0, total: 0 };
+          stats[record.student_id].total += 1;
+          const st = String(record.status || '').toLowerCase();
+          if (st === 'present' || st === 'late' || st === 'half_day') {
+            stats[record.student_id].present += (st === 'half_day' ? 0.5 : 1);
+          }
+        });
+        for (const [sId, stat] of Object.entries(stats)) {
+          if (stat.total > 0) {
+            attStatsMap[sId] = Math.round((stat.present / stat.total) * 100).toString();
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching att stats in final results:', e);
+      }
+
       // 2. Fetch Marks and Subjects for all exams
       const examDataPromises = result.exams!.map(async (config) => {
         const { data: marks } = await supabase
@@ -428,8 +466,31 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
            }
         }
 
-        const studentAttRaw = student.attendance || '0';
-        const parsedAtt = parseFloat(String(studentAttRaw).replace(/[^0-9.]/g, '')) || 0;
+        // Calculate student attendance from constituent exams or fallback to class attendance stats
+        let studentAttVal = 0;
+        let foundManualExamAtt = false;
+        let examAttSum = 0;
+        let examAttCount = 0;
+
+        (result.exams || []).forEach(ex => {
+          const manualVal = manualAttendanceConfig?.[ex.exam_id]?.[student.id];
+          if (manualVal !== undefined && manualVal !== null && String(manualVal).trim() !== '') {
+            const numVal = parseFloat(String(manualVal).replace(/[^0-9.]/g, '')) || 0;
+            examAttSum += numVal;
+            examAttCount++;
+            foundManualExamAtt = true;
+          }
+        });
+
+        if (foundManualExamAtt && examAttCount > 0) {
+          studentAttVal = examAttSum / examAttCount;
+        } else if (attStatsMap[student.id]) {
+          studentAttVal = parseFloat(attStatsMap[student.id]) || 0;
+        } else if (student.attendance) {
+          studentAttVal = parseFloat(String(student.attendance).replace(/[^0-9.]/g, '')) || 0;
+        }
+
+        const parsedAtt = studentAttVal;
 
         return {
           ...student,

@@ -132,6 +132,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         <th className="px-0.5 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-13">{t.avg}</th>
                         <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-11">{t.grade}</th>
                         <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-blue-900 w-12">{t.gpa}</th>
+                        <th className="px-1 py-1 text-center font-black uppercase border-r border-white/10 bg-amber-900 w-12">{isBangla ? 'উপস্থিতি' : 'Att.'}</th>
                         <th className="px-1 py-1 text-center font-black uppercase bg-blue-900 w-12">{t.rank}</th>
                       </tr>
                     </thead>
@@ -148,6 +149,11 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                         const gpa = hasAnyMark ? (student._gpa || '0.0') : '';
                         const grade = hasAnyMark ? (student._grade || 'F') : '';
                         const rank = hasAnyMark ? (student._rank && student._rank !== '-' ? student._rank : '') : '';
+                        const attendance = studentMarks['attendance'] !== undefined && String(studentMarks['attendance']).trim() !== ''
+                          ? String(studentMarks['attendance']).trim()
+                          : (student.attendance !== undefined && student.attendance !== null && String(student.attendance) !== 'N/A' && String(student.attendance) !== '0'
+                              ? String(student.attendance)
+                              : (student._attendance || '-'));
 
                         return (
                           <tr key={student.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
@@ -198,6 +204,7 @@ export const ClassResultTemplate: React.FC<ClassResultProps> = ({ exam, subjects
                               ) : ''}
                             </td>
                             <td className="px-1 py-[3px] text-center font-black text-slate-900 border-r border-slate-200 bg-slate-50/40 text-[13.5px]">{toBnNum(gpa)}</td>
+                            <td className="px-1 py-[3px] text-center font-black text-amber-900 border-r border-slate-200 bg-amber-50/40 text-[12px]">{toBnNum(attendance)}</td>
                             <td className="px-1 py-[3px] text-center font-black text-[#2563EB] bg-blue-50/30 text-[13.5px]">{toBnNum(rank)}</td>
                           </tr>
                         );

@@ -83,6 +83,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.total}</th>
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.grade}</th>
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-slate-800 w-10">{t.gpa}</th>
+                    <th className="px-2 py-2 text-center font-black uppercase tracking-widest border-r border-slate-700 bg-amber-900 w-10">{isBangla ? 'উপস্থিতি' : 'Att.'}</th>
                     <th className="px-2 py-2 text-center font-black uppercase tracking-widest bg-slate-800 w-10">{t.rank}</th>
                   </tr>
                 </thead>
@@ -116,6 +117,7 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
                         {std.grade}
                       </td>
                       <td className="px-2 py-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-200 bg-slate-50/30 text-[13px]">{std.gpa}</td>
+                      <td className="px-2 py-1.5 text-center font-mono font-bold text-amber-900 border-r border-slate-200 bg-amber-50/30 text-[12px]">{std.attendance ? (isBangla ? toBnNum(std.attendance) : std.attendance) : '-'}</td>
                       <td className="px-2 py-1.5 text-center font-black text-[#2563EB] bg-blue-50/20 text-[13px]">#{std.rank}</td>
                     </tr>
                   ))}

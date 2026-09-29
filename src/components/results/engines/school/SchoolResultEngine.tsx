@@ -78,6 +78,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
   const [confirmText, setConfirmText] = useState('');
   const [cancelText, setCancelText] = useState('');
   const [showExamSettingsModal, setShowExamSettingsModal] = useState(false);
+  const [classAttStatsMap, setClassAttStatsMap] = useState<Record<string, string>>({});
 
   const handleSetMeritRankingMode = async (mode: 'gpa_first' | 'total_marks_first' | 'off') => {
     if (!madrasah?.id) return;
@@ -1139,8 +1140,14 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
       `exam_marks:${examId}`
     );
     
-    // 3. Load manual attendance from config
-    const manualAttendanceMap = madrasah?.config_json?.exam_manual_attendance?.[examId] || {};
+    // 3. Load manual attendance from config & live attendance stats
+    const manualAttendanceMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examId] || {};
+    try {
+      const attStats = await fetchClassAttendanceStats(classId);
+      setClassAttStatsMap(attStats);
+    } catch (e) {
+      console.error('Error fetching attendance stats for mark entry:', e);
+    }
     
     if (stds) setStudents(stds);
     if (marks) {
@@ -1156,7 +1163,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         // Fill manual attendance
         Object.entries(manualAttendanceMap).forEach(([studentId, val]: [string, any]) => {
             if (!initialMarks[studentId]) initialMarks[studentId] = {};
-            initialMarks[studentId]['attendance'] = val;
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+                initialMarks[studentId]['attendance'] = String(val).trim();
+            }
         });
         
         setMarksData(initialMarks);
@@ -1391,9 +1400,22 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           }
         }
 
-        const manualAttMap = madrasah?.config_json?.exam_manual_attendance?.[examId] || {};
+        const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[examId] || {};
         const stdMarksObj = marksData[student.id] || {};
-        const rawAtt = stdMarksObj['attendance'] || studentMarksObjLocal['attendance'] || manualAttMap[student.id] || attStats[student.id] || '0';
+        
+        let rawAtt = '';
+        if (stdMarksObj['attendance'] !== undefined && String(stdMarksObj['attendance']).trim() !== '') {
+          rawAtt = String(stdMarksObj['attendance']).trim();
+        } else if (manualAttMap[student.id] !== undefined && String(manualAttMap[student.id]).trim() !== '') {
+          rawAtt = String(manualAttMap[student.id]).trim();
+        } else if (studentMarksObjLocal['attendance'] !== undefined && String(studentMarksObjLocal['attendance']).trim() !== '') {
+          rawAtt = String(studentMarksObjLocal['attendance']).trim();
+        } else if (attStats[student.id] !== undefined && String(attStats[student.id]).trim() !== '') {
+          rawAtt = String(attStats[student.id]).trim();
+        } else {
+          rawAtt = '0';
+        }
+
         const attVal = parseFloat(String(rawAtt).replace(/[^0-9.]/g, '')) || 0;
 
         return {
@@ -1403,7 +1425,8 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           total_marks: totalMarks,
           pass_status: passStatus,
           gpa: finalGpa,
-          attendance: attVal
+          attendance: attVal,
+          raw_attendance: rawAtt
         };
       })
       .sort((a, b) => {
@@ -2143,42 +2166,56 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         }
     }
 
-    // Delete cleared/deleted marks
+    // Delete cleared/deleted marks in parallel
     if (toDelete.length > 0) {
-        for (const item of toDelete) {
-            const { error: delError } = await supabase
-                .from('exam_marks')
-                .delete()
-                .eq('exam_id', selectedExam.id)
-                .eq('student_id', item.student_id)
-                .eq('subject_id', item.subject_id);
-            if (delError) {
-                console.error("Error deleting mark:", delError);
-            }
+        try {
+            await Promise.all(toDelete.map(item => 
+                supabase.from('exam_marks')
+                    .delete()
+                    .eq('exam_id', selectedExam.id)
+                    .eq('student_id', item.student_id)
+                    .eq('subject_id', item.subject_id)
+            ));
+        } catch (delError) {
+            console.error("Error deleting marks:", delError);
         }
     }
 
-    // Upsert logic
-    for (const row of payload) {
-        if (row.subject_id === 'attendance') continue; // Skip attendance here
-        const { error } = await supabase.from('exam_marks').upsert(row, { onConflict: 'exam_id,student_id,subject_id' });
-        if (error) {
-            console.error("Error saving marks:", error);
-            alert("Error saving marks: " + error.message);
-            setIsSaving(false);
-            return;
+    // Fast Batch Upsert Logic (All rows in single bulk operation instead of slow loop)
+    const validMarksPayload = payload.filter(row => row.subject_id !== 'attendance');
+    if (validMarksPayload.length > 0) {
+        const { error: upsertError } = await supabase.from('exam_marks').upsert(validMarksPayload, { onConflict: 'exam_id,student_id,subject_id' });
+        if (upsertError) {
+            console.warn("Batch upsert warning, retrying in parallel chunks:", upsertError);
+            const chunkSize = 40;
+            for (let i = 0; i < validMarksPayload.length; i += chunkSize) {
+                const chunk = validMarksPayload.slice(i, i + chunkSize);
+                const results = await Promise.all(chunk.map(row => supabase.from('exam_marks').upsert(row, { onConflict: 'exam_id,student_id,subject_id' })));
+                const firstErr = results.find(r => r.error);
+                if (firstErr?.error) {
+                    console.error("Error saving marks in chunk:", firstErr.error);
+                    alert("Error saving marks: " + firstErr.error.message);
+                    setIsSaving(false);
+                    return;
+                }
+            }
         }
     }
     
     // Save manual attendance to madrasah config
     try {
         const examId = selectedExam.id;
-        const currentManualAttendance = madrasah?.config_json?.exam_manual_attendance || {};
-        const examAttendance: any = {};
+        const currentManualAttendance = (madrasah?.config_json as any)?.exam_manual_attendance || {};
+        const examAttendance: any = { ...(currentManualAttendance[examId] || {}) };
         
         Object.entries(marksData).forEach(([studentId, subMarks]: any) => {
-            if (subMarks.attendance) {
-                examAttendance[studentId] = subMarks.attendance;
+            if (subMarks && subMarks.attendance !== undefined) {
+                const val = String(subMarks.attendance).trim();
+                if (val !== '') {
+                    examAttendance[studentId] = val;
+                } else {
+                    delete examAttendance[studentId];
+                }
             }
         });
 
@@ -2186,13 +2223,17 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         const updatedConfig = {
             ...(instData?.config_json || madrasah?.config_json || {}),
             exam_manual_attendance: {
-                ...currentManualAttendance,
+                ...((instData?.config_json || madrasah?.config_json)?.exam_manual_attendance || {}),
                 [examId]: examAttendance
             }
         };
 
         const { error: configError } = await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah?.id);
         if (configError) throw configError;
+
+        if (madrasah) {
+            madrasah.config_json = updatedConfig;
+        }
     } catch (err) {
         console.error("Error saving manual attendance to config:", err);
     }
@@ -2216,13 +2257,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     }
 
     const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
-    const manualAttMap = madrasah?.config_json?.exam_manual_attendance?.[selectedExam.id] || {};
+    const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id] || {};
 
     const enrichedMarksData = { ...marksData };
     students.forEach(st => {
       const currentMarks = { ...(enrichedMarksData[st.id] || {}) };
-      if (!currentMarks['attendance']) {
-        currentMarks['attendance'] = manualAttMap[st.id] || attStats[st.id] || '0';
+      if (currentMarks['attendance'] === undefined || String(currentMarks['attendance']).trim() === '') {
+        currentMarks['attendance'] = (manualAttMap[st.id] !== undefined && String(manualAttMap[st.id]).trim() !== '') 
+          ? String(manualAttMap[st.id]).trim() 
+          : (attStats[st.id] || '0%');
       }
       enrichedMarksData[st.id] = currentMarks;
     });
@@ -2255,6 +2298,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
     }
     
     const attStats = await fetchClassAttendanceStats(selectedExam.class_id);
+    const manualAttMap = (madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id] || {};
     
     // Always fetch fresh ranking to guarantee active merit mode is applied to PDF marksheets
     const currentRanking = await fetchRanking(selectedExam.id, selectedExam.class_id);
@@ -2266,6 +2310,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         const resultInfo = calculateStudentResult(item.student_id, subjects);
         
         const studentMarks = marksData[item.student_id] || {};
+        const studentAtt = (marksData[item.student_id]?.['attendance'] !== undefined && String(marksData[item.student_id]?.['attendance']).trim() !== '')
+          ? String(marksData[item.student_id]?.['attendance']).trim()
+          : ((manualAttMap[item.student_id] !== undefined && String(manualAttMap[item.student_id]).trim() !== '')
+              ? String(manualAttMap[item.student_id]).trim()
+              : (attStats[item.student_id] || 'N/A'));
         const preparedMarks = subjects.map(s => {
             const obtained = parseFloat(studentMarks[s.id] || '0');
             const full = s.full_marks || 100;
@@ -2315,7 +2364,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                roll: item.roll, 
                classes: { class_name: selectedExam.classes?.class_name }, 
                photo_url: studentObj?.photo_url, 
-               attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
+               attendance: studentAtt, 
                merit_position: item.rank || '-', 
                gpa: resultInfo.gpa,
                grade: resultInfo.grade
@@ -3963,7 +4012,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     ) : s.subject_name}
                                 </th>
                             ))}
-                            <th className={`py-4 text-[10px] font-black text-amber-500 uppercase text-center min-w-[80px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{lang === 'bn' ? 'উপস্থিতি (%)' : 'Attendance (%)'}</th>
+                            <th className={`py-4 text-[10px] font-black text-amber-500 uppercase text-center min-w-[80px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{lang === 'bn' ? 'উপস্থিতি (ঐচ্ছিক)' : 'Attendance (Opt)'}</th>
                             <th className={`py-4 text-[10px] font-black text-blue-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{t('total_marks', lang)}</th>
                             <th className={`py-4 text-[10px] font-black text-purple-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{t('average', lang)}</th>
                             <th className={`py-4 text-[10px] font-black text-emerald-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{t('gpa', lang)}</th>
@@ -4193,14 +4242,15 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                     <td className="py-4 px-2">
                                         <input 
                                             id={`school-mark-attendance-${sIndex}`}
-                                            type="number" 
+                                            type="text" 
                                             inputMode="decimal"
                                             enterKeyHint="next"
                                             autoComplete="off"
                                             tabIndex={getTabIndex('attendance')}
-                                            placeholder="%"
-                                            className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500' : 'bg-amber-50 border-amber-100 text-slate-900 focus:border-amber-500'} rounded-lg text-center font-black text-xs outline-none transition-all`}
-                                            value={marksData[std.id]?.['attendance'] || ''}
+                                            placeholder={classAttStatsMap[std.id] || "%"}
+                                            title={lang === 'bn' ? 'উপস্থিতির সংখ্যা বা শতকরা লিখুন (লিখলে স্বয়ংক্রিয় হাজিরার চেয়ে বেশি অগ্রাধিকার পাবে)' : 'Enter attendance. Overrides auto app attendance.'}
+                                            className={`w-full h-10 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500' : 'bg-amber-50/80 border-amber-100 text-slate-900 focus:border-amber-500'} rounded-lg text-center font-black text-xs outline-none transition-all placeholder:text-slate-400 placeholder:font-normal`}
+                                            value={marksData[std.id]?.['attendance'] ?? ''}
                                             onFocus={(e) => e.target.select()}
                                             onKeyDown={(e) => handleKeyDown(e, 'attendance')}
                                             onChange={(e) => {
@@ -4254,16 +4304,16 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
                       {rankingData.map((item: any) => (
-                          <div key={item.student_id} className="bg-white p-2.5 sm:p-3 rounded-[1.2rem] sm:rounded-[1.5rem] border border-slate-100 shadow-sm flex items-center justify-between gap-2">
+                          <div key={item.student_id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-2.5 sm:p-3 rounded-[1.2rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-2`}>
                               <div className="flex items-center gap-2 min-w-0">
-                                  <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-50 text-[#2563EB] rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0">{item.rank}</div>
+                                  <div className={`w-5 h-5 sm:w-6 sm:h-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-[#2563EB]'} rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0`}>{item.rank}</div>
                                   <div className="min-w-0">
-                                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto truncate leading-relaxed mb-0.5 text-[12px] sm:text-[13px] pt-0.5`}>{item.student_name}</h5>
+                                      <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'} font-noto truncate leading-relaxed mb-0.5 text-[12px] sm:text-[13px] pt-0.5`}>{item.student_name}</h5>
                                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter truncate opacity-80">
                                         Roll: {item.roll} | {item.total_marks} | {(() => {
                                             const avgValue = subjects.length > 0 ? (item.total_marks / subjects.length) : 0;
                                             return avgValue.toFixed(2);
-                                        })()}
+                                        })()}{item.raw_attendance ? ` | Att: ${item.raw_attendance}` : (item.attendance ? ` | Att: ${item.attendance}%` : '')}
                                       </p>
                                   </div>
                               </div>
@@ -4328,7 +4378,11 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                           roll: item.roll, 
                                                           classes: { class_name: selectedExam.classes?.class_name }, 
                                                           photo_url: studentObj?.photo_url, 
-                                                          attendance: marksData[item.student_id]?.['attendance'] || attStats[item.student_id] || 'N/A', 
+                                                          attendance: (marksData[item.student_id]?.['attendance'] !== undefined && String(marksData[item.student_id]?.['attendance']).trim() !== '')
+                                                            ? String(marksData[item.student_id]?.['attendance']).trim()
+                                                            : (((madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id]?.[item.student_id] !== undefined && String((madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id]?.[item.student_id]).trim() !== '')
+                                                                ? String((madrasah?.config_json as any)?.exam_manual_attendance?.[selectedExam.id]?.[item.student_id]).trim()
+                                                                : (attStats[item.student_id] || 'N/A')), 
                                                           merit_position: item.rank || '-', 
                                                           gpa: resultInfo.gpa,
                                                           grade: resultInfo.grade
