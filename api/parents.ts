@@ -26,24 +26,76 @@ export default async function handler(req, res) {
     }
     
     const body = req.body || {};
-    const { phone, reg_no } = body;
+    const { phone, reg_no, student_id } = body;
     const qPhone = String(phone || req.query.phone || url.searchParams.get('phone') || '').trim();
     const qRegNo = String(reg_no || req.query.reg_no || url.searchParams.get('reg_no') || '').trim();
+    const qStudentId = String(student_id || req.query.student_id || url.searchParams.get('student_id') || '').trim();
 
-    if (!qPhone || !qRegNo) {
-      console.warn('Parents API: Missing credentials', { qPhone, qRegNo });
-      return res.status(400).json({ error: 'Phone and Registration Number are required' });
+    if (!qPhone || (!qRegNo && !qStudentId)) {
+      console.warn('Parents API: Missing credentials', { qPhone, qRegNo, qStudentId });
+      return res.status(400).json({ error: 'Phone and Registration Number or Student ID are required' });
     }
 
-    console.log(`Parents API: Looking up student with Phone: ${qPhone}, Reg No: ${qRegNo}`);
+    console.log(`Parents API: Looking up student with Phone: ${qPhone}, Reg No: ${qRegNo}, Student ID: ${qStudentId}`);
 
-    // Lookup student
-    const { data: student, error: studentError } = await supabase
-      .from('students')
-      .select('*, institutions(*), classes(*)')
-      .eq('guardian_phone', qPhone)
-      .eq('registration_number', qRegNo)
-      .maybeSingle();
+    // Lookup student by student_id or registration_number
+    let student: any = null;
+    let studentError: any = null;
+
+    if (qStudentId) {
+      const res = await supabase
+        .from('students')
+        .select('*, institutions(*), classes(*)')
+        .or(`guardian_phone.eq.${qPhone},guardian_phone_2.eq.${qPhone}`)
+        .eq('id', qStudentId)
+        .maybeSingle();
+      student = res.data;
+      studentError = res.error;
+    }
+
+    if (!student && qStudentId) {
+      const cleanPhone = qPhone.replace(/\D/g, '');
+      const last10Digits = cleanPhone.slice(-10);
+      if (last10Digits) {
+        const res = await supabase
+          .from('students')
+          .select('*, institutions(*), classes(*)')
+          .eq('id', qStudentId)
+          .or(`guardian_phone.ilike.%${last10Digits},guardian_phone_2.ilike.%${last10Digits}`)
+          .maybeSingle();
+        if (res.data) {
+          student = res.data;
+        }
+      }
+    }
+
+    if (!student && qRegNo) {
+      const res = await supabase
+        .from('students')
+        .select('*, institutions(*), classes(*)')
+        .or(`guardian_phone.eq.${qPhone},guardian_phone_2.eq.${qPhone}`)
+        .eq('registration_number', qRegNo)
+        .maybeSingle();
+      student = res.data;
+      studentError = res.error;
+    }
+
+    // Secondary fallback without phone filter if phone matching with leading zero differences
+    if (!student && qRegNo) {
+      const cleanPhone = qPhone.replace(/\D/g, '');
+      const last10Digits = cleanPhone.slice(-10);
+      if (last10Digits) {
+        const res = await supabase
+          .from('students')
+          .select('*, institutions(*), classes(*)')
+          .eq('registration_number', qRegNo)
+          .or(`guardian_phone.ilike.%${last10Digits},guardian_phone_2.ilike.%${last10Digits}`)
+          .maybeSingle();
+        if (res.data) {
+          student = res.data;
+        }
+      }
+    }
 
     if (studentError) {
       console.error('Parents API: Supabase error looking up student:', studentError);
@@ -445,8 +497,88 @@ export default async function handler(req, res) {
 
       const examResults = Array.from(examMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+      // Lookup all children associated with this guardian phone (siblings)
+      let children: any[] = [];
+      try {
+        const cleanPhone = qPhone.replace(/\D/g, '');
+        const last10Digits = cleanPhone.slice(-10);
+        const sPhone = (student.guardian_phone || '').replace(/\D/g, '').slice(-10);
+        const sPhone2 = (student.guardian_phone_2 || '').replace(/\D/g, '').slice(-10);
+
+        const conds = new Set<string>();
+        if (qPhone) {
+          conds.add(`guardian_phone.eq.${qPhone}`);
+          conds.add(`guardian_phone_2.eq.${qPhone}`);
+        }
+        if (last10Digits) {
+          conds.add(`guardian_phone.ilike.%${last10Digits}`);
+          conds.add(`guardian_phone_2.ilike.%${last10Digits}`);
+        }
+        if (sPhone) {
+          conds.add(`guardian_phone.ilike.%${sPhone}`);
+          conds.add(`guardian_phone_2.ilike.%${sPhone}`);
+        }
+        if (sPhone2) {
+          conds.add(`guardian_phone.ilike.%${sPhone2}`);
+          conds.add(`guardian_phone_2.ilike.%${sPhone2}`);
+        }
+
+        const orFilter = Array.from(conds).join(',');
+
+        const { data: siblings } = await supabase
+          .from('students')
+          .select('id, student_name, name_en, roll, registration_number, admission_number, photo_url, class_id, is_active, institution_id, guardian_phone, guardian_phone_2, section, classes(id, class_name), institutions(id, name, logo_url, is_active, config_json, phone)')
+          .or(orFilter)
+          .eq('institution_id', student.institution_id)
+          .eq('is_active', true)
+          .order('roll', { ascending: true });
+
+        if (siblings && siblings.length > 0) {
+          children = siblings.map((s: any) => ({
+            id: s.id,
+            student_name: s.student_name,
+            name_en: s.name_en,
+            roll: s.roll,
+            registration_number: s.registration_number,
+            admission_number: s.admission_number,
+            class_id: s.class_id,
+            class_name: s.classes?.class_name || '',
+            section: s.section || '',
+            photo_url: s.photo_url,
+            institution_id: s.institution_id,
+            institution_name: s.institutions?.name || '',
+            institution_logo: s.institutions?.logo_url || '',
+            guardian_phone: s.guardian_phone || qPhone
+          }));
+        }
+      } catch (childErr) {
+        console.warn('Error fetching siblings in parents API:', childErr);
+      }
+
+      const currentChildObj = {
+        id: student.id,
+        student_name: student.student_name,
+        name_en: student.name_en,
+        roll: student.roll,
+        registration_number: student.registration_number,
+        admission_number: student.admission_number,
+        class_id: student.class_id,
+        class_name: student.classes?.class_name || '',
+        section: student.section || '',
+        photo_url: student.photo_url,
+        institution_id: student.institution_id,
+        institution_name: student.institutions?.name || '',
+        institution_logo: student.institutions?.logo_url || '',
+        guardian_phone: student.guardian_phone || qPhone
+      };
+
+      if (!children.some(c => c.id === student.id)) {
+        children.unshift(currentChildObj);
+      }
+
       return res.status(200).json({
         student,
+        children,
         attendance: attendance || [],
         fees: fees || [],
         feeStructures: feeStructures || [],

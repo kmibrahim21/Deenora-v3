@@ -19,7 +19,8 @@ import {
   Pencil,
   Copy,
   Download,
-  AlertTriangle
+  AlertTriangle,
+  ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Institution, Language } from '../types';
@@ -85,11 +86,13 @@ const SyllabusItem = ({ item, onDelete, onEdit, onDownload, isDownloading }: { i
 export default function Messages({ 
   lang = 'bn',
   madrasah,
-  profile
+  profile,
+  onBack
 }: { 
   lang?: Language;
   madrasah: Institution | null;
   profile?: any;
+  onBack?: () => void;
 }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
@@ -558,19 +561,32 @@ export default function Messages({
   if (!madrasah) return null;
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-500 pb-24 max-w-7xl mx-auto px-1 sm:px-3 pt-2">
+    <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-500 max-w-7xl mx-auto pb-12">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 rounded-2xl text-white shadow-md">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight flex items-center gap-3">
-            <MessageSquare size={26} />
-            {lang === 'bn' ? 'বার্তা ও তথ্য' : 'Messages & Updates'}
-            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-bold ml-2">
-              {messages.length}
-            </span>
-          </h1>
-          <p className="text-blue-100 font-medium mt-1 text-sm opacity-90">{lang === 'bn' ? 'নোটিশ, ক্লাস রুটিন, সিলেবাস এবং অন্যান্য আপডেট' : 'Notice, class routine, syllabus and other updates'}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 px-6 py-5 rounded-3xl text-white shadow-md">
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-2xl transition-all border border-white/15 text-white shrink-0 cursor-pointer"
+              title={lang === 'bn' ? 'ফিরে যান' : 'Go Back'}
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2.5 font-noto">
+              <MessageSquare size={24} className="shrink-0" />
+              {lang === 'bn' ? 'বার্তা ও তথ্য' : 'Messages & Updates'}
+              <span className="text-xs bg-white/20 px-2.5 py-0.5 rounded-full font-bold ml-1 border border-white/20">
+                {messages.length}
+              </span>
+            </h1>
+            <p className="text-blue-100 font-bold mt-1 text-xs sm:text-sm opacity-90 font-noto">
+              {lang === 'bn' ? 'নোটিশ, ক্লাস রুটিন, সিলেবাস এবং অন্যান্য আপডেট' : 'Notice, class routine, syllabus and other updates'}
+            </p>
+          </div>
         </div>
       </div>
 

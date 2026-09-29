@@ -180,6 +180,18 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   }, [studentId]);
 
   const [student, setStudent] = useState<any>(() => initialCache?.student || null);
+  const [children, setChildren] = useState<any[]>(() => initialCache?.children || []);
+  const [switchingChildId, setSwitchingChildId] = useState<string | null>(null);
+  const [activeStudentId, setActiveStudentId] = useState<string>(() => {
+    let activeId = studentId;
+    if (!activeId) {
+      try {
+        const session = JSON.parse(localStorage.getItem('parent_session') || '{}');
+        activeId = session.student_id;
+      } catch {}
+    }
+    return activeId || '';
+  });
   const [currentInstitution, setCurrentInstitution] = useState<Institution | null>(() => initialCache?.institution || madrasah || null);
 
   const modules = useMemo(() => {
@@ -220,7 +232,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
-  const [profileSubTab, setProfileSubTab] = useState<'basic' | 'family' | 'address'>('basic');
+  const [profileSubTab, setProfileSubTab] = useState<'basic' | 'family' | 'address' | 'siblings'>('basic');
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
   const [showNotifBanner, setShowNotifBanner] = useState<boolean>(false);
   const [notifToast, setNotifToast] = useState<string | null>(null);
@@ -289,11 +301,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     };
   }, [notifPermission]);
 
-  const CACHE_KEY = `parent_data_v2_${studentId}`;
+  const CACHE_KEY = `parent_data_v2_${activeStudentId || studentId}`;
 
   useEffect(() => {
     // Try to load from cache first
-    const cachedData = localStorage.getItem(CACHE_KEY);
+    const currentActiveId = activeStudentId || studentId;
+    const cachedData = localStorage.getItem(`parent_data_v2_${currentActiveId}`);
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
@@ -303,19 +316,22 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
         }
       } catch (e) {}
     }
-    fetchData();
-  }, [studentId]);
+    fetchData(currentActiveId);
+  }, [studentId, activeStudentId]);
 
   const applyData = useCallback((data: any) => {
     setStudent(data.student);
+    if (data.children && Array.isArray(data.children) && data.children.length > 0) {
+      setChildren(data.children);
+    }
     if (data.institution) {
       setCurrentInstitution(data.institution);
     }
-    setAttendance(data.attendance);
-    setFees(data.fees);
+    setAttendance(data.attendance || []);
+    setFees(data.fees || []);
     setFeeStructures(data.feeStructures || []);
     setStudentFeeSettings(data.studentFeeSettings || []);
-    setResults(data.examResults);
+    setResults(data.examResults || []);
     setNotices(data.notices || []);
     setEvents(data.events || []);
     setClassTotal(data.classTotal || 0);
@@ -330,7 +346,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     studentClassName: student?.classes?.class_name || student?.class_name,
     onNewNotification: useCallback(() => {
       fetchData();
-    }, [studentId])
+    }, [studentId, activeStudentId])
   });
 
   // Filter published routines that belong to student's class
@@ -428,19 +444,28 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return matchedRoutines;
   }, [currentInstitution, madrasah, student]);
 
-  const fetchData = async () => {
+  const fetchData = async (targetStudentId?: string, targetRegNo?: string) => {
+    const sId = typeof targetStudentId === 'string' ? targetStudentId : (activeStudentId || studentId);
+    const regNo = typeof targetRegNo === 'string' ? targetRegNo : undefined;
+    if (typeof targetStudentId === 'string' && targetStudentId !== student?.id) {
+      setSwitchingChildId(targetStudentId);
+    }
     if (!loading) setRefreshing(true);
     try {
       const parentSession = JSON.parse(localStorage.getItem('parent_session') || '{}');
-      const phone = parentSession.guardian_phone;
-      const regNo = parentSession.registration_number;
+      const phone = parentSession.guardian_phone || student?.guardian_phone;
+      const actualRegNo = regNo !== undefined ? regNo : parentSession.registration_number;
 
-      if (!phone || !regNo) {
+      if (!phone || (!actualRegNo && !sId)) {
         handleLogout();
         return;
       }
 
-      const response = await fetch(`/api/parents/data?phone=${phone}&reg_no=${regNo}`);
+      let url = `/api/parents/data?phone=${encodeURIComponent(phone)}`;
+      if (sId) url += `&student_id=${encodeURIComponent(sId)}`;
+      if (actualRegNo) url += `&reg_no=${encodeURIComponent(actualRegNo)}`;
+
+      const response = await fetch(url);
       const data = await response.json();
 
       if (!response.ok) {
@@ -449,10 +474,22 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
       }
 
       setError(null);
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
+      const currentSId = data.student?.id || sId;
+      localStorage.setItem(`parent_data_v2_${currentSId}`, JSON.stringify({
         data,
         timestamp: Date.now()
       }));
+
+      if (data.student) {
+        setActiveStudentId(data.student.id);
+        localStorage.setItem('parent_session', JSON.stringify({
+          student_id: data.student.id,
+          guardian_phone: data.student.guardian_phone || phone,
+          registration_number: data.student.registration_number,
+          institution_id: data.student.institution_id,
+          role: 'parent'
+        }));
+      }
 
       applyData(data);
     } catch (error) {
@@ -460,7 +497,13 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setSwitchingChildId(null);
     }
+  };
+
+  const handleSwitchChild = (child: any) => {
+    if (!child || child.id === student?.id || Boolean(switchingChildId)) return;
+    fetchData(child.id, child.registration_number);
   };
 
   const handleLogout = () => {
@@ -840,7 +883,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                 {notifPermission === 'granted' ? 'অন' : notifPermission === 'denied' ? 'ব্লকড' : 'নোটিফিকেশন'}
               </span>
             </button>
-            <button onClick={fetchData} className="p-2.5 md:p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all border border-slate-100 hover:border-blue-100 group cursor-pointer">
+            <button onClick={() => fetchData()} className="p-2.5 md:p-3 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all border border-slate-100 hover:border-blue-100 group cursor-pointer">
               <RefreshCw size={18} className={`${refreshing ? 'animate-spin' : ''} group-active:rotate-180 transition-transform`} />
             </button>
           </div>
@@ -1176,7 +1219,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
                         </div>
                      </div>
-                     <button onClick={fetchData} className="text-[9px] font-bold text-slate-400 flex items-center gap-1.5 pt-2 hover:text-blue-600 transition-colors">
+                     <button onClick={() => fetchData()} className="text-[9px] font-bold text-slate-400 flex items-center gap-1.5 pt-2 hover:text-blue-600 transition-colors">
                         <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} /> তথ্য রিফ্রেশ করুন
                      </button>
                   </div>
@@ -1362,7 +1405,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       <h3 className="text-xl font-black text-slate-900 font-noto">কোনো পরীক্ষার ফলাফল নেই</h3>
                       <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto leading-relaxed font-noto">এই শিক্ষার্থীর জন্য এখনো কোনো পরীক্ষার ফলাফল প্রকাশ করা হয়নি। অনুগ্রহ করে {(madrasah?.institution_type === 'school' || madrasah?.institution_type === 'kindergarten' || madrasah?.institution_type === 'choching') ? 'প্রতিষ্ঠান' : 'মাদরাসা'} কর্তৃপক্ষের সাথে যোগাযোগ করুন।</p>
                    </div>
-                   <button onClick={fetchData} className="bg-blue-50 text-blue-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 border border-blue-100 shadow-sm active:scale-95 transition-all outline-none">
+                   <button onClick={() => fetchData()} className="bg-blue-50 text-blue-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-2 border border-blue-100 shadow-sm active:scale-95 transition-all outline-none">
                       <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> রিফ্রেশ করুন
                    </button>
                 </div>
@@ -1480,7 +1523,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                      <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2 font-noto">
                         <BookOpen size={16} className="text-blue-600" /> বিষয়ভিত্তিক ফলাফল
                      </h3>
-                     <button onClick={fetchData} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 border border-blue-100 shadow-sm transition-all active:scale-95">
+                     <button onClick={() => fetchData()} className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 border border-blue-100 shadow-sm transition-all active:scale-95">
                         <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} /> রিফ্রেশ
                      </button>
                   </div>
@@ -1676,7 +1719,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                       </motion.div>
                     </div>
 
-                    {/* Compact Profile Details */}
+                     {/* Compact Profile Details */}
                     <div className="flex-grow min-w-0 font-noto">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[9px] md:text-[10px] font-black border border-emerald-100/50 mb-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1695,7 +1738,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                         </span>
                         {student?.section && (
                           <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-lg text-[9px] md:text-xs font-bold border border-purple-100/30">
-                            শাখা: {student.section}
+                             শাখা: {student.section}
                           </span>
                         )}
                       </div>
@@ -1703,19 +1746,92 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                   </div>
                </div>
 
+               {/* Quick Child Switcher on Account / Profile Page */}
+               {children && children.length > 1 && (
+                 <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-4 rounded-3xl border border-blue-500/20 shadow-xl text-white">
+                   <div className="flex items-center justify-between gap-2 mb-3 px-1">
+                     <div className="flex items-center gap-2">
+                       <div className="w-7 h-7 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-400/20 shrink-0">
+                         <Users size={16} />
+                       </div>
+                       <div>
+                         <h4 className="text-xs sm:text-sm font-black font-noto">
+                           সন্তান পরিবর্তন করুন ({children.length} জন)
+                         </h4>
+                         <p className="text-[9px] text-blue-200/80 font-noto">
+                           যে সন্তানের তথ্য দেখতে চান নির্বাচন করুন
+                         </p>
+                       </div>
+                     </div>
+                     <span className="text-[9px] bg-blue-500/20 text-blue-300 font-bold px-2.5 py-1 rounded-full border border-blue-400/20 font-noto">
+                       একাউন্ট সুইচ
+                     </span>
+                   </div>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                     {children.map((child) => {
+                       const isSelected = student?.id === child.id;
+                       const isSwitching = switchingChildId === child.id;
+                       return (
+                         <button
+                           key={child.id}
+                           type="button"
+                           disabled={isSelected || Boolean(switchingChildId)}
+                           onClick={() => handleSwitchChild(child)}
+                           className={`flex items-center gap-3 p-3 rounded-2xl text-left transition-all duration-200 cursor-pointer ${
+                             isSelected
+                               ? 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-lg scale-[1.01]'
+                               : 'bg-white/5 hover:bg-white/15 text-slate-300 border border-white/5 hover:border-white/20 active:scale-95'
+                           }`}
+                         >
+                           <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden shrink-0 border border-white/10">
+                             {child.photo_url ? (
+                               <img src={child.photo_url} alt="" className="w-full h-full object-cover" />
+                             ) : (
+                               <User size={22} className={isSelected ? 'text-white' : 'text-blue-300'} />
+                             )}
+                           </div>
+                           <div className="min-w-0 flex-1 font-noto">
+                             <div className="flex items-center justify-between gap-1">
+                               <p className="text-xs sm:text-sm font-black truncate leading-tight">
+                                 {child.student_name}
+                               </p>
+                               {isSelected && (
+                                 <span className="bg-emerald-500/30 text-emerald-300 text-[8px] font-black px-1.5 py-0.5 rounded border border-emerald-400/30 shrink-0">
+                                   সক্রিয়
+                                 </span>
+                               )}
+                               {isSwitching && (
+                                 <Loader2 size={14} className="animate-spin text-white shrink-0" />
+                               )}
+                             </div>
+                             <p className={`text-[10px] font-bold truncate mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                               {child.class_name ? `শ্রেণি: ${child.class_name}` : ''} {child.roll ? `• রোল: ${child.roll}` : ''}
+                             </p>
+                             <p className={`text-[8px] truncate ${isSelected ? 'text-blue-200' : 'text-slate-500'}`}>
+                               আইডি: {child.registration_number || '---'}
+                             </p>
+                           </div>
+                         </button>
+                       );
+                     })}
+                   </div>
+                 </div>
+               )}
+
                {/* Modern Profile Sub Tabs for scroll-free navigation on mobile */}
-               <div className="flex bg-slate-100 p-1 rounded-2xl gap-1 w-full border border-slate-200/50">
+               <div className="flex bg-slate-100 p-1 rounded-2xl gap-1 w-full border border-slate-200/50 overflow-x-auto no-scrollbar">
                  {[
                    { id: 'basic', label: 'ব্যক্তিগত তথ্য', icon: User },
                    { id: 'family', label: 'অভিভাবক', icon: Shield },
-                   { id: 'address', label: 'ঠিকানা ও নোট', icon: MapPin }
+                   { id: 'address', label: 'ঠিকানা ও নোট', icon: MapPin },
+                   ...(children && children.length > 1 ? [{ id: 'siblings', label: `সকল সন্তান (${children.length})`, icon: Users }] : [])
                  ].map(tab => {
                    const isActive = profileSubTab === tab.id;
                    return (
                      <button
                        key={tab.id}
                        onClick={() => setProfileSubTab(tab.id as any)}
-                       className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap ${
+                       className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 py-3 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap ${
                          isActive 
                            ? 'bg-white text-blue-600 shadow-sm border border-blue-50/50 font-black' 
                            : 'text-slate-400 hover:text-slate-600 font-bold'
@@ -1850,7 +1966,107 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                        )}
                      </motion.div>
                    )}
-                 </AnimatePresence>
+                                     {profileSubTab === 'siblings' && (
+                      <motion.div
+                        key="siblings-tab"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-4"
+                      >
+                        <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 shadow-premium space-y-4">
+                          <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                                <Users size={16} />
+                              </div>
+                              <h4 className="text-sm font-black text-slate-800 font-noto">আমার সন্তানগণ ({children.length} জন)</h4>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 font-noto">
+                              সুইচ করতে ক্লিক করুন
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {children.map((c) => {
+                              const isCurrent = student?.id === c.id;
+                              const isSwitching = switchingChildId === c.id;
+                              return (
+                                <div 
+                                  key={c.id} 
+                                  className={`p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 ${
+                                    isCurrent 
+                                      ? 'bg-blue-50/40 border-blue-200 shadow-sm ring-1 ring-blue-400/30' 
+                                      : 'bg-slate-50/40 border-slate-100 hover:bg-white hover:shadow-md hover:border-blue-100'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 text-left">
+                                    <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center overflow-hidden shrink-0 border border-slate-200 shadow-sm">
+                                      {c.photo_url ? (
+                                        <img src={c.photo_url} alt="" className="w-full h-full object-cover rounded-xl" />
+                                      ) : (
+                                        <User size={22} className={isCurrent ? 'text-blue-600' : 'text-slate-400'} />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1 font-noto">
+                                      <div className="flex items-center gap-2">
+                                        <h5 className="text-sm font-black text-slate-900 truncate">
+                                          {c.student_name}
+                                        </h5>
+                                        {isCurrent && (
+                                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[8px] font-black shrink-0 border border-emerald-200">
+                                            বর্তমান
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] font-bold text-slate-500 mt-0.5">
+                                        {c.class_name ? `শ্রেণি: ${c.class_name}` : ''} {c.section ? `(${c.section})` : ''} {c.roll ? `• রোল: ${c.roll}` : ''}
+                                      </p>
+                                      <p className="text-[9px] font-semibold text-slate-400">
+                                        আইডি: {c.registration_number || c.admission_number || '---'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    disabled={isCurrent || Boolean(switchingChildId)}
+                                    onClick={() => {
+                                      handleSwitchChild(c);
+                                      setActiveTab('home');
+                                    }}
+                                    className={`w-full py-2.5 px-3 rounded-xl text-xs font-black font-noto flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                                      isCurrent
+                                        ? 'bg-emerald-600 text-white cursor-default'
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'
+                                    }`}
+                                  >
+                                    {isSwitching ? (
+                                      <>
+                                        <Loader2 size={14} className="animate-spin text-white" />
+                                        <span>লোড হচ্ছে...</span>
+                                      </>
+                                    ) : isCurrent ? (
+                                      <>
+                                        <CheckCircle2 size={14} className="text-white" />
+                                        <span>এই প্রোফাইলটি সক্রিয় রয়েছে</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>এই সন্তানের তথ্য দেখুন</span>
+                                        <ArrowRight size={14} />
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                </div>
 
                {/* Modern Minimalist Logout Row */}

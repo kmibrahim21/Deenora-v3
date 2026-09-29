@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3 } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { linkifyMarkdown, getMarkdownComponents } from 'utils/markdownUtils';
 import { supabase, smsApi } from 'supabase';
 import { Institution, Language, View, SubscriptionPackage, SmsProviderConfig } from 'types';
 import { t } from 'translations';
@@ -607,6 +608,19 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
         </button>
 
         <button 
+          onClick={() => setIsEditingGlobalUpdate(true)} 
+          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
+        >
+          <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Globe size={24} />
+          </div>
+          <div>
+            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'গ্লোবাল আপডেট' : 'Global Update'}</h5>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Pop-up Control</p>
+          </div>
+        </button>
+
+        <button 
           onClick={() => setView('academic-calendar')} 
           className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
         >
@@ -751,19 +765,6 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
             <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ${madrasah?.theme === 'dark' ? 'left-7' : 'left-1'}`} />
           </button>
         </div>
-
-        <button 
-          onClick={() => setIsEditingGlobalUpdate(true)} 
-          className={`p-6 rounded-[2.5rem] border shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3 group active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}
-        >
-          <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Globe size={24} />
-          </div>
-          <div>
-            <h5 className={`text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'}`}>{lang === 'bn' ? 'গ্লোবাল আপডেট' : 'Global Update'}</h5>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Pop-up Control</p>
-          </div>
-        </button>
 
         <button 
           onClick={onLogout} 
@@ -1499,48 +1500,65 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                     <div className="space-y-1.5">
                        <div className="flex items-center justify-between px-1">
                           <label className="text-[10px] font-black text-slate-400 uppercase">{lang === 'bn' ? 'আপডেট মেসেজ' : 'Update Message'}</label>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                              <button 
+                                type="button"
                                 onClick={() => {
                                    const start = '**';
                                    const end = '**';
                                    const msg = globalSettings.global_update_message;
-                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg && !msg.endsWith(' ') ? ' ' : '') + start + (lang === 'bn' ? 'বোল্ড' : 'Bold') + end});
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg && !msg.endsWith(' ') ? ' ' : '') + start + (lang === 'bn' ? 'বোল্ড লেখা' : 'Bold text') + end});
                                 }}
                                 className="w-8 h-8 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center text-xs font-black shadow-sm hover:scale-105 transition-all font-serif" title="Bold"
                              >
                                 B
                              </button>
                              <button 
+                                type="button"
                                 onClick={() => {
                                    const start = '*';
                                    const end = '*';
                                    const msg = globalSettings.global_update_message;
-                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg && !msg.endsWith(' ') ? ' ' : '') + start + (lang === 'bn' ? 'ইটালিক' : 'Italic') + end});
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg && !msg.endsWith(' ') ? ' ' : '') + start + (lang === 'bn' ? 'ইটালিক লেখা' : 'Italic text') + end});
                                 }}
                                 className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center text-xs italic shadow-sm hover:scale-105 transition-all font-serif" title="Italic"
                              >
                                 I
                              </button>
                              <button 
+                                type="button"
                                 onClick={() => {
                                    const start = '# ';
                                    const msg = globalSettings.global_update_message;
                                    setGlobalSettings({...globalSettings, global_update_message: msg + "\n" + start + (lang === 'bn' ? 'বড় হেডলাইন' : 'Big Heading')});
                                 }}
-                                className="w-9 h-8 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm hover:scale-105 transition-all" title="Large Text"
+                                className="px-2 h-8 bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm hover:scale-105 transition-all" title="Large Text"
                              >
                                 BIG
                              </button>
                              <button 
+                                type="button"
                                 onClick={() => {
-                                   const start = '##### ';
                                    const msg = globalSettings.global_update_message;
-                                   setGlobalSettings({...globalSettings, global_update_message: msg + "\n" + start + (lang === 'bn' ? 'ছোট লেখা' : 'Small text')});
+                                   const template = (lang === 'bn' ? '[ইউটিউব ভিডিও দেখুন](https://www.youtube.com)' : '[Watch YouTube Video](https://www.youtube.com)');
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg ? "\n" : "") + template});
                                 }}
-                                className="w-9 h-8 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-lg flex items-center justify-center text-[8px] font-black shadow-sm hover:scale-105 transition-all" title="Small Text"
+                                className="px-2.5 h-8 bg-red-50 dark:bg-red-900/40 text-red-600 dark:text-red-400 rounded-lg flex items-center gap-1 text-[10px] font-black shadow-sm hover:scale-105 transition-all" title="Add YouTube Link"
                              >
-                                SML
+                                <Youtube size={13} className="shrink-0" />
+                                <span>YouTube</span>
+                             </button>
+                             <button 
+                                type="button"
+                                onClick={() => {
+                                   const msg = globalSettings.global_update_message;
+                                   const template = (lang === 'bn' ? '[লিংক ভিজিট করুন](https://example.com)' : '[Visit Link](https://example.com)');
+                                   setGlobalSettings({...globalSettings, global_update_message: msg + (msg ? "\n" : "") + template});
+                                }}
+                                className="px-2 h-8 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg flex items-center gap-1 text-[10px] font-black shadow-sm hover:scale-105 transition-all" title="Add Web Link"
+                             >
+                                <Link2 size={13} className="shrink-0" />
+                                <span>Link</span>
                              </button>
                           </div>
                        </div>
@@ -1549,8 +1567,12 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                           className={`w-full rounded-2xl p-4 font-bold outline-none border resize-none text-xs leading-relaxed ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-[#1E3A8A]'}`} 
                           value={globalSettings.global_update_message} 
                           onChange={(e) => setGlobalSettings({...globalSettings, global_update_message: e.target.value})}
-                          placeholder={lang === 'bn' ? 'এখানে মেসেজ লিখুন (Markdown সাপোর্ট করে)...' : 'Write message here (Markdown supported)...'}
+                          placeholder={lang === 'bn' ? 'এখানে মেসেজ লিখুন। যেকোনো লিংক (যেমন YouTube লিংক) দিলে সরাসরি কাজ করবে...' : 'Write update message here. Any link (e.g. YouTube link) will be clickable...'}
                        />
+                       <p className="text-[9px] font-bold text-slate-400 font-noto flex items-center gap-1.5 px-1">
+                          <span>💡</span>
+                          <span>{lang === 'bn' ? 'টেক্সট বক্সে যেকোনো লিংক বা YouTube ভিডিও লিংক পেস্ট করলে ইউজাররা ক্লিকে সরাসরি যেতে পারবে।' : 'Paste any web link or YouTube link and users can click to open it directly.'}</span>
+                       </p>
                     </div>
 
                     <div className="space-y-2">
@@ -1561,70 +1583,11 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                        <div className={`p-5 rounded-2xl border text-[11px] min-h-[100px] leading-relaxed break-words font-noto overflow-hidden transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900 shadow-inner'}`}>
                           <article className="font-noto font-black">
                              <ReactMarkdown
-                                components={{
-                                   p: ({ children }) => (
-                                      <p className={`my-2 leading-relaxed text-[13px] sm:text-sm font-extrabold ${madrasah?.theme === 'dark' ? 'text-slate-100' : 'text-slate-950'}`}>
-                                         {children}
-                                      </p>
-                                   ),
-                                   h1: ({ children }) => (
-                                      <h1 className={`text-base sm:text-lg font-black tracking-tight mt-4 mb-2 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-700'}`}>
-                                         {children}
-                                      </h1>
-                                   ),
-                                   h2: ({ children }) => (
-                                      <h2 className={`text-sm sm:text-base font-black tracking-tight mt-4 mb-2 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-700'}`}>
-                                         {children}
-                                      </h2>
-                                   ),
-                                   h3: ({ children }) => (
-                                      <h3 className={`text-xs sm:text-sm font-black tracking-tight mt-3 mb-1.5 ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-700'}`}>
-                                         {children}
-                                       </h3>
-                                   ),
-                                   ul: ({ children }) => (
-                                      <ul className="list-disc pl-5 my-2 space-y-1.5">
-                                         {children}
-                                      </ul>
-                                   ),
-                                   ol: ({ children }) => (
-                                      <ol className="list-decimal pl-5 my-2 space-y-1.5">
-                                         {children}
-                                      </ol>
-                                   ),
-                                   li: ({ children }) => (
-                                      <li className={`text-[12px] sm:text-[13px] font-extrabold leading-relaxed ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-slate-900'}`}>
-                                         {children}
-                                      </li>
-                                   ),
-                                   strong: ({ children }) => (
-                                      <strong className={`font-black px-1.5 py-0.5 rounded-[0.4rem] text-xs sm:text-[13px] inline-block shadow-sm ${
-                                         madrasah?.theme === 'dark' 
-                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
-                                             : 'bg-amber-100 text-amber-950 border border-amber-200/80'
-                                      }`}>
-                                         {children}
-                                      </strong>
-                                   ),
-                                   em: ({ children }) => (
-                                      <em className="italic font-bold opacity-95">
-                                         {children}
-                                      </em>
-                                   ),
-                                   code: ({ children }) => (
-                                      <code className={`px-1.5 py-0.5 rounded font-mono text-xs ${
-                                         madrasah?.theme === 'dark' 
-                                            ? 'bg-slate-800 text-pink-400 border border-slate-700' 
-                                            : 'bg-slate-100 text-pink-600 border border-slate-200'
-                                      }`}>
-                                         {children}
-                                      </code>
-                                   )
-                                }}
+                                components={getMarkdownComponents(madrasah?.theme === 'dark')}
                              >
                                 {(() => {
                                    const rawMsg = globalSettings.global_update_message || (lang === 'bn' ? '*মেসেজ লিখলে এখানে প্রিভিউ দেখা যাবে...*' : '*Write message to see preview...*');
-                                   return rawMsg.replace(/\r?\n/g, '  \n');
+                                   return linkifyMarkdown(rawMsg);
                                 })()}
                              </ReactMarkdown>
                           </article>
