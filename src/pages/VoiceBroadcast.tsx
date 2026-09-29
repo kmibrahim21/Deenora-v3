@@ -1628,9 +1628,32 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         throw new Error(resData.message || resData.error || 'Failed to upload voice to Awaj Digital server.');
       }
 
+      let audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
+
+      // Upload to Supabase Storage as permanent backup if not provided
+      if (!audioUrl) {
+        try {
+          const fileExt = uploadFile.name.split('.').pop() || 'mp3';
+          const storagePath = `voices/${madrasah.id}/${Date.now()}_${uploadName.replace(/[^a-zA-Z0-9_-]/g, '_')}.${fileExt}`;
+          const { data: uploadData, error: upError } = await supabase.storage
+            .from('voice-templates')
+            .upload(storagePath, uploadFile, { upsert: true });
+
+          if (!upError && uploadData) {
+            const { data: publicUrlData } = supabase.storage
+              .from('voice-templates')
+              .getPublicUrl(storagePath);
+            if (publicUrlData?.publicUrl) {
+              audioUrl = publicUrlData.publicUrl;
+            }
+          }
+        } catch (e) {
+          console.warn('Supabase storage fallback upload notice:', e);
+        }
+      }
+
       const providerVoiceId = resData.id || resData.voice_id || resData.data?.id || resData.result?.id || '';
       const providerVoiceName = resData.name || resData.title || uploadName;
-      const audioUrl = resData.file_url || resData.preview_url || resData.url || resData.data?.file_url || resData.data?.url || '';
 
       const { error: dbError } = await supabase.from('voice_templates').insert({
         institution_id: madrasah.id,
@@ -1638,6 +1661,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         file_url: audioUrl,
         admin_status: 'approved',
         provider_status: 'approved',
+        is_active: true,
         provider_voice_name: providerVoiceName,
         provider_voice_id: providerVoiceId ? String(providerVoiceId) : null
       });
