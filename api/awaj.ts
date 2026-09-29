@@ -469,6 +469,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Auto-lookup details from Supabase voice_templates if needed
         let dbResolvedVoiceId = body.provider_voice_id || null;
         let dbResolvedVoiceName = body.provider_voice_name || null;
+        let dbResolvedTitle = body.title || null;
 
         const vKey = body.voice_id || body.voice_template_id || body.voice || body.provider_voice_id;
         if (vKey) {
@@ -491,70 +492,172 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               if (matched.provider_voice_name) {
                 dbResolvedVoiceName = matched.provider_voice_name;
               }
+              if (matched.title) {
+                dbResolvedTitle = matched.title;
+              }
             }
           } catch (err: any) {
             console.warn('Error resolving voice details from database:', err.message);
           }
         }
 
-        // Determine effective voice name or provider ID for standard broadcast
-        const effectiveVoiceKey = dbResolvedVoiceId || dbResolvedVoiceName || body.provider_voice_id || body.provider_voice_name || body.voice || body.voice_name || body.title || '';
+        // Live resolution from Awaj Digital /voices list:
+        // Awaj Standard Broadcast API strictly requires the registered voice NAME (never a numeric ID).
+        const voiceCandidates = [
+          body.provider_voice_name,
+          dbResolvedVoiceName,
+          body.voice_name,
+          body.title,
+          dbResolvedTitle,
+          body.voice,
+          dbResolvedVoiceId,
+          body.provider_voice_id,
+          body.voice_id,
+          vKey
+        ].filter(Boolean).map(x => String(x).trim());
 
-        // If voicesList is still empty, live fallback: fetch Awaj /voices list to resolve CDN audio URL
-        if (voicesList.length === 0 && (vKey || effectiveVoiceKey)) {
-          try {
-            const token = (process.env.AWAJ_API_TOKEN || '').trim();
-            if (token) {
-              const awajRes = await fetch(`${AWAJ_BASE_URL}/voices`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Accept': 'application/json'
+        let awajMatchedVoiceName: string | null = null;
+        let awajMatchedVoiceId: string | null = null;
+
+        try {
+          const token = (process.env.AWAJ_API_TOKEN || '').trim();
+          if (token) {
+            const awajRes = await fetch(`${AWAJ_BASE_URL}/voices`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+              }
+            });
+            if (awajRes.ok) {
+              const awajData = await awajRes.json();
+              const list: any[] = Array.isArray(awajData) ? awajData : (awajData.voices || awajData.data || []);
+              
+              // 1. Try match by numeric ID first (e.g. 3592, 4731)
+              for (const c of voiceCandidates) {
+                const foundById = list.find((v: any) => v.id?.toString() === c);
+                if (foundById && foundById.name) {
+                  awajMatchedVoiceName = foundById.name;
+                  awajMatchedVoiceId = foundById.id?.toString();
+                  if (foundById.previewUrl && voicesList.length === 0) {
+                    voicesList = [foundById.previewUrl];
+                  }
+                  break;
                 }
-              });
-              if (awajRes.ok) {
-                const awajData = await awajRes.json();
-                const list = Array.isArray(awajData) ? awajData : (awajData.voices || awajData.data || []);
-                const match = list.find((v: any) => 
-                  (vKey && v.id?.toString() === String(vKey).trim()) ||
-                  (dbResolvedVoiceId && v.id?.toString() === String(dbResolvedVoiceId).trim()) ||
-                  (effectiveVoiceKey && (v.name?.toLowerCase() === effectiveVoiceKey.toLowerCase() || v.id?.toString() === effectiveVoiceKey))
-                );
-                if (match) {
-                  const resolvedUrl = (match.previewUrl || match.preview_url || match.file_url || match.url || '').trim();
-                  if (resolvedUrl.startsWith('http')) {
-                    voicesList = [resolvedUrl];
-                    console.log('Successfully fetched live audio URL from Awaj API during broadcast:', resolvedUrl);
-                    if (vKey) {
-                      await supabase.from('voice_templates').update({ file_url: resolvedUrl, provider_status: 'approved' }).or(`id.eq.${String(vKey).trim()},provider_voice_id.eq.${String(vKey).trim()}`);
+              }
+
+              // 2. Try match by exact name
+              if (!awajMatchedVoiceName) {
+                for (const c of voiceCandidates) {
+                  const foundByName = list.find((v: any) => v.name?.toLowerCase() === c.toLowerCase());
+                  if (foundByName && foundByName.name) {
+                    awajMatchedVoiceName = foundByName.name;
+                    awajMatchedVoiceId = foundByName.id?.toString();
+                    if (foundByName.previewUrl && voicesList.length === 0) {
+                      voicesList = [foundByName.previewUrl];
                     }
+                    break;
+                  }
+                }
+              }
+
+              // 3. Try partial substring match (excluding pure digits)
+              if (!awajMatchedVoiceName) {
+                for (const c of voiceCandidates) {
+                  if (/^\d+$/.test(c)) continue;
+                  const foundByPartial = list.find((v: any) => 
+                    v.name?.toLowerCase().includes(c.toLowerCase()) || 
+                    c.toLowerCase().includes(v.name?.toLowerCase())
+                  );
+                  if (foundByPartial && foundByPartial.name) {
+                    awajMatchedVoiceName = foundByPartial.name;
+                    awajMatchedVoiceId = foundByPartial.id?.toString();
+                    if (foundByPartial.previewUrl && voicesList.length === 0) {
+                      voicesList = [foundByPartial.previewUrl];
+                    }
+                    break;
                   }
                 }
               }
             }
-          } catch (e: any) {
-            console.warn('Live voice URL resolution failed in awaj broadcast handler:', e.message);
           }
+        } catch (e: any) {
+          console.warn('Live voice URL resolution failed in awaj broadcast handler:', e.message);
         }
 
-        // 2. Generate unique request_id (16-64 chars required by Awaj Direct API)
+        // Determine effective voice name:
+        // Always prioritize the matched Awaj voice name or non-numeric title/name
+        let effectiveVoiceKey = awajMatchedVoiceName;
+        if (!effectiveVoiceKey) {
+          const nonNumeric = voiceCandidates.find(c => !/^\d+$/.test(c) && !c.startsWith('http'));
+          effectiveVoiceKey = nonNumeric || dbResolvedVoiceName || body.provider_voice_name || body.voice_name || body.title || '';
+        }
+
+        console.log(`Resolved Awaj Voice for broadcast: effectiveVoiceKey="${effectiveVoiceKey}", awajMatchedVoiceName="${awajMatchedVoiceName}", awajMatchedVoiceId="${awajMatchedVoiceId}"`);
+
+        // 2. Generate unique request_id (16-64 chars required by Awaj API)
         let requestId = (body.request_id || body.requestId || '').toString().trim();
         if (!requestId || requestId.length < 16) {
           const randomSuffix = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
           requestId = `direct_${Date.now()}_${randomSuffix}`.substring(0, 64);
         }
 
-        // 3. Format sender number (e.g., 8809610993084 or 8801XXXXXXXXX)
+        // 3. Format sender number (must be active Awaj sender callingNumber, e.g., 09610993084)
         let senderNum = (body.sender || body.sender_id || body.caller_id || '').toString().trim();
-        const digits = senderNum.replace(/[^0-9]/g, '');
-        if (digits.length === 11 && digits.startsWith('01')) {
-          senderNum = '88' + digits;
-        } else if (digits.length === 13 && digits.startsWith('8801')) {
-          senderNum = digits;
-        } else if (digits.length === 10 && digits.startsWith('1')) {
-          senderNum = '880' + digits;
+        // If 88 is prepended to 096, strip it: Awaj API requires 096XXXXXXXX
+        if (senderNum.startsWith('88096')) {
+          senderNum = senderNum.replace(/^88/, '');
+        }
+        // If senderNum is a numeric ID from UI dropdown, map to active caller number
+        if (senderNum === '83' || senderNum === '8809610993084') {
+          senderNum = '09610993084';
+        } else if (senderNum === '1' || senderNum === '8809606990198') {
+          senderNum = '09606990198';
+        } else if (!senderNum.startsWith('096')) {
+          // Default to primary active Awaj sender
+          senderNum = '09610993084';
         }
 
-        // 4. Try Direct Broadcast API if audio URLs are available or direct route explicitly called
+        // 4. If effectiveVoiceKey is resolved, use Standard Awaj Broadcast as primary
+        // Because the voice is already uploaded and approved in Awaj Digital!
+        if (effectiveVoiceKey && !isDirectRoute && !body.direct) {
+          const stdPayload = {
+            request_id: requestId,
+            sender: senderNum,
+            phone_numbers: body.phone_numbers || [],
+            voice: effectiveVoiceKey
+          };
+
+          console.log(`Sending Awaj Standard Broadcast API: request_id="${requestId}", sender="${senderNum}", voice="${effectiveVoiceKey}", phone_count=${(stdPayload.phone_numbers || []).length}`);
+
+          const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
+            method: 'POST',
+            headers: headers as any,
+            body: JSON.stringify(stdPayload)
+          });
+
+          const stdData = await stdResponse.json().catch(() => ({}));
+          console.log(`Awaj Standard Broadcast API Response Status: ${stdResponse.status}`, stdData);
+
+          if (stdResponse.ok) {
+            return res.status(200).json(stdData);
+          }
+
+          // If standard broadcast failed and we have external voicesList, attempt direct fallback
+          if (voicesList.length > 0 && voicesList[0].startsWith('http') && !voicesList[0].includes('tenbytecloud.com')) {
+            console.log('Standard broadcast failed, trying direct broadcast fallback with voicesList...');
+          } else {
+            let errorMsg = stdData.message || stdData.error || 'Failed to send broadcast via Awaj API';
+            if (stdData.message === 'Voice not found or not approved') {
+              errorMsg = `ভয়েস "${effectiveVoiceKey}" Awaj Digital সার্ভারে পাওয়া যায়নি বা এখনো অনুমোদিত হয়নি। দয়া করে Voice ব্রডকাস্ট পেইজ থেকে ভয়েসটি নির্বাচন বা রি-আপলোড করুন।`;
+            }
+            return res.status(stdResponse.status).json({
+              ...stdData,
+              error: errorMsg
+            });
+          }
+        }
+
+        // 5. Try Direct Broadcast API if direct route explicitly requested or custom audio URLs
         if (voicesList.length > 0 || isDirectRoute || action === 'direct' || body.direct) {
           const directPayload: any = {
             request_id: requestId,
@@ -583,17 +686,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.warn(`Awaj Direct Broadcast failed (${directResponse.status}):`, directData);
 
             // Fallback to standard broadcast endpoint if direct API returns error and effective voice key exists
-            if (effectiveVoiceKey && !effectiveVoiceKey.startsWith('http')) {
+            if (effectiveVoiceKey) {
               console.log('Falling back to standard Awaj Broadcast endpoint with voice key:', effectiveVoiceKey);
               const stdPayload = {
-                ...body,
                 request_id: requestId,
                 sender: senderNum,
+                phone_numbers: body.phone_numbers || [],
                 voice: effectiveVoiceKey
               };
-              delete stdPayload.voices;
-              delete stdPayload.file_url;
-              delete stdPayload.direct;
 
               const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
                 method: 'POST',
@@ -609,17 +709,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           } catch (directErr: any) {
             console.error('Awaj Direct Broadcast Exception:', directErr.message);
-            if (effectiveVoiceKey && !effectiveVoiceKey.startsWith('http')) {
+            if (effectiveVoiceKey) {
               console.log('Exception in Direct Broadcast, falling back to standard Awaj Broadcast');
               const stdPayload = {
-                ...body,
                 request_id: requestId,
                 sender: senderNum,
+                phone_numbers: body.phone_numbers || [],
                 voice: effectiveVoiceKey
               };
-              delete stdPayload.voices;
-              delete stdPayload.file_url;
-              delete stdPayload.direct;
 
               const stdResponse = await fetch(`${AWAJ_BASE_URL}/broadcasts`, {
                 method: 'POST',
@@ -634,11 +731,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        // Standard Broadcast flow
+        // Standard Broadcast final fallback
         const stdPayload = {
-          ...body,
           request_id: requestId,
           sender: senderNum,
+          phone_numbers: body.phone_numbers || [],
           voice: effectiveVoiceKey
         };
 

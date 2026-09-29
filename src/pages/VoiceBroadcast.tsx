@@ -1004,14 +1004,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       const voiceName = voice.provider_voice_name || voice.title || voice.name || voice.voice_name || voice.id;
       let sNumber = (sender.callingNumber || sender.caller_id || sender.number || sender.sender_id || sender.id).toString();
 
-      // Ensure sender is in 8801... format
-      const digits = sNumber.replace(/[^0-9]/g, '');
-      if (digits.length === 11 && digits.startsWith('01')) {
-        sNumber = '88' + digits;
-      } else if (digits.length === 13 && digits.startsWith('8801')) {
-        sNumber = digits;
-      } else if (digits.length === 10 && digits.startsWith('1')) {
-        sNumber = '880' + digits;
+      // For 096 IP telephony numbers, Awaj strictly expects 096... without 88 prefix
+      if (sNumber.startsWith('88096')) {
+        sNumber = sNumber.replace(/^88/, '');
+      } else if (sNumber === '83') {
+        sNumber = '09610993084';
+      } else if (sNumber === '1') {
+        sNumber = '09606990198';
       }
 
       // Normalize phone numbers: 11 digits (01...) for Awaj API
@@ -1462,25 +1461,25 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         (s.caller_id && s.caller_id.toString() === selectedSenderId.toString())
       );
       
-      // Documentation says 'sender' must be the active caller sender number (e.g. 8801234567890)
+      // Documentation says 'sender' must be the active caller sender number (e.g. 09610993084)
       let sNumber = senderObj ? (senderObj.callingNumber || senderObj.caller_id || senderObj.id).toString() : selectedSenderId.toString();
       
-      // Ensure sender is in 8801... format
-      const digits = sNumber.replace(/[^0-9]/g, '');
-      if (digits.length === 11 && digits.startsWith('01')) {
-        sNumber = '88' + digits;
-      } else if (digits.length === 13 && digits.startsWith('8801')) {
-        sNumber = digits;
-      } else if (digits.length === 10 && digits.startsWith('1')) {
-        sNumber = '880' + digits;
+      // For 096 IP telephony numbers, Awaj strictly expects 096... without 88 prefix
+      if (sNumber.startsWith('88096')) {
+        sNumber = sNumber.replace(/^88/, '');
+      } else if (sNumber === '83') {
+        sNumber = '09610993084';
+      } else if (sNumber === '1') {
+        sNumber = '09606990198';
       }
       
-      // Voice name and CDN URL for Awaj Direct Broadcast API
-      const preferredVoiceKey = voice.provider_voice_id || voice.provider_voice_name || voice.title;
+      // Voice name: Awaj Standard Broadcast API strictly requires the registered voice NAME (never a numeric ID)
+      const preferredVoiceKey = voice.provider_voice_name || voice.title || voice.name || voice.voice_name || voice.provider_voice_id;
 
       const payload = {
         request_id: requestId,
         voice: preferredVoiceKey, 
+        voice_name: voice.provider_voice_name || voice.title,
         voice_id: voice.provider_voice_id || voice.id,
         provider_voice_id: voice.provider_voice_id,
         provider_voice_name: voice.provider_voice_name,
