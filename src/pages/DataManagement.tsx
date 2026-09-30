@@ -1,11 +1,24 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangle, FileUp, FileSpreadsheet, FileText } from 'lucide-react';
+import { ArrowLeft, Download, Upload, Loader2, CheckCircle2, Table, AlertTriangle, FileUp, FileSpreadsheet, FileText, Database, Mail, Copy, Check } from 'lucide-react';
 import { supabase } from 'supabase';
 import { requestManager } from 'services/RequestManager';
 import { Institution, Language } from 'types';
 import * as XLSX from 'xlsx';
 import { generateStudentListPDF } from 'utils/pdfGenerator';
+import { 
+  initAuth, 
+  googleSignIn, 
+  logoutGoogle, 
+  encryptData, 
+  decryptData, 
+  findOrCreateDeenoraFolder, 
+  listBackups, 
+  uploadBackupToDrive, 
+  downloadBackupFromDrive, 
+  deleteBackupFromDrive 
+} from 'services/googleDriveBackup';
+import { User } from 'firebase/auth';
 
 // Declare the Android interface for TypeScript
 declare global {
@@ -33,6 +46,315 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const jsonFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupSuccess, setBackupSuccess] = useState(false);
+  const [gmailAddress, setGmailAddress] = useState(madrasah?.contact_email || madrasah?.email || '');
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState('');
+
+  // Google Drive Backup & Restore State
+  const [googleUser, setGoogleUser] = useState<User | null>(null);
+  const [gdriveToken, setGdriveToken] = useState<string | null>(null);
+  const [gdriveBackups, setGdriveBackups] = useState<any[]>([]);
+  const [gdriveLoading, setGdriveLoading] = useState(false);
+  const [gdriveActionLoading, setGdriveActionLoading] = useState(false);
+
+  // Load Google Drive backups once token is available
+  const loadGDriveBackups = async (token: string) => {
+    setGdriveLoading(true);
+    try {
+      const folderId = await findOrCreateDeenoraFolder(token);
+      const list = await listBackups(token, folderId);
+      setGdriveBackups(list);
+      // Cache files metadata locally for instant loading on page refresh
+      localStorage.setItem('deenora_gdrive_backups_cache', JSON.stringify(list));
+    } catch (err: any) {
+      console.error('Error loading Google Drive backups:', err);
+    } finally {
+      setGdriveLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Load local metadata cache instantly on component mount
+    const cached = localStorage.getItem('deenora_gdrive_backups_cache');
+    if (cached) {
+      try {
+        setGdriveBackups(JSON.parse(cached));
+      } catch (e) {
+        console.error('Error parsing backup cache:', e);
+      }
+    }
+
+    // Listen to Google OAuth status
+    const unsubscribe = initAuth((user, token) => {
+      if (user) {
+        setGoogleUser(user);
+        setGdriveToken(token);
+        if (token) {
+          loadGDriveBackups(token);
+        }
+      } else {
+        setGoogleUser(null);
+        setGdriveToken(null);
+        setGdriveBackups([]);
+        localStorage.removeItem('deenora_gdrive_backups_cache');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleConnect = async () => {
+    setGdriveLoading(true);
+    try {
+      const res = await googleSignIn();
+      if (res) {
+        setGoogleUser(res.user);
+        setGdriveToken(res.accessToken);
+        await loadGDriveBackups(res.accessToken);
+        setStatus({
+          type: 'success',
+          message: lang === 'bn' 
+            ? 'গুগল অ্যাকাউন্ট সফলভাবে যুক্ত করা হয়েছে!' 
+            : 'Google account successfully connected!'
+        });
+      }
+    } catch (err: any) {
+      console.error('Google connect error:', err);
+      setStatus({
+        type: 'error',
+        message: lang === 'bn' 
+          ? `গুগল অ্যাকাউন্ট যুক্ত করতে ব্যর্থ হয়েছে: ${err.message}` 
+          : `Failed to connect Google account: ${err.message}`
+      });
+    } finally {
+      setGdriveLoading(false);
+    }
+  };
+
+  const handleGoogleDisconnect = async () => {
+    if (!confirm(lang === 'bn' ? 'আপনি কি গুগল অ্যাকাউন্ট ডিসকানেক্ট করতে চান?' : 'Are you sure you want to disconnect Google account?')) {
+      return;
+    }
+    try {
+      await logoutGoogle();
+      setGoogleUser(null);
+      setGdriveToken(null);
+      setGdriveBackups([]);
+      localStorage.removeItem('deenora_gdrive_backups_cache');
+      setStatus({
+        type: 'success',
+        message: lang === 'bn' ? 'গুগল অ্যাকাউন্ট ডিসকানেক্ট করা হয়েছে।' : 'Google account disconnected.'
+      });
+    } catch (err: any) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  const handleBackupToGoogleDrive = async () => {
+    if (!madrasah) return;
+    
+    let activeToken = gdriveToken;
+    if (!activeToken) {
+      setGdriveActionLoading(true);
+      try {
+        const res = await googleSignIn();
+        if (res) {
+          setGoogleUser(res.user);
+          setGdriveToken(res.accessToken);
+          activeToken = res.accessToken;
+        }
+      } catch (err: any) {
+        console.error('Auto login failed:', err);
+        setStatus({
+          type: 'error',
+          message: lang === 'bn' ? 'ড্রাইভ সেশন সক্রিয় করতে অনুগ্রহ করে গুগল সাইন-ইন সম্পন্ন করুন।' : 'Please sign in to Google to activate your drive session.'
+        });
+        setGdriveActionLoading(false);
+        return;
+      }
+    }
+
+    if (!activeToken) return;
+    setGdriveActionLoading(true);
+    try {
+      const instId = madrasah.id;
+      
+      // Step-by-step fetch for robust, full database representation
+      const [
+        classesRes,
+        studentsRes,
+        teachersRes,
+        examsRes,
+        feesRes,
+        feeStructuresRes,
+        attendanceRes,
+        calendarRes,
+        donationsRes,
+        libraryRes
+      ] = await Promise.all([
+        supabase.from('classes').select('*').eq('institution_id', instId),
+        supabase.from('students').select('*').eq('institution_id', instId),
+        supabase.from('teachers').select('*').eq('institution_id', instId),
+        supabase.from('exams').select('*').eq('institution_id', instId),
+        supabase.from('fees').select('*').eq('institution_id', instId),
+        supabase.from('fee_structures').select('*').eq('institution_id', instId),
+        supabase.from('attendance').select('*').eq('institution_id', instId),
+        supabase.from('calendar_events').select('*').eq('institution_id', instId),
+        supabase.from('donations').select('*').eq('institution_id', instId),
+        supabase.from('library_books').select('*').eq('institution_id', instId)
+      ]);
+
+      const exams = examsRes.data || [];
+      const examIds = exams.map(e => e.id);
+
+      let examSubjects: any[] = [];
+      let examMarks: any[] = [];
+
+      if (examIds.length > 0) {
+        const [subjectsRes, marksRes] = await Promise.all([
+          supabase.from('exam_subjects').select('*').in('exam_id', examIds),
+          supabase.from('exam_marks').select('*').in('exam_id', examIds)
+        ]);
+        examSubjects = subjectsRes.data || [];
+        examMarks = marksRes.data || [];
+      }
+
+      const backupObj = {
+        institution_id: instId,
+        institution_name: madrasah.name,
+        backup_date: new Date().toISOString(),
+        version: "2.0",
+        data: {
+          classes: classesRes.data || [],
+          students: studentsRes.data || [],
+          teachers: teachersRes.data || [],
+          exams: exams,
+          exam_subjects: examSubjects,
+          exam_marks: examMarks,
+          fees: feesRes.data || [],
+          fee_structures: feeStructuresRes.data || [],
+          attendance: attendanceRes.data || [],
+          calendar_events: calendarRes.data || [],
+          donations: donationsRes.data || [],
+          library_books: libraryRes.data || []
+        }
+      };
+
+      const jsonStr = JSON.stringify(backupObj);
+      const encrypted = encryptData(jsonStr);
+
+      const folderId = await findOrCreateDeenoraFolder(activeToken);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const fileName = `Backup_${dateStr}.deenora`;
+
+      await uploadBackupToDrive(activeToken, folderId, fileName, encrypted);
+      await loadGDriveBackups(activeToken);
+
+      setStatus({
+        type: 'success',
+        message: lang === 'bn' 
+          ? 'সম্পূর্ণ এনক্রিপ্টেড ব্যাকআপ সফলভাবে গুগল ড্রাইভে আপলোড করা হয়েছে!' 
+          : 'Encrypted backup successfully uploaded to Google Drive!'
+      });
+    } catch (err: any) {
+      console.error('Google drive backup error:', err);
+      setStatus({
+        type: 'error',
+        message: lang === 'bn' ? `গুগল ড্রাইভে ব্যাকআপ নিতে ব্যর্থ হয়েছে: ${err.message}` : `Google Drive backup failed: ${err.message}`
+      });
+    } finally {
+      setGdriveActionLoading(false);
+    }
+  };
+
+  const handleRestoreFromGoogleDrive = async (fileId: string, fileName: string) => {
+    let activeToken = gdriveToken;
+    if (!activeToken) {
+      setGdriveActionLoading(true);
+      try {
+        const res = await googleSignIn();
+        if (res) {
+          setGoogleUser(res.user);
+          setGdriveToken(res.accessToken);
+          activeToken = res.accessToken;
+        }
+      } catch (err: any) {
+        console.error('Auto login failed:', err);
+        setStatus({
+          type: 'error',
+          message: lang === 'bn' ? 'ড্রাইভ সেশন সক্রিয় করতে অনুগ্রহ করে গুগল সাইন-ইন সম্পন্ন করুন।' : 'Please sign in to Google to activate your drive session.'
+        });
+        setGdriveActionLoading(false);
+        return;
+      }
+    }
+
+    if (!activeToken) return;
+    setGdriveActionLoading(true);
+    try {
+      const encryptedContent = await downloadBackupFromDrive(activeToken, fileId);
+      const decryptedJsonStr = decryptData(encryptedContent);
+      const backupObj = JSON.parse(decryptedJsonStr);
+
+      await handleRestoreBackup(backupObj);
+    } catch (err: any) {
+      console.error('Google drive restore error:', err);
+      setStatus({
+        type: 'error',
+        message: lang === 'bn' ? `গুগল ড্রাইভ থেকে রিস্টোর করতে ব্যর্থ হয়েছে: ${err.message}` : `Google Drive restore failed: ${err.message}`
+      });
+    } finally {
+      setGdriveActionLoading(false);
+    }
+  };
+
+  const handleDeleteFromGoogleDrive = async (fileId: string) => {
+    let activeToken = gdriveToken;
+    if (!activeToken) {
+      setGdriveActionLoading(true);
+      try {
+        const res = await googleSignIn();
+        if (res) {
+          setGoogleUser(res.user);
+          setGdriveToken(res.accessToken);
+          activeToken = res.accessToken;
+        }
+      } catch (err: any) {
+        console.error('Auto login failed:', err);
+        setStatus({
+          type: 'error',
+          message: lang === 'bn' ? 'ড্রাইভ সেশন সক্রিয় করতে অনুগ্রহ করে গুগল সাইন-ইন সম্পন্ন করুন।' : 'Please sign in to Google to activate your drive session.'
+        });
+        setGdriveActionLoading(false);
+        return;
+      }
+    }
+
+    if (!activeToken) return;
+    if (!confirm(lang === 'bn' ? 'আপনি কি এই ব্যাকআপ ফাইলটি গুগল ড্রাইভ থেকে ডিলিট করতে চান?' : 'Are you sure you want to delete this backup file from Google Drive?')) {
+      return;
+    }
+    setGdriveActionLoading(true);
+    try {
+      await deleteBackupFromDrive(activeToken, fileId);
+      await loadGDriveBackups(activeToken);
+      setStatus({
+        type: 'success',
+        message: lang === 'bn' ? 'ব্যাকআপ ফাইলটি গুগল ড্রাইভ থেকে ডিলিট করা হয়েছে।' : 'Backup file deleted from Google Drive.'
+      });
+    } catch (err: any) {
+      console.error('Google drive delete error:', err);
+      setStatus({
+        type: 'error',
+        message: lang === 'bn' ? `ডিলিট করতে সমস্যা হয়েছে: ${err.message}` : `Delete failed: ${err.message}`
+      });
+    } finally {
+      setGdriveActionLoading(false);
+    }
+  };
 
   const isUploadActive = React.useMemo(() => {
     let configObj: any = {};
@@ -161,6 +483,270 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
       }
     };
     reader.readAsDataURL(blob);
+  };
+
+  const handleGenerateFullBackup = async (sendEmail: boolean = false) => {
+    if (!madrasah) return;
+    setBackupLoading(true);
+    setBackupSuccess(false);
+    try {
+      const instId = madrasah.id;
+      
+      // Step-by-step fetch for robust, full database representation
+      const [
+        classesRes,
+        studentsRes,
+        teachersRes,
+        examsRes,
+        feesRes,
+        feeStructuresRes,
+        attendanceRes,
+        calendarRes,
+        donationsRes,
+        libraryRes
+      ] = await Promise.all([
+        supabase.from('classes').select('*').eq('institution_id', instId),
+        supabase.from('students').select('*').eq('institution_id', instId),
+        supabase.from('teachers').select('*').eq('institution_id', instId),
+        supabase.from('exams').select('*').eq('institution_id', instId),
+        supabase.from('fees').select('*').eq('institution_id', instId),
+        supabase.from('fee_structures').select('*').eq('institution_id', instId),
+        supabase.from('attendance').select('*').eq('institution_id', instId),
+        supabase.from('calendar_events').select('*').eq('institution_id', instId),
+        supabase.from('donations').select('*').eq('institution_id', instId),
+        supabase.from('library_books').select('*').eq('institution_id', instId)
+      ]);
+
+      const exams = examsRes.data || [];
+      const examIds = exams.map(e => e.id);
+
+      let examSubjects: any[] = [];
+      let examMarks: any[] = [];
+
+      if (examIds.length > 0) {
+        const [subjectsRes, marksRes] = await Promise.all([
+          supabase.from('exam_subjects').select('*').in('exam_id', examIds),
+          supabase.from('exam_marks').select('*').in('exam_id', examIds)
+        ]);
+        examSubjects = subjectsRes.data || [];
+        examMarks = marksRes.data || [];
+      }
+
+      const backupObj = {
+        institution_id: instId,
+        institution_name: madrasah.name,
+        backup_date: new Date().toISOString(),
+        version: "2.0",
+        data: {
+          classes: classesRes.data || [],
+          students: studentsRes.data || [],
+          teachers: teachersRes.data || [],
+          exams: exams,
+          exam_subjects: examSubjects,
+          exam_marks: examMarks,
+          fees: feesRes.data || [],
+          fee_structures: feeStructuresRes.data || [],
+          attendance: attendanceRes.data || [],
+          calendar_events: calendarRes.data || [],
+          donations: donationsRes.data || [],
+          library_books: libraryRes.data || []
+        }
+      };
+
+      const jsonStr = JSON.stringify(backupObj, null, 2);
+
+      if (sendEmail) {
+        const recipient = gmailAddress || madrasah.contact_email || '';
+        const subject = encodeURIComponent(`Deenora Full System Backup - ${madrasah.name} - ${new Date().toLocaleDateString()}`);
+        const body = encodeURIComponent(
+          `আসসালামু আলাইকুম,\n\nআপনার প্রতিষ্ঠান "${madrasah.name}" এর সম্পূর্ণ ডাটাবেস ব্যাকআপ সফলভাবে জেনারেট করা হয়েছে।\n\n` +
+          `📅 ব্যাকআপের তারিখ: ${new Date().toLocaleString()}\n` +
+          `🔒 ফাইল টাইপ: JSON Full Database Archive\n` +
+          `📊 পরিসংখ্যান:\n` +
+          `- ক্লাস সংখ্যা: ${backupObj.data.classes.length} টি\n` +
+          `- শিক্ষার্থী সংখ্যা: ${backupObj.data.students.length} জন\n` +
+          `- শিক্ষক সংখ্যা: ${backupObj.data.teachers.length} জন\n` +
+          `- পরীক্ষা সংখ্যা: ${backupObj.data.exams.length} টি\n` +
+          `- মোট মার্ক এন্ট্রি: ${backupObj.data.exam_marks.length} টি\n` +
+          `- মোট ফি রেকর্ড: ${backupObj.data.fees.length} টি\n` +
+          `- মোট হাজিরা রেকর্ড: ${backupObj.data.attendance.length} টি\n\n` +
+          `⚠️ নির্দেশিকা:\n` +
+          `১. এই মেইলে নিচে ডাউনলোড করা ব্যাকআপ ফাইলটি (.json) সংযুক্ত করে রাখুন।\n` +
+          `২. পরবর্তীতে রিস্টোর করার জন্য Deenora ডেটা ম্যানেজমেন্ট প্যানেলে গিয়ে ফাইলটি আপলোড করুন।\n\n` +
+          `- Deenora Islamic Management System`
+        );
+
+        // Download file
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const fileName = `deenora_backup_${madrasah.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.json`;
+        downloadFileNative(blob, fileName, 'application/json');
+
+        // Open email client
+        window.open(`mailto:${recipient}?subject=${subject}&body=${body}`, '_blank');
+        
+        setStatus({
+          type: 'success',
+          message: lang === 'bn' 
+            ? 'ব্যাকআপ ফাইলটি ডাউনলোড হয়েছে এবং জিমেইল কম্পোজ উইন্ডো ওপেন হয়েছে। দয়া করে মেইলে ফাইলটি সংযুক্ত করে আপনার ইনবক্সে পাঠিয়ে রাখুন।' 
+            : 'Backup file downloaded & email compose window opened. Please attach the file and send it to your inbox.'
+        });
+      } else {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const fileName = `deenora_backup_${madrasah.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.json`;
+        downloadFileNative(blob, fileName, 'application/json');
+        
+        setStatus({
+          type: 'success',
+          message: lang === 'bn' 
+            ? 'সম্পূর্ণ ডাটাবেস ব্যাকআপ ফাইল সফলভাবে ডাউনলোড করা হয়েছে!' 
+            : 'Full database backup file successfully downloaded!'
+        });
+      }
+      setBackupSuccess(true);
+    } catch (err: any) {
+      console.error('Backup error:', err);
+      setStatus({
+        type: 'error',
+        message: lang === 'bn' ? `ব্যাকআপ তৈরি করতে ব্যর্থ হয়েছে: ${err.message}` : `Failed to create backup: ${err.message}`
+      });
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async (backupObj: any) => {
+    if (!madrasah) return;
+    if (!backupObj || backupObj.version !== "2.0" || !backupObj.data) {
+      alert(lang === 'bn' ? 'ভুল ব্যাকআপ ফরম্যাট! অনুগ্রহ করে সঠিক Deenora ব্যাকআপ ফাইল আপলোড করুন।' : 'Invalid backup format! Please upload a valid Deenora backup file.');
+      return;
+    }
+
+    if (backupObj.institution_id !== madrasah.id) {
+      if (!confirm(lang === 'bn' 
+        ? 'সতর্কতা: এই ব্যাকআপ ফাইলটি অন্য একটি প্রতিষ্ঠানের ডাটা ধারণ করছে। আপনি কি নিশ্চিত যে আপনি এটি আপনার প্রতিষ্ঠানে রিস্টোর করতে চান?' 
+        : 'Warning: This backup file belongs to another institution. Are you sure you want to restore it here?')) {
+        return;
+      }
+    }
+
+    const confirmMsg = lang === 'bn'
+      ? '⚠️ চূড়ান্ত সতর্কতা: ব্যাকআপ রিস্টোর করলে আপনার বর্তমান প্রতিষ্ঠানের সকল ডাটা মুছে গিয়ে ব্যাকআপ ফাইলের ডাটা দিয়ে প্রতিস্থাপিত হবে! আপনি কি নিশ্চিত?'
+      : '⚠️ FINAL WARNING: Restoring the backup will delete all current data for this institution and replace it with the backup file data! Are you sure?';
+
+    if (!confirm(confirmMsg)) return;
+
+    setRestoreLoading(true);
+    setRestoreProgress(lang === 'bn' ? 'রিস্টোর শুরু হচ্ছে...' : 'Starting restore...');
+
+    try {
+      const instId = madrasah.id;
+      const data = backupObj.data;
+
+      const chunkArray = (arr: any[], size: number) => {
+        const chunks = [];
+        for (let i = 0; i < arr.length; i += size) {
+          chunks.push(arr.slice(i, i + size));
+        }
+        return chunks;
+      };
+
+      const performRestoreForTable = async (tableName: string, rows: any[]) => {
+        if (!rows || rows.length === 0) return;
+        setRestoreProgress(lang === 'bn' ? `ডাটা রিস্টোর হচ্ছে: ${tableName}...` : `Restoring table: ${tableName}...`);
+        
+        const preppedRows = rows.map(r => ({
+          ...r,
+          ...(r.institution_id !== undefined ? { institution_id: instId } : {})
+        }));
+
+        const chunks = chunkArray(preppedRows, 50);
+        for (const chunk of chunks) {
+          const { error } = await supabase.from(tableName).upsert(chunk);
+          if (error) {
+            console.error(`Error restoring chunk for ${tableName}:`, error);
+            throw error;
+          }
+        }
+      };
+
+      // 1. Delete existing records in correct order to avoid constraint failures
+      const tablesToDelete = [
+        'exam_marks', 'exam_subjects', 'exams', 
+        'fees', 'fee_structures', 'attendance', 
+        'calendar_events', 'donations', 'library_books',
+        'students', 'classes', 'teachers'
+      ];
+
+      for (const table of tablesToDelete) {
+        setRestoreProgress(lang === 'bn' ? `পুরোনো ডাটা পরিষ্কার করা হচ্ছে: ${table}...` : `Cleaning old data: ${table}...`);
+        
+        if (table === 'exam_marks' || table === 'exam_subjects') {
+          const { data: instExams } = await supabase.from('exams').select('id').eq('institution_id', instId);
+          const eIds = (instExams || []).map((e: any) => e.id);
+          if (eIds.length > 0) {
+            await supabase.from(table).delete().in('exam_id', eIds);
+          }
+        } else {
+          await supabase.from(table).delete().eq('institution_id', instId);
+        }
+      }
+
+      // 2. Perform restores sequentially to preserve foreign key chains
+      await performRestoreForTable('classes', data.classes || []);
+      await performRestoreForTable('teachers', data.teachers || []);
+      await performRestoreForTable('students', data.students || []);
+      await performRestoreForTable('exams', data.exams || []);
+      await performRestoreForTable('exam_subjects', data.exam_subjects || []);
+      await performRestoreForTable('exam_marks', data.exam_marks || []);
+      await performRestoreForTable('fee_structures', data.fee_structures || []);
+      await performRestoreForTable('fees', data.fees || []);
+      await performRestoreForTable('attendance', data.attendance || []);
+      await performRestoreForTable('calendar_events', data.calendar_events || []);
+      await performRestoreForTable('donations', data.donations || []);
+      await performRestoreForTable('library_books', data.library_books || []);
+
+      setRestoreProgress(lang === 'bn' ? 'রিস্টোর সফলভাবে সম্পন্ন হয়েছে!' : 'Restore completed successfully!');
+      setStatus({
+        type: 'success',
+        message: lang === 'bn' 
+          ? 'অভিনন্দন! আপনার সম্পূর্ণ ডাটাবেস সফলভাবে রিস্টোর করা হয়েছে।' 
+          : 'Congratulations! Your full database has been successfully restored.'
+      });
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Restore error:', err);
+      setStatus({
+        type: 'error',
+        message: lang === 'bn' ? `রিস্টোর করতে সমস্যা হয়েছে: ${err.message}` : `Restore failed: ${err.message}`
+      });
+    } finally {
+      setRestoreLoading(false);
+      setRestoreProgress('');
+    }
+  };
+
+  const handleImportJsonBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const backupObj = JSON.parse(text);
+        await handleRestoreBackup(backupObj);
+      } catch (err: any) {
+        console.error('JSON parse error:', err);
+        setStatus({
+          type: 'error',
+          message: lang === 'bn' 
+            ? 'ব্যাকআপ ফাইলটি পড়া যায়নি! দয়া করে নিশ্চিত করুন এটি একটি সঠিক Deenora ব্যাকআপ জেসন ফাইল।' 
+            : 'Could not read backup file! Please ensure it is a valid Deenora backup JSON file.'
+        });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleDownloadSample = () => {
@@ -749,6 +1335,210 @@ const DataManagement: React.FC<DataManagementProps> = ({ lang, madrasah, onBack,
                 <span className="font-noto text-lg">{lang === 'bn' ? 'এক্সেল ফাইল সিলেক্ট করুন' : 'Select Excel File'}</span>
               </>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* সম্পূর্ণ ডাটাবেস ব্যাকআপ ও রিস্টোর */}
+      <div className={`${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} rounded-[3rem] border p-8 sm:p-10 shadow-bubble space-y-8`}>
+        <div className="flex items-center gap-4">
+          <Database className={`w-8 h-8 ${isDark ? 'text-amber-400' : 'text-amber-500'}`} />
+          <div>
+            <h3 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1E3A8A]'} font-noto leading-tight`}>
+              {lang === 'bn' ? 'ডাটাবেস ব্যাকআপ ও রিস্টোর' : 'Database Backup & Restore'}
+            </h3>
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
+              {lang === 'bn' 
+                ? 'আপনার প্রতিষ্ঠানের সমস্ত তথ্যের ক্লাউড বা ম্যানুয়াল ব্যাকআপ রাখুন।' 
+                : 'Keep cloud or manual backups of all your institution details.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-slate-100 dark:border-slate-700/50">
+          {/* গুগল ড্রাইভ ক্লাউড ব্যাকআপ ও রিস্টোর */}
+          <div className={`p-6 rounded-[2rem] border ${isDark ? 'bg-slate-900/30 border-slate-700' : 'bg-slate-50/50 border-slate-200'} space-y-6 flex flex-col justify-between`}>
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-blue-500 fill-current">
+                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" />
+                  </svg>
+                </div>
+                <h4 className={`text-base font-black ${isDark ? 'text-blue-400' : 'text-[#1E3A8A]'} font-noto`}>
+                  {lang === 'bn' ? '১. গুগল ড্রাইভ ক্লাউড ব্যাকআপ (সুপার রিকমেন্ডেড)' : '1. Google Drive Cloud Backup (Highly Recommended)'}
+                </h4>
+              </div>
+              <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'} mt-2`}>
+                {lang === 'bn' 
+                  ? 'আপনার গুগল ড্রাইভের মাধ্যমে সরাসরি মেঘে সুরক্ষিত ব্যাকআপ নিন এবং যেকোনো ডিভাইস বা নতুন ফোনে রিস্টোর করুন।' 
+                  : 'Connect your Google Drive account to perform secure backups and restore directly on any device.'}
+              </p>
+            </div>
+
+            {googleUser ? (
+              <div className="space-y-4">
+                {/* Connected User Badge */}
+                <div className={`p-3.5 rounded-2xl flex items-center justify-between border ${isDark ? 'bg-slate-900/40 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    {googleUser?.photoURL ? (
+                      <img src={googleUser.photoURL} alt="Google profile" className="w-8 h-8 rounded-full border border-blue-500 shrink-0" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-black text-xs shrink-0">
+                        {googleUser?.displayName?.charAt(0) || googleUser?.email?.charAt(0) || 'G'}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-black truncate">{googleUser?.displayName || 'Google User'}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{googleUser?.email}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleGoogleDisconnect}
+                    className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[10px] font-black rounded-lg transition-all shrink-0"
+                  >
+                    {lang === 'bn' ? 'ডিসকানেক্ট' : 'Disconnect'}
+                  </button>
+                </div>
+
+                {/* GDrive Actions & Backup List */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <h5 className={`text-xs font-black ${isDark ? 'text-slate-300' : 'text-slate-650'}`}>
+                      {lang === 'bn' ? 'সংরক্ষিত ক্লাউড ব্যাকআপ সমূহ (৭ দিন)' : 'Cloud Backups (Max 7 Days)'}
+                    </h5>
+                    <button 
+                      onClick={handleBackupToGoogleDrive}
+                      disabled={gdriveActionLoading || gdriveLoading}
+                      className="px-4 h-9 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-full flex items-center gap-1.5 text-[11px] shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      {gdriveActionLoading ? <Loader2 className="animate-spin" size={12} /> : <><svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg> {lang === 'bn' ? 'ব্যাকআপ নিন' : 'Backup Now'}</>}
+                    </button>
+                  </div>
+
+                  {gdriveLoading ? (
+                    <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-blue-500" size={28} /></div>
+                  ) : gdriveBackups.length > 0 ? (
+                    <div className={`border rounded-2xl divide-y ${isDark ? 'border-slate-700 divide-slate-700 bg-slate-900/20' : 'border-slate-100 divide-slate-100 bg-slate-50/20'} max-h-44 overflow-y-auto`}>
+                      {gdriveBackups.map((backup) => {
+                        const backupSizeKb = backup.size ? (parseInt(backup.size) / 1024).toFixed(1) : 'N/A';
+                        const createdDate = new Date(backup.createdTime).toLocaleDateString();
+                        return (
+                          <div key={backup.id} className="p-3 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-black text-slate-800 dark:text-slate-200 truncate">{backup.name}</p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">{createdDate} • {backupSizeKb} KB</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button 
+                                onClick={() => handleRestoreFromGoogleDrive(backup.id, backup.name)}
+                                disabled={gdriveActionLoading}
+                                className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-black rounded-md transition-all"
+                              >
+                                {lang === 'bn' ? 'রিস্টোর' : 'Restore'}
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteFromGoogleDrive(backup.id)}
+                                disabled={gdriveActionLoading}
+                                className="px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[9px] font-black rounded-md transition-all"
+                              >
+                                {lang === 'bn' ? 'ডিলিট' : 'Delete'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className={`p-6 border-2 border-dashed rounded-2xl text-center ${isDark ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+                      <p className="text-[11px] font-black">{lang === 'bn' ? 'কোনো ক্লাউড ব্যাকআপ পাওয়া যায়নি।' : 'No cloud backups found.'}</p>
+                      <p className="text-[9px] opacity-75 mt-0.5">{lang === 'bn' ? 'প্রথম ক্লাউড ব্যাকআপ তৈরি করতে উপরের "ব্যাকআপ নিন" বাটনে চাপুন।' : 'Press "Backup Now" above to create your first cloud backup.'}</p>
+                    </div>
+                  )}
+
+                  {!gdriveToken && gdriveBackups.length > 0 && (
+                    <p className="text-[9px] text-center text-amber-500 font-bold mt-1 leading-normal">
+                      {lang === 'bn' 
+                        ? 'সেশন রিফ্রেশ করা হয়েছে। কোনো অ্যাকশন বাটনে চাপ দিলে গুগল একাউন্ট ভেরিফাই হয়ে অপারেশনটি স্বয়ংক্রিয়ভাবে সম্পন্ন হবে।' 
+                        : 'Session refreshed. Pressing any action will automatically verify and execute the operation.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 flex flex-col items-center justify-center text-center space-y-4">
+                <button 
+                  onClick={handleGoogleConnect}
+                  disabled={gdriveLoading}
+                  className={`flex items-center justify-center gap-3 px-6 h-12 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl border border-slate-200 shadow-sm transition-all active:scale-[0.98] w-full max-w-xs cursor-pointer`}
+                >
+                  <svg viewBox="0 0 48 48" className="w-5 h-5 shrink-0">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                  </svg>
+                  <span>{lang === 'bn' ? 'গুগল দিয়ে সাইন ইন করুন' : 'Sign in with Google'}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ম্যানুয়াল বা লোকাল ডাটাবেস ব্যাকআপ ও রিস্টোর */}
+          <div className={`p-6 rounded-[2rem] border ${isDark ? 'bg-slate-900/30 border-slate-700' : 'bg-slate-50/50 border-slate-200'} space-y-6 flex flex-col justify-between`}>
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                  <Database className="w-4 h-4 text-emerald-500" />
+                </div>
+                <h4 className={`text-base font-black ${isDark ? 'text-emerald-400' : 'text-emerald-600'} font-noto`}>
+                  {lang === 'bn' ? '২. স্থানীয় ব্যাকআপ ও রিস্টোর (ম্যানুয়াল)' : '2. Local Backup & Restore (Manual)'}
+                </h4>
+              </div>
+              <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'} mt-2`}>
+                {lang === 'bn' 
+                  ? 'আপনার প্রতিষ্ঠানের সমস্ত তথ্যের কপি সরাসরি জেসন (.json) ফাইল হিসেবে ডাউনলোড করুন বা পূর্বে সংরক্ষিত ফাইল আপলোড করে রিস্টোর করুন।' 
+                  : 'Manually download your institution data as a .json file or upload a previously saved file to restore.'}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Manual Backup Download */}
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => handleGenerateFullBackup(false)}
+                  disabled={backupLoading}
+                  className={`w-full h-11 ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-650' : 'bg-slate-800 text-white hover:bg-slate-750'} font-black rounded-xl flex items-center justify-center gap-2 text-xs active:scale-95 transition-all disabled:opacity-50 cursor-pointer`}
+                >
+                  {backupLoading ? <Loader2 className="animate-spin" size={16} /> : <><Download size={16} /> {lang === 'bn' ? 'ব্যাকআপ ফাইল ডাউনলোড করুন' : 'Download Backup File'}</>}
+                </button>
+              </div>
+
+              {/* Manual Restore Upload */}
+              <div>
+                <input type="file" ref={jsonFileInputRef} className="hidden" accept=".json" onChange={handleImportJsonBackup} />
+
+                {restoreLoading ? (
+                  <div className="py-4 flex flex-col items-center justify-center gap-2 text-center">
+                    <Loader2 className="animate-spin text-emerald-500" size={24} />
+                    <p className="font-black text-emerald-500 animate-pulse text-[11px]">{restoreProgress}</p>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => jsonFileInputRef.current?.click()}
+                    className={`py-4 ${isDark ? 'bg-slate-800/40 border-slate-700 hover:bg-slate-800/70 text-emerald-400' : 'bg-emerald-50/30 border-emerald-200/50 text-emerald-600 hover:bg-emerald-50/60'} border-2 border-dashed rounded-xl flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-[0.98] px-4`}
+                  >
+                    <Upload size={18} className="opacity-80" />
+                    <div className="text-left">
+                      <span className="font-black text-[11px] block">{lang === 'bn' ? 'ব্যাকআপ ফাইল আপলোড করুন' : 'Upload Backup JSON'}</span>
+                      <span className={`text-[9px] ${isDark ? 'text-slate-500' : 'text-slate-400'} block`}>
+                        {lang === 'bn' ? 'পূর্বে ডাউনলোড করা .json ফাইল সিলেক্ট করুন' : 'Select a previously saved .json file'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
