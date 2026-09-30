@@ -220,19 +220,19 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
           <div className="bg-slate-50/90 px-4 py-3 rounded-xl border border-slate-200 mb-3 grid grid-cols-12 gap-x-4 text-[14px] shadow-sm">
             {/* First Column: Personal Info */}
             <div className="space-y-1.5 border-r border-slate-200 pr-3 col-span-5">
-              <div className="flex items-start"><span className="w-[105px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] text-[15px] tracking-tight line-clamp-1 leading-normal">: {student.student_name}</span></div>
-              <div className="flex items-start"><span className="w-[105px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight line-clamp-1 leading-normal">: {student.guardian_name || '-'}</span></div>
-              <div className="flex items-start"><span className="w-[105px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight line-clamp-1 leading-normal">: {student.mother_name || '-'}</span></div>
+              <div className="flex items-start"><span className="w-[82px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.name}</span><span className="flex-1 font-black text-[#1E3A8A] text-[15px] tracking-tight line-clamp-1 leading-normal">: {student.student_name}</span></div>
+              <div className="flex items-start"><span className="w-[82px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.fname}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight line-clamp-1 leading-normal">: {student.guardian_name || '-'}</span></div>
+              <div className="flex items-start"><span className="w-[82px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight line-clamp-1 leading-normal">: {student.mother_name || '-'}</span></div>
             </div>
             {/* Middle Column: Academic Info */}
             <div className="space-y-1.5 border-r border-slate-200 pr-3 col-span-4">
-              <div className="flex items-center"><span className="w-[95px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
-              <div className="flex items-center"><span className="w-[95px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.roll)}</span></div>
-              <div className="flex items-center"><span className="w-[95px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {isBangla ? toBnNum(student.date_of_birth || '-') : (student.date_of_birth || '-')}</span></div>
+              <div className="flex items-center"><span className="w-[70px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
+              <div className="flex items-center"><span className="w-[70px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.roll)}</span></div>
+              <div className="flex items-center"><span className="w-[70px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {isBangla ? toBnNum(student.date_of_birth || '-') : (student.date_of_birth || '-')}</span></div>
             </div>
             {/* Last Column: Other Info */}
             <div className="space-y-1.5 pl-1 col-span-3">
-              <div className="flex items-center"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {(() => {
+              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {(() => {
                 let yr = student.academic_year || exam?.academic_year || String(new Date().getFullYear());
                 if (yr === '2025-2026' || yr === '২০২৫-২০২৬') {
                   yr = '2026';
@@ -241,19 +241,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
                 }
                 return toBnNum(yr);
               })()}</span></div>
-              <div className="flex items-start"><span className="w-[108px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] leading-tight">{(() => {
-                const reg = String(student.registration_number || '-');
-                if (reg.length > 5 && reg !== '-') {
-                  return (
-                    <>
-                      : {toBnNum(reg.slice(0, 5))}
-                      <br />
-                      <span className="pl-[7.5px]">{toBnNum(reg.slice(5))}</span>
-                    </>
-                  );
-                }
-                return `: ${toBnNum(reg)}`;
-              })()}</span></div>
+              <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.reg}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] leading-tight">: {toBnNum(student.registration_number || '-')}</span></div>
             </div>
           </div>
 
