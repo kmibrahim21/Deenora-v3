@@ -162,7 +162,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
         )}
       </div>
 
-      <div className="relative z-10 px-8 py-3 h-full flex flex-col justify-between">
+      <div className="relative z-10 px-8 pt-7 pb-3 h-full flex flex-col justify-between">
         {/* Top Header & Student Info Area */}
         <div>
           {/* Header Section */}
@@ -225,13 +225,13 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
               <div className="flex items-start"><span className="w-[82px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-normal shrink-0">{t.mname}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight line-clamp-1 leading-normal">: {student.mother_name || '-'}</span></div>
             </div>
             {/* Middle Column: Academic Info */}
-            <div className="space-y-1.5 border-r border-slate-200 pr-3 col-span-4">
+            <div className="space-y-1.5 border-r border-slate-200 pr-3 col-span-3">
               <div className="flex items-center"><span className="w-[70px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.class}</span><span className="flex-1 font-black text-slate-900 text-[14.5px] tracking-tight">: {student.classes?.class_name || student.class_name || '-'}</span></div>
               <div className="flex items-center"><span className="w-[70px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.roll}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {toBnNum(student.roll)}</span></div>
               <div className="flex items-center"><span className="w-[70px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.dob}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {isBangla ? toBnNum(student.date_of_birth || '-') : (student.date_of_birth || '-')}</span></div>
             </div>
             {/* Last Column: Other Info */}
-            <div className="space-y-1.5 pl-1 col-span-3">
+            <div className="space-y-1.5 pl-1 col-span-4">
               <div className="flex items-center"><span className="w-[85px] whitespace-nowrap text-slate-600 font-bold uppercase text-[12px] leading-tight shrink-0">{t.session}</span><span className="flex-1 font-black text-slate-900 text-[14.5px]">: {(() => {
                 let yr = student.academic_year || exam?.academic_year || String(new Date().getFullYear());
                 if (yr === '2025-2026' || yr === '২০২৫-২০২৬') {

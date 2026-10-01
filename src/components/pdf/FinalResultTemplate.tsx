@@ -12,6 +12,7 @@ interface FinalResultProps {
 
 export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, className, subjects, students, madrasah, lang, includeBreakdown = false }) => {
   const isBangla = lang === 'bn';
+  const toBnNum = (n: number | string) => isBangla ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]) : String(n);
   const config = madrasah?.config_json || {};
   const t = {
     class: isBangla ? 'শ্রেণি' : 'Class',

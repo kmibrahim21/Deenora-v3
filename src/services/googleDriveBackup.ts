@@ -9,8 +9,21 @@ export const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/drive.file');
 
-// Cache the access token in memory
+const ACCESS_TOKEN_KEY = 'deenora_gdrive_access_token';
+const TOKEN_EXPIRY_KEY = 'deenora_gdrive_token_expiry';
+
+// Cache the access token in memory/localStorage
 let cachedAccessToken: string | null = null;
+try {
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
+  if (token && expiry && Date.now() < parseInt(expiry, 10)) {
+    cachedAccessToken = token;
+  }
+} catch (e) {
+  console.error('Error loading cached GDrive token:', e);
+}
+
 let isSigningIn = false;
 
 // Encryption Configuration
@@ -49,7 +62,20 @@ export const initAuth = (
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
-      if (onAuthChange) onAuthChange(user, cachedAccessToken);
+      let token = cachedAccessToken;
+      if (!token) {
+        try {
+          const storedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+          const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
+          if (storedToken && expiry && Date.now() < parseInt(expiry, 10)) {
+            token = storedToken;
+            cachedAccessToken = storedToken;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (onAuthChange) onAuthChange(user, token);
     } else {
       cachedAccessToken = null;
       if (onAuthChange) onAuthChange(null, null);
@@ -70,6 +96,16 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
 
     cachedAccessToken = credential.accessToken;
+    try {
+      localStorage.setItem(ACCESS_TOKEN_KEY, credential.accessToken);
+      // Access tokens usually expire in 3600 seconds (1 hour).
+      // Let's set the expiry to 55 minutes from now to be safe.
+      const expiryTime = Date.now() + 55 * 60 * 1000;
+      localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
+    } catch (e) {
+      console.error('Error saving access token to localStorage:', e);
+    }
+    
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Google sign-in error:', error);
@@ -92,6 +128,12 @@ export const getAccessToken = async (): Promise<string | null> => {
 export const logoutGoogle = async () => {
   await signOut(auth);
   cachedAccessToken = null;
+  try {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  } catch (e) {
+    console.error('Error removing token from localStorage:', e);
+  }
 };
 
 /**
