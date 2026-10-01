@@ -1,10 +1,13 @@
-import React, { useRef, useState } from "react";
-import { Download, X, Printer, Settings2 } from "lucide-react";
+import React, { useRef, useState, useEffect } from "react";
+import { Download, X, Printer, Settings2, Sliders, Palette, Check, RotateCcw } from "lucide-react";
 import { Student, Institution, Language } from "types";
 import QRCode from "react-qr-code";
 import { jsPDF } from "jspdf";
-import { toPng, toJpeg } from "html-to-image";
+import { toJpeg } from "html-to-image";
 import { solaimanLipiBase64 } from "../utils/fonts";
+import { IdCardDesignSettings, DEFAULT_ID_CARD_DESIGN } from "../types/idCardDesign";
+import IdCardDesignModal from "./idcard/IdCardDesignModal";
+import { supabase } from "../supabase";
 
 interface StudentIdCardGeneratorProps {
   student: Student;
@@ -13,6 +16,8 @@ interface StudentIdCardGeneratorProps {
   lang: Language;
   isBulk?: boolean;
   allStudents?: Student[];
+  designSettings?: IdCardDesignSettings;
+  onUpdateDesign?: (newSettings: IdCardDesignSettings) => void;
 }
 
 const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
@@ -22,30 +27,84 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   lang,
   isBulk,
   allStudents,
+  designSettings: externalDesignSettings,
+  onUpdateDesign: externalOnUpdateDesign,
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const backCardRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [themeColor, setThemeColor] = useState("#1E3A8A"); // Default Navy/Indigo Theme
-  const [currentRenderStudent, setCurrentRenderStudent] =
-    useState<Student>(student);
+  const [currentRenderStudent, setCurrentRenderStudent] = useState<Student>(student);
   const [bulkProgress, setBulkProgress] = useState(0);
+  const [isDesignModalOpen, setIsDesignModalOpen] = useState(false);
+  const [isSavingCloud, setIsSavingCloud] = useState(false);
 
+  // Initialize design settings from external prop, local cache or database
+  const [internalDesignSettings, setInternalDesignSettings] = useState<IdCardDesignSettings>(() => {
+    if (externalDesignSettings) return externalDesignSettings;
+    const cloudDesign = (madrasah?.config_json as any)?.id_card_design;
+    const cached = localStorage.getItem('deenora_idcard_design_settings');
+    let merged = { ...DEFAULT_ID_CARD_DESIGN };
+    if (cloudDesign) {
+      merged = { ...merged, ...cloudDesign };
+    } else if (cached) {
+      try {
+        merged = { ...merged, ...JSON.parse(cached) };
+      } catch (e) {}
+    }
+    return merged;
+  });
+
+  const designSettings = externalDesignSettings || internalDesignSettings;
+
+  useEffect(() => {
+    if (externalDesignSettings) {
+      setInternalDesignSettings(externalDesignSettings);
+    }
+  }, [externalDesignSettings]);
+
+  const themeColor = designSettings.themeColor || "#1E3A8A";
   const isDark = madrasah?.theme === "dark";
   const isBangla = lang === "bn";
 
   const isPhotoModuleEnabled = madrasah?.config_json?.modules?.student_photo === true;
   const instName = madrasah?.name || "Institution Name";
   const instAddress = madrasah?.address || "Dhaka, Bangladesh";
-  const nameLen = instName.length;
-  const addressLen = instAddress.length;
-  
-  const nameSizeClass = nameLen > 65 ? "text-[11px] leading-snug" : nameLen > 45 ? "text-[12.5px] leading-snug" : nameLen > 30 ? "text-[14.5px] leading-snug" : nameLen > 20 ? "text-[16.5px] leading-snug" : "text-[18.5px] leading-snug";
-  const addressSizeClass = addressLen > 60 ? "text-[6.5px] leading-snug" : addressLen > 40 ? "text-[7.5px] leading-snug" : "text-[8px] leading-snug";
 
-  React.useEffect(() => {
+  useEffect(() => {
     setCurrentRenderStudent(student);
   }, [student]);
+
+  const handleSaveToCloud = async (newSettings: IdCardDesignSettings) => {
+    if (!madrasah) return;
+    setIsSavingCloud(true);
+    try {
+      const existingConfig = (typeof madrasah.config_json === 'string' ? JSON.parse(madrasah.config_json) : madrasah.config_json) || {};
+      const updatedConfig = {
+        ...existingConfig,
+        id_card_design: newSettings
+      };
+      await supabase.from('institutions').update({ config_json: updatedConfig }).eq('id', madrasah.id);
+      localStorage.setItem('deenora_idcard_design_settings', JSON.stringify(newSettings));
+      if (externalOnUpdateDesign) {
+        externalOnUpdateDesign(newSettings);
+      } else {
+        setInternalDesignSettings(newSettings);
+      }
+    } catch (e) {
+      console.error('Failed to save id card design:', e);
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
+
+  const handleUpdateDesign = (newSettings: IdCardDesignSettings) => {
+    if (externalOnUpdateDesign) {
+      externalOnUpdateDesign(newSettings);
+    } else {
+      setInternalDesignSettings(newSettings);
+    }
+    localStorage.setItem('deenora_idcard_design_settings', JSON.stringify(newSettings));
+  };
 
   const generateSingleCardData = async () => {
     if (!cardRef.current || !backCardRef.current) return null;
@@ -62,8 +121,8 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             font-style: normal;
           }
         `,
-        width: 280, // Explicitly set width to prevent right-side clipping
-        height: 448, // Explicitly set height
+        width: 280,
+        height: 448,
         style: {
           margin: "0",
           transform: "scale(1)",
@@ -247,7 +306,6 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
     } catch (serverError) {
       console.warn("Server ID card generation failed, falling back to client-side:", serverError);
       
-      // Fallback to client-side jsPDF
       try {
         const pdf = new jsPDF("portrait", "mm", "a4");
         const cardWidth = 54;
@@ -260,54 +318,53 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
           const gapX = 10;
           const xMargin = (210 - (cardWidth * 2) - gapX) / 2;
           const yMargin = 30;
-          pdf.addImage(cardData.front, "JPEG", xMargin, yMargin, cardWidth, cardHeight);
-          pdf.addImage(cardData.back, "JPEG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight);
+
+          pdf.addImage(cardData.front, "JPEG", xMargin, yMargin, cardWidth, cardHeight, undefined, "FAST");
+          pdf.addImage(cardData.back, "JPEG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight, undefined, "FAST");
           pdf.save(filename);
         }
-      } catch (clientErr) {
-        console.error("Error generating single PDF fallback:", clientErr);
-        alert("Failed to generate single PDF. Please try again.");
+      } catch (err) {
+        console.error("Single PDF fallback generation error:", err);
       }
     } finally {
       setIsGenerating(false);
-      setCurrentRenderStudent(student);
     }
   };
 
   const downloadPdfMultiple = async () => {
+    const studentsToRender = allStudents && allStudents.length > 0 ? allStudents : [student];
+    const filename = `Student_ID_Cards_Batch_${activeSide}_${studentsToRender.length}.pdf`;
     setIsGenerating(true);
-    const sideText = activeSide === 'front' ? 'Fronts' : 'Backs';
-    const filename = (allStudents && allStudents.length > 1) 
-      ? `${(allStudents[0]?.classes?.class_name || "Class").replace(/\s+/g, "_")}_Grid_${sideText}.pdf` 
-      : `${(student?.student_name || "Student").replace(/\s+/g, "_")}_A4_${sideText}.pdf`;
+    setBulkProgress(5);
 
     try {
-      const studentsToRender = (allStudents && allStudents.length > 0) ? allStudents : [student];
-      const cardHtmlList: string[] = [];
+      const cardHtmlPromises = studentsToRender.map(async (std, index) => {
+        setCurrentRenderStudent(std);
+        await new Promise(r => setTimeout(r, 20));
+        const targetEl = activeSide === 'front' ? cardRef.current : backCardRef.current;
+        if (!targetEl) return '';
+        return targetEl.outerHTML.replace(/\bhidden\b/g, 'flex');
+      });
 
-      // Render cards in DOM with sufficient delay to extract rendered HTML
+      const cardsHtmlList: string[] = [];
       for (let i = 0; i < studentsToRender.length; i++) {
-        setBulkProgress(Math.round(((i + 1) / studentsToRender.length) * 40));
         setCurrentRenderStudent(studentsToRender[i]);
-        await new Promise((resolve) => setTimeout(resolve, 120));
-
+        await new Promise(r => setTimeout(r, 15));
         const targetEl = activeSide === 'front' ? cardRef.current : backCardRef.current;
         if (targetEl) {
-          const cleanHtml = targetEl.outerHTML.replace(/\bhidden\b/g, 'flex');
-          cardHtmlList.push(cleanHtml);
+          cardsHtmlList.push(targetEl.outerHTML.replace(/\bhidden\b/g, 'flex'));
         }
+        setBulkProgress(Math.min(50, Math.round(((i + 1) / studentsToRender.length) * 50)));
       }
 
-      setBulkProgress(50);
-
-      // Group into pages of 9 cards (3 columns x 3 rows)
+      const CARDS_PER_PAGE = 8;
       const pages: string[][] = [];
-      for (let i = 0; i < cardHtmlList.length; i += 9) {
-        pages.push(cardHtmlList.slice(i, i + 9));
+      for (let i = 0; i < cardsHtmlList.length; i += CARDS_PER_PAGE) {
+        pages.push(cardsHtmlList.slice(i, i + CARDS_PER_PAGE));
       }
 
       const pagesHtml = pages.map((pageCards, pageIdx) => `
-        <div class="grid-page" style="width: 210mm; height: 297mm; display: grid; grid-template-columns: repeat(3, 54mm); grid-template-rows: repeat(3, 86mm); gap: 8mm; justify-content: center; align-content: center; box-sizing: border-box; ${pageIdx < pages.length - 1 ? 'page-break-after: always;' : ''}">
+        <div class="page-container" style="page-break-after: ${pageIdx < pages.length - 1 ? 'always' : 'auto'};">
           ${pageCards.map(c => `
             <div class="card-slot">
               ${c}
@@ -359,6 +416,21 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               margin: 0;
               padding: 0;
               background-color: white;
+            }
+            .page-container {
+              width: 210mm;
+              height: 297mm;
+              padding-top: 15mm;
+              padding-bottom: 15mm;
+              padding-left: 10mm;
+              padding-right: 10mm;
+              display: grid;
+              grid-template-columns: repeat(3, 54mm);
+              grid-template-rows: repeat(3, 86mm);
+              gap: 6mm 10mm;
+              box-sizing: border-box;
+              justify-content: center;
+              align-content: center;
             }
             .card-slot {
               width: 54mm;
@@ -414,6 +486,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
       });
 
       if (response.ok) {
+        setBulkProgress(95);
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           const data = await response.json();
@@ -425,7 +498,6 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            setBulkProgress(100);
             return;
           }
         } else {
@@ -439,63 +511,50 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
-          setBulkProgress(100);
           return;
         }
       }
       throw new Error('Server returned non-OK response');
-    } catch (serverErr) {
-      console.warn("Server ID card grid generation failed, falling back to client-side:", serverErr);
-
-      // Fallback: client-side jsPDF loop
+    } catch (serverError) {
+      console.warn("Server ID card generation failed, falling back to client-side:", serverError);
+      
       try {
         const pdf = new jsPDF("portrait", "mm", "a4");
         const cardWidth = 54;
         const cardHeight = 86;
-        const pageW = 210;
-        const pageH = 297;
-        
-        const cols = 3;
+        const gapX = 10;
+        const gapY = 6;
+        const columns = 3;
         const rows = 3;
-        const gapX = 8;
-        const marginX = (pageW - (cardWidth * cols) - (gapX * (cols - 1))) / 2;
-        const gapY = 8; 
-        const marginY = (pageH - (cardHeight * rows) - (gapY * (rows - 1))) / 2;
-
-        const studentsToRender = (allStudents && allStudents.length > 0) ? allStudents : [student];
-        let currentIdxOnPage = 0;
+        const cardsPerPage = columns * rows;
+        const xOffset = 14;
+        const yOffset = 15;
 
         for (let i = 0; i < studentsToRender.length; i++) {
-          setBulkProgress(Math.round((i / studentsToRender.length) * 100));
+          setBulkProgress(Math.round(((i + 1) / studentsToRender.length) * 100));
           setCurrentRenderStudent(studentsToRender[i]);
-          await new Promise((resolve) => setTimeout(resolve, 300));
+          await new Promise((resolve) => setTimeout(resolve, 150));
+
+          const pageIndex = Math.floor((i % cardsPerPage) / columns);
+          const colIndex = (i % cardsPerPage) % columns;
+
+          if (i > 0 && i % cardsPerPage === 0) {
+            pdf.addPage();
+          }
+
+          const x = xOffset + colIndex * (cardWidth + gapX);
+          const y = yOffset + pageIndex * (cardHeight + gapY);
 
           const cardData = await generateSingleCardData();
-          if (!cardData) continue;
-
-          const row = Math.floor(currentIdxOnPage / cols);
-          const col = currentIdxOnPage % cols;
-
-          const posX = marginX + (col * (cardWidth + gapX));
-          const posY = marginY + (row * (cardHeight + gapY));
-
-          const imageData = activeSide === 'front' ? cardData.front : cardData.back;
-
-          pdf.addImage(imageData, "JPEG", posX, posY, cardWidth, cardHeight);
-
-          currentIdxOnPage++;
-
-          if (currentIdxOnPage === (cols * rows) && i < studentsToRender.length - 1) {
-              pdf.addPage();
-              currentIdxOnPage = 0;
+          if (cardData) {
+            const imageToDraw = activeSide === 'front' ? cardData.front : cardData.back;
+            pdf.addImage(imageToDraw, "JPEG", x, y, cardWidth, cardHeight, undefined, "FAST");
           }
         }
 
-        setBulkProgress(100);
         pdf.save(filename);
-      } catch (clientError) {
-        console.error("Error generating PDF Grid fallback:", clientError);
-        alert("Failed to generate PDF. Please try again.");
+      } catch (err) {
+        console.error("Batch PDF fallback generation error:", err);
       }
     } finally {
       setIsGenerating(false);
@@ -505,28 +564,67 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
   };
 
   const handlePrint = () => {
-    window.print();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert(isBangla ? 'পপআপ ব্লকার সক্রিয় আছে। অনুগ্রহ করে পপআপ অনুমোদন করুন।' : 'Popup blocked. Please allow popups.');
+      return;
+    }
+
+    const targetEl = activeSide === 'front' ? cardRef.current : backCardRef.current;
+    if (!targetEl) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${instName} - ID Card</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @font-face {
+              font-family: 'SolaimanLipi';
+              src: url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
+              font-weight: normal;
+              font-style: normal;
+            }
+            .font-solaiman { font-family: 'SolaimanLipi', sans-serif !important; }
+            body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+            @media print {
+              body { padding: 0; }
+              @page { size: auto; margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div style="transform: scale(1); transform-origin: top center;">
+            ${targetEl.outerHTML}
+          </div>
+          <script>
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const colors = [
-    "#1E3A8A",
-    "#4F46E5",
-    "#0F766E",
-    "#10B981",
-    "#E11D48",
-    "#D97706",
-    "#4338CA",
-    "#0369A1",
+    "#1E3A8A", // Navy Blue
+    "#065F46", // Royal Emerald
+    "#881337", // Deep Maroon
+    "#B91C1C", // Crimson Red
+    "#4338CA", // Indigo
+    "#0F766E", // Dark Teal
+    "#581C87", // Imperial Violet
+    "#18181B", // Charcoal
   ];
 
-  // PVC Card ratio approx 2.125 x 3.375 inches (portait) -> 54mm x 85.6mm (1:1.58 ratio)
-  // Example dimensions: 250px x 395px
-
   const t = {
-    title: isBangla ? "স্টুডেন্ট আইডি কার্ড" : "Student ID Card",
-    id: isBangla ? "রেজিঃ নম্বর" : "Reg No",
-    class: isBangla ? "শ্রেণী" : "Class",
-    roll: isBangla ? "রোল" : "Roll",
+    title: isBangla ? "শিক্ষার্থী পরিচয় পত্র" : "Student ID Card",
+    class: isBangla ? "শ্রেণি" : "Class",
+    id: isBangla ? "আইডি/রোল" : "ID/Roll",
     blood: isBangla ? "রক্তের গ্রুপ" : "Blood",
     dob: isBangla ? "জন্ম তারিখ" : "DOB",
     phone: isBangla ? "মোবাইল" : "Phone",
@@ -560,6 +658,92 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
 
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
 
+  // Helper to render top header decoration based on layout style
+  const renderHeaderDecoration = () => {
+    const style = designSettings.layoutStyle;
+    if (style === 'minimal_clean') {
+      return (
+        <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[140px]" style={{ backgroundColor: themeColor }}>
+          <div className="absolute bottom-0 left-0 w-full h-[4px] bg-gradient-to-r from-amber-400 via-white to-amber-400 opacity-80" />
+        </div>
+      );
+    }
+    if (style === 'royal_arch') {
+      return (
+        <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[155px]">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 155" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,0 L280,0 L280,115 Q140,165 0,115 Z" fill={themeColor}></path>
+            <path d="M0,115 Q140,165 280,115 L280,120 Q140,170 0,120 Z" fill="#F59E0B" opacity="0.9"></path>
+            <path d="M0,123 Q140,173 280,123 L280,125 Q140,175 0,125 Z" fill="white" opacity="0.4"></path>
+          </svg>
+        </div>
+      );
+    }
+    if (style === 'bold_banner') {
+      return (
+        <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[148px]">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 148" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,0 L280,0 L280,140 L140,125 L0,140 Z" fill={themeColor}></path>
+            <path d="M0,140 L140,125 L280,140 L280,145 L140,130 L0,145 Z" fill="white" opacity="0.3"></path>
+          </svg>
+        </div>
+      );
+    }
+    // Default: modern_wave
+    return (
+      <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[155px]">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 155" preserveAspectRatio="none" className="w-full h-full">
+          <path d="M0,0 L280,0 L280,120 C180,160 100,80 0,140 Z" fill={themeColor}></path>
+          <path d="M0,0 L280,0 L280,110 C180,150 100,70 0,130 Z" fill="white" opacity="0.15"></path>
+          <path d="M0,0 L280,0 L280,100 C180,140 100,60 0,120 Z" fill="white" opacity="0.1"></path>
+          <path d="M0,140 C100,80 180,160 280,120 L280,124 C180,164 100,84 0,144 Z" fill="black" opacity="0.08"></path>
+        </svg>
+      </div>
+    );
+  };
+
+  // Helper to render bottom footer decoration based on layout style
+  const renderFooterDecoration = () => {
+    const style = designSettings.layoutStyle;
+    if (style === 'minimal_clean') {
+      return (
+        <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[45px]" style={{ backgroundColor: themeColor }}>
+          <div className="absolute top-0 left-0 w-full h-[2px] bg-white/40" />
+        </div>
+      );
+    }
+    if (style === 'royal_arch') {
+      return (
+        <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[65px]">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 65" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,65 L280,65 L280,20 Q140,0 0,20 Z" fill={themeColor}></path>
+            <path d="M0,20 Q140,0 280,20 L280,23 Q140,3 0,23 Z" fill="#F59E0B" opacity="0.8"></path>
+          </svg>
+        </div>
+      );
+    }
+    if (style === 'bold_banner') {
+      return (
+        <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[55px]">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 55" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,55 L280,55 L280,12 L140,24 L0,12 Z" fill={themeColor}></path>
+            <path d="M0,12 L140,24 L280,12 L280,9 L140,21 L0,9 Z" fill="white" opacity="0.3"></path>
+          </svg>
+        </div>
+      );
+    }
+    // Default: modern_wave
+    return (
+      <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[70px]">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 70" preserveAspectRatio="none" className="w-full h-full">
+          <path d="M0,70 L280,70 L280,40 C180,0 100,50 0,20 Z" fill={themeColor}></path>
+          <path d="M0,70 L280,70 L280,50 C180,10 100,60 0,30 Z" fill="white" opacity="0.15"></path>
+          <path d="M0,70 L280,70 L280,60 C180,20 100,70 0,40 Z" fill="white" opacity="0.10"></path>
+        </svg>
+      </div>
+    );
+  };
+
   return (
     <div className={`flex flex-col rounded-2xl sm:rounded-3xl border shadow-sm overflow-hidden ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"}`}>
       {/* Header Controls */}
@@ -570,9 +754,9 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               {isBulk ? (isBangla ? 'সকল আইডি কার্ড' : 'All ID Cards') : t.title}
             </h2>
             <div className="flex items-center gap-1.5 sm:gap-2">
-               <button
+              <button
                 onClick={handlePrint}
-                className={`p-2 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold transition-all rounded-lg sm:rounded-xl ${isDark ? "bg-slate-800 text-white hover:bg-slate-700" : "bg-white text-slate-700 border hover:bg-slate-50"}`}
+                className={`p-2 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold transition-all rounded-lg sm:rounded-xl cursor-pointer ${isDark ? "bg-slate-800 text-white hover:bg-slate-700" : "bg-white text-slate-700 border hover:bg-slate-50"}`}
                 title={isBangla ? "প্রিন্ট" : "Print"}
               >
                 <Printer size={18} />
@@ -586,7 +770,7 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               {colors.map((c) => (
                 <button
                   key={c}
-                  onClick={() => setThemeColor(c)}
+                  onClick={() => handleUpdateDesign({ ...designSettings, themeColor: c })}
                   className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 transition-all shrink-0 ${themeColor === c ? "border-white ring-2 ring-blue-500 scale-110 shadow-sm" : "border-transparent"}`}
                   style={{ backgroundColor: c }}
                   aria-label={`Select color ${c}`}
@@ -654,180 +838,340 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               width: "280px", 
               height: "448px",
               WebkitTextSizeAdjust: "100%",
-              textSizeAdjust: "100%"
+              textSizeAdjust: "100%",
+              borderRadius: "12px",
+              overflow: "hidden"
             }}
             ref={cardRef}
           >
-             {/* Top Modern Header Shape */}
-             <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[155px]">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 280 155"
-                  preserveAspectRatio="none"
-                  className="w-full h-full"
-                >
-                  <path d="M0,0 L280,0 L280,120 C180,160 100,80 0,140 Z" fill={themeColor}></path>
-                  <path d="M0,0 L280,0 L280,110 C180,150 100,70 0,130 Z" fill="white" opacity="0.15"></path>
-                  <path d="M0,0 L280,0 L280,100 C180,140 100,60 0,120 Z" fill="white" opacity="0.1"></path>
-                  <path d="M0,140 C100,80 180,160 280,120 L280,124 C180,164 100,84 0,144 Z" fill="black" opacity="0.08"></path>
-                </svg>
-              </div>
+             {/* Header Vector */}
+             {renderHeaderDecoration()}
 
-              {/* Bottom Wave Vector */}
-              <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[70px]">
-                 <svg 
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 280 70" 
-                  preserveAspectRatio="none" 
-                  className="w-full h-full"
-                 >
-                     <path d="M0,70 L280,70 L280,40 C180,0 100,50 0,20 Z" fill={themeColor}></path>
-                     <path d="M0,70 L280,70 L280,50 C180,10 100,60 0,30 Z" fill="white" opacity="0.15"></path>
-                     <path d="M0,70 L280,70 L280,60 C180,20 100,70 0,40 Z" fill="white" opacity="0.10"></path>
-                 </svg>
-              </div>
+             {/* Bottom Vector */}
+             {renderFooterDecoration()}
 
-              {/* Content Container */}
-              <div className="relative z-10 flex flex-col h-full w-full">
-                  {/* Header - Logo & Madrasah Info */}
-                  <div className="flex items-center gap-2.5 pt-4 px-4">
-                       <div className="w-[48px] h-[48px] bg-white rounded-full p-[2px] shadow-sm flex items-center justify-center shrink-0">
-                          {madrasah?.logo_url ? (
-                            <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain rounded-full" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+             {/* Content Container */}
+             <div className="relative z-10 flex flex-col h-full w-full">
+                 {/* Header - Logo & Madrasah Info */}
+                 <div className="flex items-center gap-2.5 pt-4 px-4">
+                      {designSettings.showLogo !== false && (
+                        <div 
+                          className="bg-white rounded-full p-[2px] shadow-sm flex items-center justify-center shrink-0"
+                          style={{
+                            width: `${designSettings.logoSize || 48}px`,
+                            height: `${designSettings.logoSize || 48}px`
+                          }}
+                        >
+                           {madrasah?.logo_url ? (
+                             <img src={madrasah.logo_url} alt="Logo" className="w-full h-full object-contain rounded-full" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                           ) : (
+                             <div className="w-full h-full rounded-full flex items-center justify-center text-[18px] font-black" style={{ color: themeColor }}>
+                               {instName.charAt(0) || "M"}
+                             </div>
+                           )}
+                        </div>
+                      )}
+                      <div className="flex-1 text-center flex flex-col justify-center min-w-0 px-0.5">
+                          <h3 
+                            className="font-bold text-white font-solaiman w-full mx-auto text-center leading-snug py-0.5" 
+                            style={{ 
+                              fontSize: `${designSettings.instNameSize || 16}px`,
+                              color: designSettings.instNameColor || 'white',
+                              textShadow: "0 1px 2px rgba(0,0,0,0.3)" 
+                            }}
+                          >
+                           {instName}
+                         </h3>
+                         <p 
+                           className="text-white/95 font-medium -mt-0.5 w-full mx-auto text-center leading-snug"
+                           style={{ fontSize: `${designSettings.instAddressSize || 8}px` }}
+                         >
+                           {instAddress}
+                         </p>
+                      </div>
+                 </div>
+
+                 {/* Photo & Title Section */}
+                 <div className="flex flex-col items-center mt-1 w-full relative z-10 px-5">
+                     {designSettings.showPhoto !== false && (
+                       <div 
+                         className="bg-white border-[2px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] overflow-hidden flex items-center justify-center shrink-0 photo-frame"
+                         style={{
+                           width: `${designSettings.photoWidth || 75}px`,
+                           height: `${designSettings.photoHeight || 85}px`,
+                           borderRadius: `${designSettings.photoRadius !== undefined ? designSettings.photoRadius : 12}px`,
+                           overflow: 'hidden',
+                           WebkitMaskImage: '-webkit-radial-gradient(white, black)',
+                           clipPath: `inset(0 round ${designSettings.photoRadius !== undefined ? designSettings.photoRadius : 12}px)`,
+                           isolation: 'isolate'
+                         }}
+                       >
+                          {(isPhotoModuleEnabled && currentRenderStudent.photo_url) ? (
+                              <img 
+                                src={currentRenderStudent.photo_url} 
+                                alt="Photo" 
+                                className="w-full h-full object-cover" 
+                                style={{
+                                  borderRadius: `${Math.max(0, (designSettings.photoRadius !== undefined ? designSettings.photoRadius : 12) - 2)}px`,
+                                  objectFit: 'cover',
+                                  display: 'block'
+                                }}
+                                crossOrigin="anonymous"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                              />
                           ) : (
-                            <div className="w-full h-full rounded-full flex items-center justify-center text-[18px] font-black" style={{ color: themeColor }}>
-                              {instName.charAt(0) || "M"}
-                            </div>
+                              <svg className="text-slate-200 w-[36px] h-[36px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                           )}
                        </div>
-                       <div className="flex-1 text-center flex flex-col justify-center min-w-0 px-0.5">
-                           <h3 className={`font-bold text-white font-solaiman w-full mx-auto text-center ${nameSizeClass}`} style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
-                            {instName}
-                          </h3>
-                          <p className={`text-white/95 font-medium -mt-0.5 w-full mx-auto text-center ${addressSizeClass}`}>
-                            {instAddress}
-                          </p>
-                       </div>
-                  </div>
+                     )}
 
-                  {/* Photo & Title Section */}
-                  <div className="flex flex-col items-center mt-1 w-full relative z-10 px-5">
-                      <div 
-                        className="w-[75px] h-[85px] bg-white border-[2px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0 photo-frame"
-                        style={{
-                          borderRadius: '12px',
-                          overflow: 'hidden',
-                          WebkitMaskImage: '-webkit-radial-gradient(white, black)',
-                          clipPath: 'inset(0 round 12px)',
-                          isolation: 'isolate'
-                        }}
-                      >
-                         {(isPhotoModuleEnabled && currentRenderStudent.photo_url) ? (
+                     {/* Title Badge */}
+                     <div 
+                       className="mt-1 px-3 py-0.5 rounded-full text-white text-[8.5px] font-bold shadow-sm tracking-wide border border-white/20 uppercase inline-block font-solaiman" 
+                       style={{ backgroundColor: designSettings.badgeBgColor || themeColor }}
+                     >
+                       {designSettings.badgeText || t.idBadge}
+                     </div>
+
+                     {/* Name */}
+                     <div className="mt-0.5 text-center px-2">
+                        <h2 
+                          className="font-extrabold font-solaiman leading-snug py-0.5" 
+                          style={{ 
+                            fontSize: `${designSettings.nameSize || 16}px`,
+                            color: designSettings.nameColor || themeColor 
+                          }}
+                        >
+                             {currentRenderStudent.student_name || 'Student Name'}
+                         </h2>
+                     </div>
+                 </div>
+
+                 {/* Data Fields */}
+                 <div className="pl-10 pr-4 w-full flex flex-col gap-[1px] mt-0.5 z-10 relative">
+                      {designSettings.showClass !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.class}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman"
+                             style={{ fontSize: `${designSettings.fieldValueSize || 11.5}px` }}
+                           >
+                             {currentRenderStudent.classes?.class_name || (currentRenderStudent as any).class_name || "-"}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showSection !== false && currentRenderStudent.section && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.section}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman"
+                             style={{ fontSize: `${designSettings.fieldValueSize || 11.5}px` }}
+                           >
+                             {currentRenderStudent.section}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showId !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.id}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide"
+                             style={{ fontSize: `${designSettings.fieldValueSize || 11.5}px` }}
+                           >
+                             {currentRenderStudent.registration_number || (currentRenderStudent.roll !== null && currentRenderStudent.roll !== undefined ? currentRenderStudent.roll : null) || (currentRenderStudent as any).admission_number || currentRenderStudent.biometric_id || (currentRenderStudent.id ? currentRenderStudent.id.substring(0, 6).toUpperCase() : "-")}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showDob !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.dob}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide"
+                             style={{ fontSize: `${designSettings.fieldValueSize || 11.5}px` }}
+                           >
+                             {currentRenderStudent.date_of_birth ? new Date(currentRenderStudent.date_of_birth).toLocaleDateString('en-GB') : "-"}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showBlood !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.blood}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-black text-red-600 leading-snug py-0.5 font-solaiman"
+                             style={{ fontSize: `${designSettings.fieldValueSize || 11.5}px` }}
+                           >
+                             {currentRenderStudent.blood_group || "-"}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showFather !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.father}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-snug py-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman"
+                             style={{ fontSize: `${Math.max(9.5, (designSettings.fieldValueSize || 11.5) - 0.5)}px` }}
+                           >
+                             {(currentRenderStudent as any).father_name || currentRenderStudent.guardian_name || "-"}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showMother !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.mother}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-snug py-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman"
+                             style={{ fontSize: `${Math.max(9.5, (designSettings.fieldValueSize || 11.5) - 0.5)}px` }}
+                           >
+                             {currentRenderStudent.mother_name || "-"}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showPhone !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.phone}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide"
+                             style={{ fontSize: `${Math.max(9.5, (designSettings.fieldValueSize || 11.5) - 0.5)}px` }}
+                           >
+                             {currentRenderStudent.guardian_phone || currentRenderStudent.guardian_phone_2 || "-"}
+                           </span>
+                        </div>
+                      )}
+
+                      {designSettings.showAddress !== false && (
+                        <div className="flex items-start">
+                           <span 
+                             className="font-semibold text-slate-600 font-solaiman shrink-0 py-0.5 leading-snug"
+                             style={{ 
+                               width: `${designSettings.labelWidth || 75}px`,
+                               fontSize: `${designSettings.fieldFontSize || 10}px` 
+                             }}
+                           >
+                             {t.address}
+                           </span>
+                           <span className="font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug" style={{ fontSize: `${designSettings.fieldFontSize || 10}px` }}>:</span>
+                           <span 
+                             className="font-extrabold text-slate-800 leading-tight py-0.5 line-clamp-2 max-w-[155px] font-solaiman break-words"
+                             style={{ fontSize: `${Math.max(9, (designSettings.fieldValueSize || 11.5) - 1.5)}px` }}
+                           >
+                             {currentRenderStudent.address || (currentRenderStudent as any).permanent_address || "-"}
+                           </span>
+                        </div>
+                      )}
+                 </div>
+
+                 {/* Footer Signature */}
+                 <div className="w-full flex justify-end items-end mt-auto px-5 pb-2 relative z-10">
+                    <div className="flex items-end gap-2 text-center relative w-full h-[35px] max-w-[120px]">
+                       <div className="flex flex-col items-center w-[70px] ml-auto">
+                          <div 
+                            className="flex items-end justify-center mb-[2px]" 
+                            style={{ height: `${designSettings.signatureHeight || (madrasah?.config_json?.signature_height ? madrasah.config_json.signature_height / 1.5 : 22)}px` }}
+                          >
+                          {madrasah?.config_json?.signature_url ? (
                              <img 
-                               src={currentRenderStudent.photo_url} 
-                               alt="Photo" 
-                               className="w-full h-full object-cover rounded-[10px]" 
-                               style={{
-                                 borderRadius: '10px',
-                                 objectFit: 'cover',
-                                 display: 'block'
-                               }}
-                               crossOrigin="anonymous"
+                               src={madrasah.config_json.signature_url} 
+                               style={{ height: `${designSettings.signatureHeight || (madrasah?.config_json?.signature_height ? madrasah.config_json.signature_height / 1.5 : 22)}px` }} 
+                               className="object-contain mix-blend-multiply" 
+                               alt="Sig" 
+                               crossOrigin="anonymous" 
                                onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                              />
-                         ) : (
-                             <svg className="text-slate-200 w-[36px] h-[36px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-                         )}
-                      </div>
-
-                      {/* Title: 'পরিচয় পত্র' or 'STUDENT ID CARD' */}
-                      <div className="mt-1 px-3 py-0.5 rounded-full text-white text-[8.5px] font-bold shadow-sm tracking-wide border border-white/20 uppercase inline-block font-solaiman" style={{ backgroundColor: themeColor }}>
-                        {t.idBadge}
-                      </div>
-
-                      {/* Name */}
-                      <div className="mt-0.5 text-center px-2">
-                         <h2 className="font-extrabold text-[16px] font-solaiman leading-snug py-0.5" style={{ color: themeColor }}>
-                              {currentRenderStudent.student_name || 'Student Name'}
-                          </h2>
-                      </div>
-                  </div>
-
-                  {/* Data Fields */}
-                  <div className="pl-10 pr-4 w-full flex flex-col gap-[1px] mt-0.5 z-10 relative">
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.class}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman">{currentRenderStudent.classes?.class_name || (currentRenderStudent as any).class_name || "-"}</span>
+                          ) : (
+                             <img
+                                src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgNDAiPjxwYXRoIGQ9Ik0xMCAzMGM1LTUgMTAtMTAgMTEtMTVzLTIgMTAtNSAxNWMyLTUgNS0xMCAxMC0xNCA1LTMgOC01IDEwLTJzLTEgNS0zIDEwYzIgMCA0LTIgNi0zIDItejIgNCAwLTUgOC01IDQgMyAyIDEwLTMgMTRjLTIgMi01IDUtOCAxLTItMy0xLTYgMi04cyA1LTIgNyAwbDEgM2MyLTIgMy01IDUtNyAyLTIgNCAwIDUtMnMyIDEwLTMgMTQtMSA0IDMgNSA2IDVjLTItNSA1LTIgNyAwczIgNiAwIDEwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0NzU1NjkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+"
+                                className="w-[38px] opacity-70 mix-blend-multiply"
+                                alt="Sig"
+                             />
+                          )}
+                          </div>
+                          <div className="w-full h-[1px] bg-white/50 mb-0.5" />
+                          <p className="text-[7px] font-bold text-white font-solaiman uppercase tracking-wider shadow-sm leading-snug py-0.5">
+                             {designSettings.principalTitle || t.principal}
+                          </p>
                        </div>
-                       {currentRenderStudent.section && (
-                         <div className="flex items-start">
-                            <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.section}</span>
-                            <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                            <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman">{currentRenderStudent.section}</span>
-                         </div>
-                       )}
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.id}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderStudent.registration_number || (currentRenderStudent.roll !== null && currentRenderStudent.roll !== undefined ? currentRenderStudent.roll : null) || (currentRenderStudent as any).admission_number || currentRenderStudent.biometric_id || (currentRenderStudent.id ? currentRenderStudent.id.substring(0, 6).toUpperCase() : "-")}</span>
-                       </div>
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.dob}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11.5px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderStudent.date_of_birth ? new Date(currentRenderStudent.date_of_birth).toLocaleDateString('en-GB') : "-"}</span>
-                       </div>
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.blood}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11.5px] font-black text-red-600 leading-snug py-0.5 font-solaiman">{currentRenderStudent.blood_group || "-"}</span>
-                       </div>
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.father}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman">{(currentRenderStudent as any).father_name || currentRenderStudent.guardian_name || "-"}</span>
-                       </div>
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.mother}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-solaiman">{currentRenderStudent.mother_name || "-"}</span>
-                       </div>
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.phone}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[11px] font-extrabold text-slate-800 leading-snug py-0.5 font-solaiman tracking-wide">{currentRenderStudent.guardian_phone || currentRenderStudent.guardian_phone_2 || "-"}</span>
-                       </div>
-                       <div className="flex items-start">
-                          <span className="text-[10px] font-semibold text-slate-600 w-[75px] font-solaiman shrink-0 py-0.5 leading-snug">{t.address}</span>
-                          <span className="text-[10px] font-semibold text-slate-400 mr-2 shrink-0 py-0.5 leading-snug">:</span>
-                          <span className="text-[10px] font-extrabold text-slate-800 leading-tight py-0.5 line-clamp-2 max-w-[155px] font-solaiman break-words">{currentRenderStudent.address || (currentRenderStudent as any).permanent_address || "-"}</span>
-                       </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="w-full flex justify-end items-end mt-auto px-5 pb-2 relative z-10">
-                     {/* Signature */}
-                     <div className="flex items-end gap-2 text-center relative w-full h-[35px] max-w-[120px]">
-                        <div className="flex flex-col items-center w-[70px] ml-auto">
-                           <div className="flex items-end justify-center mb-[2px]" style={{ height: `${madrasah?.config_json?.signature_height ? madrasah.config_json.signature_height / 1.5 : 22}px` }}>
-                           {madrasah?.config_json?.signature_url ? (
-                              <img src={madrasah.config_json.signature_url} style={{ height: `${madrasah.config_json.signature_height ? madrasah.config_json.signature_height / 1.5 : 22}px` }} className="object-contain mix-blend-multiply" alt="Sig" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                           ) : (
-                              <img
-                                 src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgNDAiPjxwYXRoIGQ9Ik0xMCAzMGM1LTUgMTAtMTAgMTEtMTVzLTIgMTAtNSAxNWMyLTUgNS0xMCAxMC0xNCA1LTMgOC01IDEwLTJzLTEgNS0zIDEwYzIgMCA0LTIgNi0zIDItejIgNCAwLTUgOC01IDQgMyAyIDEwLTMgMTRjLTIgMi01IDUtOCAxLTItMy0xLTYgMi04cyA1LTIgNyAwbDEgM2MyLTIgMy01IDUtNyAyLTIgNCAwIDUtMnMyIDEwLTMgMTQtMSA0IDMgNSA2IDVjLTItNSA1LTIgNyAwczIgNiAwIDEwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0NzU1NjkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+"
-                                 className="w-[38px] opacity-70 mix-blend-multiply"
-                                 alt="Sig"
-                              />
-                           )}
-                           </div>
-                           <div className="w-full h-[1px] bg-white/50 mb-0.5" />
-                           <p className="text-[7px] font-bold text-white font-solaiman uppercase tracking-wider shadow-sm leading-snug py-0.5">
-                              {t.principal}
-                           </p>
-                        </div>
-                     </div>
-                  </div>
-              </div>
+                    </div>
+                 </div>
+             </div>
           </div>
 
           {/* BACK SIDE */}
@@ -837,7 +1181,9 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               width: "280px", 
               height: "448px",
               WebkitTextSizeAdjust: "100%",
-              textSizeAdjust: "100%"
+              textSizeAdjust: "100%",
+              borderRadius: "12px",
+              overflow: "hidden"
             }}
             ref={backCardRef}
           >
@@ -869,7 +1215,13 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
             {/* Back Header Content */}
             <div className="w-full pt-3 pb-0.5 px-3 text-center z-10 relative">
                <div className="flex items-center justify-center px-1">
-                  <h3 className={`font-bold font-solaiman w-full leading-snug py-0.5 ${nameLen > 65 ? 'text-[10.5px]' : nameLen > 45 ? 'text-[12px]' : nameLen > 30 ? 'text-[14px]' : nameLen > 20 ? 'text-[15.5px]' : 'text-[17px]'}`} style={{ color: themeColor }}>
+                  <h3 
+                    className="font-bold font-solaiman w-full leading-snug py-0.5" 
+                    style={{ 
+                      color: themeColor,
+                      fontSize: `${Math.max(11, (designSettings.instNameSize || 16) - 1)}px`
+                    }}
+                  >
                     {madrasah?.name || instName}
                   </h3>
                </div>
@@ -894,22 +1246,24 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                 </ul>
               </div>
 
-              {/* QR Code Segment - Enlarged */}
-              <div className="my-1 flex flex-col items-center w-full">
-                <div className="p-1.5 bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-100 inline-block mb-1">
-                  <QRCode
-                    value={madrasah ? `Name: ${madrasah.name}\nAddress: ${madrasah.address || ''}\nMobile: ${madrasah.phone || ''}\nStudent: ${currentRenderStudent.student_name} (${currentRenderStudent.registration_number || currentRenderStudent.roll || ''})` : `ID:${currentRenderStudent.id}`}
-                    size={60}
-                  />
+              {/* QR Code Segment */}
+              {designSettings.showQrCode !== false && (
+                <div className="my-1 flex flex-col items-center w-full">
+                  <div className="p-1.5 bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-100 inline-block mb-1">
+                    <QRCode
+                      value={madrasah ? `Name: ${madrasah.name}\nAddress: ${madrasah.address || ''}\nMobile: ${madrasah.phone || ''}\nStudent: ${currentRenderStudent.student_name} (${currentRenderStudent.registration_number || currentRenderStudent.roll || ''})` : `ID:${currentRenderStudent.id}`}
+                      size={designSettings.qrSize || 60}
+                    />
+                  </div>
+                  <p className="text-[8px] font-bold tracking-widest text-slate-500 font-solaiman">
+                    {currentRenderStudent.registration_number ||
+                      currentRenderStudent.roll ||
+                      currentRenderStudent.id.substring(0, 8)}
+                  </p>
                 </div>
-                <p className="text-[8px] font-bold tracking-widest text-slate-500 font-solaiman">
-                  {currentRenderStudent.registration_number ||
-                    currentRenderStudent.roll ||
-                    currentRenderStudent.id.substring(0, 8)}
-                </p>
-              </div>
+              )}
 
-              {/* Emergency Contact - Slightly raised with balanced margins */}
+              {/* Emergency Contact */}
               <div className="mt-1.5 mb-2 w-full bg-slate-50 border border-slate-100/80 rounded-lg p-2 shadow-sm">
                 <div
                   className="inline-block px-2 py-0.5 rounded text-white text-[8px] font-bold font-solaiman mb-1 leading-snug"
@@ -961,65 +1315,35 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
                     >
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     </svg>
-                    <span className="leading-tight flex-1 font-solaiman line-clamp-2 py-0.5 text-[7.5px]">
-                      {madrasah?.address || "Institution Address Here"}
+                    <span className="font-medium leading-tight">
+                      {madrasah?.address || "ঢাকা, বাংলাদেশ"}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5 pt-1 border-t border-slate-200/70">
-                    <span className="text-[7.5px] font-bold text-slate-500 font-solaiman uppercase tracking-wider leading-snug py-0.5">{t.issueDate}</span>
-                    <span className="text-[7.5px] font-bold text-slate-800 font-solaiman leading-snug py-0.5">: {new Date().toLocaleDateString('en-GB')}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Bottom Curve Design */}
-            <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[60px]">
-               <svg 
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 280 60" 
-                preserveAspectRatio="none" 
-                className="w-full h-full"
-               >
-                   <path d="M0,60 L280,60 L280,30 C180,0 100,50 0,20 Z" fill={themeColor} opacity={0.12}></path>
-                   <path d="M0,60 L280,60 L280,20 C180,-10 100,40 0,10 Z" fill={themeColor} opacity={0.08}></path>
-               </svg>
-            </div>
-
-            {/* Bottom Motto Styled */}
-            <div className="w-full pb-2 pt-0.5 text-center z-10 relative mt-auto px-4">
-               <div className="px-3.5 py-0.5 rounded-lg inline-block mx-auto shadow-sm border border-white/50" style={{ backgroundColor: themeColor }}>
-                  <p className="text-[8px] font-bold text-white font-solaiman tracking-wide uppercase leading-snug py-0.5">
-                    {t.motto}
-                  </p>
-               </div>
+            {/* Backside Bottom Motto */}
+            <div className="w-full py-1 text-center bg-slate-100 border-t border-slate-200 mt-auto z-10 relative">
+              <p className="text-[7.5px] font-bold text-slate-500 uppercase tracking-widest font-solaiman">
+                {designSettings.mottoText || t.motto}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* CSS for print mode */}
-      <style>{`
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            .print-area, .print-area * {
-                visibility: visible;
-            }
-            .print-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                display: flex;
-                flex-direction: row !important;
-                gap: 20px !important;
-                align-items: flex-start;
-                justify-content: flex-start;
-            }
-        }
-      `}</style>
+      {/* ID Card Design Customization Modal */}
+      <IdCardDesignModal
+        isOpen={isDesignModalOpen}
+        onClose={() => setIsDesignModalOpen(false)}
+        settings={designSettings}
+        onUpdate={handleUpdateDesign}
+        onSaveToCloud={handleSaveToCloud}
+        isSavingCloud={isSavingCloud}
+        lang={lang}
+        cardType="student"
+      />
     </div>
   );
 };
