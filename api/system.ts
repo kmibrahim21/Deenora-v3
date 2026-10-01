@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Buffer } from 'node:buffer';
-import nodemailer from 'nodemailer';
 
 function upsample8kTo16k(wavBuffer: Buffer): Buffer {
   if (wavBuffer.length < 44) return wavBuffer;
@@ -83,68 +82,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         port: process.env.PORT
       }
     });
-  }
-
-  if (pathname.includes('/email-backup')) {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
-
-    const { email, institutionName, backupData } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email address is required' });
-    }
-    if (!backupData) {
-      return res.status(400).json({ error: 'Backup data is required' });
-    }
-
-    try {
-      const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-      const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
-      const smtpUser = process.env.SMTP_USER;
-      const smtpPass = process.env.SMTP_PASS;
-      const smtpFrom = process.env.SMTP_FROM || `"Deenora Backup System" <${smtpUser || 'no-reply@deenora.com'}>`;
-
-      if (!smtpUser || !smtpPass) {
-        return res.status(400).json({
-          error: 'SMTP credentials (SMTP_USER/SMTP_PASS) are not configured in environment (.env). Please configure them to support automatic email backups.'
-        });
-      }
-
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass
-        }
-      });
-
-      const backupStr = JSON.stringify(backupData, null, 2);
-      const fileName = `deenora_backup_${(institutionName || 'institution').replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.json`;
-
-      const mailOptions = {
-        from: smtpFrom,
-        to: email,
-        subject: `Deenora Auto Backup: ${institutionName || 'Institution'} - ${new Date().toLocaleDateString()}`,
-        text: `আসসালামু আলাইকুম,\n\nআপনার প্রতিষ্ঠান "${institutionName || 'মাদরাসা'}" এর সম্পূর্ণ ডাটাবেস ব্যাকআপ সফলভাবে প্রসেস করে সংযুক্ত করা হয়েছে।\n\n📅 ব্যাকআপের তারিখ: ${new Date().toLocaleString()}\n📊 ফাইল ফরম্যাট: JSON Full Archive\n\nভবিষ্যতে রিস্টোর করার জন্য এই ইমেইলে সংযুক্ত .json ফাইলটি ডাউনলোড করে আপনার ডাটা ম্যানেজমেন্ট প্যানেলে আপলোড করুন।\n\nধন্যবাদ,\nডীনোরা ইসলামিক ম্যানেজমেন্ট সিস্টেম`,
-        attachments: [
-          {
-            filename: fileName,
-            content: backupStr,
-            contentType: 'application/json'
-          }
-        ]
-      };
-
-      await transporter.sendMail(mailOptions);
-      return res.status(200).json({ success: true, message: 'Backup email sent successfully!' });
-    } catch (err: any) {
-      console.error('Email backup error:', err);
-      return res.status(500).json({ error: err.message || 'Failed to send backup email.' });
-    }
   }
 
   if (pathname.includes('/proxy-audio')) {
