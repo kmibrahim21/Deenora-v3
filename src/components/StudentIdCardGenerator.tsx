@@ -744,6 +744,91 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
     );
   };
 
+  // Helper to render back header decoration dynamically matching selected layout style
+  const renderBackHeaderDecoration = () => {
+    const style = designSettings.layoutStyle;
+    if (style === 'minimal_clean') {
+      return (
+        <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[65px]" style={{ backgroundColor: `${themeColor}12` }}>
+          <div className="absolute top-0 left-0 w-full h-[4px]" style={{ backgroundColor: themeColor }} />
+          <div className="absolute bottom-0 left-0 w-full h-[1px] border-b border-dashed" style={{ borderColor: `${themeColor}40` }} />
+        </div>
+      );
+    }
+    if (style === 'royal_arch') {
+      return (
+        <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[75px]">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 75" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,0 L280,0 L280,45 Q140,75 0,45 Z" fill={themeColor} opacity={0.16}></path>
+            <path d="M0,45 Q140,75 280,45 L280,48 Q140,78 0,48 Z" fill="#F59E0B" opacity="0.8"></path>
+            <path d="M0,52 Q140,82 280,52 L280,53 Q140,83 0,53 Z" fill={themeColor} opacity={0.3}></path>
+          </svg>
+        </div>
+      );
+    }
+    if (style === 'bold_banner') {
+      return (
+        <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[70px]">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 70" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,0 L280,0 L280,55 L140,42 L0,55 Z" fill={themeColor} opacity={0.16}></path>
+            <path d="M0,55 L140,42 L280,55 L280,59 L140,46 L0,59 Z" fill={themeColor} opacity={0.45}></path>
+          </svg>
+        </div>
+      );
+    }
+    // Default: modern_wave
+    return (
+      <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[80px]">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" preserveAspectRatio="none" className="w-full h-full">
+          <path d="M0,0 L280,0 L280,50 C180,80 100,20 0,70 Z" fill={themeColor} opacity={0.15}></path>
+          <path d="M0,0 L280,0 L280,40 C180,70 100,10 0,60 Z" fill={themeColor} opacity={0.10}></path>
+          <path d="M0,70 C100,20 180,80 280,50 L280,53 C180,83 100,23 0,73 Z" fill={themeColor} opacity={0.35}></path>
+        </svg>
+      </div>
+    );
+  };
+
+  // Helper to render back footer decoration dynamically matching selected layout style
+  const renderBackFooterDecoration = () => {
+    const style = designSettings.layoutStyle;
+    if (style === 'minimal_clean') {
+      return (
+        <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[18px] pointer-events-none" style={{ backgroundColor: `${themeColor}12` }}>
+          <div className="absolute top-0 left-0 w-full h-[2px]" style={{ backgroundColor: themeColor }} />
+        </div>
+      );
+    }
+    if (style === 'royal_arch') {
+      return (
+        <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[45px] pointer-events-none">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 45" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,45 L280,45 L280,15 Q140,0 0,15 Z" fill={themeColor} opacity={0.14}></path>
+            <path d="M0,15 Q140,0 280,15 L280,17 Q140,2 0,17 Z" fill="#F59E0B" opacity="0.75"></path>
+          </svg>
+        </div>
+      );
+    }
+    if (style === 'bold_banner') {
+      return (
+        <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[38px] pointer-events-none">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 38" preserveAspectRatio="none" className="w-full h-full">
+            <path d="M0,38 L280,38 L280,10 L140,18 L0,10 Z" fill={themeColor} opacity={0.14}></path>
+            <path d="M0,10 L140,18 L280,10 L280,12 L140,20 L0,12 Z" fill={themeColor} opacity={0.4}></path>
+          </svg>
+        </div>
+      );
+    }
+    // Default: modern_wave
+    return (
+      <div className="absolute bottom-0 left-0 w-full shrink-0 z-0 h-[45px] pointer-events-none">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 45" preserveAspectRatio="none" className="w-full h-full">
+          <path d="M0,45 L280,45 L280,25 C180,5 100,35 0,15 Z" fill={themeColor} opacity={0.12}></path>
+          <path d="M0,15 C100,35 180,5 280,25 L280,28 C180,8 100,38 0,18 Z" fill={themeColor} opacity={0.3}></path>
+        </svg>
+      </div>
+    );
+  };
+
   return (
     <div className={`flex flex-col rounded-2xl sm:rounded-3xl border shadow-sm overflow-hidden ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"}`}>
       {/* Header Controls */}
@@ -1199,18 +1284,11 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               </div>
             )}
 
-            {/* Back Header - Elegant Curve */}
-            <div className="absolute top-0 left-0 w-full shrink-0 z-0 h-[80px]">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 280 80"
-                  preserveAspectRatio="none"
-                  className="w-full h-full"
-                >
-                  <path d="M0,0 L280,0 L280,50 C180,80 100,20 0,70 Z" fill={themeColor} opacity={0.15}></path>
-                  <path d="M0,0 L280,0 L280,40 C180,70 100,10 0,60 Z" fill={themeColor} opacity={0.10}></path>
-                </svg>
-            </div>
+            {/* Back Header - Dynamic Vector matching layout style */}
+            {renderBackHeaderDecoration()}
+
+            {/* Back Footer - Dynamic Vector matching layout style */}
+            {renderBackFooterDecoration()}
 
             {/* Back Header Content */}
             <div className="w-full pt-3 pb-0.5 px-3 text-center z-10 relative">
