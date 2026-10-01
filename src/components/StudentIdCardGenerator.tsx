@@ -178,6 +178,18 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               margin: 0 !important;
               box-shadow: none !important;
             }
+            .photo-frame {
+              border-radius: 12px !important;
+              overflow: hidden !important;
+              -webkit-mask-image: -webkit-radial-gradient(white, black) !important;
+              clip-path: inset(0 round 12px) !important;
+              isolation: isolate !important;
+            }
+            .photo-frame img {
+              border-radius: 10px !important;
+              object-fit: cover !important;
+              display: block !important;
+            }
           </style>
         </head>
         <body>
@@ -363,6 +375,18 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
               display: flex !important;
               margin: 0 !important;
               box-shadow: none !important;
+            }
+            .photo-frame {
+              border-radius: 12px !important;
+              overflow: hidden !important;
+              -webkit-mask-image: -webkit-radial-gradient(white, black) !important;
+              clip-path: inset(0 round 12px) !important;
+              isolation: isolate !important;
+            }
+            .photo-frame img {
+              border-radius: 10px !important;
+              object-fit: cover !important;
+              display: block !important;
             }
           </style>
         </head>
@@ -688,9 +712,29 @@ const StudentIdCardGenerator: React.FC<StudentIdCardGeneratorProps> = ({
 
                   {/* Photo & Title Section */}
                   <div className="flex flex-col items-center mt-1 w-full relative z-10 px-5">
-                      <div className="w-[75px] h-[85px] bg-white border-[2px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                      <div 
+                        className="w-[75px] h-[85px] bg-white border-[2px] border-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl overflow-hidden flex items-center justify-center shrink-0 photo-frame"
+                        style={{
+                          borderRadius: '12px',
+                          overflow: 'hidden',
+                          WebkitMaskImage: '-webkit-radial-gradient(white, black)',
+                          clipPath: 'inset(0 round 12px)',
+                          isolation: 'isolate'
+                        }}
+                      >
                          {(isPhotoModuleEnabled && currentRenderStudent.photo_url) ? (
-                             <img src={currentRenderStudent.photo_url} alt="Photo" className="w-full h-full object-cover" crossOrigin="anonymous"onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                             <img 
+                               src={currentRenderStudent.photo_url} 
+                               alt="Photo" 
+                               className="w-full h-full object-cover rounded-[10px]" 
+                               style={{
+                                 borderRadius: '10px',
+                                 objectFit: 'cover',
+                                 display: 'block'
+                               }}
+                               crossOrigin="anonymous"
+                               onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                             />
                          ) : (
                              <svg className="text-slate-200 w-[36px] h-[36px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                          )}
