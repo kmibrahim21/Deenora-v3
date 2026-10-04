@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="bn" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Deenora AI — শিক্ষা প্রতিষ্ঠান অ্যাডমিন সহকারী</title>
+
+  <!-- Google Fonts: Hind Siliguri & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            bengali: ['"Hind Siliguri"', 'sans-serif'],
+            sans: ['"Inter"', '"Hind Siliguri"', 'sans-serif'],
+          },
+          colors: {
+            deepnavy: '#0A0F1E',
+            navycard: '#111827',
+            brandlime: '#A3E635',
+            brandamber: '#FBBF24',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg-dark: #0A0F1E;
+      --card-radius: 16px;
+    }
+    body {
+      font-family: 'Hind Siliguri', 'Inter', sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Subtle background grid & radial mesh */
+    .dark .mesh-bg {
+      background-color: #0A0F1E;
+      background-image: 
+        radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+        radial-gradient(at 85% 85%, rgba(34, 211, 238, 0.08) 0px, transparent 50%),
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+    }
+    .light .mesh-bg {
+      background-color: #F8FAFC;
+      background-image: 
+        radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 85% 85%, rgba(34, 211, 238, 0.05) 0px, transparent 50%),
+        linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+    }
+
+    /* Glassmorphism Classes */
+    .glass-panel {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .dark .glass-panel {
+      background: rgba(17, 24, 39, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .light .glass-panel {
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    /* Message entrance animation */
+    @keyframes slideUpFade {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .msg-animate {
+      animation: slideUpFade 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* ----------------------------------------------------
+       ANIMATED LOGO: DEENORA SPARK (PURE CSS KEYFRAMES)
+       ---------------------------------------------------- */
+    .spark-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .spark-ring-1 {
+      animation: spinClockwise 12s linear infinite;
+      transform-origin: center;
+    }
+    .spark-ring-2 {
+      animation: spinCounterClockwise 18s linear infinite;
+      transform-origin: center;
+    }
+    .spark-core {
+      animation: coreGlowPulse 2.4s ease-in-out infinite;
+      transform-origin: center;
+    }
+    .spark-particle-1 {
+      animation: driftFloat 3.2s ease-in-out infinite;
+    }
+    .spark-particle-2 {
+      animation: driftFloat 2.7s ease-in-out 0.8s infinite;
+    }
+    .spark-particle-3 {
+      animation: driftFloat 3.6s ease-in-out 1.5s infinite;
+    }
+
+    /* .thinking state: 3x faster spinning + core brightening */
+    .spark-container.thinking .spark-ring-1 {
+      animation-duration: 3s !important;
+    }
+    .spark-container.thinking .spark-ring-2 {
+      animation-duration: 4.5s !important;
+    }
+    .spark-container.thinking .spark-core {
+      animation: coreThinkingPulse 0.8s ease-in-out infinite !important;
+      filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.95)) brightness(1.3);
+    }
+
+    @keyframes spinClockwise {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes spinCounterClockwise {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(-360deg); }
+    }
+    @keyframes coreGlowPulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.6)); }
+      50% { transform: scale(1.08); filter: drop-shadow(0 0 14px rgba(34, 211, 238, 0.85)); }
+    }
+    @keyframes coreThinkingPulse {
+      0%, 100% { transform: scale(0.96); filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.8)); }
+      50% { transform: scale(1.16); filter: drop-shadow(0 0 22px rgba(34, 211, 238, 1)); }
+    }
+    @keyframes driftFloat {
+      0% { transform: translateY(0px) scale(0.8); opacity: 0.2; }
+      50% { transform: translateY(-6px) scale(1.2); opacity: 0.9; }
+      100% { transform: translateY(-12px) scale(0.6); opacity: 0; }
+    }
+
+    /* Shimmer effect for working tools */
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .animate-shimmer {
+      background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.03) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 2s infinite linear;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.5); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .msg-animate, .spark-ring-1, .spark-ring-2, .spark-core, .spark-particle-1, .spark-particle-2, .spark-particle-3 {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="h-[100dvh] w-screen overflow-hidden mesh-bg transition-colors duration-200">
+  <div id="app" class="h-full w-full flex overflow-hidden">
+    
+    <!-- ========================================================
+         MOBILE BACKDROP OVERLAY
+         ======================================================== -->
+    <div id="mobileOverlay" onclick="toggleSidebar(false)" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 hidden md:hidden transition-opacity duration-200"></div>
+
+    <!-- ========================================================
+         1. SIDEBAR (280px, COLLAPSIBLE / DRAWER ON MOBILE)
+         ======================================================== -->
+    <aside id="sidebar" class="fixed md:static inset-y-0 left-0 z-50 w-[280px] h-full flex flex-col glass-panel shrink-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out border-r">
+      
+      <!-- Top Brand Header -->
+      <div class="p-4 border-b border-white/5 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <!-- Spark Logo 32px -->
+          <div class="w-8 h-8 spark-container" id="sidebarLogoContainer"></div>
+          <div>
+            <h1 class="font-extrabold text-base tracking-tight text-slate-100 dark:text-slate-100 font-sans flex items-center gap-1.5">
+              <span>Deenora</span>
+              <span class="text-xs px-1.5 py-0.5 rounded-md font-black bg-gradient-to-r from-indigo-500 to-cyan-400 text-white shadow-xs">AI</span>
+            </h1>
+            <p class="text-[10px] text-slate-400 font-bengali">অ্যাডমিন সহকারী</p>
+          </div>
+        </div>
+
+        <button onclick="toggleSidebar(false)" class="md:hidden p-1.5 text-slate-400 hover:text-slate-200 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Action: New Chat Button -->
+      <div class="p-3">
+        <button onclick="createNewChat()" class="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-xs font-bengali flex items-center justify-between shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all cursor-pointer">
+          <div class="flex items-center gap-2">
+            <span class="text-base leading-none">＋</span>
+            <span>নতুন চ্যাট শুরু করুন</span>
+          </div>
+          <span class="text-[10px] opacity-70 font-mono px-1.5 py-0.5 bg-black/20 rounded">Ctrl+K</span>
+        </button>
+      </div>
+
+      <!-- Search Box -->
+      <div class="px-3 pb-2">
+        <div class="relative">
+          <input 
+            type="text" 
+            id="chatSearchInput" 
+            oninput="handleSearchHistory(this.value)" 
+            placeholder="আগের আলাপ খুঁজুন..." 
+            class="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-black/20 dark:bg-black/40 border border-white/5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-bengali"
+          />
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </div>
+      </div>
+
+      <!-- History List (আজ / গতকাল / আগে) -->
+      <div id="historyListContainer" class="flex-1 overflow-y-auto px-3 py-1 space-y-3">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <!-- Bottom Profile & Settings Card -->
+      <div class="p-3 border-t border-white/5 bg-black/20 dark:bg-black/30">
+        <div class="p-2.5 rounded-xl border border-white/5 bg-white/5 flex items-center justify-between">
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600/30 text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+              🏛️
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-bold text-slate-200 truncate font-bengali" id="instituteDisplayName">মাদ্রাসা / শিক্ষা প্রতিষ্ঠান</p>
+              <div class="flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-[10px] text-slate-400 font-bengali" id="quotaStatusText">ফ্রি মোড সক্রিয়</span>
+              </div>
+            </div>
+          </div>
+
+          <button onclick="openSettingsModal()" class="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors cursor-pointer" title="সেটিংস">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+
+    <!-- ========================================================
+         2. MAIN CHAT AREA
+         ======================================================== -->
+    <main class="flex-1 h-full flex flex-col overflow-hidden relative">
+      
+      <!-- Top Header Bar -->
+      <header class="h-14 px-4 border-b border-white/5 glass-panel flex items-center justify-between shrink-0 z-10">
+        <div class="flex items-center gap-3">
+          <!-- Mobile Sidebar Toggle -->
+          <button onclick="toggleSidebar(true)" class="md:hidden p-1.5 -ml-1 text-slate-400 hover:text-slate-200 rounded-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+
+          <!-- Chat Header Logo 28px -->
+          <div class="w-7 h-7 spark-container" id="headerLogoContainer"></div>
+
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-sm text-slate-100 font-sans">Deenora AI</span>
+            
+            <!-- Online status dot -->
+            <span class="flex items-center gap-1 text-[11px] font-bengali text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>অনলাইন</span>
+            </span>
+
+            <!-- Flash Model Badge -->
+            <span class="hidden sm:inline-flex text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+              ⚡ Gemini Flash
+            </span>
+          </div>
+        </div>
+
+        <!-- Right Controls: Theme Toggle & Settings Shortcut -->
+        <div class="flex items-center gap-1.5">
+          <!-- Theme toggle -->
+          <button onclick="toggleTheme()" class="p-2 text-slate-400 hover:text-slate-200 rounded-xl hover:bg-white/5 transition-colors cursor-pointer" title="থিম পরিবর্তন">
+            <svg id="themeIconDark" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            <svg id="themeIconLight" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+          </button>
+
+          <!-- Settings button -->
+          <button onclick="openSettingsModal()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bengali transition-colors cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+            <span class="hidden sm:inline">API Key</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Quota Exceeded Banner (Hidden by default) -->
+      <div id="quotaBanner" class="hidden px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs flex items-center justify-between font-bengali">
+        <div class="flex items-center gap-2">
+          <span>⚠️</span>
+          <span>আজকের ফ্রি লিমিট শেষ হয়েছে। Settings-এ নিজের API key বসিয়ে আনলিমিটেড ব্যবহার করুন।</span>
+        </div>
+        <button onclick="openSettingsModal()" class="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg text-xs transition-colors shrink-0">
+          Settings এ যান →
+        </button>
+      </div>
+
+      <!-- Messages Thread Scroll View -->
+      <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+        <!-- Welcome Hero (shown when no messages) -->
+        <div id="welcomeHero" class="max-w-xl mx-auto my-auto py-8 text-center flex flex-col items-center justify-center">
+          <!-- Big 120px Hero Logo -->
+          <div class="w-28 h-28 sm:w-32 sm:h-32 spark-container mb-6" id="heroLogoContainer"></div>
+
+          <h2 class="text-2xl sm:text-3xl font-black text-slate-100 font-bengali tracking-tight">
+            Deenora AI-তে স্বাগতম
+          </h2>
+          <p class="text-slate-400 text-sm sm:text-base font-bengali max-w-md mt-2 leading-relaxed">
+            ছাত্র, ফি, হাজিরা, পরীক্ষা, নোটিশ — বাংলায় কমান্ড দাও, বাকিটা আমি সামলাচ্ছি।
+          </p>
+
+          <!-- Suggestion Chips Grid -->
+          <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-md text-left font-bengali">
+            <button onclick="sendSuggestion('আজকের ফি কালেকশন কত?')" class="p-3 rounded-xl border border-white/5 bg-white/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center gap-2.5 group">
+              <span class="text-base group-hover:scale-110 transition-transform">💰</span>
+              <span>আজকের ফি কালেকশন কত?</span>
+            </button>
+            <button onclick="sendSuggestion('নতুন ছাত্র ভর্তি করো')" class="p-3 rounded-xl border border-white/5 bg-white/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center gap-2.5 group">
+              <span class="text-base group-hover:scale-110 transition-transform">📝</span>
+              <span>নতুন ছাত্র ভর্তি করো</span>
+            </button>
+            <button onclick="sendSuggestion('আগামীকালের নোটিশ দাও')" class="p-3 rounded-xl border border-white/5 bg-white/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center gap-2.5 group">
+              <span class="text-base group-hover:scale-110 transition-transform">📢</span>
+              <span>আগামীকালের নোটিশ দাও</span>
+            </button>
+            <button onclick="sendSuggestion('দশম শ্রেণির হাজিরা দেখাও')" class="p-3 rounded-xl border border-white/5 bg-white/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center gap-2.5 group">
+              <span class="text-base group-hover:scale-110 transition-transform">📊</span>
+              <span>দশম শ্রেণির হাজিরা দেখাও</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Message Elements Appended Here -->
+      </div>
+
+      <!-- Typing Indicator Row -->
+      <div id="typingIndicator" class="hidden px-6 py-2 flex items-center gap-3">
+        <div class="w-7 h-7 spark-container thinking" id="typingLogoContainer"></div>
+        <div class="px-4 py-2.5 rounded-2xl rounded-tl-xs glass-panel text-slate-400 text-xs flex items-center gap-2 font-bengali">
+          <span>AI চিন্তা করছে</span>
+          <span class="flex gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style="animation-delay: 0.15s"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style="animation-delay: 0.3s"></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Sticky Input Bar -->
+      <div class="p-3 sm:p-4 border-t border-white/5 glass-panel shrink-0">
+        <div class="max-w-3xl mx-auto">
+          <form id="chatForm" onsubmit="handleFormSubmit(event)" class="relative flex items-center gap-2 bg-black/30 dark:bg-black/40 border border-white/10 rounded-full p-1.5 pl-4 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+            
+            <!-- Visual Mic button (TODO preview) -->
+            <button type="button" onclick="handleMicClick()" class="p-2 text-slate-400 hover:text-slate-200 rounded-full hover:bg-white/5 transition-colors cursor-pointer" title="ভয়েস ইনপুট (শীঘ্রই আসছে)">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+            </button>
+
+            <!-- Auto-grow Input -->
+            <input 
+              type="text" 
+              id="messageInput" 
+              placeholder="কিছু জিজ্ঞেস করো বা কমান্ড দাও…" 
+              autocomplete="off"
+              class="flex-1 bg-transparent border-none text-slate-200 placeholder-slate-500 text-xs sm:text-sm font-bengali focus:outline-none"
+            />
+
+            <!-- Send Button -->
+            <button 
+              type="submit" 
+              id="sendBtn"
+              class="w-9 h-9 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer shrink-0 disabled:opacity-40"
+            >
+              <svg class="w-4 h-4 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+            </button>
+          </form>
+
+          <p class="text-center text-[10px] text-slate-500 font-bengali mt-2">
+            Deenora AI ভুল তথ্য দিতে পারে। গুরুত্বপূর্ণ সিদ্ধান্ত নিজ দায়িত্বে যাচাই করুন।
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- ========================================================
+         3. SETTINGS MODAL (BYOK & STATUS)
+         ======================================================== -->
+    <div id="settingsModal" class="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+      <div class="w-full max-w-md rounded-2xl glass-panel p-6 border border-white/10 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+        
+        <div class="flex items-center justify-between pb-4 border-b border-white/5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+              🔑
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-slate-100 font-bengali">AI Agent API Key সেটিংস</h3>
+              <p class="text-[11px] text-slate-400 font-bengali">BYOK আনলিমিটেড মোড</p>
+            </div>
+          </div>
+          <button onclick="closeSettingsModal()" class="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Quota / Key Status Card -->
+        <div class="my-4 p-4 rounded-xl bg-black/30 border border-white/5 space-y-2.5">
+          <div class="flex items-center justify-between text-xs font-bengali">
+            <span class="text-slate-400">বর্তমান অবস্থা:</span>
+            <span id="modalModeBadge" class="px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">ফ্রি মোড</span>
+          </div>
+
+          <div id="savedKeyRow" class="hidden pt-2 border-t border-white/5 flex items-center justify-between">
+            <div>
+              <span class="text-[11px] text-slate-400 font-bengali">সংরক্ষিত Key:</span>
+              <p class="font-mono text-xs text-indigo-300" id="modalMaskedKey">AIzaSy...xxxx</p>
+            </div>
+            <button onclick="deleteCustomKey()" class="p-2 text-red-400 hover:bg-red-500/10 rounded-lg text-xs font-bengali transition-colors cursor-pointer" title="মুছে ফেলুন">
+              🗑️ মুছুন
+            </button>
+          </div>
+
+          <div id="sharedUsageRow" class="pt-2 border-t border-white/5">
+            <div class="flex justify-between text-xs font-bengali text-slate-400 mb-1">
+              <span>আজকের ফ্রি ব্যবহার:</span>
+              <span id="modalUsageCounter" class="font-mono text-indigo-400">0 / 50</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div id="modalUsageProgress" class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Input Form -->
+        <form onsubmit="saveCustomKey(event)" class="space-y-3 font-bengali">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">নিজের API Key (ঐচ্ছিক):</label>
+            <div class="relative">
+              <input 
+                type="password" 
+                id="apiKeyInput" 
+                placeholder="AIzaSy..." 
+                class="w-full pl-3 pr-10 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              <button type="button" onclick="toggleKeyVisibility()" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 text-xs">
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <div id="keyFeedback" class="hidden p-2 rounded-lg text-xs font-bengali"></div>
+
+          <button 
+            type="submit" 
+            id="saveKeyBtn" 
+            class="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+          >
+            যাচাই ও সংরক্ষণ করুন
+          </button>
+        </form>
+
+        <!-- Google AI Studio Link Guide -->
+        <div class="mt-4 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 text-[11px] text-slate-400 font-bengali leading-relaxed">
+          💡 <a href="https://aistudio.google.com" target="_blank" class="text-indigo-400 underline font-bold">aistudio.google.com</a> থেকে সম্পূর্ণ ফ্রিতে আপনার নিজস্ব Gemini API Key তৈরি করে এখানে বসাতে পারেন।
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       APPLICATION LOGIC & API CONTRACT
+       ======================================================== -->
+  <script>
+    // 1. API CONTRACT BASE URL
+    const API_BASE_URL = ""; // Empty = same origin, e.g. https://deenora.vercel.app
+
+    // Application State
+    let currentChatId = 'chat_' + Date.now();
+    let currentHistory = [];
+    let isThinking = false;
+    let lastPendingConfirmation = null;
+
+    // SVG Generator for "Deenora Spark"
+    function generateSparkLogoSvg(size = 32) {
+      return `
+        <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="sparkOrbGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#22D3EE" />
+              <stop offset="50%" stop-color="#6366F1" />
+              <stop offset="100%" stop-color="#0F172A" />
+            </radialGradient>
+            <linearGradient id="ringGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.9" />
+              <stop offset="100%" stop-color="#6366F1" stop-opacity="0.1" />
+            </linearGradient>
+            <linearGradient id="ringGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#A3E635" stop-opacity="0.8" />
+              <stop offset="100%" stop-color="#6366F1" stop-opacity="0.1" />
+            </linearGradient>
+          </defs>
+          
+          <!-- Outer Particle Dots -->
+          <circle cx="50" cy="18" r="2.5" fill="#22D3EE" class="spark-particle-1" />
+          <circle cx="78" cy="45" r="2" fill="#A3E635" class="spark-particle-2" />
+          <circle cx="24" cy="65" r="1.8" fill="#6366F1" class="spark-particle-3" />
+
+          <!-- Orbit Ring 1 -->
+          <ellipse cx="50" cy="50" rx="42" ry="16" stroke="url(#ringGrad1)" stroke-width="1.8" fill="none" class="spark-ring-1" stroke-dasharray="18 8" />
+
+          <!-- Orbit Ring 2 (Counter) -->
+          <ellipse cx="50" cy="50" rx="40" ry="18" stroke="url(#ringGrad2)" stroke-width="1.5" fill="none" class="spark-ring-2" stroke-dasharray="24 10" transform="rotate(45 50 50)" />
+
+          <!-- Core Orb Glow -->
+          <circle cx="50" cy="50" r="22" fill="url(#sparkOrbGrad)" class="spark-core" />
+          <circle cx="45" cy="45" r="8" fill="#FFFFFF" opacity="0.4" filter="blur(3px)" />
+        </svg>
+      `;
+    }
+
+    // Initialize Logos
+    function initLogos() {
+      const sidebarLogo = document.getElementById('sidebarLogoContainer');
+      const headerLogo = document.getElementById('headerLogoContainer');
+      const heroLogo = document.getElementById('heroLogoContainer');
+      const typingLogo = document.getElementById('typingLogoContainer');
+
+      if (sidebarLogo) sidebarLogo.innerHTML = generateSparkLogoSvg(32);
+      if (headerLogo) headerLogo.innerHTML = generateSparkLogoSvg(28);
+      if (heroLogo) heroLogo.innerHTML = generateSparkLogoSvg(110);
+      if (typingLogo) typingLogo.innerHTML = generateSparkLogoSvg(28);
+    }
+
+    // Theme Management
+    function initTheme() {
+      const savedTheme = localStorage.getItem('deenora_theme') || 'dark';
+      applyTheme(savedTheme);
+    }
+    function applyTheme(theme) {
+      const html = document.documentElement;
+      const darkIcon = document.getElementById('themeIconDark');
+      const lightIcon = document.getElementById('themeIconLight');
+
+      if (theme === 'dark') {
+        html.classList.add('dark');
+        html.classList.remove('light');
+        if (darkIcon) darkIcon.classList.remove('hidden');
+        if (lightIcon) lightIcon.classList.add('hidden');
+      } else {
+        html.classList.add('light');
+        html.classList.remove('dark');
+        if (darkIcon) darkIcon.classList.add('hidden');
+        if (lightIcon) lightIcon.classList.remove('hidden');
+      }
+      localStorage.setItem('deenora_theme', theme);
+    }
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      applyTheme(isDark ? 'light' : 'dark');
+    }
+
+    // Sidebar Mobile Toggle
+    function toggleSidebar(show) {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('mobileOverlay');
+      if (show) {
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.remove('hidden');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      }
+    }
+
+    // Thinking State Controller
+    function setThinking(thinking) {
+      isThinking = thinking;
+      const typingInd = document.getElementById('typingIndicator');
+      const heroLogo = document.getElementById('heroLogoContainer');
+      const headerLogo = document.getElementById('headerLogoContainer');
+
+      if (thinking) {
+        typingInd.classList.remove('hidden');
+        if (heroLogo) heroLogo.classList.add('thinking');
+        if (headerLogo) headerLogo.classList.add('thinking');
+      } else {
+        typingInd.classList.add('hidden');
+        if (heroLogo) heroLogo.classList.remove('thinking');
+        if (headerLogo) headerLogo.classList.remove('thinking');
+      }
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      const container = document.getElementById('messagesContainer');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // ----------------------------------------------------
+    // CHAT MESSAGE RENDERING (COMPONENTS)
+    // ----------------------------------------------------
+
+    // User Message Bubble (Indigo gradient right)
+    function appendUserMessage(text) {
+      hideWelcomeHero();
+      const container = document.getElementById('messagesContainer');
+      const time = new Date().toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+
+      const div = document.createElement('div');
+      div.className = 'flex justify-end msg-animate';
+      div.innerHTML = `
+        <div class="max-w-[85%] sm:max-w-[70%] space-y-1">
+          <div class="p-3.5 sm:p-4 rounded-2xl rounded-tr-xs bg-gradient-to-r from-indigo-600 to-cyan-600 text-slate-100 text-sm font-bengali shadow-md">
+            ${escapeHtml(text)}
+          </div>
+          <div class="text-[10px] text-slate-500 text-right px-1 font-mono">${time}</div>
+        </div>
+      `;
+      container.appendChild(div);
+      scrollToBottom();
+
+      currentHistory.push({ role: 'user', text });
+      saveChatToStorage();
+    }
+
+    // AI Message Dispatcher
+    function renderAiResponse(payload) {
+      hideWelcomeHero();
+      const container = document.getElementById('messagesContainer');
+      const time = new Date().toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex items-start gap-3 msg-animate';
+
+      // Left Spark Logo Avatar (28px)
+      const avatarHtml = `<div class="w-7 h-7 spark-container shrink-0 mt-1">${generateSparkLogoSvg(28)}</div>`;
+
+      let innerContentHtml = '';
+
+      // Normalize shape
+      if (typeof payload === 'string') {
+        payload = { type: 'text', text: payload };
+      } else if (payload.reply && !payload.type) {
+        if (payload.confirmation_required) {
+          payload = {
+            type: 'confirmation',
+            summary: payload.reply,
+            call: payload.confirmation_call
+          };
+        } else {
+          payload = { type: 'text', text: payload.reply };
+        }
+      }
+
+      switch (payload.type) {
+        // Component 1: Normal text bubble
+        case 'text':
+          innerContentHtml = `
+            <div class="relative group p-4 rounded-2xl rounded-tl-xs glass-panel text-slate-200 text-sm font-bengali leading-relaxed border border-white/10 shadow-sm max-w-[90%] sm:max-w-[80%]">
+              <div class="whitespace-pre-wrap">${formatMarkdown(payload.text)}</div>
+              <button onclick="copyToClipboard(this, \`${escapeJsString(payload.text)}\`)" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 text-xs" title="কপি করুন">
+                📋
+              </button>
+            </div>
+          `;
+          currentHistory.push({ role: 'ai', text: payload.text });
+          break;
+
+        // Component 2: Tool Timeline card
+        case 'tool_timeline':
+          innerContentHtml = `
+            <div class="p-4 rounded-2xl rounded-tl-xs glass-panel border border-cyan-500/20 shadow-sm max-w-[90%] sm:max-w-[80%] w-full space-y-3 font-bengali">
+              <div class="flex items-center justify-between border-b border-white/5 pb-2">
+                <span class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                  লাইভ কার্যক্রম
+                </span>
+              </div>
+              <div class="space-y-2">
+                ${(payload.steps || []).map(st => `
+                  <div class="flex items-start gap-2.5 text-xs p-2 rounded-xl ${st.status === 'working' ? 'animate-shimmer border border-cyan-500/30' : 'bg-black/20'}">
+                    <span>${st.status === 'done' ? '✅' : '⏳'}</span>
+                    <div>
+                      <p class="font-bold text-slate-200">${escapeHtml(st.label)}</p>
+                      ${st.detail ? `<p class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(st.detail)}</p>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+          break;
+
+        // Component 3: Confirmation card (Amber border + Lime yes)
+        case 'confirmation':
+          lastPendingConfirmation = payload.call;
+          innerContentHtml = `
+            <div class="p-4 sm:p-5 rounded-2xl rounded-tl-xs glass-panel border-2 border-brandamber/60 bg-brandamber/5 shadow-lg max-w-[90%] sm:max-w-[80%] w-full space-y-3 font-bengali">
+              <div class="flex items-center gap-2 text-brandamber font-bold text-xs">
+                <span>⚠️</span>
+                <span>অ্যাকশন নিশ্চিতকরণ প্রয়োজন</span>
+              </div>
+              <p class="text-sm font-bold text-slate-100 whitespace-pre-wrap">${escapeHtml(payload.summary)}</p>
+              <div class="pt-2 flex items-center gap-2">
+                <button onclick="confirmAction()" class="flex-1 py-2.5 px-4 rounded-xl bg-brandlime hover:bg-lime-400 text-slate-950 font-black text-xs transition-transform active:scale-95 shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                  <span>✅ হ্যাঁ, করো</span>
+                </button>
+                <button onclick="cancelAction()" class="py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 font-bold text-xs transition-colors cursor-pointer">
+                  বাতিল
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+
+        // Component 4: Receipt-style Result Card
+        case 'result':
+          innerContentHtml = `
+            <div class="p-5 rounded-2xl rounded-tl-xs glass-panel border border-emerald-500/30 bg-emerald-500/5 shadow-xl max-w-[90%] sm:max-w-[80%] w-full space-y-3.5 font-bengali">
+              <div class="flex items-center justify-between border-b border-emerald-500/20 pb-2.5">
+                <h4 class="font-black text-base text-emerald-400">${escapeHtml(payload.title)}</h4>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">সফল</span>
+              </div>
+              ${payload.rows ? `
+                <div class="space-y-1.5 bg-black/20 p-3 rounded-xl border border-white/5">
+                  ${payload.rows.map(([k, v]) => `
+                    <div class="flex justify-between text-xs py-1 border-b border-white/5 last:border-0">
+                      <span class="text-slate-400">${escapeHtml(k)}</span>
+                      <span class="font-bold text-slate-200 font-mono">${escapeHtml(v)}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+              ${payload.text ? `<p class="text-xs text-slate-300">${formatMarkdown(payload.text)}</p>` : ''}
+            </div>
+          `;
+          currentHistory.push({ role: 'ai', text: `${payload.title}: ${payload.text || ''}` });
+          break;
+
+        // Component 5: Clarification card with tappable chips
+        case 'clarification':
+          innerContentHtml = `
+            <div class="p-4 rounded-2xl rounded-tl-xs glass-panel border border-indigo-500/30 shadow-md max-w-[90%] sm:max-w-[80%] w-full space-y-3 font-bengali">
+              <p class="text-sm font-bold text-slate-200">${escapeHtml(payload.question)}</p>
+              <div class="flex flex-wrap gap-2 pt-1">
+                ${(payload.options || []).map(opt => `
+                  <button onclick="sendSuggestion('${escapeJsString(opt.label)}')" class="px-3.5 py-2 rounded-full bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 text-xs font-bold text-indigo-300 hover:text-white transition-all cursor-pointer active:scale-95">
+                    ${escapeHtml(opt.label)}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          `;
+          break;
+
+        // Component 6: Error toast with retry
+        case 'error':
+          innerContentHtml = `
+            <div class="p-4 rounded-2xl rounded-tl-xs glass-panel border border-red-500/30 bg-red-500/5 text-red-300 text-xs max-w-[90%] sm:max-w-[80%] space-y-2 font-bengali">
+              <div class="flex items-center gap-2 font-bold">
+                <span>❌</span>
+                <span>ত্রুটি: ${escapeHtml(payload.message || 'একটি সমস্যা দেখা দিয়েছে।')}</span>
+              </div>
+              <button onclick="retryLastMessage()" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-xs font-bold transition-colors">
+                🔄 পুনরায় চেষ্টা করুন
+              </button>
+            </div>
+          `;
+          break;
+
+        // Component 7: Quota exceeded
+        case 'quota_exceeded':
+          document.getElementById('quotaBanner').classList.remove('hidden');
+          innerContentHtml = `
+            <div class="p-4 rounded-2xl rounded-tl-xs glass-panel border border-amber-500/40 bg-amber-500/10 text-amber-300 text-xs max-w-[90%] sm:max-w-[80%] space-y-2.5 font-bengali">
+              <p class="font-bold">⚠️ আজকের Free Limit শেষ হয়েছে।</p>
+              <p class="text-[11px] opacity-80">Settings-এ নিজের API key বসিয়ে unlimited ব্যবহার করুন।</p>
+              <button onclick="openSettingsModal()" class="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg font-bold">
+                সেটিংস খুলুন →
+              </button>
+            </div>
+          `;
+          break;
+      }
+
+      wrapper.innerHTML = `
+        ${avatarHtml}
+        <div class="flex-1 space-y-1">
+          ${innerContentHtml}
+          <div class="text-[10px] text-slate-500 px-1 font-mono">${time}</div>
+        </div>
+      `;
+
+      container.appendChild(wrapper);
+      scrollToBottom();
+      saveChatToStorage();
+    }
+
+    function hideWelcomeHero() {
+      const hero = document.getElementById('welcomeHero');
+      if (hero) hero.classList.add('hidden');
+    }
+
+    // ----------------------------------------------------
+    // SEND MESSAGE TO BACKEND API CONTRACT
+    // ----------------------------------------------------
+    async function sendMessage(text, confirmedCall = null) {
+      if (!text && !confirmedCall) return;
+
+      if (text) {
+        appendUserMessage(text);
+      }
+
+      setThinking(true);
+
+      const endpoint = `${API_BASE_URL}/api/agent/chat`;
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: text || '',
+            history: currentHistory.slice(-6),
+            confirmedCall: confirmedCall
+          })
+        });
+
+        // Check if streaming response or JSON
+        const contentType = response.headers.get('content-type') || '';
+
+        if (contentType.includes('text/event-stream') && response.body) {
+          // Streaming reader
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let streamText = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            streamText += chunk;
+          }
+          setThinking(false);
+          renderAiResponse({ type: 'text', text: streamText });
+
+        } else {
+          // Standard JSON payload
+          const data = await response.json();
+          setThinking(false);
+
+          if (response.status === 429 || data.error === 'QUOTA_EXCEEDED') {
+            renderAiResponse({ type: 'quota_exceeded', message: data.message });
+          } else {
+            renderAiResponse(data);
+          }
+        }
+
+      } catch (err) {
+        console.error('Agent chat error:', err);
+        setThinking(false);
+        renderAiResponse({
+          type: 'error',
+          message: 'সার্ভারে সংযোগে ব্যর্থ হয়েছে। অনুগ্রহ করে ইন্টারনেট সংযোগ চেক করুন।'
+        });
+      }
+    }
+
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      if (isThinking) return;
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      sendMessage(text);
+    }
+
+    function sendSuggestion(text) {
+      if (isThinking) return;
+      sendMessage(text);
+    }
+
+    function confirmAction() {
+      if (!lastPendingConfirmation) return;
+      const lastUserMsg = currentHistory.filter(m => m.role === 'user').slice(-1)[0]?.text || '';
+      sendMessage(lastUserMsg, lastPendingConfirmation);
+      lastPendingConfirmation = null;
+    }
+
+    function cancelAction() {
+      lastPendingConfirmation = null;
+      const container = document.getElementById('messagesContainer');
+      const div = document.createElement('div');
+      div.className = 'text-center my-2 text-xs text-slate-500 font-bengali';
+      div.innerHTML = `<span>— কাজটি বাতিল করা হয়েছে —</span>`;
+      container.appendChild(div);
+      scrollToBottom();
+    }
+
+    function retryLastMessage() {
+      const lastUserMsg = currentHistory.filter(m => m.role === 'user').slice(-1)[0]?.text;
+      if (lastUserMsg) {
+        sendMessage(lastUserMsg);
+      }
+    }
+
+    function handleMicClick() {
+      alert('ভয়েস ইনপুট ফিচারটি শীঘ্রই যুক্ত করা হচ্ছে!');
+    }
+
+    // ----------------------------------------------------
+    // SETTINGS & API KEY LOGIC
+    // ----------------------------------------------------
+    async function loadSettingsStatus() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/agent/settings/status`);
+        if (res.ok) {
+          const data = await res.json();
+          updateSettingsUi(data);
+        }
+      } catch (e) {
+        console.warn('Status fetch note:', e);
+      }
+    }
+
+    function updateSettingsUi(data) {
+      const badge = document.getElementById('modalModeBadge');
+      const savedKeyRow = document.getElementById('savedKeyRow');
+      const maskedKey = document.getElementById('modalMaskedKey');
+      const usageCounter = document.getElementById('modalUsageCounter');
+      const usageProgress = document.getElementById('modalUsageProgress');
+      const quotaStatusText = document.getElementById('quotaStatusText');
+
+      if (data.mode === 'byok' || data.has_custom_key) {
+        badge.innerText = 'BYOK আনলিমিটেড';
+        badge.className = 'px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        savedKeyRow.classList.remove('hidden');
+        maskedKey.innerText = data.masked_key || 'AIzaSy...****';
+        if (quotaStatusText) quotaStatusText.innerText = 'আনলিমিটেড সক্রিয়';
+      } else {
+        badge.innerText = 'শেয়ার্ড ফ্রি লিমিট';
+        badge.className = 'px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30';
+        savedKeyRow.classList.add('hidden');
+        const used = data.shared_usage?.today_used || 0;
+        const cap = data.shared_usage?.daily_cap || 50;
+        usageCounter.innerText = `${used} / ${cap}`;
+        usageProgress.style.width = `${Math.min(100, (used / cap) * 100)}%`;
+        if (quotaStatusText) quotaStatusText.innerText = `বাকি: ${cap - used}/${cap}`;
+      }
+    }
+
+    async function saveCustomKey(e) {
+      e.preventDefault();
+      const input = document.getElementById('apiKeyInput');
+      const key = input.value.trim();
+      if (!key) return;
+
+      const btn = document.getElementById('saveKeyBtn');
+      const feedback = document.getElementById('keyFeedback');
+      btn.disabled = true;
+      btn.innerText = 'যাচাই করা হচ্ছে...';
+      feedback.classList.add('hidden');
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/agent/settings/key`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: key })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          feedback.className = 'p-2 rounded-lg text-xs font-bengali bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          feedback.innerText = '✅ API Key সফলভাবে সংরক্ষিত হয়েছে!';
+          feedback.classList.remove('hidden');
+          input.value = '';
+          loadSettingsStatus();
+        } else {
+          feedback.className = 'p-2 rounded-lg text-xs font-bengali bg-red-500/20 text-red-300 border border-red-500/30';
+          feedback.innerText = `❌ ${data.error || 'Key টি সঠিক নয়।'}`;
+          feedback.classList.remove('hidden');
+        }
+      } catch (err) {
+        feedback.className = 'p-2 rounded-lg text-xs font-bengali bg-red-500/20 text-red-300 border border-red-500/30';
+        feedback.innerText = '❌ সার্ভারের সাথে সংযোগে সমস্যা হয়েছে।';
+        feedback.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'যাচাই ও সংরক্ষণ করুন';
+      }
+    }
+
+    async function deleteCustomKey() {
+      if (!confirm('আপনি কি নিজস্ব Key মুছে ফ্রি শেয়ার্ড মোডে ফিরতে চান?')) return;
+      try {
+        await fetch(`${API_BASE_URL}/api/agent/settings/key`, { method: 'DELETE' });
+        loadSettingsStatus();
+      } catch (e) {
+        console.error('Delete key error:', e);
+      }
+    }
+
+    function toggleKeyVisibility() {
+      const input = document.getElementById('apiKeyInput');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function openSettingsModal() {
+      document.getElementById('settingsModal').classList.remove('hidden');
+      document.getElementById('settingsModal').classList.add('flex');
+      loadSettingsStatus();
+    }
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').classList.add('hidden');
+      document.getElementById('settingsModal').classList.remove('flex');
+    }
+
+    // ----------------------------------------------------
+    // HISTORY PERSISTENCE (LOCAL STORAGE)
+    // ----------------------------------------------------
+    function getStoredChats() {
+      try {
+        return JSON.parse(localStorage.getItem('deenora_chat_sessions') || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function saveChatToStorage() {
+      if (currentHistory.length === 0) return;
+      const chats = getStoredChats();
+      const firstUserMsg = currentHistory.find(m => m.role === 'user')?.text || 'নতুন কথোপকথন';
+      const title = firstUserMsg.slice(0, 28) + (firstUserMsg.length > 28 ? '...' : '');
+
+      const existingIndex = chats.findIndex(c => c.id === currentChatId);
+      const sessionData = {
+        id: currentChatId,
+        title,
+        history: currentHistory,
+        timestamp: Date.now()
+      };
+
+      if (existingIndex >= 0) {
+        chats[existingIndex] = sessionData;
+      } else {
+        chats.unshift(sessionData);
+      }
+      localStorage.setItem('deenora_chat_sessions', JSON.stringify(chats.slice(0, 30)));
+      renderHistoryList();
+    }
+
+    function renderHistoryList(filterQuery = '') {
+      const container = document.getElementById('historyListContainer');
+      const chats = getStoredChats();
+      container.innerHTML = '';
+
+      if (chats.length === 0) {
+        container.innerHTML = `<p class="text-[11px] text-slate-500 text-center py-4 font-bengali">কোনো পূর্ববর্তী আলাপ নেই</p>`;
+        return;
+      }
+
+      const filtered = filterQuery 
+        ? chats.filter(c => c.title.toLowerCase().includes(filterQuery.toLowerCase()))
+        : chats;
+
+      const now = Date.now();
+      const oneDay = 24 * 60 * 60 * 1000;
+
+      const todayList = [];
+      const yesterdayList = [];
+      const olderList = [];
+
+      filtered.forEach(c => {
+        const diff = now - c.timestamp;
+        if (diff < oneDay) todayList.push(c);
+        else if (diff < 2 * oneDay) yesterdayList.push(c);
+        else olderList.push(c);
+      });
+
+      const appendGroup = (title, list) => {
+        if (list.length === 0) return;
+        const groupEl = document.createElement('div');
+        groupEl.className = 'space-y-1';
+        groupEl.innerHTML = `
+          <p class="text-[10px] font-black uppercase text-slate-500 px-2 pt-2 tracking-wider font-bengali">${title}</p>
+          ${list.map(c => `
+            <button onclick="loadChatSession('${c.id}')" class="w-full text-left px-2.5 py-2 rounded-lg text-xs font-bengali truncate text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 ${c.id === currentChatId ? 'bg-white/10 text-white font-bold' : ''}">
+              <span class="opacity-50">💬</span>
+              <span class="truncate">${escapeHtml(c.title)}</span>
+            </button>
+          `).join('')}
+        `;
+        container.appendChild(groupEl);
+      };
+
+      appendGroup('আজ', todayList);
+      appendGroup('গতকাল', yesterdayList);
+      appendGroup('পূর্বে', olderList);
+    }
+
+    function loadChatSession(id) {
+      const chats = getStoredChats();
+      const session = chats.find(c => c.id === id);
+      if (!session) return;
+
+      currentChatId = session.id;
+      currentHistory = [];
+      const container = document.getElementById('messagesContainer');
+      container.innerHTML = '';
+      hideWelcomeHero();
+
+      session.history.forEach(m => {
+        if (m.role === 'user') {
+          appendUserMessage(m.text);
+        } else {
+          renderAiResponse({ type: 'text', text: m.text });
+        }
+      });
+      renderHistoryList();
+      toggleSidebar(false);
+    }
+
+    function createNewChat() {
+      currentChatId = 'chat_' + Date.now();
+      currentHistory = [];
+      const container = document.getElementById('messagesContainer');
+      container.innerHTML = '';
+      
+      const hero = document.getElementById('welcomeHero');
+      if (hero) hero.classList.remove('hidden');
+      container.appendChild(hero);
+
+      renderHistoryList();
+      toggleSidebar(false);
+    }
+
+    function handleSearchHistory(query) {
+      renderHistoryList(query);
+    }
+
+    // Utilities
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+    function escapeJsString(str) {
+      if (!str) return '';
+      return String(str).replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    }
+    function formatMarkdown(text) {
+      if (!text) return '';
+      return escapeHtml(text)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code class="bg-black/30 px-1 py-0.5 rounded font-mono text-cyan-300 text-xs">$1</code>');
+    }
+    function copyToClipboard(btn, text) {
+      navigator.clipboard.writeText(text);
+      const original = btn.innerHTML;
+      btn.innerHTML = '✅';
+      setTimeout(() => { btn.innerHTML = original; }, 1800);
+    }
+
+    // Global Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        createNewChat();
+      }
+    });
+
+    // Startup
+    window.addEventListener('DOMContentLoaded', () => {
+      initLogos();
+      initTheme();
+      renderHistoryList();
+      loadSettingsStatus();
+    });
+  </script>
+</body>
+</html>

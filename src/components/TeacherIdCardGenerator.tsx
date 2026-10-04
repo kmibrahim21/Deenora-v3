@@ -1,13 +1,15 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Download, X, Printer, Settings2, Sliders, Palette, Check, RotateCcw } from "lucide-react";
+import { Download, X, Printer, Settings2, Sliders, Palette, Check, RotateCcw, FileText, Layers, Sparkles } from "lucide-react";
 import { Teacher, Institution, Language } from "types";
 import QRCode from "react-qr-code";
 import { jsPDF } from "jspdf";
-import { toJpeg } from "html-to-image";
+import { toJpeg, toPng } from "html-to-image";
+import JSZip from "jszip";
 import { solaimanLipiBase64 } from "../utils/fonts";
 import { IdCardDesignSettings, DEFAULT_ID_CARD_DESIGN } from "../types/idCardDesign";
 import IdCardDesignModal from "./idcard/IdCardDesignModal";
 import { supabase } from "../supabase";
+import { elementToEps, elementToPureSvgXml, downloadCardEpsZip } from "../utils/epsExport";
 
 interface TeacherIdCardGeneratorProps {
   teacher: Teacher;
@@ -554,6 +556,92 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
     }
   };
 
+  const downloadEpsSingle = async () => {
+    if (!cardRef.current || !backCardRef.current) return;
+    setIsGenerating(true);
+    const safeName = (teacher?.name || "Teacher").replace(/\s+/g, "_");
+    const idNum = teacher?.teacher_id_number || 'Teacher';
+    const baseFilename = `${idNum}_${safeName}`;
+
+    try {
+      setCurrentRenderTeacher(teacher);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      const frontEl = cardRef.current;
+      const backEl = backCardRef.current;
+
+      if (!frontEl || !backEl) {
+        throw new Error("Card elements not found in DOM");
+      }
+
+      await downloadCardEpsZip(frontEl, backEl, baseFilename, teacher?.name || 'Teacher');
+    } catch (err) {
+      console.error('Failed to generate EPS:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const downloadEpsMultiple = async () => {
+    const teachersToProcess = isBulk && allTeachers && allTeachers.length > 0 ? allTeachers : [teacher];
+    if (teachersToProcess.length === 0 || !cardRef.current || !backCardRef.current) return;
+
+    setIsGenerating(true);
+    setBulkProgress(0);
+
+    try {
+      const zip = new JSZip();
+      const folderName = `Teacher_ID_Cards_EPS_Press_${new Date().toISOString().split('T')[0]}`;
+      const folder = zip.folder(folderName) || zip;
+
+      for (let i = 0; i < teachersToProcess.length; i++) {
+        const t = teachersToProcess[i];
+        setCurrentRenderTeacher(t);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        const frontEl = cardRef.current;
+        const backEl = backCardRef.current;
+
+        if (frontEl && backEl) {
+          const safeName = (t.name || `Teacher_${i + 1}`).replace(/[\s/\\:]+/g, '_');
+          const prefix = t.teacher_id_number ? `${t.teacher_id_number}_` : `${String(i + 1).padStart(2, '0')}_`;
+          const baseName = `${prefix}${safeName}`;
+
+          const [frontEps, backEps] = await Promise.all([
+            elementToEps(frontEl, { title: `${t.name}_Front`, widthPt: 243.78, heightPt: 388.27 }),
+            elementToEps(backEl, { title: `${t.name}_Back`, widthPt: 243.78, heightPt: 388.27 })
+          ]);
+
+          const frontSvg = elementToPureSvgXml(frontEl, `${t.name}_Front`);
+          const backSvg = elementToPureSvgXml(backEl, `${t.name}_Back`);
+
+          folder.file(`${baseName}_Front.eps`, frontEps);
+          folder.file(`${baseName}_Back.eps`, backEps);
+          folder.file(`${baseName}_Front_Vector.svg`, frontSvg);
+          folder.file(`${baseName}_Back_Vector.svg`, backSvg);
+        }
+
+        setBulkProgress(Math.round(((i + 1) / teachersToProcess.length) * 100));
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${folderName}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error('Failed to export bulk EPS:', err);
+    } finally {
+      setCurrentRenderTeacher(teacher);
+      setIsGenerating(false);
+      setBulkProgress(0);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -806,33 +894,65 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
               ))}
             </div>
 
-            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 shadow-sm border border-slate-200 dark:border-slate-700">
-              <button
-                onClick={downloadPdfSingle}
-                disabled={isGenerating || isBulk}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black bg-[#1E3A8A] text-white rounded-lg hover:bg-blue-800 transition-all shadow-sm disabled:opacity-50"
-              >
-                <Download size={14} />
-                <span>{isBangla ? "সিঙ্গেল" : "Single"}</span>
-              </button>
-              <button
-                onClick={downloadPdfMultiple}
-                disabled={isGenerating}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all disabled:opacity-50"
-              >
-                {isGenerating ? (
-                  <div className="w-3.5 h-3.5 border-2 border-[#1E3A8A]/30 border-t-[#1E3A8A] rounded-full animate-spin flex-shrink-0" />
-                ) : (
-                  <Download size={14} />
-                )}
-                <span>
-                  {isGenerating && isBulk
-                    ? `${bulkProgress}%`
-                    : isBangla
-                      ? "A4 গ্রিড"
-                      : "A4 Grid"}
-                </span>
-              </button>
+            {/* Download Buttons: PDF & EPS (Press Ready) */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* PDF Group */}
+              <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 shadow-sm border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={downloadPdfSingle}
+                  disabled={isGenerating || isBulk}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] sm:text-xs font-black bg-[#1E3A8A] text-white rounded-lg hover:bg-blue-800 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+                  title={isBangla ? "সিঙ্গেল PDF ডাউনলোড" : "Download Single PDF"}
+                >
+                  <FileText size={13} />
+                  <span>{isBangla ? "PDF" : "PDF"}</span>
+                </button>
+                <button
+                  onClick={downloadPdfMultiple}
+                  disabled={isGenerating}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] sm:text-xs font-black text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                  title={isBangla ? "A4 গ্রিড PDF ডাউনলোড" : "Download A4 Grid PDF"}
+                >
+                  {isGenerating ? (
+                    <div className="w-3.5 h-3.5 border-2 border-[#1E3A8A]/30 border-t-[#1E3A8A] rounded-full animate-spin flex-shrink-0" />
+                  ) : (
+                    <Download size={13} />
+                  )}
+                  <span>
+                    {isGenerating && isBulk
+                      ? `${bulkProgress}%`
+                      : isBangla
+                        ? "A4 গ্রিড"
+                        : "A4 Grid"}
+                  </span>
+                </button>
+              </div>
+
+              {/* EPS Press-Ready Group */}
+              <div className="flex bg-teal-50 dark:bg-teal-950/40 rounded-xl p-1 shadow-sm border border-teal-200 dark:border-teal-800">
+                <button
+                  onClick={downloadEpsSingle}
+                  disabled={isGenerating || isBulk}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] sm:text-xs font-black bg-teal-700 text-white rounded-lg hover:bg-teal-800 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+                  title={isBangla ? "প্রেস প্রিন্ট উপযোগী ভেক্টর EPS ডাউনলোড (ZIP)" : "Download Single EPS ZIP (Front & Back)"}
+                >
+                  <Sparkles size={13} />
+                  <span>{isBangla ? "EPS প্রেস" : "EPS"}</span>
+                </button>
+                <button
+                  onClick={downloadEpsMultiple}
+                  disabled={isGenerating}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] sm:text-xs font-black text-teal-800 dark:text-teal-300 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                  title={isBangla ? "সকল শিক্ষকের ফ্রন্ট ও ব্যাক EPS জিপ ডাউনলোড" : "Download Bulk EPS ZIP for Press"}
+                >
+                  {isGenerating ? (
+                    <div className="w-3.5 h-3.5 border-2 border-teal-700/30 border-t-teal-700 rounded-full animate-spin flex-shrink-0" />
+                  ) : (
+                    <Layers size={13} />
+                  )}
+                  <span>{isBangla ? "সকল EPS" : "All EPS"}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

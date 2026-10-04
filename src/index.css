@@ -269,3 +269,39 @@ select {
 .duration-500 { animation-duration: 500ms; }
 .duration-300 { animation-duration: 300ms; }
 
+/* Muse AI Pulse & Orb Keyframes */
+@keyframes muse-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes muse-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.6)) drop-shadow(0 0 25px rgba(56, 189, 248, 0.4));
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 22px rgba(168, 85, 247, 0.8)) drop-shadow(0 0 35px rgba(59, 130, 246, 0.6));
+  }
+}
+
+@keyframes muse-bar {
+  0%, 100% { height: 6px; }
+  50% { height: 26px; }
+}
+
+.animate-muse-spin {
+  animation: muse-spin 6s linear infinite;
+}
+
+.animate-muse-pulse {
+  animation: muse-pulse 2.2s ease-in-out infinite;
+}
+
+.animate-muse-bar-1 { animation: muse-bar 0.9s ease-in-out infinite 0.1s; }
+.animate-muse-bar-2 { animation: muse-bar 0.9s ease-in-out infinite 0.25s; }
+.animate-muse-bar-3 { animation: muse-bar 0.9s ease-in-out infinite 0.4s; }
+.animate-muse-bar-4 { animation: muse-bar 0.9s ease-in-out infinite 0.15s; }
+.animate-muse-bar-5 { animation: muse-bar 0.9s ease-in-out infinite 0.35s; }
+

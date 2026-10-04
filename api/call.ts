@@ -334,7 +334,141 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 3. GET CALL CONFIG & HEALTH
+  // 3. SEND GENERIC PUSH NOTIFICATION (notice / result / diary / chat) to parent Android apps
+  // Body: { institution_id, title, body, target?: {type:'class'|'all'|'students'|'phones', ...}, conversation_id?, class_name?, sender_id? }
+  // Finds parent FCM tokens from device_tokens (matched by guardian phone) and sends
+  // an FCM v1 DATA message {title, body}. The Android FcmService shows it as a
+  // regular notification (no caller_name => not a call).
+  if (req.method === 'POST' && action === 'send_notification_push') {
+    try {
+      const { institution_id, title, body, target, conversation_id, class_name, sender_id } = req.body || {};
+      if (!institution_id) {
+        return res.status(400).json({ success: false, message: 'institution_id is required' });
+      }
+      if (!title && !body) {
+        return res.status(400).json({ success: false, message: 'title or body is required' });
+      }
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        return res.status(500).json({ success: false, message: 'Server configuration error' });
+      }
+      if (!serviceAccount) {
+        return res.status(500).json({ success: false, message: 'Firebase service account not configured' });
+      }
+
+      const sbGet = async (path: string): Promise<any[]> => {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+          });
+          if (!r.ok) return [];
+          const j = await r.json();
+          return Array.isArray(j) ? j : [];
+        } catch { return []; }
+      };
+
+      const normPhone = (p: any) => String(p || '').replace(/\D/g, '').slice(-10);
+      const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ''));
+
+      const studentsToPhones = async (ids: string[]) => {
+        const clean = (ids || []).filter(isUuid);
+        if (!clean.length) return [];
+        const rows = await sbGet(`students?select=guardian_phone&id=in.(${clean.join(',')})&is_active=eq.true&limit=2000`);
+        return rows.map(r => r.guardian_phone).filter(Boolean);
+      };
+
+      const classToPhones = async (nameOrId: string) => {
+        let classIds: string[] = [];
+        if (isUuid(nameOrId)) {
+          classIds = [nameOrId];
+        } else {
+          const cls = await sbGet(`classes?select=id&institution_id=eq.${institution_id}&class_name=ilike.${encodeURIComponent(String(nameOrId))}&limit=10`);
+          classIds = (cls || []).map((c: any) => c.id).filter(isUuid);
+        }
+        if (!classIds.length) return [];
+        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&class_id=in.(${classIds.join(',')})&is_active=eq.true&limit=3000`);
+        return rows.map(r => r.guardian_phone).filter(Boolean);
+      };
+
+      const allPhones = async () => {
+        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&is_active=eq.true&limit=5000`);
+        return rows.map(r => r.guardian_phone).filter(Boolean);
+      };
+
+      const isAllTarget = (n: any) => ['all', 'app_notice', 'app_holiday', 'app_ptm', 'app_event'].includes(String(n || '').toLowerCase());
+      const classFromAppKey = (n: any) => {
+        const m = String(n || '').match(/^app_(syllabus|suggestion|routine)_(.+)$/i);
+        return m ? m[2] : null;
+      };
+
+      let phones: any[] = [];
+      if (target?.type === 'students' && Array.isArray(target.student_ids)) {
+        phones = await studentsToPhones(target.student_ids);
+      } else if (target?.type === 'phones' && Array.isArray(target.phones)) {
+        phones = target.phones;
+      } else if (target?.type === 'class' && target.class_name) {
+        phones = await classToPhones(target.class_name);
+      } else if (target?.type === 'all') {
+        phones = await allPhones();
+      } else if (conversation_id) {
+        const conv = String(conversation_id);
+        const gm = conv.match(/class-group-(.+)/i);
+        if (gm) {
+          phones = await classToPhones(gm[1]);
+        } else if (/^(general|general-chat|announcement)/i.test(conv)) {
+          phones = await allPhones();
+        } else {
+          // direct conversation: student id or phone
+          const byId = await studentsToPhones([conv]);
+          phones = byId.length ? byId : [conv];
+        }
+      } else if (class_name) {
+        const ck = classFromAppKey(class_name);
+        if (isAllTarget(class_name)) phones = await allPhones();
+        else if (ck) phones = await classToPhones(ck);
+        else phones = await classToPhones(class_name);
+      }
+
+      const phoneSet = new Set(phones.map(normPhone).filter((p: string) => p.length >= 10));
+      if (sender_id) phoneSet.delete(normPhone(sender_id));
+      const uniquePhones = [...phoneSet];
+      if (!uniquePhones.length) {
+        return res.status(200).json({ success: true, sent: 0, message: 'No recipient phones resolved' });
+      }
+
+      // Match phones to registered FCM tokens (single bulk query, match in JS)
+      const tokens = await sbGet(`device_tokens?select=fcm_token,phone&limit=10000`);
+      const phoneToToken = new Map<string, string>();
+      for (const t of tokens || []) {
+        const p = normPhone(t.phone);
+        if (p && t.fcm_token && !phoneToToken.has(p)) phoneToToken.set(p, t.fcm_token);
+      }
+      const finalTokens = [...new Set(uniquePhones.map(p => phoneToToken.get(p)).filter(Boolean) as string[])];
+      if (!finalTokens.length) {
+        return res.status(200).json({ success: true, sent: 0, matched: 0, message: 'No registered device tokens for recipients yet (parents need to open the Android app once)' });
+      }
+
+      const accessToken = await getFirebaseV1AccessToken(serviceAccount);
+      if (!accessToken) {
+        return res.status(500).json({ success: false, message: 'Could not get Firebase access token' });
+      }
+
+      const data = { title: String(title || 'Deenora'), body: String(body || ''), type: 'notification' };
+      const results = await Promise.all(finalTokens.map(tok =>
+        fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+          body: JSON.stringify({ message: { token: tok, android: { priority: 'HIGH' }, data } }),
+        }).then(r => r.ok).catch(() => false)
+      ));
+      const sent = results.filter(Boolean).length;
+      return res.status(200).json({ success: true, sent, matched: finalTokens.length });
+    } catch (err: any) {
+      console.error('[Call API] send_notification_push error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // 4. GET CALL CONFIG & HEALTH
   if (req.method === 'GET') {
     return res.status(200).json({
       status: 'active',

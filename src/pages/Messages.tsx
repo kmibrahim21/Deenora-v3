@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { pushToParents } from '../lib/notifyParents';
 import { 
   MessageSquare, 
   Calendar, 
@@ -316,6 +317,15 @@ export default function Messages({
           sender_name: profile?.name || 'Admin'
         });
         if (error) throw error;
+        // Native Android push for parents (fire-and-forget, skip drafts)
+        if (!isDraft) {
+          pushToParents({
+            institution_id: madrasah?.id,
+            class_name: selectedClass,
+            title: title || 'ডায়েরি',
+            body: 'নতুন পড়া / ডায়েরি দেওয়া হয়েছে — দেখে নিন',
+          });
+        }
       }
 
       sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);
@@ -373,6 +383,15 @@ export default function Messages({
           sender_name: profile?.name || 'Admin'
         });
         if (error) throw error;
+        // Native Android push for parents (fire-and-forget, skip drafts)
+        if (!isDraft) {
+          pushToParents({
+            institution_id: madrasah?.id,
+            class_name: noticeType,
+            title: noticeTitle || 'নতুন নোটিশ',
+            body: 'প্রতিষ্ঠান থেকে নতুন নোটিশ প্রকাশিত হয়েছে',
+          });
+        }
       }
 
       sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);
@@ -442,6 +461,15 @@ export default function Messages({
           sender_name: profile?.name || 'Admin'
         });
         if (error) throw error;
+        // Native Android push for parents (fire-and-forget, skip drafts)
+        if (!isDraft) {
+          pushToParents({
+            institution_id: madrasah?.id,
+            class_name: `APP_SUGGESTION_${suggestionClass}`,
+            title: suggestionTitle || `সাজেশন ${suggestionSession}`,
+            body: 'নতুন সাজেশন প্রকাশিত হয়েছে — দেখে নিন',
+          });
+        }
       }
       sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);
       setShowSuggestionModal(false);
@@ -487,6 +515,15 @@ export default function Messages({
           sender_name: profile?.name || 'Admin'
         });
         if (error) throw error;
+        // Native Android push for parents (fire-and-forget, skip drafts)
+        if (!isDraft) {
+          pushToParents({
+            institution_id: madrasah?.id,
+            class_name: `APP_SYLLABUS_${syllabusClass}`,
+            title: syllabusTitle || `সিলেবাস ${syllabusSession}`,
+            body: 'নতুন সিলেবাস প্রকাশিত হয়েছে — দেখে নিন',
+          });
+        }
       }
 
       sessionStorage.removeItem(`messages_cache_${madrasah?.id}`);

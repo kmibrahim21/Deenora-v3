@@ -142,9 +142,21 @@ async function startServer() {
     await runHandler(path.join(__dirname, 'api', 'awaj.ts'), req, res);
   });
 
-  // Specific Routes for Agent Gateway (Agent 2)
+  // Specific Routes for Agent (Admin AI Agent Chat, Settings & Gateway)
+  app.use('/api/agent/chat', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'agent-chat.ts'), req, res);
+  });
+
+  app.use('/api/agent/settings', async (req, res) => {
+    await runHandler(path.join(__dirname, 'api', 'agent-chat.ts'), req, res);
+  });
+
   app.use('/api/agent', async (req, res) => {
-    await runHandler(path.join(__dirname, 'api', 'agent.ts'), req, res);
+    if (req.url?.includes('/chat') || req.url?.includes('/settings')) {
+      await runHandler(path.join(__dirname, 'api', 'agent-chat.ts'), req, res);
+    } else {
+      await runHandler(path.join(__dirname, 'api', 'agent.ts'), req, res);
+    }
   });
 
   // Specific Routes for Teachers
@@ -180,6 +192,16 @@ async function startServer() {
   // ZKTeco ADMS Route (Biometric Machine Sync)
   app.all('/iclock/*all', async (req, res) => {
     await runHandler(path.join(__dirname, 'api', 'iclock.ts'), req, res);
+  });
+
+  // Route to serve standalone Deenora AI Chat UI
+  app.get(['/ai', '/agent-ui'], (req, res) => {
+    const aiHtmlPath = path.join(__dirname, 'public', 'ai.html');
+    if (fs.existsSync(aiHtmlPath)) {
+      res.sendFile(aiHtmlPath);
+    } else {
+      res.redirect('/ai.html');
+    }
   });
 
   // API Wildcard

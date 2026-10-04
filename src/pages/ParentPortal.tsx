@@ -51,6 +51,7 @@ import {
 import { ChatApp } from './ChatApp';
 import { useVoiceCall } from '../context/CallContext';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
+import { registerNativePushToken } from '../lib/notifyParents';
 import { 
   requestPushNotificationPermission, 
   getNotificationPermissionState, 
@@ -252,6 +253,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
 
     if (activeInstId || activeStudentId || activePhone) {
       initSignaling(activeInstId, activeStudentId, activePhone);
+      // Android WebView app: register native FCM token (linked to this parent)
+      // so notice/result/diary/chat pushes reach the phone even when closed
+      registerNativePushToken(activeStudentId, activePhone, activeInstId);
     }
   }, [currentInstitution?.id, madrasah?.id, student?.institution_id, studentId, student?.id, student?.guardian_phone, initSignaling]);
 

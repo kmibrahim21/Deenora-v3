@@ -73,6 +73,7 @@ const TutorialsManager = React.lazy(() =>
 );
 const AdmissionFormPage = React.lazy(() => import("components/admission_form/AdmissionFormPage"));
 const ParentPortal = React.lazy(() => import("pages/ParentPortal"));
+const AdminAiAgentFloatingButton = React.lazy(() => import("components/agent/AdminAiAgentFloatingButton"));
 
 const App: React.FC = () => {
   useSyncEngine();
@@ -1162,6 +1163,16 @@ const App: React.FC = () => {
           </div>,
           document.body,
         )}
+      {/* Admin AI Agent Floating Button & Drawer (Only for Super Admin & Manager) */}
+      {(profile?.role === 'super_admin' || profile?.role === 'manager') && (
+        <Suspense fallback={null}>
+          <AdminAiAgentFloatingButton
+            madrasah={madrasah}
+            profile={profile}
+            lang={lang}
+          />
+        </Suspense>
+      )}
     </Layout>
   );
 };

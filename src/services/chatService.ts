@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { Conversation, ConversationMember, ChatMessage } from '../types';
 import { ChatLocalStore } from './chatLocalStore';
+import { pushToParents } from '../lib/notifyParents';
 
 export function formatRowToChatMessage(row: any, fallbackConvId?: string): ChatMessage {
   if (!row) return row;
@@ -949,6 +950,18 @@ export class ChatService {
       });
     } catch (broadcastErr) {
       console.warn('[ChatService] Realtime broadcast exception:', broadcastErr);
+    }
+
+    // 4b. Native Android push fan-out for parents (fire-and-forget).
+    // Server resolves recipients from conversation_id (class-group / general / direct).
+    if (isSavedToDB) {
+      pushToParents({
+        institution_id: cleanInstitutionId,
+        conversation_id: cleanConversationId,
+        title: cleanSenderName || 'নতুন মেসেজ',
+        body: String(defaultText || '').slice(0, 140),
+        sender_id: cleanSenderId,
+      });
     }
 
     // Tab-to-tab instant BroadcastChannel dispatch
