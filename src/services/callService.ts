@@ -615,11 +615,12 @@ export class VoiceCallService {
     const isPhoneMatch = Boolean(myPhone && targetPhone && myPhone === targetPhone);
     const isParentPrefix = myId.startsWith('parent') && (myId.includes(targetStudentId) || (targetPhone && myId.includes(targetPhone)));
     
-    // Check if recipient is an institution admin/teacher receiving a call for their institution
-    const isInstMatch = Boolean(this.currentInstitutionId && payload.institutionId && String(this.currentInstitutionId) === String(payload.institutionId));
-    const isStaffOrAdmin = isInstMatch && (myId.startsWith('admin') || myId.startsWith('teacher') || myId === 'admin' || myId === 'teacher' || !myId.startsWith('parent'));
-
-    const isForMe = isIdMatch || isPhoneMatch || isParentPrefix || isStaffOrAdmin;
+    // NOTE (2026-10-04 fix): removed the old "isStaffOrAdmin" catch-all
+    // (!myId.startsWith('parent')). It matched EVERY connected user of the
+    // institution (parents log in with UUID/phone ids that don't start with
+    // 'parent'), so every call rang everyone. Now only the targeted parent
+    // (matched by student id or guardian phone) sees the incoming call.
+    const isForMe = isIdMatch || isPhoneMatch || isParentPrefix;
 
     if (!isForMe) {
       return;
