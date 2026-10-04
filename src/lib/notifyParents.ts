@@ -49,6 +49,7 @@ let nativeTokenRegistered = false;
 /**
  * Register the Android WebView app's native FCM token, linked to the parent.
  * Call after parent login (ParentPortal). Safe to call repeatedly — runs once.
+ * Retries a few times because the native token may not be ready on first call.
  */
 export function registerNativePushToken(
   student_id?: string,
@@ -58,21 +59,32 @@ export function registerNativePushToken(
   try {
     if (nativeTokenRegistered || typeof window === 'undefined') return;
     const w = window as any;
-    const getToken = w.AndroidInterface?.getFcmToken;
-    if (typeof getToken !== 'function') return; // not running inside the Android app
-    const token: string = getToken.call(w.AndroidInterface) || '';
-    if (!token) return;
-    nativeTokenRegistered = true;
-    fetch('/api/call?action=register_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'register_token',
-        token,
-        student_id: student_id || undefined,
-        phone: guardian_phone || undefined,
-        institution_id: institution_id || undefined,
-      }),
-    }).catch(() => {});
+    const bridge = w.AndroidInterface;
+    if (!bridge || typeof bridge.getFcmToken !== 'function') return; // not in Android app
+    let attempts = 0;
+    const tryRegister = () => {
+      attempts++;
+      let token = '';
+      try {
+        token = bridge.getFcmToken() || '';
+      } catch {}
+      if (token) {
+        nativeTokenRegistered = true;
+        fetch('/api/call?action=register_token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register_token',
+            token,
+            student_id: student_id || undefined,
+            phone: guardian_phone || undefined,
+            institution_id: institution_id || undefined,
+          }),
+        }).catch(() => {});
+      } else if (attempts < 5) {
+        setTimeout(tryRegister, 2000);
+      }
+    };
+    tryRegister();
   } catch {}
 }

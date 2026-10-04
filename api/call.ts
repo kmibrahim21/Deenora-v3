@@ -136,9 +136,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         memoryTokens[`user_${user_id}`] = { token, updatedAt: Date.now() };
       }
 
-      // Try saving to Supabase device_tokens table if available
+      // Try saving to Supabase device_tokens table if available.
+      // IMPORTANT (2026-10-04 fix): only send fields that actually have values.
+      // The native app posts on EVERY launch with phone=null — with
+      // resolution=merge-duplicates that was wiping the phone/student linkage
+      // the web registration had just set. Now nulls never overwrite.
       if (SUPABASE_URL && SUPABASE_KEY) {
         try {
+          const upsertBody: any = {
+            fcm_token: token,
+            updated_at: new Date().toISOString(),
+          };
+          if (phone) upsertBody.phone = phone;
+          if (user_id) upsertBody.user_id = user_id;
+          if (student_id) upsertBody.student_id = student_id;
+          if (institution_id) upsertBody.institution_id = institution_id;
           await fetch(`${SUPABASE_URL}/rest/v1/device_tokens`, {
             method: 'POST',
             headers: {
@@ -147,14 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               'Content-Type': 'application/json',
               'Prefer': 'resolution=merge-duplicates',
             },
-            body: JSON.stringify({
-              fcm_token: token,
-              phone: phone || null,
-              user_id: user_id || null,
-              student_id: student_id || null,
-              institution_id: institution_id || null,
-              updated_at: new Date().toISOString(),
-            }),
+            body: JSON.stringify(upsertBody),
           });
         } catch (dbErr) {
           console.warn('[Call API] device_tokens table save notice:', dbErr);
