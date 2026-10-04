@@ -152,11 +152,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (user_id) upsertBody.user_id = user_id;
           if (student_id) upsertBody.student_id = student_id;
           if (institution_id) upsertBody.institution_id = institution_id;
-          // IMPORTANT (2026-10-05 fix): PostgREST needs ?onConflict=fcm_token —
-          // without it, merge-duplicates only matches the PRIMARY KEY (id),
+          // IMPORTANT (2026-10-05 fix): PostgREST needs ?on_conflict=fcm_token
+          // (snake_case — onConflict is supabase-js syntax, raw PostgREST
+          // rejects it with PGRST100 "failed to parse filter").
+          // Without it, merge-duplicates only matches the PRIMARY KEY (id),
           // so every POST tried to INSERT a duplicate fcm_token → 409 silently
           // caught → phone was NEVER saved. The unique fcm_token IS the conflict target.
-          const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?onConflict=fcm_token`, {
+          const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?on_conflict=fcm_token`, {
             method: 'POST',
             headers: {
               'apikey': SUPABASE_KEY,
