@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY || process.env.FIREBASE_SERVER_KEY;
   const serviceAccount = parseServiceAccount();
 
-  const action = req.query?.action || req.body?.action;
+  const action = req.query.action || req.body?.action;
 
   // 1. REGISTER FCM DEVICE TOKEN
   if (req.method === 'POST' && action === 'register_token') {
@@ -141,6 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // The native app posts on EVERY launch with phone=null — with
       // resolution=merge-duplicates that was wiping the phone/student linkage
       // the web registration had just set. Now nulls never overwrite.
+      let dbDebug: any = null;
       if (SUPABASE_URL && SUPABASE_KEY) {
         try {
           const upsertBody: any = {
@@ -155,7 +156,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // without it, merge-duplicates only matches the PRIMARY KEY (id),
           // so every POST tried to INSERT a duplicate fcm_token → 409 silently
           // caught → phone was NEVER saved. The unique fcm_token IS the conflict target.
-          await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?onConflict=fcm_token`, {
+          const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?onConflict=fcm_token`, {
             method: 'POST',
             headers: {
               'apikey': SUPABASE_KEY,
@@ -165,12 +166,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             },
             body: JSON.stringify(upsertBody),
           });
-        } catch (dbErr) {
+          const dbText = await dbRes.text().catch(() => '');
+          console.error('[Call API] device_tokens upsert:', dbRes.status, dbText.slice(0, 300));
+          dbDebug = { status: dbRes.status, ok: dbRes.ok, body: dbText.slice(0, 300) };
+        } catch (dbErr: any) {
           console.warn('[Call API] device_tokens table save notice:', dbErr);
+          dbDebug = { fetchError: String(dbErr?.message || dbErr) };
         }
+      } else {
+        dbDebug = { skipped: 'SUPABASE_URL or SUPABASE_KEY missing in Vercel env' };
       }
 
-      return res.status(200).json({ success: true, message: 'FCM Token registered successfully' });
+      return res.status(200).json({ success: true, message: 'FCM Token registered successfully', _dbDebug: dbDebug });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -483,6 +490,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: 'active',
       hasFcmServerKey: Boolean(FCM_SERVER_KEY),
       hasFirebaseServiceAccount: Boolean(serviceAccount),
+      hasSupabaseUrl: Boolean(SUPABASE_URL),
+      hasSupabaseKey: Boolean(SUPABASE_KEY),
       cachedTokensCount: Object.keys(memoryTokens).length,
       timestamp: Date.now(),
     });
