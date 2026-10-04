@@ -44,11 +44,13 @@ export function pushToParents(opts: PushToParentsOptions): void {
   } catch {}
 }
 
-let nativeTokenRegistered = false;
+let lastRegisterKey = '';
 
 /**
  * Register the Android WebView app's native FCM token, linked to the parent.
- * Call after parent login (ParentPortal). Safe to call repeatedly — runs once.
+ * Call after parent login (ParentPortal). Re-sends whenever the
+ * (token, phone, student_id) combination changes — e.g. first call happens
+ * before guardian_phone loads, the later call with the phone goes through.
  * Retries a few times because the native token may not be ready on first call.
  */
 export function registerNativePushToken(
@@ -57,7 +59,7 @@ export function registerNativePushToken(
   institution_id?: string
 ): void {
   try {
-    if (nativeTokenRegistered || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
     const w = window as any;
     const bridge = w.AndroidInterface;
     if (!bridge || typeof bridge.getFcmToken !== 'function') return; // not in Android app
@@ -68,8 +70,9 @@ export function registerNativePushToken(
       try {
         token = bridge.getFcmToken() || '';
       } catch {}
-      if (token) {
-        nativeTokenRegistered = true;
+      const key = `${token}|${guardian_phone || ''}|${student_id || ''}`;
+      if (token && key !== lastRegisterKey) {
+        lastRegisterKey = key;
         fetch('/api/call?action=register_token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -80,8 +83,11 @@ export function registerNativePushToken(
             phone: guardian_phone || undefined,
             institution_id: institution_id || undefined,
           }),
-        }).catch(() => {});
-      } else if (attempts < 5) {
+        }).catch(() => {
+          // allow retry on network failure
+          lastRegisterKey = '';
+        });
+      } else if (!token && attempts < 5) {
         setTimeout(tryRegister, 2000);
       }
     };
