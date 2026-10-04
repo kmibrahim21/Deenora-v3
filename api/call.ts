@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY || process.env.FIREBASE_SERVER_KEY;
   const serviceAccount = parseServiceAccount();
 
-  const action = req.query.action || req.body?.action;
+  const action = req.query?.action || req.body?.action;
 
   // 1. REGISTER FCM DEVICE TOKEN
   if (req.method === 'POST' && action === 'register_token') {
@@ -151,7 +151,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (user_id) upsertBody.user_id = user_id;
           if (student_id) upsertBody.student_id = student_id;
           if (institution_id) upsertBody.institution_id = institution_id;
-          await fetch(`${SUPABASE_URL}/rest/v1/device_tokens`, {
+          // IMPORTANT (2026-10-05 fix): PostgREST needs ?onConflict=fcm_token —
+          // without it, merge-duplicates only matches the PRIMARY KEY (id),
+          // so every POST tried to INSERT a duplicate fcm_token → 409 silently
+          // caught → phone was NEVER saved. The unique fcm_token IS the conflict target.
+          await fetch(`${SUPABASE_URL}/rest/v1/device_tokens?onConflict=fcm_token`, {
             method: 'POST',
             headers: {
               'apikey': SUPABASE_KEY,
