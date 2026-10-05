@@ -475,7 +475,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const r = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-            body: JSON.stringify({ message: { token: tok, android: { priority: 'HIGH', notification: { sound: 'default', channel_id: 'deenora_updates' } }, notification: { title: String(title || 'Deenora'), body: String(body || '') }, data } }),
+            body: JSON.stringify({ message: { token: tok, android: { priority: 'HIGH', notification: { sound: 'default' } }, notification: { title: String(title || 'Deenora'), body: String(body || '') }, data } }),
           });
           const b = await r.text().catch(() => '');
           return { ok: r.ok, status: r.status, tokenPrefix: tok.slice(0, 16), fcmBody: b.slice(0, 250) };
