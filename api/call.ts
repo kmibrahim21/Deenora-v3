@@ -287,6 +287,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 token: targetToken,
                 android: {
                   priority: 'HIGH',
+                  notification: {
+                    sound: 'default',
+                  },
+                },
+                notification: {
+                  title: 'Incoming Voice Call',
+                  body: `Call from ${fcmDataPayload.caller_name}`,
                 },
                 data: fcmDataPayload,
               },
