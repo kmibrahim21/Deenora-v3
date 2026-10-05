@@ -478,9 +478,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       }
       
       const { data } = await query
-        .eq('module', 'voice')
+        .in('module', ['voice', 'wallet'])
+        .not('transaction_id', 'like', 'REFUND_%')
+        .not('transaction_id', 'like', 'ADD_REFUND_%')
+        .not('transaction_id', 'like', 'CORRECT_VOICE_%')
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(50);
       if (data) setUserTransactions(data);
     } catch (err) {
       console.error('Error fetching transactions:', err);
@@ -2585,24 +2588,37 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                    return rechargeTransactions.length > 0 ? rechargeTransactions.map(tr => (
                      <div key={tr.id} className="bg-white p-4 rounded-[1.8rem] border border-slate-100 flex items-center justify-between shadow-bubble">
                        <div className="min-w-0 flex-1">
-                         <div className="flex items-center gap-2">
+                         <div className="flex items-center gap-2 flex-wrap">
                            <p className="text-[15px] font-black leading-none text-slate-800">{tr.amount} ৳</p>
-                           <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : tr.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
-                             {tr.status === 'approved' ? (lang === 'bn' ? 'অনুমোদিত' : 'Approved') :
-                              tr.status === 'pending' ? (lang === 'bn' ? 'অপেক্ষমান' : 'Pending') :
-                              (lang === 'bn' ? 'প্রত্যাখ্যাত' : 'Rejected')}
+                           <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === "approved" ? "bg-emerald-50 text-emerald-600" : tr.status === "pending" ? "bg-orange-50 text-orange-600" : "bg-red-50 text-red-600"}`}>
+                             {tr.status === "approved" ? (lang === "bn" ? "অনুমোদিত" : "Approved") :
+                              tr.status === "pending" ? (lang === "bn" ? "অপেক্ষমান" : "Pending") :
+                              (lang === "bn" ? "প্রত্যাখ্যাত" : "Rejected")}
                            </span>
+                           {tr.metadata?.payment_method && (
+                             <span className="text-[8px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
+                               {tr.metadata.payment_method}
+                             </span>
+                           )}
                          </div>
-                         <div className="flex items-center gap-2 mt-1.5">
+                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             <Clock size={10} className="text-slate-400" />
-                            <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
+                            <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString("bn-BD")}</p>
+                            {tr.metadata?.balance_after !== undefined && (
+                              <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                {lang === "bn" ? `ব্যালেন্স: ${tr.metadata.balance_after} ৳` : `Bal: ${tr.metadata.balance_after} ৳`}
+                              </span>
+                            )}
                          </div>
                        </div>
                        <div className="text-right">
-                          <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter opacity-60">TrxID: {tr.transaction_id}</p>
-                       </div>
-                     </div>
-                   )) : (
+                          <p className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter opacity-70">TrxID: {tr.transaction_id}</p>
+                          {tr.sender_phone && tr.sender_phone !== "Admin" && tr.sender_phone !== "SYSTEM" ? (
+                            <p className="text-[8px] font-bold text-slate-400 mt-0.5">{tr.sender_phone}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    )) : (
                      <div className="text-center py-10 rounded-[2.5rem] border border-dashed bg-slate-50 border-slate-200">
                         <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest">{lang === 'bn' ? 'কোনো রিচার্জ রেকর্ড নেই' : 'No recharge records'}</p>
                      </div>

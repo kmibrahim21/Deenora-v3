@@ -610,7 +610,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
     }
   }, [commsModal.show, commsModal.institutions, commsModal.type, handleFetchAwajVoices]);
 
-  const fetchPaymentHistory = async (institutionId: string) => {
+  const fetchPaymentHistory = async (institutionId: string, filterModule: string = 'all') => {
     setIsLoadingHistory(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -622,7 +622,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
         },
         body: JSON.stringify({
           action: 'get_payment_history',
-          institution_id: institutionId
+          institution_id: institutionId,
+          module: filterModule
         })
       });
       const result = await res.json();
@@ -865,7 +866,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
   const [overrideTotal, setOverrideTotal] = useState<number | ''>('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [historyFilterModule, setHistoryFilterModule] = useState<'all' | 'subscription' | 'sms' | 'voice'>('all');
+  const [auditDate, setAuditDate] = useState<string>('');
+  const [auditResult, setAuditResult] = useState<any>(null);
+  const [isCheckingAudit, setIsCheckingAudit] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const handleCheckHistoricalBalance = async () => {
+    if (!selectedUser?.id || !auditDate) return;
+    setIsCheckingAudit(true);
+    setAuditResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          action: 'get_historical_balance',
+          institution_id: selectedUser.id,
+          target_date: auditDate
+        })
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      setAuditResult(result);
+    } catch (err: any) {
+      setStatusModal({ show: true, type: 'error', title: 'ত্রুটি', message: err.message });
+    } finally {
+      setIsCheckingAudit(false);
+    }
+  };
   const [showConfirm, setShowConfirm] = useState<{
     show: boolean;
     title: string;
@@ -4484,10 +4517,80 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                       {detailsTab === 'history' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700/50' : 'bg-slate-50/50 border-slate-100'} p-6 md:p-8 rounded-[2.5rem] border space-y-8`}>
-                              <div className="flex items-center justify-between px-1">
-                                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                    <History size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-500'} /> Payment History
-                                 </h4>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                 <div>
+                                   <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                      <History size={16} className={madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-blue-500'} /> লেনদেন ও রিচার্জ ইতিহাস (Transaction & Recharge History)
+                                   </h4>
+                                 </div>
+                                 <div className="flex items-center gap-1.5 bg-slate-200/60 dark:bg-slate-900/60 p-1 rounded-xl">
+                                    {(['all', 'sms', 'voice', 'subscription'] as const).map(mod => (
+                                      <button
+                                        key={mod}
+                                        type="button"
+                                        onClick={() => {
+                                          setHistoryFilterModule(mod);
+                                          if (selectedUser?.id) fetchPaymentHistory(selectedUser.id, mod);
+                                        }}
+                                        className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                                          historyFilterModule === mod 
+                                            ? 'bg-blue-600 text-white shadow-md' 
+                                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                        }`}
+                                      >
+                                        {mod === 'all' ? 'সকল' : mod === 'sms' ? 'SMS' : mod === 'voice' ? 'ভয়েস' : 'সাবস্ক্রিপশন'}
+                                      </button>
+                                    ))}
+                                 </div>
+                              </div>
+
+                              {/* Historical Point-in-time Balance Resolver */}
+                              <div className={`p-4 rounded-2xl border ${madrasah?.theme === 'dark' ? 'bg-slate-900/80 border-slate-700' : 'bg-white border-blue-100 shadow-sm'} space-y-3`}>
+                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div>
+                                       <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
+                                          <Clock size={13} /> নির্দিষ্ট সময়ে ব্যালেন্স কত ছিল? (Historical Balance Check)
+                                       </p>
+                                       <p className="text-[10px] font-bold text-slate-400 mt-0.5">যেকোনো তারিখ সিলেক্ট করে ওই সময়ে প্রতিষ্ঠানটির ব্যালেন্স কত ছিল তা বের করুন</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                       <input
+                                         type="date"
+                                         value={auditDate}
+                                         onChange={(e) => setAuditDate(e.target.value)}
+                                         className={`px-3 py-1.5 rounded-xl border text-xs font-bold outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                                       />
+                                       <button
+                                         type="button"
+                                         onClick={handleCheckHistoricalBalance}
+                                         disabled={isCheckingAudit || !auditDate}
+                                         className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95"
+                                       >
+                                         {isCheckingAudit ? <Loader2 size={13} className="animate-spin" /> : 'চেক করুন'}
+                                       </button>
+                                    </div>
+                                 </div>
+
+                                 {auditResult && (
+                                   <div className="pt-3 border-t border-slate-200/50 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 animate-in fade-in duration-300">
+                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                         <p className="text-[9px] font-bold text-slate-400">তারিখে ভয়েস ব্যালেন্স</p>
+                                         <p className="text-sm font-black text-emerald-600 mt-0.5">{auditResult.historical_voice_balance} ৳</p>
+                                      </div>
+                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                         <p className="text-[9px] font-bold text-slate-400">তারিখে SMS ব্যালেন্স</p>
+                                         <p className="text-sm font-black text-blue-600 mt-0.5">{auditResult.historical_sms_balance} SMS</p>
+                                      </div>
+                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                         <p className="text-[9px] font-bold text-slate-400">বর্তমান ভয়েস ব্যালেন্স</p>
+                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5">{auditResult.current_voice_balance} ৳</p>
+                                      </div>
+                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                         <p className="text-[9px] font-bold text-slate-400">বর্তমান SMS ব্যালেন্স</p>
+                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5">{auditResult.current_sms_balance} SMS</p>
+                                      </div>
+                                   </div>
+                                 )}
                               </div>
 
                               <div className="overflow-y-auto custom-scrollbar max-h-[500px] pr-2">
@@ -4518,12 +4621,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                                       {tr.module}
                                                    </span>
                                                  )}
-                                                 <span className={`text-[10px] font-bold ${madrasah?.theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                                                    {new Date(tr.created_at).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                 {tr.sms_count ? (
+                                                   <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                      {tr.sms_count} SMS
+                                                   </span>
+                                                 ) : null}
+                                                 {tr.metadata?.balance_after !== undefined && (
+                                                   <span className="text-[10px] font-black px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                      ব্যালেন্স: {tr.metadata.balance_after} ৳
+                                                   </span>
+                                                 )}
+                                                 {tr.metadata?.sms_balance_after !== undefined && (
+                                                   <span className="text-[10px] font-black px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+                                                      SMS ব্যালেন্স: {tr.metadata.sms_balance_after}
+                                                   </span>
+                                                 )}
+                                                 <span className={`text-[10px] font-bold ${madrasah?.theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>
+                                                    {new Date(tr.created_at).toLocaleDateString("bn-BD", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                                                  </span>
                                               </div>
-                                              <p className={`text-sm font-bold ${madrasah?.theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{tr.description}</p>
-                                              <p className={`text-[10px] font-mono ${madrasah?.theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>ID: {tr.transaction_id}</p>
+                                              <p className={`text-sm font-bold ${madrasah?.theme === "dark" ? "text-slate-300" : "text-slate-700"}`}>{tr.description}</p>
+                                              <p className={`text-[10px] font-mono ${madrasah?.theme === "dark" ? "text-slate-500" : "text-slate-400"}`}>ID: {tr.transaction_id} {tr.sender_phone && tr.sender_phone !== "Admin" && tr.sender_phone !== "SYSTEM" ? `| প্রেরক: ${tr.sender_phone}` : ""}</p>
                                            </div>
                                            <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3 shrink-0">
                                               <p className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>

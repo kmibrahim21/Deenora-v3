@@ -483,9 +483,9 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
     const { data } = await supabase.from('transactions')
       .select('*')
       .eq('institution_id', madrasah.id)
-      .eq('module', 'sms')
+      .in('module', ['sms', 'wallet'])
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(50);
     if (data) setUserTransactions(data);
   };
 
@@ -1263,17 +1263,29 @@ const WalletSMS: React.FC<WalletSMSProps> = ({ lang, madrasah, triggerRefresh, d
                  {userTransactions.length > 0 ? userTransactions.map(tr => (
                    <div key={tr.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'} p-4 rounded-[1.8rem] border flex items-center justify-between shadow-bubble`}>
                      <div className="min-w-0 flex-1">
-                       <div className="flex items-center gap-2">
-                         <p className={`text-[15px] font-black leading-none ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{tr.amount} ৳</p>
-                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : tr.status === 'pending' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
-                           {tr.status === 'approved' ? (lang === 'bn' ? 'অনুমোদিত' : 'Approved') :
-                            tr.status === 'pending' ? (lang === 'bn' ? 'অপেক্ষমান' : 'Pending') :
-                            (lang === 'bn' ? 'প্রত্যাখ্যাত' : 'Rejected')}
+                       <div className="flex items-center gap-2 flex-wrap">
+                         <p className={`text-[15px] font-black leading-none ${madrasah?.theme === "dark" ? "text-white" : "text-slate-800"}`}>
+                           {tr.amount > 0 ? `${tr.amount} ৳` : `${tr.sms_count || 0} SMS`}
+                         </p>
+                         {tr.sms_count && tr.amount > 0 && (
+                           <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                             {tr.sms_count} SMS
+                           </span>
+                         )}
+                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tr.status === "approved" ? "bg-emerald-50 text-emerald-600" : tr.status === "pending" ? "bg-orange-50 text-orange-600" : "bg-red-50 text-red-600"}`}>
+                           {tr.status === "approved" ? (lang === "bn" ? "অনুমোদিত" : "Approved") :
+                            tr.status === "pending" ? (lang === "bn" ? "অপেক্ষমান" : "Pending") :
+                            (lang === "bn" ? "প্রত্যাখ্যাত" : "Rejected")}
                          </span>
                        </div>
-                       <div className="flex items-center gap-2 mt-1.5">
+                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <Clock size={10} className="text-slate-400" />
-                          <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString('bn-BD')}</p>
+                          <p className="text-[10px] font-bold text-slate-400">{new Date(tr.created_at).toLocaleDateString("bn-BD")}</p>
+                          {tr.metadata?.sms_balance_after !== undefined && (
+                            <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                              {lang === "bn" ? `ব্যালেন্স: ${tr.metadata.sms_balance_after} SMS` : `Bal: ${tr.metadata.sms_balance_after} SMS`}
+                            </span>
+                          )}
                        </div>
                      </div>
                      <div className="text-right">

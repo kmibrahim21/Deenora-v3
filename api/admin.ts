@@ -761,7 +761,7 @@ export default async function handler(req, res) {
       
       if (updateError) throw updateError;
 
-      // Log transaction
+      // Log transaction with running balance metadata
       await supabase.from('transactions').insert({
         transaction_id: `ADMIN_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         institution_id: id,
@@ -772,11 +772,14 @@ export default async function handler(req, res) {
         module: type,
         status: 'approved',
         metadata: {
-          payment_method: 'Admin Transfer'
+          payment_method: 'Admin Transfer',
+          balance_before: currentBalance,
+          balance_after: newBalance,
+          credit_amount: creditAmount
         }
       });
 
-      return res.status(200).json({ success: true });
+      return res.status(200).json({ success: true, balance_before: currentBalance, balance_after: newBalance });
     }
 
     if (action === 'approve_transaction') {
@@ -814,9 +817,19 @@ export default async function handler(req, res) {
         if (targetModule === 'voice' || targetModule === 'payment') {
           const { data: instData, error: instError } = await supabase.from('institutions').select('balance').eq('id', targetInstId).single();
           if (instError) throw instError;
-          const newBalance = Number(instData.balance || 0) + Number(targetAmount);
+          const currentBal = Number(instData.balance || 0);
+          const newBalance = currentBal + Number(targetAmount);
           const { error: balanceError } = await supabase.from('institutions').update({ balance: newBalance }).eq('id', targetInstId);
           if (balanceError) throw balanceError;
+
+          // Record balance_before & balance_after in transaction metadata
+          await supabase.from('transactions').update({
+            metadata: {
+              ...(metadata || {}),
+              balance_before: currentBal,
+              balance_after: newBalance
+            }
+          }).eq('id', id);
         } else if (targetModule === 'sms') {
           const { data: instData, error: instError } = await supabase.from('institutions').select('sms_balance, sms_rate, sms_type, reve_client_id').eq('id', targetInstId).single();
           if (instError) throw instError;
@@ -847,10 +860,20 @@ export default async function handler(req, res) {
             creditAmount = Math.ceil(Number(targetAmount || 0) / smsRate);
           }
 
-          const newBalance = Number(instData.sms_balance || 0) + creditAmount;
+          const currentSmsBal = Number(instData.sms_balance || 0);
+          const newBalance = currentSmsBal + creditAmount;
           
           const { error: balanceError } = await supabase.from('institutions').update({ sms_balance: newBalance }).eq('id', targetInstId);
           if (balanceError) throw balanceError;
+
+          // Record balance_before & balance_after in transaction metadata
+          await supabase.from('transactions').update({
+            metadata: {
+              ...(metadata || {}),
+              sms_balance_before: currentSmsBal,
+              sms_balance_after: newBalance
+            }
+          }).eq('id', id);
 
           // Update Admin SMS Stock
           const { data: stockData, error: stockFetchError } = await supabase
@@ -913,21 +936,84 @@ export default async function handler(req, res) {
     }
 
     if (action === 'get_payment_history') {
-      const { institution_id } = body;
+      const { institution_id, module: filterModule } = body;
       if (!institution_id) return res.status(400).json({ error: 'Institution ID is required' });
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('transactions')
         .select('*')
         .eq('institution_id', institution_id)
-        .eq('module', 'subscription')
         .order('created_at', { ascending: false });
+
+      if (filterModule && filterModule !== 'all') {
+        query = query.eq('module', filterModule);
+      }
+      
+      const { data, error } = await query;
       
       if (error) {
         console.error('Error fetching payment history:', error);
         throw error;
       }
       return res.status(200).json({ history: data || [] });
+    }
+
+    if (action === 'get_historical_balance') {
+      const { institution_id, target_date } = body;
+      if (!institution_id) return res.status(400).json({ error: 'Institution ID is required' });
+
+      const { data: inst, error: instErr } = await supabase
+        .from('institutions')
+        .select('id, name, balance, sms_balance')
+        .eq('id', institution_id)
+        .single();
+
+      if (instErr || !inst) return res.status(404).json({ error: 'Institution not found' });
+
+      const targetIso = target_date ? new Date(target_date).toISOString() : new Date().toISOString();
+
+      // Fetch all approved transactions that occurred on or after the target timestamp
+      const { data: laterTxs, error: txErr } = await supabase
+        .from('transactions')
+        .select('amount, type, status, module, sms_count, created_at, description, transaction_id')
+        .eq('institution_id', institution_id)
+        .eq('status', 'approved')
+        .gte('created_at', targetIso);
+
+      if (txErr) throw txErr;
+
+      let voiceDelta = 0;
+      let smsDelta = 0;
+
+      for (const t of laterTxs || []) {
+        const amt = Number(t.amount || 0);
+        const smsC = Number(t.sms_count || 0);
+
+        if (t.module === 'voice' || t.module === 'payment' || (!t.module && amt > 0)) {
+          if (t.type === 'credit') voiceDelta += amt;
+          else if (t.type === 'debit') voiceDelta -= amt;
+        }
+
+        if (t.module === 'sms') {
+          if (t.type === 'credit') smsDelta += smsC;
+          else if (t.type === 'debit') smsDelta -= smsC;
+        }
+      }
+
+      const historicalVoice = Math.max(0, Math.round((Number(inst.balance || 0) - voiceDelta) * 100) / 100);
+      const historicalSms = Math.max(0, Math.round((Number(inst.sms_balance || 0) - smsDelta)));
+
+      return res.status(200).json({
+        success: true,
+        institution_id,
+        institution_name: inst.name,
+        target_date: targetIso,
+        current_voice_balance: Number(inst.balance || 0),
+        current_sms_balance: Number(inst.sms_balance || 0),
+        historical_voice_balance: historicalVoice,
+        historical_sms_balance: historicalSms,
+        transactions_since_target: (laterTxs || []).length,
+      });
     }
 
     if (action === 'delete_payment_history') {
