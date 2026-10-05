@@ -185,6 +185,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         url.searchParams.delete('call_id');
         url.searchParams.delete('t');
         window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      } else if (action === 'incoming_call' && targetCallId) {
+        // App bondho chilo → broadcast miss → admin ke offer abar pathate bolo.
+        // Admin 'call:request_offer' shune 'call:initiate' abar pathabe,
+        // tokhon handleIncomingOffer → incoming UI asbe.
+        console.log('[CallContext] No active call found, requesting offer re-send for', targetCallId);
+        voiceCallService.requestOffer(targetCallId);
       }
     }
   }, [activeCall, callStatus]);

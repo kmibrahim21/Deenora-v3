@@ -122,6 +122,15 @@ export class VoiceCallService {
     return null;
   }
 
+  /**
+   * Parent app bondho theke FCM notification tap kore khulle call offer miss hoy.
+   * Tokhon ei method diye admin ke offer abar pathate bola hoy.
+   */
+  public requestOffer(callId: string) {
+    console.log('[VoiceCall] Requesting offer re-send for:', callId);
+    this.broadcastSignaling('call:request_offer', { callId });
+  }
+
   constructor() {
     if (typeof window !== 'undefined') {
       this.remoteAudioElement = new Audio();
@@ -211,6 +220,13 @@ export class VoiceCallService {
         .on('broadcast', { event: 'call:ping' }, ({ payload }: { payload: { callId: string } }) => {
           if (this.activeCallData && this.activeCallData.callId === payload.callId) {
             this.lastPingReceived = Date.now();
+          }
+        })
+        .on('broadcast', { event: 'call:request_offer' }, ({ payload }: { payload: { callId: string } }) => {
+          // Parent app bondho theke khule offer miss koreche → caller abar offer pathabe
+          if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+            console.log('[VoiceCall] Re-sending offer for missed call:', payload.callId);
+            this.broadcastSignaling('call:initiate', this.activeCallData);
           }
         });
     };
