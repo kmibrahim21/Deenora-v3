@@ -469,15 +469,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const data = { title: String(title || 'Deenora'), body: String(body || ''), type: 'notification' };
-      const results = await Promise.all(finalTokens.map(tok =>
-        fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-          body: JSON.stringify({ message: { token: tok, android: { priority: 'HIGH' }, data } }),
-        }).then(r => r.ok).catch(() => false)
-      ));
-      const sent = results.filter(Boolean).length;
-      return res.status(200).json({ success: true, sent, matched: finalTokens.length });
+      // TEMP DEBUG 2026-10-05: capture which token + what FCM actually says
+      const results = await Promise.all(finalTokens.map(async (tok) => {
+        try {
+          const r = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+            body: JSON.stringify({ message: { token: tok, android: { priority: 'HIGH' }, data } }),
+          });
+          const b = await r.text().catch(() => '');
+          return { ok: r.ok, status: r.status, tokenPrefix: tok.slice(0, 16), fcmBody: b.slice(0, 250) };
+        } catch (e: any) {
+          return { ok: false, status: 0, tokenPrefix: tok.slice(0, 16), fcmBody: String(e?.message || e).slice(0, 250) };
+        }
+      }));
+      const sent = results.filter(r => r.ok).length;
+      return res.status(200).json({ success: true, sent, matched: finalTokens.length, _debug: results });
     } catch (err: any) {
       console.error('[Call API] send_notification_push error:', err);
       return res.status(500).json({ success: false, message: err.message });
