@@ -3000,11 +3000,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                     </td>
                                 ))}
                                 <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
-                                    {(Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0)}
+                                    {subjects.reduce((sum, sub) => sum + (parseFloat(marksData[std.id]?.[sub.id] || '0') || 0), 0)}
                                 </td>
                                 <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
                                     {(() => {
-                                        const total = (Object.values(marksData[std.id] || {}) as any[]).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0);
+                                        const total = subjects.reduce((sum, sub) => sum + (parseFloat(marksData[std.id]?.[sub.id] || '0') || 0), 0);
                                         const totalPossible = subjects.reduce((sum, s) => sum + s.total_marks, 0);
                                         return getDivision(total, totalPossible);
                                     })()}
@@ -3039,7 +3039,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                         {(() => {
                             const sortedStds = students.map(std => {
                                 const stdMarks = marksData[std.id] || {};
-                                const totalObtained = Object.values(stdMarks).reduce((sum: number, m: any) => sum + (parseFloat(m) || 0), 0) as number;
+                                const totalObtained = subjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
                                 const totalPossible = subjects.reduce((sum, s) => sum + s.total_marks, 0);
                                 
                                 // Check if failed in any subject

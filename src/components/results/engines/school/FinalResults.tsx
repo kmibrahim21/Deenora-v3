@@ -418,11 +418,19 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
           studentMarks[sub] = weightedSum.toFixed(1);
           termBreakdown[sub] = subTerms;
-          if (resultSystem === 'grading_optional') {
-            if (!isOptional) {
+          const optTotalMode = (madrasah?.config_json as any)?.optional_subject_total_mode || 'exclude';
+          const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
+
+          if (isOptionalEffectively) {
+            if (optTotalMode === 'bonus_above_40') {
+              const passPart = subjectPassMarks || 40;
+              const bonus = Math.max(0, weightedSum - passPart);
+              totalWeightedSum += bonus;
+            } else if (optTotalMode === 'include') {
               totalWeightedSum += weightedSum;
               overallMaxMarks += subjectMaxMarks;
             }
+            // default 'exclude': do not add 4th subject to totalWeightedSum or overallMaxMarks
           } else {
             totalWeightedSum += weightedSum;
             overallMaxMarks += subjectMaxMarks;
