@@ -436,26 +436,54 @@ export const generateResultPDF = async (
         console.warn('Server PDF generation failed for marksheet, falling back to client:', serverErr);
     }
 
-    const imgData = await toPng(targetEl, {
-        pixelRatio: 3, // High quality for print
-        backgroundColor: '#ffffff',
-        width: 794,
-        height: 1123,
-        fontEmbedCSS: solaimanLipiFontEmbedCSS,
-    });
-    onProgress?.(85);
+    let imgData: string | null = null;
+    try {
+        imgData = await toPng(targetEl, {
+            pixelRatio: 2,
+            backgroundColor: '#ffffff',
+            width: 794,
+            height: 1123,
+            skipFonts: true,
+            fontEmbedCSS: solaimanLipiFontEmbedCSS,
+        });
+    } catch (pngErr) {
+        console.warn('toPng failed for marksheet, trying toJpeg fallback:', pngErr);
+        try {
+            imgData = await toJpeg(targetEl, {
+                pixelRatio: 2,
+                quality: 0.95,
+                backgroundColor: '#ffffff',
+                width: 794,
+                height: 1123,
+                skipFonts: true,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
+            });
+        } catch (jpegErr) {
+            console.error('Both toPng and toJpeg failed for marksheet:', jpegErr);
+        }
+    }
 
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
+    if (imgData) {
+        onProgress?.(85);
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        
+        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        
+        onProgress?.(98);
+        const outFileName = `Result_${student.student_name || student.name || 'Student'}.pdf`;
+        if (typeof window !== 'undefined' && (window.AndroidInterface?.downloadFile || window.Android?.downloadFile)) {
+            await saveJsPdf(doc, outFileName);
+        } else {
+            doc.save(outFileName);
+        }
+    }
     
-    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'SLOW');
-    
-    onProgress?.(98);
     root.unmount();
-    document.body.removeChild(container);
-    
-    doc.save(`Result_${student.student_name || student.name || 'Student'}.pdf`);
+    if (document.body.contains(container)) {
+        document.body.removeChild(container);
+    }
     onProgress?.(100);
 };
 
@@ -1471,27 +1499,53 @@ export const generateFinalIndividualResultPDF = async (
         console.warn('Server PDF generation failed for final individual marksheet, falling back to client:', serverErr);
     }
 
-    const imgData = await toJpeg(targetEl, {
-        pixelRatio: 2,
-        quality: 0.95,
-        backgroundColor: '#ffffff',
-        width: 794,
-        height: 1123,
-        fontEmbedCSS: solaimanLipiFontEmbedCSS,
-    });
-    onProgress?.(85);
+    let imgData: string | null = null;
+    try {
+        imgData = await toJpeg(targetEl, {
+            pixelRatio: 2,
+            quality: 0.95,
+            backgroundColor: '#ffffff',
+            width: 794,
+            height: 1123,
+            skipFonts: true,
+            fontEmbedCSS: solaimanLipiFontEmbedCSS,
+        });
+    } catch (jpegErr) {
+        console.warn('toJpeg failed for final individual marksheet, trying toPng fallback:', jpegErr);
+        try {
+            imgData = await toPng(targetEl, {
+                pixelRatio: 2,
+                backgroundColor: '#ffffff',
+                width: 794,
+                height: 1123,
+                skipFonts: true,
+                fontEmbedCSS: solaimanLipiFontEmbedCSS,
+            });
+        } catch (pngErr) {
+            console.error('Both toJpeg and toPng failed for final individual marksheet:', pngErr);
+        }
+    }
 
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    
-    doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-    
-    onProgress?.(98);
+    if (imgData) {
+        onProgress?.(85);
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        
+        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+        
+        onProgress?.(98);
+        if (typeof window !== 'undefined' && (window.AndroidInterface?.downloadFile || window.Android?.downloadFile)) {
+            await saveJsPdf(doc, finalMarksheetFileName);
+        } else {
+            doc.save(finalMarksheetFileName);
+        }
+    }
+
     root.unmount();
-    document.body.removeChild(container);
-    
-    doc.save(finalMarksheetFileName);
+    if (document.body.contains(container)) {
+        document.body.removeChild(container);
+    }
     onProgress?.(100);
 };
 

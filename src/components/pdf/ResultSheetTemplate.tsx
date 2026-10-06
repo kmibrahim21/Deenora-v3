@@ -74,7 +74,7 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
 
   const hasAnyMark = marks.some(m => m.marks_obtained !== undefined && m.marks_obtained !== null && m.marks_obtained !== '');
 
-  const optTotalMode = (institution?.config_json as any)?.optional_subject_total_mode || 'include';
+  const optTotalMode = (config?.optional_subject_total_mode) || 'include';
   
   const totalObtained = hasAnyMark ? marks.filter(m => optTotalMode !== 'exclude' || !m.is_optional).reduce((sum, m) => sum + Number(m.marks_obtained || 0), 0) : '';
   const totalFull = marks.filter(m => optTotalMode !== 'exclude' || !m.is_optional).reduce((sum, m) => sum + Number(m.full_marks || 100), 0);

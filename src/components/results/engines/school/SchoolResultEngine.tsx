@@ -4479,6 +4479,9 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                                                         (p) => setDownloadProgress(p),
                                                         selectedResultTemplate
                                                     );
+                                                  } catch (pdfErr) {
+                                                    console.error('Error generating marksheet:', pdfErr);
+                                                    alert(lang === 'bn' ? 'মার্কশিট তৈরিতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।' : 'Failed to generate marksheet. Please try again.');
                                                   } finally {
                                                     setIsDownloading(false);
                                                     setDownloadProgress(0);
