@@ -203,16 +203,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     return (config?.modules || {}) as any;
   }, [currentInstitution, madrasah]);
 
-  const isLiveChatEnabled = useMemo(() => {
-    const inst = currentInstitution || madrasah;
-    if (inst?.is_super_admin) return true;
-    let config: any = inst?.config_json;
-    if (typeof config === 'string') {
-      try { config = JSON.parse(config); } catch (e) { config = {}; }
-    }
-    const configModules = config?.modules || {};
-    return configModules.live_chat === true || (inst as any)?.live_chat === true || (config as any)?.live_chat === true;
-  }, [currentInstitution, madrasah]);
+  // Live chat is temporarily hidden from parent portal as requested
+  const isLiveChatEnabled = false;
 
   const [attendance, setAttendance] = useState<Attendance[]>(() => initialCache?.attendance || []);
   const [fees, setFees] = useState<Fee[]>(() => initialCache?.fees || []);
@@ -2917,7 +2909,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
               })()}
             </motion.div>
           )}
-          {activeTab === 'chat' && (
+          {isLiveChatEnabled && activeTab === 'chat' && (
             <div key="chat" className="h-full w-full flex flex-col overflow-hidden">
               <ChatApp
                 institution={currentInstitution || madrasah}
