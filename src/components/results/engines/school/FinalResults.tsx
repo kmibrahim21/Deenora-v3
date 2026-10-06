@@ -418,7 +418,7 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
 
           studentMarks[sub] = weightedSum.toFixed(1);
           termBreakdown[sub] = subTerms;
-          const optTotalMode = (madrasah?.config_json as any)?.optional_subject_total_mode || 'exclude';
+          const optTotalMode = (madrasah?.config_json as any)?.optional_subject_total_mode || 'include';
           const isOptionalEffectively = isOptional && (resultSystem === 'grading_optional' || resultSystem === 'high_school');
 
           if (isOptionalEffectively) {

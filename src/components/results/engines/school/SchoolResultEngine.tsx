@@ -1330,7 +1330,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
           if (isChild) return;
 
-          const optTotalMode = (madrasah?.config_json as any)?.optional_subject_total_mode || 'exclude';
+          const optTotalMode = (madrasah?.config_json as any)?.optional_subject_total_mode || 'include';
 
           if (children.length > 0) {
             let combinedObtained = parseFloat(studentMarksObjLocal[sub.id] || '0');
@@ -1602,7 +1602,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
         continue;
       }
 
-      const optTotalMode = (madrasah?.config_json as any)?.optional_subject_total_mode || 'exclude';
+      const optTotalMode = (madrasah?.config_json as any)?.optional_subject_total_mode || 'include';
 
       // Check if any other subject is paired with this one
       const children = currentSubjects.filter(child => child.pair_with_id === s.id);
@@ -5059,13 +5059,13 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     type="button"
                     onClick={() => handleSetOptionalSubjectTotalMode('exclude')}
                     className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex flex-col justify-between ${
-                      (!((madrasah?.config_json as any)?.optional_subject_total_mode) || (madrasah?.config_json as any)?.optional_subject_total_mode === 'exclude')
+                      (madrasah?.config_json as any)?.optional_subject_total_mode === 'exclude'
                         ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                         : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700')
                     }`}
                   >
                     <span>{lang === 'bn' ? '৪র্থ বিষয় বাদ' : 'Exclude 4th Sub'}</span>
-                    <span className="text-[9px] font-normal opacity-80 mt-0.5">{lang === 'bn' ? '(ডিফল্ট/বোর্ড নিয়ম)' : '(Default/Board)'}</span>
+                    <span className="text-[9px] font-normal opacity-80 mt-0.5">{lang === 'bn' ? '(বোর্ডের মূল নিয়ম)' : '(Board Rule)'}</span>
                   </button>
 
                   <button
@@ -5085,7 +5085,7 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                     type="button"
                     onClick={() => handleSetOptionalSubjectTotalMode('include')}
                     className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex flex-col justify-between ${
-                      (madrasah?.config_json as any)?.optional_subject_total_mode === 'include'
+                      (!((madrasah?.config_json as any)?.optional_subject_total_mode) || (madrasah?.config_json as any)?.optional_subject_total_mode === 'include')
                         ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                         : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700')
                     }`}
