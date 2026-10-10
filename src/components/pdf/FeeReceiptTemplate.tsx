@@ -25,9 +25,10 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
     description: isBangla ? 'বিবরণ' : 'Description',
     amount: isBangla ? 'পরিমাণ' : 'Amount',
     monthlyFees: isBangla ? 'মাসিক ফি ও অন্যান্য চার্জ' : 'Monthly Fees & Other Charges',
-    discount: isBangla ? 'ডিসকাউন্ট' : 'Discount Applied',
+    discount: isBangla ? 'ডিসকাউন্ট (ছাড়)' : 'Discount Applied',
     totalPaid: isBangla ? 'মোট জমা (এই মাসে)' : 'Total Paid (This Month)',
     balanceDue: isBangla ? 'বকেয়া' : 'Balance Due',
+    previousDue: isBangla ? 'পূর্বের বকেয়া' : 'Previous Due',
     authSignature: isBangla ? 'হিসাব রক্ষক' : 'Accounts Officer',
     principalSignature: isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Head of Institution',
     computerGenerated: isBangla ? 'এটি একটি কম্পিউটার জেনারেটেড রিসিট।' : 'This is a computer-generated receipt.',
@@ -37,9 +38,18 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
   };
 
   const ReceiptContent = ({ copyType }: { copyType: string }) => {
-    const feeItems = student.fee_items || [
-      { name: t.monthlyFees, amount: Number(student.total_payable) }
-    ];
+    const discountVal = Number(student?.discount ?? student?.total_discount ?? student?.discount_amount ?? student?.paymentDetails?.discount ?? 0);
+    const paidVal = Number(student?.total_paid ?? 0);
+    const prevDueVal = Number(student?.previous_due ?? 0);
+    const balDueVal = Math.max(0, Number(student?.balance_due ?? 0));
+
+    const fallbackPayable = Number(student?.total_payable ?? 0) > 0
+      ? Number(student.total_payable)
+      : Math.max(0, paidVal + discountVal + balDueVal - prevDueVal);
+
+    const feeItems = (student?.fee_items && student.fee_items.length > 0)
+      ? student.fee_items
+      : [{ name: t.monthlyFees, amount: fallbackPayable || (paidVal + discountVal) }];
 
     return (
     <div className="flex-1 border-[2px] border-[#1E3A8A] border-dashed rounded-xl relative overflow-hidden bg-white shadow-sm flex flex-col justify-between p-3">
@@ -126,21 +136,27 @@ export const FeeReceiptTemplate: React.FC<FeeReceiptProps> = ({ student, month, 
                   <td className="py-1 px-3 text-right text-[11px] font-bold text-slate-900">{t.currency}{Number(item.amount).toLocaleString()}</td>
                 </tr>
               ))}
-              {Number(student.discount) > 0 && (
-                <tr className="bg-white">
+              {prevDueVal > 0 && (
+                <tr className="bg-amber-50/30">
+                  <td className="py-0.5 px-3 text-[10px] font-bold text-amber-800 leading-none">{t.previousDue}</td>
+                  <td className="py-0.5 px-3 text-right text-[10px] font-bold text-amber-800 leading-none">{t.currency}{prevDueVal.toLocaleString()}</td>
+                </tr>
+              )}
+              {discountVal > 0 && (
+                <tr className="bg-orange-50/40">
                   <td className="py-0.5 px-3 text-[10px] font-bold text-orange-600 italic leading-none">{t.discount}</td>
-                  <td className="py-0.5 px-3 text-right text-[10px] font-bold text-orange-600 leading-none">-{t.currency}{Number(student.discount).toLocaleString()}</td>
+                  <td className="py-0.5 px-3 text-right text-[10px] font-bold text-orange-600 leading-none">-{t.currency}{discountVal.toLocaleString()}</td>
                 </tr>
               )}
               <tr className="bg-emerald-50/50">
                 <td className="py-1 px-3 text-[11px] font-black text-emerald-800">{t.totalPaid}</td>
-                <td className="py-1 px-3 text-right text-[11px] font-black text-emerald-800">{t.currency}{Number(student.total_paid).toLocaleString()}</td>
+                <td className="py-1 px-3 text-right text-[11px] font-black text-emerald-800">{t.currency}{paidVal.toLocaleString()}</td>
               </tr>
             </tbody>
             <tfoot>
               <tr className="bg-red-50/30 border-t border-red-100">
                 <td className="py-1 px-3 text-right text-[9px] font-black uppercase tracking-widest text-red-700">{t.balanceDue}:</td>
-                <td className="py-1 px-3 text-right text-[12px] font-black text-red-600 font-mono">{t.currency}{Math.max(0, Number(student.balance_due)).toLocaleString()}</td>
+                <td className="py-1 px-3 text-right text-[12px] font-black text-red-600 font-mono">{t.currency}{balDueVal.toLocaleString()}</td>
               </tr>
             </tfoot>
           </table>

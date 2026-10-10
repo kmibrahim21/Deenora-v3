@@ -970,15 +970,24 @@ export default async function handler(req, res) {
 
       if (instErr || !inst) return res.status(404).json({ error: 'Institution not found' });
 
-      const targetIso = target_date ? new Date(target_date).toISOString() : new Date().toISOString();
+      let targetIso = new Date().toISOString();
+      if (target_date) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(target_date)) {
+          // If pure YYYY-MM-DD date provided, default to end of that day (23:59:59.999)
+          const [y, m, d] = target_date.split('-').map(Number);
+          targetIso = new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+        } else {
+          targetIso = new Date(target_date).toISOString();
+        }
+      }
 
-      // Fetch all approved transactions that occurred on or after the target timestamp
+      // Fetch all approved transactions that occurred strictly after targetIso
       const { data: laterTxs, error: txErr } = await supabase
         .from('transactions')
         .select('amount, type, status, module, sms_count, created_at, description, transaction_id')
         .eq('institution_id', institution_id)
         .eq('status', 'approved')
-        .gte('created_at', targetIso);
+        .gt('created_at', targetIso);
 
       if (txErr) throw txErr;
 

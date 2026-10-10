@@ -332,24 +332,28 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
             }, 0);
             
             const studentFees = feesData?.filter(f => f.student_id === student.student_id) || [];
-            const totalPaid = studentFees.reduce((sum, f) => sum + Number(f.amount_paid) + Number(f.discount || 0), 0);
+            const cashPaid = studentFees.reduce((sum, f) => sum + Number(f.amount_paid || 0), 0);
+            const studentDiscount = studentFees.reduce((sum, f) => sum + Number(f.discount || 0), 0);
+            const totalSettled = cashPaid + studentDiscount;
             
-            const balanceDue = Math.max(0, previousDue + totalPayable - totalPaid);
+            const balanceDue = Math.max(0, previousDue + totalPayable - totalSettled);
             
             let status = 'unpaid';
             if (totalPayable > 0) {
-                if (totalPaid >= totalPayable) status = 'paid';
-                else if (totalPaid > 0) status = 'partial';
+                if (totalSettled >= totalPayable) status = 'paid';
+                else if (totalSettled > 0) status = 'partial';
                 else status = 'unpaid';
             } else {
-                status = totalPaid > 0 ? 'paid' : 'no_fee';
+                status = totalSettled > 0 ? 'paid' : 'no_fee';
             }
 
             return {
                 ...student,
                 previous_due: previousDue,
                 total_payable: totalPayable,
-                total_paid: totalPaid,
+                total_paid: cashPaid,
+                discount: studentDiscount,
+                total_settled: totalSettled,
                 balance_due: balanceDue,
                 status: status,
                 fee_items: studentFeeStructures.map(fs => {
@@ -749,7 +753,8 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
           class_name: className,
           section: student.student_type || '',
           previous_due: previousDue,
-          fee_items: feeCats
+          fee_items: feeCats,
+          discount: Number(student.discount || 0)
         },
         month: selectedMonth,
         paymentDetails: {
@@ -770,7 +775,12 @@ export const SchoolFeeEngine: React.FC<SchoolFeeEngineProps> = ({ activeTab, mad
     setDownloadProgress(0);
     try {
         await generateFeeReceiptPDF(
-            { ...student, class_name: className, section: student.student_type ? student.student_type : '' }, // Assuming student_type might represent section temporarily if none exists
+            { 
+              ...student, 
+              class_name: className, 
+              section: student.student_type ? student.student_type : '',
+              discount: Number(student.discount || 0)
+            },
             selectedMonth,
             madrasah,
             downloadLang,

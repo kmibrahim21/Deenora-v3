@@ -102,7 +102,14 @@ export const ClassFeeReportTemplate: React.FC<ClassFeeReportProps> = ({ classNam
                   <td className="border-r border-slate-100 p-2 text-xs font-black text-center text-blue-600">{student.roll}</td>
                   <td className="border-r border-slate-100 p-2 text-xs font-black text-slate-700">{student.student_name}</td>
                   <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">৳{Number(student.total_payable || 0).toLocaleString()}</td>
-                  <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">৳{Number(student.total_paid || 0).toLocaleString()}</td>
+                  <td className="border-r border-slate-100 p-2 text-xs font-bold text-right">
+                    ৳{Number(student.total_paid || 0).toLocaleString()}
+                    {Number(student.discount) > 0 && (
+                      <span className="block text-[8px] text-orange-600 font-bold">
+                        (ছাড়: ৳{Number(student.discount).toLocaleString()})
+                      </span>
+                    )}
+                  </td>
                   <td className="border-r border-slate-100 p-2 text-xs font-bold text-right text-red-600">৳{Number(student.balance_due || 0).toLocaleString()}</td>
                   <td className="p-2 text-center">
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase ${statusColor}`}>

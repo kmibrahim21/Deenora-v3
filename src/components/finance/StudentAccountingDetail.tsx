@@ -318,12 +318,12 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
     
     // Parse months from description
     let monthText = new Date().toLocaleString(lang === 'bn' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' });
-    const monthsMatch = description.match(/Month[s]?:\s*([^\)]+)/);
+    const monthsMatch = description.match(/Month[s]?:\s*([^\)]+)/i);
     if (monthsMatch && monthsMatch[1]) monthText = monthsMatch[1];
     
     // Parse discount from description
     let discount = 0;
-    const discountMatch = description.match(/ছাড়:\s*৳([0-9.]+)/);
+    const discountMatch = description.match(/(?:ছাড়|Discount):\s*৳?([0-9.]+)/i);
     if (discountMatch && discountMatch[1]) discount = parseFloat(discountMatch[1]);
     
     // Parse fee items categories
@@ -364,12 +364,12 @@ const StudentAccountingDetail: React.FC<StudentAccountingDetailProps> = ({ stude
       
       // Parse months from description
       let monthText = 'Multiple Months';
-      const monthsMatch = description.match(/Months:\s*([^\)]+)/);
+      const monthsMatch = description.match(/Month[s]?:\s*([^\)]+)/i);
       if (monthsMatch && monthsMatch[1]) monthText = monthsMatch[1];
       
       // Parse discount from description
       let discount = 0;
-      const discountMatch = description.match(/ছাড়:\s*৳([0-9.]+)/);
+      const discountMatch = description.match(/(?:ছাড়|Discount):\s*৳?([0-9.]+)/i);
       if (discountMatch && discountMatch[1]) discount = parseFloat(discountMatch[1]);
       
       // Parse fee items categories

@@ -4549,13 +4549,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div>
                                        <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
-                                          <Clock size={13} /> নির্দিষ্ট সময়ে ব্যালেন্স কত ছিল? (Historical Balance Check)
+                                          <Clock size={13} /> নির্দিষ্ট তারিখ ও সময়ে ব্যালেন্স কত ছিল? (Historical Balance Check)
                                        </p>
-                                       <p className="text-[10px] font-bold text-slate-400 mt-0.5">যেকোনো তারিখ সিলেক্ট করে ওই সময়ে প্রতিষ্ঠানটির ব্যালেন্স কত ছিল তা বের করুন</p>
+                                       <p className="text-[10px] font-bold text-slate-400 mt-0.5">যেকোনো তারিখ ও সময় সিলেক্ট করে ওই মুহূর্তে প্রতিষ্ঠানটির ব্যালেন্স কত ছিল তা যাচাই করুন</p>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                                        <input
-                                         type="date"
+                                         type="datetime-local"
                                          value={auditDate}
                                          onChange={(e) => setAuditDate(e.target.value)}
                                          className={`px-3 py-1.5 rounded-xl border text-xs font-bold outline-none ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
@@ -4564,7 +4564,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                          type="button"
                                          onClick={handleCheckHistoricalBalance}
                                          disabled={isCheckingAudit || !auditDate}
-                                         className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95"
+                                         className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 shrink-0"
                                        >
                                          {isCheckingAudit ? <Loader2 size={13} className="animate-spin" /> : 'চেক করুন'}
                                        </button>
@@ -4572,22 +4572,36 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
                                  </div>
 
                                  {auditResult && (
-                                   <div className="pt-3 border-t border-slate-200/50 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 animate-in fade-in duration-300">
-                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
-                                         <p className="text-[9px] font-bold text-slate-400">তারিখে ভয়েস ব্যালেন্স</p>
-                                         <p className="text-sm font-black text-emerald-600 mt-0.5">{auditResult.historical_voice_balance} ৳</p>
+                                   <div className="pt-3 border-t border-slate-200/50 dark:border-slate-800 space-y-3 animate-in fade-in duration-300">
+                                      <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                                         <span>যাচাইকৃত সময়:</span>
+                                         <span className="font-black text-blue-600 dark:text-blue-400">
+                                            {new Date(auditResult.target_date).toLocaleString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                                         </span>
+                                         <span className="text-[10px] font-bold text-slate-400">({new Date(auditResult.target_date).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })})</span>
+                                         {auditResult.transactions_since_target > 0 && (
+                                           <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md border border-amber-200/50">
+                                              ঐ সময়ের পর {auditResult.transactions_since_target} টি লেনদেন হয়েছে
+                                           </span>
+                                         )}
                                       </div>
-                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
-                                         <p className="text-[9px] font-bold text-slate-400">তারিখে SMS ব্যালেন্স</p>
-                                         <p className="text-sm font-black text-blue-600 mt-0.5">{auditResult.historical_sms_balance} SMS</p>
-                                      </div>
-                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
-                                         <p className="text-[9px] font-bold text-slate-400">বর্তমান ভয়েস ব্যালেন্স</p>
-                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5">{auditResult.current_voice_balance} ৳</p>
-                                      </div>
-                                      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
-                                         <p className="text-[9px] font-bold text-slate-400">বর্তমান SMS ব্যালেন্স</p>
-                                         <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5">{auditResult.current_sms_balance} SMS</p>
+                                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                         <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                            <p className="text-[9px] font-bold text-slate-400">উক্ত তারিখ ও সময়ের ভয়েস ব্যালেন্স</p>
+                                            <p className="text-sm font-black text-emerald-600 mt-0.5">{auditResult.historical_voice_balance} ৳</p>
+                                         </div>
+                                         <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                            <p className="text-[9px] font-bold text-slate-400">উক্ত তারিখ ও সময়ের SMS ব্যালেন্স</p>
+                                            <p className="text-sm font-black text-blue-600 mt-0.5">{auditResult.historical_sms_balance} SMS</p>
+                                         </div>
+                                         <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                            <p className="text-[9px] font-bold text-slate-400">বর্তমান ভয়েস ব্যালেন্স</p>
+                                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5">{auditResult.current_voice_balance} ৳</p>
+                                         </div>
+                                         <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                                            <p className="text-[9px] font-bold text-slate-400">বর্তমান SMS ব্যালেন্স</p>
+                                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 mt-0.5">{auditResult.current_sms_balance} SMS</p>
+                                         </div>
                                       </div>
                                    </div>
                                  )}
