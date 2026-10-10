@@ -597,7 +597,7 @@ const SmartFeeAnalytics: React.FC<SmartFeeAnalyticsProps> = ({ institutionId, la
         const { data: sysSettings } = await supabase.from('system_settings').select('voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
         if (sysSettings?.voice_rate) vRate = sysSettings.voice_rate;
       }
-      setVoiceRate(vRate || 0.50);
+      setVoiceRate(vRate || 0.45);
 
       const { data: localVoices } = await supabase
         .from('voice_templates')

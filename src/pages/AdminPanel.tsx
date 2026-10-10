@@ -2299,6 +2299,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ lang, currentView = 'list', dat
 
   
 
+  
+  const handleApplyVoiceRateToAllUsers = async () => {
+    try {
+      const { error: sysErr } = await supabase
+        .from('system_settings')
+        .update({ voice_rate: 0.45 })
+        .eq('id', '00000000-0000-0000-0000-000000000001');
+      if (sysErr) console.error('Sys error:', sysErr);
+
+      const { error: instErr } = await supabase
+        .from('institutions')
+        .update({ voice_rate: 0.45 })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (instErr) throw instErr;
+
+      setEditVoiceRate(0.45);
+      setStatusModal({
+        show: true,
+        type: 'success',
+        title: 'সফল',
+        message: 'সকল ইউজার এবং গ্লোবাল সিস্টেমে ভয়েস কল রেট ০.৪৫ টাকা সেট করা হয়েছে।'
+      });
+      initData(true, true);
+    } catch (err: any) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: 'ত্রুটি',
+        message: err.message || 'ভয়েস রেট আপডেট করতে সমস্যা হয়েছে।'
+      });
+    }
+  };
+
   const bulkDeleteTransactions = async () => {
     if (!bulkDeleteTab) return;
     setIsBulkDeleting(true);

@@ -278,7 +278,7 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
           const { data } = await supabase.from('system_settings').select('voice_rate').eq('id', '00000000-0000-0000-0000-000000000001').single();
           r = data?.voice_rate || 0.45;
         } catch(e) {
-          r = 0.50;
+          r = 0.45;
         }
       }
       setVoiceRate(r);

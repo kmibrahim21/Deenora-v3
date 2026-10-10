@@ -178,7 +178,7 @@ export default async function handler(req, res) {
       const spentVoiceTk = Math.max(0, totalVoiceRecharged - totalVoiceBalance);
       
       const smsRev = Math.round(sentCount * 0.10);
-      const voiceRev = Math.round((spentVoiceTk / 0.5) * 0.15);
+      const voiceRev = Math.round((spentVoiceTk / 0.45) * 0.15);
       
       const monthlySubscriptionRevenue = subTransactions.reduce((acc: Record<string, number>, t) => {
         const date = new Date(t.created_at);
