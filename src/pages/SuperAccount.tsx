@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink } from 'lucide-react';
+import { LogOut, Loader2, User as UserIcon, ShieldCheck, ChevronRight, Smartphone, Save, Sliders, CreditCard, LayoutDashboard, X, Play, Mic, Moon, Sun, Languages, Globe, CheckCircle2, Package, Plus, Trash2, Edit2, ArrowLeft, ArrowRight, Calendar, Award, Type, Shield, Users2, UserPlus, Trash, Building2, BarChart3, Link2, Youtube, ExternalLink, Eye } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { linkifyMarkdown, getMarkdownComponents } from 'utils/markdownUtils';
 import { supabase, smsApi } from 'supabase';
@@ -819,7 +819,8 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                       { id: 'tutorials', label: lang === 'bn' ? 'টিউটোরিয়াল ম্যানেজ' : 'Manage Tutorials' },
                       { id: 'voice_dashboard', label: lang === 'bn' ? 'ভয়েস ড্যাশবোর্ড / গেটওয়ে' : 'Voice Dashboard / Gateway' },
                       { id: 'can_use_voice_call', label: lang === 'bn' ? 'ভয়েস ব্রডকাস্ট / কল' : 'Voice Broadcast / Call' },
-                      { id: 'packages', label: lang === 'bn' ? 'প্যাকেজসমূহ' : 'Packages' }
+                      { id: 'packages', label: lang === 'bn' ? 'প্যাকেজসমূহ' : 'Packages' },
+                      { id: 'read_only', label: lang === 'bn' ? 'রিড-অনলি মোড (শুধু দেখার এক্সেস)' : 'Read-Only Mode (View Only)' }
                     ].map((perm) => (
                       <button
                         key={perm.id}
@@ -892,6 +893,11 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${s.role === 'super_admin' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
                             {s.role}
                           </span>
+                          {s.permissions?.read_only && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 flex items-center gap-1">
+                              <Eye size={10} /> {lang === 'bn' ? 'রিড-অনলি' : 'Read Only'}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -966,6 +972,69 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                 </div>
               </div>
 
+              {/* Read Only Mode Setting */}
+              <div 
+                onClick={() => {
+                  const currentPerms = editingStaff.permissions || {};
+                  setEditingStaff({
+                    ...editingStaff,
+                    permissions: {
+                      ...currentPerms,
+                      read_only: !currentPerms.read_only
+                    }
+                  });
+                }}
+                className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+                  editingStaff.permissions?.read_only 
+                    ? 'border-amber-500/50 bg-amber-500/10 shadow-lg shadow-amber-500/5 ring-1 ring-amber-500/30' 
+                    : (madrasah?.theme === 'dark' ? 'bg-slate-800/40 border-slate-700 hover:border-slate-600' : 'bg-slate-50 border-slate-200 hover:border-slate-300')
+                } hover:scale-[1.01] active:scale-95`}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${
+                      editingStaff.permissions?.read_only ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30' : (madrasah?.theme === 'dark' ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600')
+                    }`}>
+                      <Eye size={22} />
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-sm font-black uppercase tracking-wider ${
+                          editingStaff.permissions?.read_only ? 'text-amber-600 dark:text-amber-400' : (madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-900')
+                        }`}>
+                          {lang === 'bn' ? 'রিড-অনলি মোড (Read Only Mode)' : 'Read Only Mode'}
+                        </span>
+                        <span className={`text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                          editingStaff.permissions?.read_only ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                        }`}>
+                          {editingStaff.permissions?.read_only ? (lang === 'bn' ? 'শুধু দেখার অনুমতি' : 'View Only') : (lang === 'bn' ? 'সম্পূর্ণ এক্সেস' : 'Normal')}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-bold text-slate-400 leading-tight">
+                        {lang === 'bn' 
+                          ? 'এই পারমিশন দিলে ম্যানেজার শুধু তথ্য দেখতে পারবে, কোনো পরিবর্তন বা এডিট করতে পারবে না।' 
+                          : 'Read-only permission allows the manager to only view details without editing, saving, or deleting.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${
+                    editingStaff.permissions?.read_only ? 'bg-amber-500' : (madrasah?.theme === 'dark' ? 'bg-slate-700' : 'bg-slate-300')
+                  }`}>
+                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${
+                      editingStaff.permissions?.read_only ? 'left-7' : 'left-1'
+                    }`} />
+                  </div>
+                </div>
+
+                {editingStaff.permissions?.read_only && (
+                  <div className="mt-3 pt-3 border-t border-amber-500/20 text-[10px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 font-noto">
+                    <CheckCircle2 size={13} className="shrink-0" />
+                    <span>{lang === 'bn' ? 'রিড-অনলি পারমিশন সক্রিয়: ম্যানেজার কোনো ডাটা পরিবর্তন করতে পারবেন না।' : 'Read-only permission active: manager cannot make any modifications.'}</span>
+                  </div>
+                )}
+              </div>
+
               {/* Individual Permissions */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-1">
@@ -974,6 +1043,7 @@ const SuperAccount: React.FC<SuperAccountProps> = ({ lang, setLang, setView, onL
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
+                    { key: 'read_only', label: lang === 'bn' ? 'রিড-অনলি মোড (Read Only)' : 'Read-Only Mode' },
                     { key: 'institutions', label: 'Manage Institutions' },
                     { key: 'approvals', label: 'Manage Approvals' },
                     { key: 'sms', label: 'Manage SMS' },

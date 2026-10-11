@@ -83,11 +83,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
     
     // For managers, check their specific permissions for system views
     if (isManager) {
-      if (module === 'dashboard') return profile?.permissions?.dashboard !== false;
-      if (module === 'institutions') return profile?.permissions?.institutions !== false;
-      if (module === 'approvals') return profile?.permissions?.approvals !== false;
-      if (module === 'tutorials') return profile?.permissions?.tutorials !== false;
-      if (module === 'voice-service' || module === 'voice_dashboard') return true;
+      if (module === 'dashboard') return !!profile?.permissions?.dashboard;
+      if (module === 'institutions') return !!profile?.permissions?.institutions;
+      if (module === 'approvals') return !!profile?.permissions?.approvals;
+      if (module === 'tutorials') return !!profile?.permissions?.tutorials;
+      if (module === 'voice-service' || module === 'voice_dashboard') return !!profile?.permissions?.voice_dashboard || !!profile?.permissions?.can_use_voice_call;
+      return false;
     }
     
     // For regular admins, check module permissions
@@ -202,19 +203,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
                   <span className="text-sm font-bold font-noto">{t('approvals', lang, madrasah?.institution_type)}</span>
                 </button>
               )}
-              {isSystemStaff && (
-                <>
-                  <button onClick={() => setView('sms-voice-menu')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
-                    <MessageSquare size={22} strokeWidth={isTabActive('sms-voice-menu') ? 2.5 : 2} />
-                    <span className="text-sm font-bold font-noto">{t('sms_voice', lang)}</span>
-                  </button>
-                  {(isSuperAdmin || canAccess('voice-service')) && (
-                    <button onClick={() => setView('admin-voice-service')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('voice-service') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
-                      <Radio size={22} strokeWidth={isTabActive('voice-service') ? 2.5 : 2} />
-                      <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'ভয়েস গেটওয়ে' : 'Voice Gateway'}</span>
-                    </button>
-                  )}
-                </>
+              {canAccess('sms') && (
+                <button onClick={() => setView('sms-voice-menu')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('sms-voice-menu') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <MessageSquare size={22} strokeWidth={isTabActive('sms-voice-menu') ? 2.5 : 2} />
+                  <span className="text-sm font-bold font-noto">{t('sms_voice', lang)}</span>
+                </button>
+              )}
+              {canAccess('voice-service') && (
+                <button onClick={() => setView('admin-voice-service')} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('voice-service') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
+                  <Radio size={22} strokeWidth={isTabActive('voice-service') ? 2.5 : 2} />
+                  <span className="text-sm font-bold font-noto">{lang === 'bn' ? 'ভয়েস গেটওয়ে' : 'Voice Gateway'}</span>
+                </button>
               )}
               <button onClick={() => setView(isSuperAdmin ? 'super-account' : (role === 'teacher' ? 'teacheraccount' : 'account'))} className={`flex items-center gap-4 p-4 rounded-2xl transition-all w-full ${isTabActive('account') ? (madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-slate-50 text-blue-700') : (madrasah?.theme === 'dark' ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}`}>
                 <User size={22} strokeWidth={isTabActive('account') ? 2.5 : 2} />

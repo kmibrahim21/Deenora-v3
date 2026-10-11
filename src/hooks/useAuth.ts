@@ -79,25 +79,25 @@ export const useAuth = () => {
           ? { ...singleProfileData, role: 'super_admin' as const } 
           : singleProfileData;
           
-        // If the user is a manager, fetch global manager permissions from system_settings
+        // If the user is a manager, prioritize individual manager permissions
         if (finalProfile.role === 'manager') {
-          try {
-            const { data: sysSettings } = await requestManager.cachedFetch(
-              'system_settings',
-              (q) => q.select('manager_permissions').eq('id', '00000000-0000-0000-0000-000000000001').single(),
-              'global_manager_permissions'
-            );
-            if (sysSettings?.manager_permissions) {
-              finalProfile = {
-                ...finalProfile,
-                permissions: {
-                  ...sysSettings.manager_permissions,
-                  ...finalProfile.permissions
-                }
-              };
+          // If manager doesn't have permissions defined, fallback to global manager permissions
+          if (!finalProfile.permissions || Object.keys(finalProfile.permissions).length === 0) {
+            try {
+              const { data: sysSettings } = await requestManager.cachedFetch(
+                'system_settings',
+                (q) => q.select('manager_permissions').eq('id', '00000000-0000-0000-0000-000000000001').single(),
+                'global_manager_permissions'
+              );
+              if (sysSettings?.manager_permissions) {
+                finalProfile = {
+                  ...finalProfile,
+                  permissions: sysSettings.manager_permissions
+                };
+              }
+            } catch (err) {
+              console.error("Error fetching global manager permissions:", err);
             }
-          } catch (err) {
-            console.error("Error fetching global manager permissions:", err);
           }
         }
           

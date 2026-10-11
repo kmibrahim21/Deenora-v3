@@ -194,6 +194,7 @@ export interface Profile {
     institutions?: boolean;
     approvals?: boolean;
     tutorials?: boolean;
+    read_only?: boolean;
     can_manage_students?: boolean;
     can_manage_classes?: boolean;
     can_send_sms?: boolean;

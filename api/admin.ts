@@ -1171,7 +1171,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'create_staff') {
-      const { name, email, password, role } = body;
+      const { name, email, password, role, permissions } = body;
 
       if (!name || !email || !password || !role) {
         return res.status(400).json({ error: 'Missing required fields' });
@@ -1206,12 +1206,13 @@ export default async function handler(req, res) {
         sysId = newSys?.id;
       }
 
-      // 3. Create profile
+      // 3. Create profile with assigned permissions
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: userId,
         institution_id: sysId,
         full_name: name.trim(),
         role: role, // 'manager' or 'super_admin'
+        permissions: permissions || {},
         is_active: true
       });
 
