@@ -19,7 +19,7 @@ interface CallContextType {
   initSignaling: (institutionId: string, userId: string, phone?: string) => void;
   startCall: (student: CallStudentInfo, caller?: CallParticipantInfo, institutionId?: string) => Promise<boolean>;
   acceptCall: () => Promise<boolean>;
-  rejectCall: (reason?: string) => void;
+  rejectCall: (reason?: string, specificCallId?: string) => void;
   endCall: () => void;
   toggleMute: () => void;
   toggleSpeaker: () => void;
@@ -151,7 +151,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await voiceCallService.acceptCall();
       } else if (cleanAction === 'reject_call' || cleanAction === 'decline' || cleanAction === 'reject') {
         native('stopRinging');
-        voiceCallService.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।');
+        voiceCallService.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।', callId);
       } else if (cleanAction === 'end_call' || cleanAction === 'hangup') {
         native('stopRinging');
         voiceCallService.endCall();
@@ -188,8 +188,27 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const isFcmTap = params.get('fcm_tap') === '1';
-    const action = params.get('action') || (isFcmTap ? (params.get('answer') === '1' ? 'accept_call' : 'incoming_call') : null);
+    let action = params.get('action');
+    if (!action && isFcmTap) {
+      const answerVal = params.get('answer');
+      if (answerVal === '1') {
+        action = 'accept_call';
+      } else if (answerVal === '0') {
+        action = 'reject_call';
+      } else {
+        action = 'incoming_call';
+      }
+    }
     const targetCallId = params.get('call_id');
+
+    if (action === 'reject_call') {
+      native('stopRinging');
+      voiceCallService.rejectCall('অভিভাবক কল কেটে দিয়েছেন।', targetCallId || undefined);
+      const url = new URL(window.location.href);
+      ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 't'].forEach((k) => url.searchParams.delete(k));
+      window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      return;
+    }
 
     if (action === 'accept_call' || action === 'incoming_call') {
       const pendingCall = activeCall || voiceCallService.getActiveCall();
@@ -277,9 +296,9 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return await voiceCallService.acceptCall();
   }, []);
 
-  const rejectCall = useCallback(async (reason?: string) => {
+  const rejectCall = useCallback(async (reason?: string, specificCallId?: string) => {
     native('stopRinging');
-    await voiceCallService.rejectCall(reason);
+    await voiceCallService.rejectCall(reason, specificCallId);
   }, []);
 
   const endCall = useCallback(async () => {

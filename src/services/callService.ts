@@ -431,12 +431,28 @@ export class VoiceCallService {
     }
 
     // 2. Dedicated Call Room Channel (Direct session channel between caller and callee)
+    const targetRoomCallId = payload?.callId || this.activeCallData?.callId;
     if (this.callRoomChannel) {
       promises.push(
         this.callRoomChannel
           .send({ type: 'broadcast', event, payload })
           .catch((e: any) => console.warn('[VoiceCall] broadcast on call room channel failed:', e))
       );
+    }
+    if (targetRoomCallId) {
+      const roomChanName = `call-room-${targetRoomCallId}`;
+      if (!this.callRoomChannel || this.callRoomChannel.topic !== roomChanName) {
+        try {
+          const rChan = supabase.channel(roomChanName, {
+            config: { broadcast: { self: false } },
+          });
+          rChan.subscribe(async (st: string) => {
+            if (st === 'SUBSCRIBED') {
+              await rChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+            }
+          });
+        } catch {}
+      }
     }
 
     // 3. Main Institution Channel
@@ -1092,7 +1108,7 @@ export class VoiceCallService {
   /**
    * Reject incoming call
    */
-  public async rejectCall(reason: string = 'কলটি কেটে দেওয়া হয়েছে।') {
+  public async rejectCall(reason: string = 'কলটি কেটে দেওয়া হয়েছে।', specificCallId?: string) {
     callSoundService.stopAll();
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
@@ -1100,14 +1116,16 @@ export class VoiceCallService {
     // 1. Immediately reflect UI state on the user's screen
     this.onStatusChange?.('rejected', this.activeCallData || undefined);
 
-    const callData = this.activeCallData;
-    if (callData) {
-      const payload = {
-        callId: callData.callId,
-        institutionId: callData.institutionId,
-        student: callData.student,
-        calleePhone: callData.calleePhone || callData.student?.guardian_phone,
-        caller: callData.caller,
+    const callData = this.activeCallData || this.getActiveCall();
+    const effectiveCallId = specificCallId || callData?.callId;
+
+    if (effectiveCallId) {
+      const payload: any = {
+        callId: effectiveCallId,
+        institutionId: callData?.institutionId || this.currentInstitutionId || '',
+        student: callData?.student,
+        calleePhone: callData?.calleePhone || callData?.student?.guardian_phone || this.currentPhone,
+        caller: callData?.caller,
         reason,
         timestamp: Date.now(),
       };
@@ -1122,10 +1140,13 @@ export class VoiceCallService {
       // Broadcast immediately across all room & direct channels
       await this.broadcastSignaling('call:reject', payload);
 
-      // Repeat burst pulse after 60ms to guarantee delivery across sockets
+      // Repeat burst pulse after 60ms and 150ms to guarantee delivery across sockets
       setTimeout(() => {
         this.broadcastSignaling('call:reject', payload).catch(() => {});
       }, 60);
+      setTimeout(() => {
+        this.broadcastSignaling('call:reject', payload).catch(() => {});
+      }, 150);
 
       // Cross-tab broadcast
       try {
@@ -1137,7 +1158,7 @@ export class VoiceCallService {
       } catch {}
 
       // Safe buffer so socket packets leave the browser before channel teardown
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, 650));
     }
 
     this.cleanup();
