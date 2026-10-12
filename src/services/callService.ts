@@ -69,6 +69,7 @@ export class VoiceCallService {
   private cachedInstitutionName: string = '';
   private activeCallData: CallPayload | null = null;
   private isCaller: boolean = false;
+  private isCallAnswered: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
   private isSubscribed: boolean = false;
   private subscribePromise: Promise<boolean> | null = null;
@@ -396,7 +397,7 @@ export class VoiceCallService {
     // Auto-register Device FCM Token for Android background call wake-up
     try {
       const storedToken = typeof window !== 'undefined' ? localStorage.getItem('deenora_fcm_token') : null;
-      const bridgeToken = typeof window !== 'undefined' ? (window as any).AndroidBridge?.getFcmToken?.() : null;
+      const bridgeToken = typeof window !== 'undefined' ? (window as any).AndroidInterface?.getFcmToken?.() : null;
       const effectiveToken = storedToken || bridgeToken;
       if (effectiveToken && (cleanPhone || cleanUserId)) {
         fetch('/api/call', {
@@ -752,6 +753,7 @@ export class VoiceCallService {
   ): Promise<boolean> {
     try {
       this.isCaller = true;
+      this.isCallAnswered = false;
       const callId = `call-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       
       // Ensure signaling channel is connected
@@ -826,6 +828,18 @@ export class VoiceCallService {
       this.outgoingRingTimeout = setTimeout(() => {
         if (this.activeCallData && this.activeCallData.callId === callId && this.isCaller) {
           console.log('[VoiceCall] Outgoing call unanswered timeout (45s)');
+          fetch('/api/call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'cancel_call_push',
+              call_id: callId,
+              callee_phone: student.guardian_phone,
+              student_id: student.id,
+              institution_id: institutionId,
+            }),
+          }).catch(() => {});
+
           callSoundService.stopAll();
           callSoundService.playDisconnectChime();
           this.onError?.('অভিভাবক কল রিসিভ করেননি (কোনো উত্তর নেই)');
@@ -1015,6 +1029,7 @@ export class VoiceCallService {
         timestamp: Date.now(),
       });
 
+      this.isCallAnswered = true;
       this.onStatusChange?.('connected', this.activeCallData);
       callSoundService.playConnectChime();
       return true;
@@ -1033,6 +1048,7 @@ export class VoiceCallService {
     if (!this.peerConnection || !payload.answer) return;
 
     try {
+      this.isCallAnswered = true;
       callSoundService.stopAll();
       if (this.outgoingRingTimeout) {
         clearTimeout(this.outgoingRingTimeout);
@@ -1148,6 +1164,22 @@ export class VoiceCallService {
     callSoundService.stopAll();
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
+
+    // TASK 4b: If caller cancels/ends call before callee answered, send cancel_call_push
+    if (this.isCaller && !this.isCallAnswered && this.activeCallData) {
+      const callData = this.activeCallData;
+      fetch('/api/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel_call_push',
+          call_id: callData.callId,
+          callee_phone: callData.student?.guardian_phone || callData.calleePhone,
+          student_id: callData.student?.id,
+          institution_id: callData.institutionId,
+        }),
+      }).catch(() => {});
+    }
 
     // 1. Immediately reflect UI state on the user's screen
     this.onStatusChange?.('ended', this.activeCallData || undefined);
@@ -1282,6 +1314,7 @@ export class VoiceCallService {
     }
 
     this.activeCallData = null;
+    this.isCallAnswered = false;
     this.pendingCandidates = [];
   }
 

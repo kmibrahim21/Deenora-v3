@@ -485,6 +485,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           institution_id: data.student.institution_id,
           role: 'parent'
         }));
+        registerNativePushToken(data.student.id, data.student.guardian_phone || phone, data.student.institution_id);
       }
 
       applyData(data);

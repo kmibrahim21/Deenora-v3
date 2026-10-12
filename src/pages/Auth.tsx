@@ -8,6 +8,7 @@ import { t } from 'translations';
 import { isValidUUID } from 'utils/validation';
 import { hardReload } from 'utils/reloadUtils';
 import { useOfflineStatus } from '../hooks/useOffline';
+import { registerNativePushToken } from '../lib/notifyParents';
 
 interface AuthProps {
   lang: Language;
@@ -115,6 +116,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         if (signInError) throw signInError;
 
         localStorage.setItem('teacher_session', JSON.stringify(data.user));
+        registerNativePushToken(undefined, phone.trim(), data.user?.institution_id, data.user?.id);
         hardReload();
       } else {
         setError(lang === 'bn' ? 'ভুল ফোন নম্বর বা পিন' : 'Invalid phone number or PIN');
@@ -177,6 +179,7 @@ const Auth: React.FC<AuthProps> = ({ lang }) => {
         if (data.institution?.name) {
           localStorage.setItem('m_name', data.institution.name);
         }
+        registerNativePushToken(data.student.id, data.student.guardian_phone, data.student.institution_id);
         hardReload();
       } else {
         setError(lang === 'bn' ? 'ভুল ফোন নম্বর অথবা রেজিস্ট্রেশন নম্বর' : 'Invalid phone number or registration number');

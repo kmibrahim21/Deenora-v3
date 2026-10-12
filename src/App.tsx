@@ -26,6 +26,7 @@ import { linkifyMarkdown, getMarkdownComponents } from "utils/markdownUtils";
 import { useGlobalNotifications } from "hooks/useGlobalNotifications";
 import { requestManager } from "services/RequestManager";
 import { useVoiceCall } from "context/CallContext";
+import { registerNativePushToken } from "./lib/notifyParents";
 import { NotificationPermissionBanner } from "components/NotificationPermissionBanner";
 
 const Auth = React.lazy(() => import("pages/Auth"));
@@ -162,11 +163,12 @@ const App: React.FC = () => {
 
   const { initSignaling: initVoiceSignaling } = useVoiceCall();
 
-  // Initialize Voice Call signaling for admin/teacher
+  // Initialize Voice Call signaling and native push token for admin/teacher
   useEffect(() => {
     if (madrasah?.id && profile?.id) {
       const userPhone = (profile as any)?.phone || (profile as any)?.guardian_phone;
       initVoiceSignaling(madrasah.id, profile.id, userPhone);
+      registerNativePushToken(undefined, userPhone, madrasah.id, profile.id);
     }
   }, [madrasah?.id, profile?.id, profile, initVoiceSignaling]);
 

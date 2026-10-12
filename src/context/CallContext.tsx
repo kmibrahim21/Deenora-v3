@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { voiceCallService, CallPayload, CallStatus, CallStudentInfo, CallParticipantInfo } from '../services/callService';
 import { VoiceCallModal } from '../components/call/VoiceCallModal';
+
+// Helper: safe caller to Android WebView bridge methods
+const native = (fn: string) => {
+  try {
+    (window as any).AndroidInterface?.[fn]?.();
+  } catch {}
+};
 
 interface CallContextType {
   callStatus: CallStatus;
@@ -27,6 +34,17 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
+  const autoAnswerRef = useRef<string | null>(null);
+
+  // Task 3b: Native Android bridge sync on callStatus transitions
+  useEffect(() => {
+    if (callStatus === 'connected') {
+      native('callStarted');
+    } else if (callStatus === 'ended' || callStatus === 'rejected' || callStatus === 'failed' || callStatus === 'idle') {
+      native('stopRinging');
+      native('callEnded');
+    }
+  }, [callStatus]);
 
   // Initialize service listeners once
   useEffect(() => {
@@ -95,6 +113,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!event.data) return;
       if (event.data.type === 'ACCEPT_CALL_FROM_NOTIFICATION') {
         console.log('[CallContext] Received ACCEPT_CALL_FROM_NOTIFICATION from SW');
+        native('stopRinging');
         const currentActive = activeCall || voiceCallService.getActiveCall();
         if (currentActive) {
           setActiveCall(currentActive);
@@ -103,6 +122,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await voiceCallService.acceptCall();
       } else if (event.data.type === 'REJECT_CALL_FROM_NOTIFICATION') {
         console.log('[CallContext] Received REJECT_CALL_FROM_NOTIFICATION from SW');
+        native('stopRinging');
         voiceCallService.rejectCall('মোবাইলের নোটিফিকেশন থেকে কল বাতিল করা হয়েছে।');
       }
     };
@@ -122,6 +142,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const cleanAction = String(action || '').toLowerCase().trim();
 
       if (cleanAction === 'accept_call' || cleanAction === 'answer' || cleanAction === 'accept') {
+        native('stopRinging');
         const currentActive = activeCall || voiceCallService.getActiveCall();
         if (currentActive) {
           setActiveCall(currentActive);
@@ -129,8 +150,10 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         await voiceCallService.acceptCall();
       } else if (cleanAction === 'reject_call' || cleanAction === 'decline' || cleanAction === 'reject') {
+        native('stopRinging');
         voiceCallService.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।');
       } else if (cleanAction === 'end_call' || cleanAction === 'hangup') {
+        native('stopRinging');
         voiceCallService.endCall();
       }
     };
@@ -160,11 +183,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [activeCall]);
 
-  // Auto-answer or open call screen if user unlocked phone / opened app directly from lock screen notification
+  // Auto-answer or open call screen if user unlocked phone / opened app directly from lock screen notification or FCM tap
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    const action = params.get('action');
+    const isFcmTap = params.get('fcm_tap') === '1';
+    const action = params.get('action') || (isFcmTap ? (params.get('answer') === '1' ? 'accept_call' : 'incoming_call') : null);
     const targetCallId = params.get('call_id');
 
     if (action === 'accept_call' || action === 'incoming_call') {
@@ -173,6 +197,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setActiveCall(pendingCall);
         if (action === 'accept_call') {
           console.log('[CallContext] Auto-answering call from URL parameter');
+          native('stopRinging');
           setCallStatus('connected');
           voiceCallService.acceptCall();
         } else {
@@ -181,19 +206,35 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Clean query parameter from URL without reload
         const url = new URL(window.location.href);
-        url.searchParams.delete('action');
-        url.searchParams.delete('call_id');
-        url.searchParams.delete('t');
+        ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 't'].forEach((k) => url.searchParams.delete(k));
         window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
-      } else if (action === 'incoming_call' && targetCallId) {
-        // App bondho chilo → broadcast miss → admin ke offer abar pathate bolo.
-        // Admin 'call:request_offer' shune 'call:initiate' abar pathabe,
-        // tokhon handleIncomingOffer → incoming UI asbe.
+      } else if (targetCallId) {
+        // App was closed / no active call in memory yet:
+        // if user tapped Answer, stage callId to auto-answer once offer arrives
+        if (action === 'accept_call') {
+          autoAnswerRef.current = targetCallId;
+        }
         console.log('[CallContext] No active call found, requesting offer re-send for', targetCallId);
         voiceCallService.requestOffer(targetCallId);
+
+        // Clean query parameter from URL without reload
+        const url = new URL(window.location.href);
+        ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 't'].forEach((k) => url.searchParams.delete(k));
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
       }
     }
   }, [activeCall, callStatus]);
+
+  // Task 2d: Auto-answer when incoming call arrives if user tapped answer on native lockscreen/FCM notification
+  useEffect(() => {
+    if (callStatus === 'incoming' && activeCall?.callId && autoAnswerRef.current === activeCall.callId) {
+      console.log('[CallContext] Auto-answering incoming call matching autoAnswerRef:', activeCall.callId);
+      autoAnswerRef.current = null;
+      native('stopRinging');
+      setCallStatus('connected');
+      voiceCallService.acceptCall();
+    }
+  }, [callStatus, activeCall]);
 
   // Duration timer during connected call
   useEffect(() => {
@@ -232,10 +273,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 
   const acceptCall = useCallback(async () => {
+    native('stopRinging');
     return await voiceCallService.acceptCall();
   }, []);
 
   const rejectCall = useCallback(async (reason?: string) => {
+    native('stopRinging');
     await voiceCallService.rejectCall(reason);
   }, []);
 

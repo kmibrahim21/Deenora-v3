@@ -56,7 +56,8 @@ let lastRegisterKey = '';
 export function registerNativePushToken(
   student_id?: string,
   guardian_phone?: string,
-  institution_id?: string
+  institution_id?: string,
+  user_id?: string
 ): void {
   try {
     if (typeof window === 'undefined') return;
@@ -70,7 +71,7 @@ export function registerNativePushToken(
       try {
         token = bridge.getFcmToken() || '';
       } catch {}
-      const key = `${token}|${guardian_phone || ''}|${student_id || ''}`;
+      const key = `${token}|${guardian_phone || ''}|${student_id || ''}|${user_id || ''}`;
       if (token && key !== lastRegisterKey) {
         lastRegisterKey = key;
         fetch('/api/call?action=register_token', {
@@ -80,6 +81,7 @@ export function registerNativePushToken(
             action: 'register_token',
             token,
             student_id: student_id || undefined,
+            user_id: user_id || undefined,
             phone: guardian_phone || undefined,
             institution_id: institution_id || undefined,
           }),

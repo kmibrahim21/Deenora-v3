@@ -111,10 +111,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY || process.env.FIREBASE_SERVER_KEY;
   const serviceAccount = parseServiceAccount();
 
   const action = req.query.action || req.body?.action;
+
+  // Helper: Find target FCM token by callee_phone or student_id (memory cache first, then Supabase device_tokens)
+  async function findTargetFcmToken(
+    calleePhone: string | null | undefined,
+    studentId: string | null | undefined
+  ): Promise<string | null> {
+    const cleanPhone = calleePhone ? String(calleePhone).replace(/\D/g, '').slice(-10) : '';
+
+    // 1. Check in-memory token cache
+    if (cleanPhone && memoryTokens[`phone_${cleanPhone}`]) {
+      return memoryTokens[`phone_${cleanPhone}`].token;
+    }
+    if (studentId && memoryTokens[`student_${studentId}`]) {
+      return memoryTokens[`student_${studentId}`].token;
+    }
+
+    // 2. Query Supabase device_tokens table
+    if (SUPABASE_URL && SUPABASE_KEY && (cleanPhone || studentId)) {
+      try {
+        let qUrl = `${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token`;
+        if (cleanPhone) {
+          qUrl += `&phone=ilike.*${cleanPhone}*`;
+        } else if (studentId) {
+          qUrl += `&student_id=eq.${studentId}`;
+        }
+        qUrl += `&order=updated_at.desc&limit=1`;
+
+        const tokenRes = await fetch(qUrl, {
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+          },
+        });
+        if (tokenRes.ok) {
+          const tokenList = await tokenRes.json();
+          if (tokenList && tokenList.length > 0 && tokenList[0].fcm_token) {
+            return tokenList[0].fcm_token;
+          }
+        }
+      } catch (dbQErr) {
+        console.warn('[Call API] Querying device_tokens notice:', dbQErr);
+      }
+    }
+
+    return null;
+  }
+
+  // Helper: Resolve effective service account (env or institution settings)
+  async function resolveServiceAccount(institutionId?: string): Promise<FirebaseServiceAccount | null> {
+    if (serviceAccount) return serviceAccount;
+    if (institutionId && SUPABASE_URL && SUPABASE_KEY) {
+      try {
+        const instRes = await fetch(`${SUPABASE_URL}/rest/v1/institutions?select=config_json&id=eq.${institutionId}&limit=1`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+        });
+        if (instRes.ok) {
+          const instData = await instRes.json();
+          const config = instData?.[0]?.config_json || {};
+          if (config.firebase_service_account) {
+            try {
+              return typeof config.firebase_service_account === 'string'
+                ? JSON.parse(config.firebase_service_account)
+                : config.firebase_service_account;
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+    return null;
+  }
 
   // 1. REGISTER FCM DEVICE TOKEN
   if (req.method === 'POST' && action === 'register_token') {
@@ -186,7 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 2. INITIATE HIGH-PRIORITY CALL PUSH TO WAKE UP ANDROID FULLSCREEN INTENT
   if (req.method === 'POST' && (action === 'initiate_call_push' || req.body?.type === 'incoming_call')) {
     try {
-      const payload = req.body?.payload || req.body;
+      const payload = req.body?.payload || req.body || {};
       const {
         call_id,
         caller_name,
@@ -196,72 +265,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         callee_phone,
       } = payload;
 
-      const cleanPhone = callee_phone ? String(callee_phone).replace(/\D/g, '').slice(-10) : '';
-
       // Find token from memory or database
-      let targetToken: string | null = null;
-      if (cleanPhone && memoryTokens[`phone_${cleanPhone}`]) {
-        targetToken = memoryTokens[`phone_${cleanPhone}`].token;
-      } else if (student_id && memoryTokens[`student_${student_id}`]) {
-        targetToken = memoryTokens[`student_${student_id}`].token;
+      const targetToken = await findTargetFcmToken(callee_phone, student_id);
+
+      // Check institution config for service account if not in env
+      const effectiveServiceAccount = await resolveServiceAccount(institution_id);
+
+      if (!effectiveServiceAccount) {
+        return res.status(200).json({
+          success: false,
+          fcmSent: false,
+          message: 'Firebase Service Account (HTTP v1) is not configured in environment variables or institution settings.',
+        });
       }
 
-      // Query database if not in memory
-      if (!targetToken && SUPABASE_URL && SUPABASE_KEY) {
-        try {
-          let qUrl = `${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token`;
-          if (cleanPhone) {
-            qUrl += `&phone=ilike.*${cleanPhone}*`;
-          } else if (student_id) {
-            qUrl += `&student_id=eq.${student_id}`;
-          }
-          qUrl += `&order=updated_at.desc&limit=1`;
-
-          const tokenRes = await fetch(qUrl, {
-            headers: {
-              apikey: SUPABASE_KEY,
-              Authorization: `Bearer ${SUPABASE_KEY}`,
-            },
-          });
-          if (tokenRes.ok) {
-            const tokenList = await tokenRes.json();
-            if (tokenList && tokenList.length > 0 && tokenList[0].fcm_token) {
-              targetToken = tokenList[0].fcm_token;
-            }
-          }
-        } catch (dbQErr) {
-          console.warn('[Call API] Querying device_tokens notice:', dbQErr);
-        }
-      }
-
-      // Check institution config for custom FCM key if not in env
-      let effectiveFcmKey = FCM_SERVER_KEY;
-      let effectiveServiceAccount = serviceAccount;
-
-      if (!effectiveFcmKey && !effectiveServiceAccount && institution_id && SUPABASE_URL && SUPABASE_KEY) {
-        try {
-          const instRes = await fetch(`${SUPABASE_URL}/rest/v1/institutions?select=config_json&id=eq.${institution_id}&limit=1`, {
-            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-          });
-          if (instRes.ok) {
-            const instData = await instRes.json();
-            const config = instData?.[0]?.config_json || {};
-            if (config.fcm_server_key) {
-              effectiveFcmKey = config.fcm_server_key;
-            }
-            if (config.firebase_service_account) {
-              try {
-                effectiveServiceAccount = typeof config.firebase_service_account === 'string'
-                  ? JSON.parse(config.firebase_service_account)
-                  : config.firebase_service_account;
-              } catch {}
-            }
-          }
-        } catch {}
-      }
-
-      // High-Priority Data Payload expected by Fcmservice.kt
-      const fcmDataPayload = {
+      // High-Priority Data Payload expected by FcmService.kt (all values must be strings)
+      const fcmDataPayload: Record<string, string> = {
         type: 'incoming_call',
         call_id: String(call_id || ''),
         caller_name: String(caller_name || 'মাদরাসা এডমিন'),
@@ -272,83 +291,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         timestamp: String(Date.now()),
       };
 
-      // METHOD 1: Firebase Cloud Messaging HTTP v1 API (Google Recommended Modern API)
-      if (effectiveServiceAccount && targetToken) {
-        const v1AccessToken = await getFirebaseV1AccessToken(effectiveServiceAccount);
-        if (v1AccessToken) {
-          const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${v1AccessToken}`,
-            },
-            body: JSON.stringify({
-              message: {
-                token: targetToken,
-                android: {
-                  priority: 'HIGH',
-                  notification: {
-                    sound: 'default',
-                  },
-                },
-                notification: {
-                  title: 'Incoming Voice Call',
-                  body: `Call from ${fcmDataPayload.caller_name}`,
-                },
-                data: fcmDataPayload,
-              },
-            }),
-          });
-
-          const v1Result = await v1Response.json().catch(() => ({}));
-          return res.status(200).json({
-            success: true,
-            fcmSent: true,
-            apiType: 'v1',
-            targetTokenFound: true,
-            fcmResult: v1Result,
-            payload: fcmDataPayload,
-          });
-        }
-      }
-
-      // METHOD 2: Firebase Legacy HTTP API (Simple Server Key)
-      if (effectiveFcmKey && targetToken) {
-        const fcmResponse = await fetch('https://fcm.googleapis.com/fcm/send', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `key=${effectiveFcmKey}`,
-          },
-          body: JSON.stringify({
-            to: targetToken,
-            priority: 'high',
-            android: {
-              priority: 'high',
-            },
-            data: fcmDataPayload,
-          }),
-        });
-
-        const fcmResult = await fcmResponse.json().catch(() => ({}));
+      if (!targetToken) {
         return res.status(200).json({
           success: true,
-          fcmSent: true,
-          apiType: 'legacy',
-          targetTokenFound: true,
-          fcmResult,
+          fcmSent: false,
+          targetTokenFound: false,
+          message: 'Device FCM token not registered for this phone yet. Open the app on Android once to register token.',
           payload: fcmDataPayload,
         });
       }
 
+      const v1AccessToken = await getFirebaseV1AccessToken(effectiveServiceAccount);
+      if (!v1AccessToken) {
+        return res.status(500).json({
+          success: false,
+          message: 'Could not generate OAuth access token for Firebase HTTP v1.',
+        });
+      }
+
+      // TASK 1a: DATA-ONLY high-priority push so Android FcmService.onMessageReceived always runs
+      const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${v1AccessToken}`,
+        },
+        body: JSON.stringify({
+          message: {
+            token: targetToken,
+            android: { priority: 'HIGH', ttl: '30s' },
+            data: fcmDataPayload,
+          },
+        }),
+      });
+
+      const v1Result = await v1Response.json().catch(() => ({}));
       return res.status(200).json({
         success: true,
-        fcmSent: false,
-        targetTokenFound: Boolean(targetToken),
-        hasServerKey: Boolean(effectiveFcmKey || effectiveServiceAccount),
-        message: !(effectiveFcmKey || effectiveServiceAccount)
-          ? 'Neither FCM_SERVER_KEY nor FIREBASE_SERVICE_ACCOUNT is configured.'
-          : 'Device FCM token not registered for this phone yet. Open the app on Android once to register token.',
+        fcmSent: true,
+        apiType: 'v1',
+        targetTokenFound: true,
+        fcmResult: v1Result,
         payload: fcmDataPayload,
       });
     } catch (err: any) {
@@ -357,7 +340,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 3. SEND GENERIC PUSH NOTIFICATION (notice / result / diary / chat) to parent Android apps
+  // 3. TASK 4a: CANCEL CALL PUSH TO DISMISS ANDROID INCOMING CALL UI AND STOP RINGING
+  if (req.method === 'POST' && action === 'cancel_call_push') {
+    try {
+      const payload = req.body?.payload || req.body || {};
+      const {
+        call_id,
+        callee_phone,
+        student_id,
+        institution_id,
+      } = payload;
+
+      const effectiveServiceAccount = await resolveServiceAccount(institution_id);
+      if (!effectiveServiceAccount) {
+        return res.status(200).json({
+          success: false,
+          fcmSent: false,
+          message: 'Firebase Service Account not configured',
+        });
+      }
+
+      const targetToken = await findTargetFcmToken(callee_phone, student_id);
+      if (!targetToken) {
+        return res.status(200).json({
+          success: true,
+          fcmSent: false,
+          message: 'No target token found for cancellation',
+        });
+      }
+
+      const v1AccessToken = await getFirebaseV1AccessToken(effectiveServiceAccount);
+      if (!v1AccessToken) {
+        return res.status(500).json({
+          success: false,
+          message: 'Could not generate Firebase access token',
+        });
+      }
+
+      const cancelPayload: Record<string, string> = {
+        type: 'call_cancel',
+        call_id: String(call_id || ''),
+      };
+
+      const v1Response = await fetch(`https://fcm.googleapis.com/v1/projects/${effectiveServiceAccount.project_id}/messages:send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${v1AccessToken}`,
+        },
+        body: JSON.stringify({
+          message: {
+            token: targetToken,
+            android: { priority: 'HIGH', ttl: '30s' },
+            data: cancelPayload,
+          },
+        }),
+      });
+
+      const v1Result = await v1Response.json().catch(() => ({}));
+      return res.status(200).json({
+        success: true,
+        fcmSent: true,
+        fcmResult: v1Result,
+      });
+    } catch (err: any) {
+      console.error('[Call API] cancel_call_push error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  // 4. SEND GENERIC PUSH NOTIFICATION (notice / result / diary / chat) to parent Android apps
   // Body: { institution_id, title, body, target?: {type:'class'|'all'|'students'|'phones', ...}, conversation_id?, class_name?, sender_id? }
   // Finds parent FCM tokens from device_tokens (matched by guardian phone) and sends
   // an FCM v1 DATA message {title, body}. The Android FcmService shows it as a
@@ -482,7 +534,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const r = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-            body: JSON.stringify({ message: { token: tok, android: { priority: 'HIGH', notification: { sound: 'default' } }, notification: { title: String(title || 'Deenora'), body: String(body || '') }, data } }),
+            body: JSON.stringify({
+              message: {
+                token: tok,
+                android: { priority: 'HIGH', ttl: '3600s' },
+                data,
+              },
+            }),
           });
           const b = await r.text().catch(() => '');
           return { ok: r.ok, status: r.status, tokenPrefix: tok.slice(0, 16), fcmBody: b.slice(0, 250) };
@@ -498,11 +556,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // 4. GET CALL CONFIG & HEALTH
+  // 5. GET CALL CONFIG & HEALTH
   if (req.method === 'GET') {
     return res.status(200).json({
       status: 'active',
-      hasFcmServerKey: Boolean(FCM_SERVER_KEY),
       hasFirebaseServiceAccount: Boolean(serviceAccount),
       hasSupabaseUrl: Boolean(SUPABASE_URL),
       hasSupabaseKey: Boolean(SUPABASE_KEY),
