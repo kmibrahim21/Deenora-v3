@@ -235,12 +235,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return await voiceCallService.acceptCall();
   }, []);
 
-  const rejectCall = useCallback((reason?: string) => {
-    voiceCallService.rejectCall(reason);
+  const rejectCall = useCallback(async (reason?: string) => {
+    await voiceCallService.rejectCall(reason);
   }, []);
 
-  const endCall = useCallback(() => {
-    voiceCallService.endCall();
+  const endCall = useCallback(async () => {
+    await voiceCallService.endCall();
   }, []);
 
   const toggleMute = useCallback(() => {

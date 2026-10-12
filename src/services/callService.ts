@@ -59,6 +59,10 @@ export class VoiceCallService {
   private channel: any = null;
   private directChannel: any = null;
   private phoneChannel: any = null;
+  private userChannel: any = null;
+  private callRoomChannel: any = null;
+  private callerExtraChannels: any[] = [];
+  private dataChannel: RTCDataChannel | null = null;
   private currentInstitutionId: string = '';
   private currentUserId: string = '';
   private currentPhone: string = '';
@@ -70,7 +74,9 @@ export class VoiceCallService {
   private subscribePromise: Promise<boolean> | null = null;
   private subscribeResolver: ((val: boolean) => void) | null = null;
   private disconnectTimer: NodeJS.Timeout | null = null;
+  private outgoingRingTimeout: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
+  private watchdogInterval: NodeJS.Timeout | null = null;
   private lastPingReceived: number = Date.now();
   private isSpeakerOn: boolean = true;
 
@@ -136,6 +142,30 @@ export class VoiceCallService {
       this.remoteAudioElement = new Audio();
       this.remoteAudioElement.autoplay = true;
       (this.remoteAudioElement as any).playsInline = true;
+
+      // Auto-hangup when tab is closed or user navigates away
+      const handleUnload = () => {
+        if (this.activeCallData) {
+          this.endCall();
+        }
+      };
+      window.addEventListener('beforeunload', handleUnload);
+      window.addEventListener('pagehide', handleUnload);
+
+      // Listen for cross-tab hangup / reject events
+      if ('BroadcastChannel' in window) {
+        try {
+          const bc = new BroadcastChannel('deenora_call_events');
+          bc.onmessage = (event) => {
+            const data = event.data;
+            if (data?.type === 'CALL_ENDED' || data?.type === 'CALL_REJECTED') {
+              if (this.activeCallData && (!data.payload?.callId || this.activeCallData.callId === data.payload.callId)) {
+                this.handleCallEndedRemotely();
+              }
+            }
+          };
+        } catch {}
+      }
     }
   }
 
@@ -143,6 +173,101 @@ export class VoiceCallService {
     if (!p) return '';
     const digits = String(p).replace(/\D/g, '');
     return digits.slice(-10); // Standard Bangladesh 10-digit normalized phone
+  }
+
+  /**
+   * Attach common call signaling event listeners to any channel
+   */
+  private attachCallListeners(ch: any) {
+    ch
+      .on('broadcast', { event: 'call:initiate' }, ({ payload }: { payload: CallPayload }) => {
+        this.handleIncomingOffer(payload);
+      })
+      .on('broadcast', { event: 'call:ringing' }, ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+          this.onStatusChange?.('calling', this.activeCallData);
+        }
+      })
+      .on('broadcast', { event: 'call:accept' }, async ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+          await this.handleRemoteAnswer(payload);
+        }
+      })
+      .on('broadcast', { event: 'call:reject' }, ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
+          console.log('[VoiceCall] Received call:reject from peer:', payload);
+          this.handleCallRejected(payload.reason);
+        }
+      })
+      .on('broadcast', { event: 'call:candidate' }, async ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+          await this.handleRemoteCandidate(payload);
+        }
+      })
+      .on('broadcast', { event: 'call:end' }, ({ payload }: { payload: CallPayload }) => {
+        if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
+          console.log('[VoiceCall] Received call:end from peer:', payload);
+          this.handleCallEndedRemotely();
+        }
+      })
+      .on('broadcast', { event: 'call:ping' }, ({ payload }: { payload: { callId: string } }) => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+          this.lastPingReceived = Date.now();
+        }
+      })
+      .on('broadcast', { event: 'call:request_offer' }, ({ payload }: { payload: { callId: string } }) => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
+          console.log('[VoiceCall] Re-sending offer for missed call:', payload.callId);
+          this.broadcastSignaling('call:initiate', this.activeCallData);
+        }
+      });
+  }
+
+  /**
+   * Dedicated per-call room channel ensuring 100% direct caller <-> callee signaling
+   */
+  private subscribeCallRoom(callId: string) {
+    if (!callId) return;
+    if (this.callRoomChannel) {
+      try { supabase.removeChannel(this.callRoomChannel); } catch {}
+      this.callRoomChannel = null;
+    }
+
+    const roomName = `call-room-${callId}`;
+    this.callRoomChannel = supabase.channel(roomName, {
+      config: { broadcast: { self: false } },
+    });
+    this.attachCallListeners(this.callRoomChannel);
+    this.callRoomChannel.subscribe((status: string) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[VoiceCall] Call room channel active:', roomName);
+      }
+    });
+  }
+
+  /**
+   * Set up WebRTC DataChannel for instantaneous 0ms peer-to-peer hangup & control
+   */
+  private setupDataChannel(dc: RTCDataChannel) {
+    this.dataChannel = dc;
+    dc.onopen = () => {
+      console.log('[VoiceCall] RTCDataChannel open for zero-latency control');
+    };
+    dc.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        console.log('[VoiceCall] DataChannel message received:', msg);
+        if (msg.type === 'call:end' || msg.type === 'call:reject') {
+          this.handleCallEndedRemotely();
+        }
+      } catch {}
+    };
+    dc.onclose = () => {
+      console.log('[VoiceCall] RTCDataChannel closed by peer');
+      if (this.activeCallData && this.peerConnection) {
+        this.handleCallEndedRemotely();
+      }
+    };
   }
 
   /**
@@ -181,59 +306,18 @@ export class VoiceCallService {
       try { supabase.removeChannel(this.phoneChannel); } catch {}
       this.phoneChannel = null;
     }
+    if (this.userChannel) {
+      try { supabase.removeChannel(this.userChannel); } catch {}
+      this.userChannel = null;
+    }
 
     this.isSubscribed = false;
     this.subscribePromise = new Promise<boolean>((resolve) => {
       this.subscribeResolver = resolve;
     });
 
-    const attachListeners = (ch: any) => {
-      ch
-        .on('broadcast', { event: 'call:initiate' }, ({ payload }: { payload: CallPayload }) => {
-          this.handleIncomingOffer(payload);
-        })
-        .on('broadcast', { event: 'call:ringing' }, ({ payload }: { payload: CallPayload }) => {
-          if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
-            this.onStatusChange?.('calling', this.activeCallData);
-          }
-        })
-        .on('broadcast', { event: 'call:accept' }, async ({ payload }: { payload: CallPayload }) => {
-          if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
-            await this.handleRemoteAnswer(payload);
-          }
-        })
-        .on('broadcast', { event: 'call:reject' }, ({ payload }: { payload: CallPayload }) => {
-          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
-            this.handleCallRejected(payload.reason);
-          }
-        })
-        .on('broadcast', { event: 'call:candidate' }, async ({ payload }: { payload: CallPayload }) => {
-          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
-            await this.handleRemoteCandidate(payload);
-          }
-        })
-        .on('broadcast', { event: 'call:end' }, ({ payload }: { payload: CallPayload }) => {
-          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
-            this.handleCallEndedRemotely();
-          }
-        })
-        .on('broadcast', { event: 'call:ping' }, ({ payload }: { payload: { callId: string } }) => {
-          if (this.activeCallData && this.activeCallData.callId === payload.callId) {
-            this.lastPingReceived = Date.now();
-          }
-        })
-        .on('broadcast', { event: 'call:request_offer' }, ({ payload }: { payload: { callId: string } }) => {
-          // Parent app bondho theke khule offer miss koreche → caller abar offer pathabe
-          if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
-            console.log('[VoiceCall] Re-sending offer for missed call:', payload.callId);
-            this.broadcastSignaling('call:initiate', this.activeCallData);
-          }
-        });
-    };
-
     // 1. Institution-wide channel
     if (cleanInstId) {
-      // Fetch and cache institution name asynchronously if available
       (async () => {
         try {
           const { data } = await supabase
@@ -251,7 +335,7 @@ export class VoiceCallService {
       this.channel = supabase.channel(channelName, {
         config: { broadcast: { self: false } },
       });
-      attachListeners(this.channel);
+      this.attachCallListeners(this.channel);
       this.channel.subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('[VoiceCall] Institution Channel Connected:', channelName);
@@ -261,13 +345,29 @@ export class VoiceCallService {
       });
     }
 
-    // 2. Direct Student ID channel (for guardian portal)
+    // 2. Direct User ID channel (for Admin, Teacher, or any logged in user)
+    if (cleanUserId) {
+      const userChanName = `user-call-${cleanUserId.toLowerCase()}`;
+      this.userChannel = supabase.channel(userChanName, {
+        config: { broadcast: { self: false } },
+      });
+      this.attachCallListeners(this.userChannel);
+      this.userChannel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[VoiceCall] Direct User Channel Connected:', userChanName);
+          this.isSubscribed = true;
+          this.subscribeResolver?.(true);
+        }
+      });
+    }
+
+    // 3. Direct Student ID channel (for guardian portal)
     if (cleanUserId && !cleanUserId.startsWith('admin') && !cleanUserId.startsWith('user-')) {
       const directChannelName = `student-call-${cleanUserId.toLowerCase()}`;
       this.directChannel = supabase.channel(directChannelName, {
         config: { broadcast: { self: false } },
       });
-      attachListeners(this.directChannel);
+      this.attachCallListeners(this.directChannel);
       this.directChannel.subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('[VoiceCall] Direct Student Channel Connected:', directChannelName);
@@ -277,13 +377,13 @@ export class VoiceCallService {
       });
     }
 
-    // 3. Direct Guardian Phone channel
+    // 4. Direct Guardian Phone channel
     if (cleanPhone) {
       const phoneChannelName = `phone-call-${cleanPhone}`;
       this.phoneChannel = supabase.channel(phoneChannelName, {
         config: { broadcast: { self: false } },
       });
-      attachListeners(this.phoneChannel);
+      this.attachCallListeners(this.phoneChannel);
       this.phoneChannel.subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('[VoiceCall] Direct Phone Channel Connected:', phoneChannelName);
@@ -320,6 +420,25 @@ export class VoiceCallService {
   private async broadcastSignaling(event: string, payload: any) {
     const promises: Promise<any>[] = [];
 
+    // 1. Direct WebRTC DataChannel (0ms latency direct transport)
+    if (this.dataChannel && this.dataChannel.readyState === 'open') {
+      try {
+        this.dataChannel.send(JSON.stringify({ type: event, ...payload }));
+      } catch (dcErr) {
+        console.warn('[VoiceCall] DataChannel send warning:', dcErr);
+      }
+    }
+
+    // 2. Dedicated Call Room Channel (Direct session channel between caller and callee)
+    if (this.callRoomChannel) {
+      promises.push(
+        this.callRoomChannel
+          .send({ type: 'broadcast', event, payload })
+          .catch((e: any) => console.warn('[VoiceCall] broadcast on call room channel failed:', e))
+      );
+    }
+
+    // 3. Main Institution Channel
     if (this.channel) {
       promises.push(
         this.channel
@@ -327,6 +446,8 @@ export class VoiceCallService {
           .catch((e: any) => console.warn('[VoiceCall] broadcast on main channel failed:', e))
       );
     }
+
+    // 4. Direct Student Channel
     if (this.directChannel) {
       promises.push(
         this.directChannel
@@ -334,6 +455,8 @@ export class VoiceCallService {
           .catch((e: any) => console.warn('[VoiceCall] broadcast on direct channel failed:', e))
       );
     }
+
+    // 5. Direct Phone Channel
     if (this.phoneChannel) {
       promises.push(
         this.phoneChannel
@@ -342,8 +465,35 @@ export class VoiceCallService {
       );
     }
 
-    // If payload has student info, send directly to student's dedicated channel as well
-    const studentId = payload?.student?.id;
+    // 6. Direct User Channel of current user if active
+    if (this.userChannel) {
+      promises.push(
+        this.userChannel
+          .send({ type: 'broadcast', event, payload })
+          .catch((e: any) => console.warn('[VoiceCall] broadcast on userChannel failed:', e))
+      );
+    }
+
+    // 7. Direct Caller's dedicated channel (Guarantees Admin panel receives reject/end instantly!)
+    const callerId = payload?.caller?.id || this.activeCallData?.caller?.id;
+    if (callerId) {
+      const callerChanName = `user-call-${String(callerId).trim().toLowerCase()}`;
+      if (!this.userChannel || this.userChannel.topic !== callerChanName) {
+        try {
+          const cChan = supabase.channel(callerChanName, {
+            config: { broadcast: { self: false } },
+          });
+          cChan.subscribe(async (st: string) => {
+            if (st === 'SUBSCRIBED') {
+              await cChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+            }
+          });
+        } catch {}
+      }
+    }
+
+    // 8. Target student's dedicated channel
+    const studentId = payload?.student?.id || payload?.studentId || this.activeCallData?.student?.id;
     if (studentId) {
       const targetChanName = `student-call-${String(studentId).trim().toLowerCase()}`;
       if (!this.directChannel || this.directChannel.topic !== targetChanName) {
@@ -360,8 +510,13 @@ export class VoiceCallService {
       }
     }
 
-    // If payload has guardian phone, send to phone channel as well
-    const guardianPhone = this.normPhone(payload?.calleePhone || payload?.student?.guardian_phone);
+    // 7. Target guardian phone's dedicated channel
+    const guardianPhone = this.normPhone(
+      payload?.calleePhone ||
+      payload?.student?.guardian_phone ||
+      this.activeCallData?.calleePhone ||
+      this.activeCallData?.student?.guardian_phone
+    );
     if (guardianPhone) {
       const phoneChanName = `phone-call-${guardianPhone}`;
       if (!this.phoneChannel || this.phoneChannel.topic !== phoneChanName) {
@@ -376,6 +531,21 @@ export class VoiceCallService {
           });
         } catch {}
       }
+    }
+
+    // 8. Target institution channel if known
+    const targetInstId = String(payload?.institutionId || this.activeCallData?.institutionId || '').trim();
+    if (targetInstId && (!this.channel || this.channel.topic !== `institution-calls-${targetInstId}`)) {
+      try {
+        const instChan = supabase.channel(`institution-calls-${targetInstId}`, {
+          config: { broadcast: { self: false } },
+        });
+        instChan.subscribe(async (st: string) => {
+          if (st === 'SUBSCRIBED') {
+            await instChan.send({ type: 'broadcast', event, payload }).catch(() => {});
+          }
+        });
+      } catch {}
     }
 
     await Promise.all(promises);
@@ -404,7 +574,6 @@ export class VoiceCallService {
       return stream;
     } catch (err: any) {
       console.warn('[VoiceCall] MediaDevices getUserMedia error:', err);
-      // Fallback dummy audio stream if browser policy blocks mic in some preview environments
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtx) {
@@ -416,6 +585,37 @@ export class VoiceCallService {
       } catch {}
       this.onError?.('মাইক্রোফোন পারমিশন প্রয়োজন। দয়া করে ব্রাউজারে Microphone Allow করুন।');
       return null;
+    }
+  }
+
+  /**
+   * Bidirectional ping heartbeat and watchdog timer
+   */
+  private startHeartbeatAndWatchdog() {
+    this.lastPingReceived = Date.now();
+
+    if (!this.pingInterval) {
+      this.pingInterval = setInterval(() => {
+        if (this.activeCallData) {
+          this.broadcastSignaling('call:ping', {
+            callId: this.activeCallData.callId,
+            senderId: this.currentUserId,
+            timestamp: Date.now(),
+          });
+        }
+      }, 2000);
+    }
+
+    if (!this.watchdogInterval) {
+      this.watchdogInterval = setInterval(() => {
+        if (this.peerConnection && this.peerConnection.connectionState === 'connected') {
+          // If no heartbeat ping received for 6 seconds, assume peer has disconnected / closed tab
+          if (Date.now() - this.lastPingReceived > 6000) {
+            console.warn('[VoiceCall] Heartbeat timeout (no ping received for 6s), disconnecting call');
+            this.handleCallEndedRemotely();
+          }
+        }
+      }, 1500);
     }
   }
 
@@ -432,6 +632,20 @@ export class VoiceCallService {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     this.peerConnection = pc;
+
+    // Zero-latency hangup & control DataChannel
+    if (this.isCaller) {
+      try {
+        const dc = pc.createDataChannel('call_control', { negotiated: false });
+        this.setupDataChannel(dc);
+      } catch (e) {
+        console.warn('[VoiceCall] Error creating DataChannel:', e);
+      }
+    } else {
+      pc.ondatachannel = (event) => {
+        this.setupDataChannel(event.channel);
+      };
+    }
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -459,7 +673,7 @@ export class VoiceCallService {
         try {
           this.remoteAudioElement.srcObject = remoteStream;
           this.remoteAudioElement.muted = false;
-          this.remoteAudioElement.volume = 1.0;
+          this.remoteAudioElement.volume = this.isSpeakerOn ? 1.0 : 0.3;
           const playPromise = this.remoteAudioElement.play();
           if (playPromise !== undefined) {
             playPromise.catch((err) => {
@@ -473,6 +687,30 @@ export class VoiceCallService {
       this.onRemoteStreamReady?.(remoteStream);
     };
 
+    // Immediate ICE connection state monitoring (detects mobile hangup & tab close)
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      console.log('[VoiceCall] ICE Connection state:', state);
+      if (state === 'disconnected') {
+        if (!this.disconnectTimer) {
+          this.disconnectTimer = setTimeout(() => {
+            if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
+              console.warn('[VoiceCall] ICE disconnected grace period expired, ending call');
+              this.handleCallEndedRemotely();
+            }
+          }, 3000);
+        }
+      } else if (state === 'failed' || state === 'closed') {
+        console.warn('[VoiceCall] ICE state failed/closed, ending call immediately');
+        this.handleCallEndedRemotely();
+      } else if (state === 'connected' || state === 'completed') {
+        if (this.disconnectTimer) {
+          clearTimeout(this.disconnectTimer);
+          this.disconnectTimer = null;
+        }
+      }
+    };
+
     pc.onconnectionstatechange = () => {
       console.log('[VoiceCall] Connection state:', pc.connectionState);
       if (pc.connectionState === 'connected') {
@@ -480,32 +718,24 @@ export class VoiceCallService {
           clearTimeout(this.disconnectTimer);
           this.disconnectTimer = null;
         }
+        if (this.outgoingRingTimeout) {
+          clearTimeout(this.outgoingRingTimeout);
+          this.outgoingRingTimeout = null;
+        }
         callSoundService.playConnectChime();
         this.onStatusChange?.('connected', this.activeCallData || undefined);
-
-        // Start periodic ping heartbeat to keep WebRTC channel active
-        if (!this.pingInterval) {
-          this.pingInterval = setInterval(() => {
-            if (this.activeCallData) {
-              this.broadcastSignaling('call:ping', {
-                callId: this.activeCallData.callId,
-              });
+        this.startHeartbeatAndWatchdog();
+      } else if (pc.connectionState === 'disconnected') {
+        if (!this.disconnectTimer) {
+          this.disconnectTimer = setTimeout(() => {
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+              console.warn('[VoiceCall] Connection state disconnected grace period expired, ending call');
+              this.handleCallEndedRemotely();
             }
           }, 3000);
         }
-      } else if (pc.connectionState === 'disconnected') {
-        // Mobile network jitter grace period: allow 7 seconds for automatic ICE reconnect
-        console.warn('[VoiceCall] Peer connection disconnected, waiting 7s grace period before ending...');
-        if (!this.disconnectTimer) {
-          this.disconnectTimer = setTimeout(() => {
-            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-              console.warn('[VoiceCall] Connection did not recover, ending call.');
-              this.endCall();
-            }
-          }, 7000);
-        }
-      } else if (pc.connectionState === 'failed') {
-        this.endCall();
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        this.handleCallEndedRemotely();
       }
     };
 
@@ -535,6 +765,26 @@ export class VoiceCallService {
           this.subscribePromise,
           new Promise((resolve) => setTimeout(resolve, 1500)),
         ]);
+      }
+
+      // 1. Subscribe immediately to dedicated Call Room channel
+      this.subscribeCallRoom(callId);
+
+      // 2. Caller also listens on Student and Phone channels for any direct signals from Callee
+      if (student.id) {
+        const studentChanName = `student-call-${String(student.id).trim().toLowerCase()}`;
+        const sChan = supabase.channel(studentChanName, { config: { broadcast: { self: false } } });
+        this.attachCallListeners(sChan);
+        sChan.subscribe();
+        this.callerExtraChannels.push(sChan);
+      }
+      const normGuardianPhone = this.normPhone(student.guardian_phone);
+      if (normGuardianPhone) {
+        const phoneChanName = `phone-call-${normGuardianPhone}`;
+        const pChan = supabase.channel(phoneChanName, { config: { broadcast: { self: false } } });
+        this.attachCallListeners(pChan);
+        pChan.subscribe();
+        this.callerExtraChannels.push(pChan);
       }
 
       const stream = await this.acquireLocalStream();
@@ -568,6 +818,20 @@ export class VoiceCallService {
       // Start ringing sound
       callSoundService.startOutgoingRingback();
       this.onStatusChange?.('calling', payload);
+
+      // 3. Outgoing Ring Timeout (45 seconds): automatically end if parent does not answer
+      if (this.outgoingRingTimeout) {
+        clearTimeout(this.outgoingRingTimeout);
+      }
+      this.outgoingRingTimeout = setTimeout(() => {
+        if (this.activeCallData && this.activeCallData.callId === callId && this.isCaller) {
+          console.log('[VoiceCall] Outgoing call unanswered timeout (45s)');
+          callSoundService.stopAll();
+          callSoundService.playDisconnectChime();
+          this.onError?.('অভিভাবক কল রিসিভ করেননি (কোনো উত্তর নেই)');
+          this.endCall();
+        }
+      }, 45000);
 
       // Broadcast offer on all channels
       await this.broadcastSignaling('call:initiate', payload);
@@ -631,11 +895,6 @@ export class VoiceCallService {
     const isPhoneMatch = Boolean(myPhone && targetPhone && myPhone === targetPhone);
     const isParentPrefix = myId.startsWith('parent') && (myId.includes(targetStudentId) || (targetPhone && myId.includes(targetPhone)));
     
-    // NOTE (2026-10-04 fix): removed the old "isStaffOrAdmin" catch-all
-    // (!myId.startsWith('parent')). It matched EVERY connected user of the
-    // institution (parents log in with UUID/phone ids that don't start with
-    // 'parent'), so every call rang everyone. Now only the targeted parent
-    // (matched by student id or guardian phone) sees the incoming call.
     const isForMe = isIdMatch || isPhoneMatch || isParentPrefix;
 
     if (!isForMe) {
@@ -653,12 +912,17 @@ export class VoiceCallService {
     if (this.activeCallData && this.activeCallData.callId !== payload.callId) {
       this.broadcastSignaling('call:reject', {
         callId: payload.callId,
+        institutionId: payload.institutionId,
+        student: payload.student,
         reason: 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন।',
       });
       return;
     }
 
     this.isCaller = false;
+
+    // Immediately join the dedicated call room channel so signaling is 100% direct!
+    this.subscribeCallRoom(payload.callId);
 
     // Ensure institutionName is filled
     if (!payload.institutionName && !payload.caller?.institutionName) {
@@ -701,6 +965,7 @@ export class VoiceCallService {
     // Notify caller that phone is ringing
     this.broadcastSignaling('call:ringing', {
       callId: payload.callId,
+      institutionId: payload.institutionId,
       calleeId: this.currentUserId,
     });
   }
@@ -740,6 +1005,8 @@ export class VoiceCallService {
       // Broadcast accept across channels
       await this.broadcastSignaling('call:accept', {
         callId,
+        institutionId: this.activeCallData.institutionId,
+        student: this.activeCallData.student,
         answer: {
           type: answer.type,
           sdp: answer.sdp,
@@ -767,6 +1034,10 @@ export class VoiceCallService {
 
     try {
       callSoundService.stopAll();
+      if (this.outgoingRingTimeout) {
+        clearTimeout(this.outgoingRingTimeout);
+        this.outgoingRingTimeout = null;
+      }
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.answer));
       
       // Process pending candidates
@@ -779,6 +1050,7 @@ export class VoiceCallService {
 
       callSoundService.playConnectChime();
       this.onStatusChange?.('connected', this.activeCallData || undefined);
+      this.startHeartbeatAndWatchdog();
     } catch (e) {
       console.error('[VoiceCall] Failed setting remote answer:', e);
     }
@@ -804,21 +1076,55 @@ export class VoiceCallService {
   /**
    * Reject incoming call
    */
-  public rejectCall(reason: string = 'কলটি কেটে দেওয়া হয়েছে।') {
+  public async rejectCall(reason: string = 'কলটি কেটে দেওয়া হয়েছে।') {
     callSoundService.stopAll();
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
 
-    if (this.activeCallData) {
-      this.broadcastSignaling('call:reject', {
-        callId: this.activeCallData.callId,
+    // 1. Immediately reflect UI state on the user's screen
+    this.onStatusChange?.('rejected', this.activeCallData || undefined);
+
+    const callData = this.activeCallData;
+    if (callData) {
+      const payload = {
+        callId: callData.callId,
+        institutionId: callData.institutionId,
+        student: callData.student,
+        calleePhone: callData.calleePhone || callData.student?.guardian_phone,
+        caller: callData.caller,
         reason,
         timestamp: Date.now(),
-      });
+      };
+
+      // Direct WebRTC DataChannel (instant 0ms)
+      if (this.dataChannel && this.dataChannel.readyState === 'open') {
+        try {
+          this.dataChannel.send(JSON.stringify({ type: 'call:reject', ...payload }));
+        } catch {}
+      }
+
+      // Broadcast immediately across all room & direct channels
+      await this.broadcastSignaling('call:reject', payload);
+
+      // Repeat burst pulse after 60ms to guarantee delivery across sockets
+      setTimeout(() => {
+        this.broadcastSignaling('call:reject', payload).catch(() => {});
+      }, 60);
+
+      // Cross-tab broadcast
+      try {
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('deenora_call_events');
+          bc.postMessage({ type: 'CALL_REJECTED', payload });
+          setTimeout(() => bc.close(), 1000);
+        }
+      } catch {}
+
+      // Safe buffer so socket packets leave the browser before channel teardown
+      await new Promise((r) => setTimeout(r, 350));
     }
 
     this.cleanup();
-    this.onStatusChange?.('rejected');
   }
 
   /**
@@ -838,20 +1144,55 @@ export class VoiceCallService {
   /**
    * Hang up / End active call
    */
-  public endCall() {
+  public async endCall() {
     callSoundService.stopAll();
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
 
-    if (this.activeCallData) {
-      this.broadcastSignaling('call:end', {
-        callId: this.activeCallData.callId,
+    // 1. Immediately reflect UI state on the user's screen
+    this.onStatusChange?.('ended', this.activeCallData || undefined);
+
+    const callData = this.activeCallData;
+    if (callData) {
+      const payload = {
+        callId: callData.callId,
+        institutionId: callData.institutionId,
+        student: callData.student,
+        calleePhone: callData.calleePhone || callData.student?.guardian_phone,
+        caller: callData.caller,
+        reason: 'কল সমাপ্ত হয়েছে।',
         timestamp: Date.now(),
-      });
+      };
+
+      // Direct WebRTC DataChannel (instant 0ms)
+      if (this.dataChannel && this.dataChannel.readyState === 'open') {
+        try {
+          this.dataChannel.send(JSON.stringify({ type: 'call:end', ...payload }));
+        } catch {}
+      }
+
+      // Broadcast immediately across room & direct channels
+      await this.broadcastSignaling('call:end', payload);
+
+      // Repeat burst pulse after 60ms
+      setTimeout(() => {
+        this.broadcastSignaling('call:end', payload).catch(() => {});
+      }, 60);
+
+      // Cross-tab broadcast
+      try {
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('deenora_call_events');
+          bc.postMessage({ type: 'CALL_ENDED', payload });
+          setTimeout(() => bc.close(), 1000);
+        }
+      } catch {}
+
+      // Safe buffer so socket packets leave the browser before channel teardown
+      await new Promise((r) => setTimeout(r, 350));
     }
 
     this.cleanup();
-    this.onStatusChange?.('ended');
   }
 
   /**
@@ -879,10 +1220,14 @@ export class VoiceCallService {
   }
 
   /**
-   * Cleanup connections and media tracks
+   * Cleanup connections, channels and media tracks
    */
   private cleanup() {
     dismissIncomingCallNotification();
+    if (this.outgoingRingTimeout) {
+      clearTimeout(this.outgoingRingTimeout);
+      this.outgoingRingTimeout = null;
+    }
     if (this.disconnectTimer) {
       clearTimeout(this.disconnectTimer);
       this.disconnectTimer = null;
@@ -891,9 +1236,18 @@ export class VoiceCallService {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
     }
+    if (this.watchdogInterval) {
+      clearInterval(this.watchdogInterval);
+      this.watchdogInterval = null;
+    }
     try {
       localStorage.removeItem('deenora_active_call_payload');
     } catch {}
+
+    if (this.dataChannel) {
+      try { this.dataChannel.close(); } catch {}
+      this.dataChannel = null;
+    }
 
     if (this.peerConnection) {
       try {
@@ -913,6 +1267,18 @@ export class VoiceCallService {
       try {
         this.remoteAudioElement.srcObject = null;
       } catch {}
+    }
+
+    if (this.callRoomChannel) {
+      try { supabase.removeChannel(this.callRoomChannel); } catch {}
+      this.callRoomChannel = null;
+    }
+
+    if (this.callerExtraChannels && this.callerExtraChannels.length > 0) {
+      this.callerExtraChannels.forEach((ch) => {
+        try { supabase.removeChannel(ch); } catch {}
+      });
+      this.callerExtraChannels = [];
     }
 
     this.activeCallData = null;
@@ -937,6 +1303,10 @@ export class VoiceCallService {
     if (this.phoneChannel) {
       try { supabase.removeChannel(this.phoneChannel); } catch {}
       this.phoneChannel = null;
+    }
+    if (this.userChannel) {
+      try { supabase.removeChannel(this.userChannel); } catch {}
+      this.userChannel = null;
     }
   }
 }
