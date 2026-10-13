@@ -973,16 +973,27 @@ export class VoiceCallService {
       }
     } catch {}
 
+    // Format clean caller name for notification & native bridge (avoiding raw email strings)
+    const rawCaller = payload.institutionName || payload.caller?.institutionName || payload.caller?.name || '';
+    const cleanCallerName = (rawCaller.includes('@') || rawCaller.toLowerCase().includes('gmail') || rawCaller.toLowerCase().includes('.com'))
+      ? (payload.institutionName || payload.caller?.institutionName || 'Institution Admin')
+      : (rawCaller || 'Institution Admin');
+    const callerName = cleanCallerName || payload.student?.name || 'Institution Admin';
+    const callId = payload.callId;
+
+    // Trigger Android native incoming call UI via JavaScript bridge if available
+    try {
+      if (typeof window !== 'undefined' && window.AndroidInterface && window.AndroidInterface?.onIncomingCall) {
+        window.AndroidInterface.onIncomingCall(callerName, callId);
+      }
+    } catch (bridgeErr) {
+      console.warn('[VoiceCall] AndroidInterface.onIncomingCall bridge invocation error:', bridgeErr);
+    }
+
     // Start incoming ringtone
     callSoundService.startIncomingRingtone();
     this.onStatusChange?.('incoming', payload);
     this.onIncomingCall?.(payload);
-
-    // Format clean caller name for notification (avoiding raw email strings)
-    const rawCaller = payload.institutionName || payload.caller.institutionName || payload.caller.name || '';
-    const cleanCallerName = (rawCaller.includes('@') || rawCaller.toLowerCase().includes('gmail') || rawCaller.toLowerCase().includes('.com'))
-      ? (payload.institutionName || payload.caller.institutionName || 'Institution Admin')
-      : (rawCaller || 'Institution Admin');
 
     // Show WhatsApp-style persistent lock-screen / mobile screen notification
     showIncomingCallNotification({
