@@ -500,16 +500,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (isUuid(nameOrId)) {
           classIds = [nameOrId];
         } else {
-          const cls = await sbGet(`classes?select=id&institution_id=eq.${institutionId}&class_name=ilike.${encodeURIComponent(String(nameOrId))}&limit=10`);
+          const cls = await sbGet(`classes?select=id&institution_id=eq.${institution_id}&class_name=ilike.${encodeURIComponent(String(nameOrId))}&limit=10`);
           classIds = (cls || []).map((c: any) => c.id).filter(isUuid);
         }
         if (!classIds.length) return [];
-        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institutionId}&class_id=in.(${classIds.join(',')})&is_active=eq.true&limit=3000`);
+        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&class_id=in.(${classIds.join(',')})&is_active=eq.true&limit=3000`);
         return rows.map(r => r.guardian_phone).filter(Boolean);
       };
 
       const allPhones = async () => {
-        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institutionId}&is_active=eq.true&limit=5000`);
+        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&is_active=eq.true&limit=5000`);
         return rows.map(r => r.guardian_phone).filter(Boolean);
       };
 
