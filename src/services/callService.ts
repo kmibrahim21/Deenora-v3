@@ -40,12 +40,15 @@ export type CallStatus = 'idle' | 'calling' | 'incoming' | 'connected' | 'ended'
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:stun.services.mozilla.com' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
   iceCandidatePoolSize: 10,
 };
@@ -836,14 +839,23 @@ export class VoiceCallService {
   /**
    * Acquire local microphone audio stream
    */
+  /**
+   * Acquire local microphone audio stream
+   */
   private async acquireLocalStream(): Promise<MediaStream | null> {
     try {
       if (this.localStream && this.localStream.active) {
+        console.log('[VoiceCall] Reusing active local stream. Track count:', this.localStream.getAudioTracks().length);
+        this.localStream.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+          console.log('[VoiceCall] Local audio track verified:', { id: track.id, enabled: track.enabled, readyState: track.readyState });
+        });
         return this.localStream;
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('মাইক্রোফোন ব্রাউজারে সাপোর্টেড নয় বা সিকিউর কনটেক্সট (HTTPS) প্রয়োজন।');
       }
+      console.log('[VoiceCall] Requesting getUserMedia audio permission...');
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -852,16 +864,32 @@ export class VoiceCallService {
         },
         video: false,
       });
+      const audioTracks = stream.getAudioTracks();
+      console.log('[VoiceCall] getUserMedia SUCCESS! Audio tracks count:', audioTracks.length);
+      if (audioTracks.length > 0) {
+        audioTracks.forEach((track) => {
+          track.enabled = true;
+          console.log('[VoiceCall] Local audio track verified:', {
+            id: track.id,
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+          });
+        });
+      } else {
+        console.warn('[VoiceCall] getUserMedia succeeded but returned 0 audio tracks!');
+      }
       this.localStream = stream;
       return stream;
     } catch (err: any) {
-      console.warn('[VoiceCall] MediaDevices getUserMedia error:', err);
+      console.error('[VoiceCall] getUserMedia FAILURE:', err);
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtx) {
           const actx = new AudioCtx();
           const dest = actx.createMediaStreamDestination();
           this.localStream = dest.stream;
+          console.log('[VoiceCall] Fallback silent AudioContext destination stream created');
           return dest.stream;
         }
       } catch {}
@@ -891,13 +919,13 @@ export class VoiceCallService {
     if (!this.watchdogInterval) {
       this.watchdogInterval = setInterval(() => {
         if (this.peerConnection && this.peerConnection.connectionState === 'connected') {
-          // If no heartbeat ping received for 6 seconds, assume peer has disconnected / closed tab
-          if (Date.now() - this.lastPingReceived > 6000) {
-            console.warn('[VoiceCall] Heartbeat timeout (no ping received for 6s), disconnecting call');
+          // If no heartbeat ping received for 20 seconds, assume peer has disconnected / closed tab
+          if (Date.now() - this.lastPingReceived > 20000) {
+            console.warn('[VoiceCall] Heartbeat timeout (no ping received for 20s), disconnecting call');
             this.handleCallEndedRemotely();
           }
         }
-      }, 1500);
+      }, 3000);
     }
   }
 
@@ -941,26 +969,42 @@ export class VoiceCallService {
     };
 
     pc.ontrack = (event) => {
-      console.log('[VoiceCall] Received remote audio track', event.streams, event.track);
+      console.log('[VoiceCall] ontrack fired! Stream count:', event.streams?.length, 'Track:', event.track?.id, 'kind:', event.track?.kind);
       let remoteStream: MediaStream;
       if (event.streams && event.streams[0]) {
         remoteStream = event.streams[0];
       } else if (event.track) {
         remoteStream = new MediaStream([event.track]);
       } else {
+        console.warn('[VoiceCall] ontrack received without stream or track!');
         return;
       }
 
       if (this.remoteAudioElement) {
         try {
           this.remoteAudioElement.srcObject = remoteStream;
-          this.remoteAudioElement.muted = false;
-          this.remoteAudioElement.volume = this.isSpeakerOn ? 1.0 : 0.3;
+          this.remoteAudioElement.muted = false; // verify unmuted!
+          this.remoteAudioElement.volume = this.isSpeakerOn ? 1.0 : 0.85;
+          console.log('[VoiceCall] Attached remoteStream to remoteAudioElement. muted:', this.remoteAudioElement.muted, 'volume:', this.remoteAudioElement.volume);
           const playPromise = this.remoteAudioElement.play();
           if (playPromise !== undefined) {
-            playPromise.catch((err) => {
-              console.warn('[VoiceCall] remoteAudioElement.play() warning, auto-resuming on user interaction:', err);
-            });
+            playPromise
+              .then(() => {
+                console.log('[VoiceCall] remoteAudioElement playback active! muted:', this.remoteAudioElement?.muted);
+              })
+              .catch((err) => {
+                console.warn('[VoiceCall] remoteAudioElement.play() warning, auto-resuming on user interaction:', err);
+                const resumeAudio = () => {
+                  if (this.remoteAudioElement) {
+                    this.remoteAudioElement.muted = false;
+                    this.remoteAudioElement.play().catch(() => {});
+                  }
+                  window.removeEventListener('click', resumeAudio);
+                  window.removeEventListener('touchend', resumeAudio);
+                };
+                window.addEventListener('click', resumeAudio);
+                window.addEventListener('touchend', resumeAudio);
+              });
           }
         } catch (e) {
           console.warn('[VoiceCall] remoteAudioElement setup error:', e);
@@ -969,23 +1013,49 @@ export class VoiceCallService {
       this.onRemoteStreamReady?.(remoteStream);
     };
 
-    // Immediate ICE connection state monitoring (detects mobile hangup & tab close)
+    // Immediate ICE connection state monitoring with automatic ICE restart on failed/disconnected
     pc.oniceconnectionstatechange = () => {
       const state = pc.iceConnectionState;
-      console.log('[VoiceCall] ICE Connection state:', state);
-      if (state === 'disconnected') {
+      console.log('[VoiceCall] ICE Connection state change:', state);
+
+      if (state === 'failed' || state === 'disconnected') {
+        console.warn(`[VoiceCall] ICE connection state is "${state}", triggering ICE restart...`);
+        try {
+          if (typeof (pc as any).restartIce === 'function') {
+            (pc as any).restartIce();
+            console.log('[VoiceCall] pc.restartIce() executed');
+          }
+          if (this.isCaller && this.activeCallData) {
+            pc.createOffer({ iceRestart: true })
+              .then(async (newOffer) => {
+                await pc.setLocalDescription(newOffer);
+                await this.broadcastSignaling('call:offer', {
+                  callId: this.activeCallData!.callId,
+                  offer: newOffer,
+                  senderId: this.currentUserId,
+                  timestamp: Date.now(),
+                });
+                console.log('[VoiceCall] ICE restart offer sent successfully');
+              })
+              .catch((err) => {
+                console.warn('[VoiceCall] Failed to send ICE restart offer:', err);
+              });
+          }
+        } catch (iceErr) {
+          console.warn('[VoiceCall] Error during ICE restart attempt:', iceErr);
+        }
+
+        // Give a 15-second grace period for ICE recovery / network switch before ending call
         if (!this.disconnectTimer) {
           this.disconnectTimer = setTimeout(() => {
-            if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
-              console.warn('[VoiceCall] ICE disconnected grace period expired, ending call');
+            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
+              console.warn('[VoiceCall] ICE reconnect failed after 15s grace period, ending call');
               this.handleCallEndedRemotely();
             }
-          }, 3000);
+          }, 15000);
         }
-      } else if (state === 'failed' || state === 'closed') {
-        console.warn('[VoiceCall] ICE state failed/closed, ending call immediately');
-        this.handleCallEndedRemotely();
       } else if (state === 'connected' || state === 'completed') {
+        console.log('[VoiceCall] ICE connection healthy and stable:', state);
         if (this.disconnectTimer) {
           clearTimeout(this.disconnectTimer);
           this.disconnectTimer = null;
@@ -994,7 +1064,7 @@ export class VoiceCallService {
     };
 
     pc.onconnectionstatechange = () => {
-      console.log('[VoiceCall] Connection state:', pc.connectionState);
+      console.log('[VoiceCall] Connection state change:', pc.connectionState);
       if (pc.connectionState === 'connected') {
         if (this.disconnectTimer) {
           clearTimeout(this.disconnectTimer);
@@ -1011,10 +1081,10 @@ export class VoiceCallService {
         if (!this.disconnectTimer) {
           this.disconnectTimer = setTimeout(() => {
             if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-              console.warn('[VoiceCall] Connection state disconnected grace period expired, ending call');
+              console.warn('[VoiceCall] Connection state disconnected grace period (15s) expired, ending call');
               this.handleCallEndedRemotely();
             }
-          }, 3000);
+          }, 15000);
         }
       } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         this.handleCallEndedRemotely();
@@ -1175,17 +1245,23 @@ export class VoiceCallService {
    */
   private async handleIncomingOffer(payload: CallPayload) {
     // 1. Ignore if current user is the caller or we initiated this call
-    if (this.isCaller || String(this.currentUserId) === String(payload.caller.id)) {
+    if (this.isCaller || String(this.currentUserId) === String(payload.caller?.id)) {
+      console.log('[VoiceCall] Incoming offer ignored: Current user is caller/initiator', {
+        isCaller: this.isCaller,
+        currentUserId: this.currentUserId,
+        callerId: payload.caller?.id,
+        callId: payload.callId,
+      });
       return;
     }
 
     // 2. Normalize and check if this call belongs to this user or student
     const norm = (s?: any) => String(s || '').trim().toLowerCase();
     const myId = norm(this.currentUserId);
-    const targetStudentId = norm(payload.student.id);
+    const targetStudentId = norm(payload.student?.id);
 
     const myPhone = this.normPhone(this.currentPhone || this.currentUserId);
-    const targetPhone = this.normPhone(payload.calleePhone || payload.student.guardian_phone);
+    const targetPhone = this.normPhone(payload.calleePhone || payload.student?.guardian_phone);
 
     const isIdMatch = Boolean(myId && targetStudentId && (myId === targetStudentId || myId.includes(targetStudentId) || targetStudentId.includes(myId)));
     const isPhoneMatch = Boolean(myPhone && targetPhone && myPhone === targetPhone);
@@ -1194,6 +1270,13 @@ export class VoiceCallService {
     const isForMe = isIdMatch || isPhoneMatch || isParentPrefix;
 
     if (!isForMe) {
+      console.log('[VoiceCall] Incoming offer ignored: Call is not targeted for current user/student/phone', {
+        myId,
+        targetStudentId,
+        myPhone,
+        targetPhone,
+        callId: payload.callId,
+      });
       return;
     }
 
@@ -1752,6 +1835,11 @@ export class VoiceCallService {
       clearTimeout(this.autoAnswerTimer);
       this.autoAnswerTimer = null;
     }
+
+    // Verify and ensure realtime signaling channels are active and subscribed for the next call!
+    setTimeout(() => {
+      this.checkConnectionHealth(false);
+    }, 250);
   }
 
   /**
