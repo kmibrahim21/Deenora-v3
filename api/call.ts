@@ -362,7 +362,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify({
           message: {
             token: targetToken,
-            android: { priority: 'HIGH', ttl: '30s' },
+            android: { priority: 'HIGH', ttl: '120s' },
             data: fcmDataPayload,
           },
         }),
