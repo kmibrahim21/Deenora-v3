@@ -13,12 +13,24 @@ interface FirebaseServiceAccount {
   private_key: string;
 }
 
+function normalizePrivateKey(key: string | undefined | null): string {
+  if (!key) return '';
+  let cleaned = key.trim();
+  // Strip surrounding quotes if present
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  // Replace literal '\n' characters with actual line breaks
+  cleaned = cleaned.replace(/\\n/g, '\n').replace(/\\r/g, '');
+  return cleaned;
+}
+
 function parseServiceAccount(): FirebaseServiceAccount | null {
   try {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (raw) {
       let trimmed = typeof raw === 'string' ? raw.trim() : '';
-      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
         trimmed = trimmed.slice(1, -1).replace(/\\"/g, '"');
       }
       const parsed = trimmed.startsWith('{')
@@ -28,7 +40,7 @@ function parseServiceAccount(): FirebaseServiceAccount | null {
         return {
           project_id: parsed.project_id,
           client_email: parsed.client_email,
-          private_key: parsed.private_key.replace(/\\n/g, '\n'),
+          private_key: normalizePrivateKey(parsed.private_key),
         };
       }
     }
@@ -44,7 +56,7 @@ function parseServiceAccount(): FirebaseServiceAccount | null {
     return {
       project_id: projectId,
       client_email: clientEmail,
-      private_key: privateKey.replace(/\\n/g, '\n'),
+      private_key: normalizePrivateKey(privateKey),
     };
   }
 
