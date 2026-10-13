@@ -94,6 +94,87 @@ export class VoiceCallService {
   private handleVisibilityChange: (() => void) | null = null;
   private handleOnline: (() => void) | null = null;
 
+  // Staged / Pending auto-answer state (for Android Native Action / URL ?answer=1)
+  private pendingAutoAnswerCallId: string | null = null;
+  private autoAnswerTimer: NodeJS.Timeout | null = null;
+
+  public setPendingAutoAnswer(callId: string | null) {
+    this.pendingAutoAnswerCallId = callId ? String(callId).trim() : null;
+    if (this.autoAnswerTimer) {
+      clearTimeout(this.autoAnswerTimer);
+      this.autoAnswerTimer = null;
+    }
+    if (this.pendingAutoAnswerCallId) {
+      this.autoAnswerTimer = setTimeout(() => {
+        if (this.pendingAutoAnswerCallId === callId) {
+          console.log('[VoiceCall] Pending auto-answer timeout expired for:', callId);
+          this.pendingAutoAnswerCallId = null;
+        }
+      }, 45000);
+    }
+  }
+
+  public getPendingAutoAnswer(): string | null {
+    return this.pendingAutoAnswerCallId;
+  }
+
+  /**
+   * Handle native call action invoked by Android WebView bridge or background notifications:
+   * action: 'answer' | 'decline' | 'end'
+   */
+  public async handleNativeAction(action: string, callId?: string): Promise<boolean> {
+    const act = String(action || '').toLowerCase().trim();
+    console.log('[VoiceCall] handleNativeAction invoked:', { action: act, callId });
+
+    if (act === 'answer' || act === 'accept' || act === 'accept_call') {
+      // 1. Tell Android native to stop ringing sound immediately
+      if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
+        try { window.AndroidInterface.stopRinging(); } catch {}
+      }
+      callSoundService.stopAll();
+
+      // 2. Check if we already have the activeCallData or stored call matching callId
+      const currentCall = this.activeCallData || this.getActiveCall();
+      const isMatchingCall = currentCall && (!callId || currentCall.callId === callId);
+
+      if (isMatchingCall && currentCall?.offer) {
+        console.log('[VoiceCall] Found active offer matching callId, accepting WebRTC immediately:', currentCall.callId);
+        this.activeCallData = currentCall;
+        const accepted = await this.acceptCall();
+        return accepted;
+      }
+
+      // 3. If offer not yet in memory (or socket delivery in flight):
+      // Stage callId so when handleIncomingOffer fires, it automatically accepts instead of ringing!
+      const targetId = callId ? String(callId).trim() : '__ANY__';
+      console.log('[VoiceCall] Staging auto-answer for upcoming offer:', targetId);
+      this.setPendingAutoAnswer(targetId);
+
+      if (callId) {
+        this.subscribeCallRoom(callId);
+        this.requestOffer(callId);
+      }
+      return true;
+    } else if (act === 'decline' || act === 'reject' || act === 'reject_call') {
+      if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
+        try { window.AndroidInterface.stopRinging(); } catch {}
+      }
+      callSoundService.stopAll();
+      this.setPendingAutoAnswer(null);
+      await this.rejectCall('Android Native UI থেকে কল বাতিল করা হয়েছে।', callId);
+      return true;
+    } else if (act === 'end_call' || act === 'hangup' || act === 'end') {
+      if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
+        try { window.AndroidInterface.stopRinging(); } catch {}
+      }
+      this.setPendingAutoAnswer(null);
+      await this.endCall();
+      return true;
+    }
+
+    return false;
+  }
+
   public setSpeaker(enabled: boolean): void {
     this.isSpeakerOn = enabled;
     if (this.remoteAudioElement) {
@@ -261,7 +342,7 @@ export class VoiceCallService {
   /**
    * Dedicated per-call room channel ensuring 100% direct caller <-> callee signaling
    */
-  private subscribeCallRoom(callId: string) {
+  public subscribeCallRoom(callId: string) {
     if (!callId) return;
     if (this.callRoomChannel) {
       try { supabase.removeChannel(this.callRoomChannel); } catch {}
@@ -1159,6 +1240,22 @@ export class VoiceCallService {
       }
     } catch {}
 
+    // Check if this incoming call was already marked for auto-answer (via ?answer=1 or handleNativeCallAction('answer'))
+    const isAutoAnswerPending = Boolean(
+      this.pendingAutoAnswerCallId &&
+      (this.pendingAutoAnswerCallId === '__ANY__' || this.pendingAutoAnswerCallId === payload.callId)
+    );
+
+    if (isAutoAnswerPending) {
+      console.log('[VoiceCall] Incoming offer matched pending auto-answer! Auto-accepting immediately without ringing modal:', payload.callId);
+      this.setPendingAutoAnswer(null);
+      if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
+        try { window.AndroidInterface.stopRinging(); } catch {}
+      }
+      await this.acceptCall();
+      return;
+    }
+
     // Format clean caller name for notification & native bridge (avoiding raw email strings)
     const rawCaller = payload.institutionName || payload.caller?.institutionName || payload.caller?.name || '';
     const cleanCallerName = (rawCaller.includes('@') || rawCaller.toLowerCase().includes('gmail') || rawCaller.toLowerCase().includes('.com'))
@@ -1223,7 +1320,12 @@ export class VoiceCallService {
    */
   public async acceptCall(): Promise<boolean> {
     if (!this.activeCallData || !this.activeCallData.offer) {
-      return false;
+      const stored = this.getActiveCall();
+      if (stored && stored.offer) {
+        this.activeCallData = stored;
+      } else {
+        return false;
+      }
     }
 
     try {
@@ -1231,8 +1333,12 @@ export class VoiceCallService {
         clearTimeout(this.incomingRingTimeout);
         this.incomingRingTimeout = null;
       }
+      this.setPendingAutoAnswer(null);
       callSoundService.stopAll();
       dismissIncomingCallNotification();
+      if (typeof window !== 'undefined' && window.AndroidInterface?.stopRinging) {
+        try { window.AndroidInterface.stopRinging(); } catch {}
+      }
       const callId = this.activeCallData.callId;
       const pc = this.createPeerConnection(callId);
 
@@ -1270,6 +1376,10 @@ export class VoiceCallService {
       this.isCallAnswered = true;
       this.onStatusChange?.('connected', this.activeCallData);
       callSoundService.playConnectChime();
+      if (typeof window !== 'undefined' && window.AndroidInterface?.callStarted) {
+        try { window.AndroidInterface.callStarted(); } catch {}
+      }
+      this.startHeartbeatAndWatchdog();
       return true;
     } catch (error: any) {
       console.error('[VoiceCall] Error accepting call:', error);
@@ -1575,6 +1685,11 @@ export class VoiceCallService {
     this.isCaller = false;
     this.isCallAnswered = false;
     this.pendingCandidates = [];
+    this.pendingAutoAnswerCallId = null;
+    if (this.autoAnswerTimer) {
+      clearTimeout(this.autoAnswerTimer);
+      this.autoAnswerTimer = null;
+    }
   }
 
   /**
@@ -1628,3 +1743,25 @@ export class VoiceCallService {
 }
 
 export const voiceCallService = new VoiceCallService();
+
+// Expose global bridge function window.handleNativeCallAction for Android WebView & Notifications
+if (typeof window !== 'undefined') {
+  (window as any).handleNativeCallAction = (action: string, callId?: string) => {
+    return voiceCallService.handleNativeAction(action, callId);
+  };
+  (window as any).onNativeCallAction = (window as any).handleNativeCallAction;
+
+  // Auto-detect ?answer=1&call_id=xxx on page load (fresh start case)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('answer') === '1') {
+      const targetCallId = params.get('call_id') || '__ANY__';
+      console.log('[VoiceCall] Page load detected ?answer=1 for call_id:', targetCallId);
+      voiceCallService.setPendingAutoAnswer(targetCallId);
+      if (targetCallId && targetCallId !== '__ANY__') {
+        voiceCallService.subscribeCallRoom(targetCallId);
+        voiceCallService.requestOffer(targetCallId);
+      }
+    }
+  } catch {}
+}
