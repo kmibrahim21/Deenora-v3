@@ -13,6 +13,17 @@ interface FirebaseServiceAccount {
   private_key: string;
 }
 
+// FIX 2026-10-13: normalize private key pasted into Vercel env vars.
+// Handles: literal \n, double-escaped \\n, real newlines, surrounding quotes, \r.
+function normalizePrivateKey(k: string): string {
+  let key = (k || '').trim();
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+  key = key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r/g, '');
+  return key;
+}
+
 function parseServiceAccount(): FirebaseServiceAccount | null {
   try {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -44,7 +55,7 @@ function parseServiceAccount(): FirebaseServiceAccount | null {
     return {
       project_id: projectId,
       client_email: clientEmail,
-      private_key: privateKey.replace(/\\n/g, '\n'),
+      private_key: normalizePrivateKey(privateKey),
     };
   }
 
@@ -68,7 +79,7 @@ async function getFirebaseV1AccessToken(serviceAccount: FirebaseServiceAccount):
       iat,
     };
 
-    const cleanPrivateKey = serviceAccount.private_key.replace(/\\n/g, '\n');
+    const cleanPrivateKey = normalizePrivateKey(serviceAccount.private_key);
     const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
     const encodedClaimSet = Buffer.from(JSON.stringify(claimSet)).toString('base64url');
     const signatureInput = `${encodedHeader}.${encodedClaimSet}`;
@@ -122,6 +133,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   const serviceAccount = parseServiceAccount();
+
+  // FIX 2026-10-13: log key SHAPE only (never the key itself) to diagnose paste issues
+  if (serviceAccount) {
+    const pk = serviceAccount.private_key;
+    console.log('[Call API] private key shape:', {
+      len: pk.length,
+      hasBegin: pk.includes('BEGIN PRIVATE KEY'),
+      hasEnd: pk.includes('END PRIVATE KEY'),
+      newlines: (pk.match(/\n/g) || []).length,
+    });
+  }
 
   const action = req.query.action || req.body?.action;
 
@@ -252,7 +274,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             body: JSON.stringify(upsertBody),
           });
           const dbText = await dbRes.text().catch(() => '');
-          console.error('[Call API] device_tokens upsert:', dbRes.status, dbText.slice(0, 300));
+          console.log('[Call API] device_tokens upsert:', dbRes.status, dbText.slice(0, 300));
           dbDebug = { status: dbRes.status, ok: dbRes.ok, body: dbText.slice(0, 300) };
         } catch (dbErr: any) {
           console.warn('[Call API] device_tokens table save notice:', dbErr);
@@ -449,7 +471,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const sbGet = async (path: string): Promise<any[]> => {
         try {
           const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-            headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+            headers: { apikey: SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
           });
           if (!r.ok) return [];
           const j = await r.json();
@@ -472,16 +494,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (isUuid(nameOrId)) {
           classIds = [nameOrId];
         } else {
-          const cls = await sbGet(`classes?select=id&institution_id=eq.${institution_id}&class_name=ilike.${encodeURIComponent(String(nameOrId))}&limit=10`);
+          const cls = await sbGet(`classes?select=id&institution_id=eq.${institutionId}&class_name=ilike.${encodeURIComponent(String(nameOrId))}&limit=10`);
           classIds = (cls || []).map((c: any) => c.id).filter(isUuid);
         }
         if (!classIds.length) return [];
-        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&class_id=in.(${classIds.join(',')})&is_active=eq.true&limit=3000`);
+        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institutionId}&class_id=in.(${classIds.join(',')})&is_active=eq.true&limit=3000`);
         return rows.map(r => r.guardian_phone).filter(Boolean);
       };
 
       const allPhones = async () => {
-        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institution_id}&is_active=eq.true&limit=5000`);
+        const rows = await sbGet(`students?select=guardian_phone&institution_id=eq.${institutionId}&is_active=eq.true&limit=5000`);
         return rows.map(r => r.guardian_phone).filter(Boolean);
       };
 
