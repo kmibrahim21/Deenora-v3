@@ -305,6 +305,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Find token from memory or database
       const targetToken = await findTargetFcmToken(callee_phone, student_id);
+      console.log('[Call API] initiate_call_push attempt:', JSON.stringify({
+        targetTokenFound: !!targetToken,
+        tokenPrefix: targetToken ? targetToken.slice(0, 12) : null,
+        call_id: String(payload.call_id || ''),
+      }));
 
       // Check institution config for service account if not in env
       const effectiveServiceAccount = await resolveServiceAccount(institution_id);
@@ -364,6 +369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       const v1Result = await v1Response.json().catch(() => ({}));
+      console.log('[Call API] FCM v1 send:', v1Response.status, JSON.stringify(v1Result).slice(0, 300));
       return res.status(200).json({
         success: true,
         fcmSent: true,
