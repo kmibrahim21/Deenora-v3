@@ -20,14 +20,6 @@ import {
 } from 'services/googleDriveBackup';
 import { User } from 'firebase/auth';
 
-// Declare the Android interface for TypeScript
-declare global {
-  interface Window {
-    AndroidInterface?: {
-      downloadFile?: (base64: string, fileName: string, mimeType: string) => void;
-    };
-  }
-}
 
 interface DataManagementProps {
   lang: Language;

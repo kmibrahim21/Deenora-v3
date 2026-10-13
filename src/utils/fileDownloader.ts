@@ -5,16 +5,6 @@
  * 2. Android Studio WebView (via native AndroidInterface bridge with Scoped Storage support)
  */
 
-declare global {
-  interface Window {
-    AndroidInterface?: {
-      downloadFile?: (base64: string, fileName: string, mimeType: string) => void;
-    };
-    Android?: {
-      downloadFile?: (base64: string, fileName: string, mimeType: string) => void;
-    };
-  }
-}
 
 /**
  * Download a Blob as a file

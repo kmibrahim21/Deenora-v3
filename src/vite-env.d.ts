@@ -10,16 +10,18 @@ interface ImportMeta {
   readonly env: ImportMetaEnv
 }
 
-declare global {
-  interface Window {
-    AndroidInterface?: {
-      downloadFile?: (base64: string, fileName: string, mimeType: string) => void;
-      getFcmToken?: () => string;
-      stopRinging?: () => void;
-      callStarted?: () => void;
-      callEnded?: () => void;
-      onIncomingCall?: (callerName: string, callId: string) => void;
-      [key: string]: any;
-    };
-  }
+interface Window {
+  AndroidInterface?: {
+    downloadFile?: (base64: string, fileName: string, mimeType: string) => void;
+    getFcmToken?: () => string;
+    stopRinging?: () => void;
+    callStarted?: () => void;
+    callEnded?: () => void;
+    onIncomingCall?: (callerName: string, callId: string) => void;
+    [key: string]: any;
+  };
+  Android?: {
+    downloadFile?: (base64: string, fileName: string, mimeType: string) => void;
+    [key: string]: any;
+  };
 }

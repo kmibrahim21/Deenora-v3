@@ -76,10 +76,23 @@ export class VoiceCallService {
   private subscribeResolver: ((val: boolean) => void) | null = null;
   private disconnectTimer: NodeJS.Timeout | null = null;
   private outgoingRingTimeout: NodeJS.Timeout | null = null;
+  private incomingRingTimeout: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
   private watchdogInterval: NodeJS.Timeout | null = null;
   private lastPingReceived: number = Date.now();
   private isSpeakerOn: boolean = true;
+
+  // Realtime connection health & auto-reconnect state
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectAttempts: number = 0;
+  private readonly INITIAL_RECONNECT_DELAY: number = 1000;
+  private readonly MAX_RECONNECT_DELAY: number = 30000;
+  private readonly BACKOFF_FACTOR: number = 1.5;
+  private isReconnecting: boolean = false;
+  private healthCheckInterval: NodeJS.Timeout | null = null;
+  private handleUnload: (() => void) | null = null;
+  private handleVisibilityChange: (() => void) | null = null;
+  private handleOnline: (() => void) | null = null;
 
   public setSpeaker(enabled: boolean): void {
     this.isSpeakerOn = enabled;
@@ -145,13 +158,13 @@ export class VoiceCallService {
       (this.remoteAudioElement as any).playsInline = true;
 
       // Auto-hangup when tab is closed or user navigates away
-      const handleUnload = () => {
+      this.handleUnload = () => {
         if (this.activeCallData) {
           this.endCall();
         }
       };
-      window.addEventListener('beforeunload', handleUnload);
-      window.addEventListener('pagehide', handleUnload);
+      window.addEventListener('beforeunload', this.handleUnload);
+      window.addEventListener('pagehide', this.handleUnload);
 
       // Listen for cross-tab hangup / reject events
       if ('BroadcastChannel' in window) {
@@ -167,6 +180,27 @@ export class VoiceCallService {
           };
         } catch {}
       }
+
+      // App foreground (visibilitychange) connection health check & reconnect
+      if (typeof document !== 'undefined') {
+        this.handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+            console.log('[VoiceCall] App came to foreground (visibilitychange), checking realtime connection health...');
+            this.checkConnectionHealth(true);
+          }
+        };
+        document.addEventListener('visibilitychange', this.handleVisibilityChange);
+      }
+
+      // Online event: network restored, verify connection immediately
+      this.handleOnline = () => {
+        console.log('[VoiceCall] Network back online, checking realtime connection health...');
+        this.checkConnectionHealth(true);
+      };
+      window.addEventListener('online', this.handleOnline);
+
+      // Periodic connection health check (every 25 seconds)
+      this.startHealthCheckLoop();
     }
   }
 
@@ -272,6 +306,155 @@ export class VoiceCallService {
   }
 
   /**
+   * Monitor individual channel status changes and handle disconnection/error with auto-reconnect
+   */
+  private monitorChannelSubscription(ch: any, name: string) {
+    ch.subscribe((status: string, err?: any) => {
+      console.log(`[VoiceCall] Channel ${name} status: ${status}`, err || '');
+      if (status === 'SUBSCRIBED') {
+        this.isSubscribed = true;
+        this.subscribeResolver?.(true);
+        // Reset reconnect attempts on successful subscription
+        if (this.reconnectAttempts > 0) {
+          console.log(`[VoiceCall] Reconnected successfully to channel ${name}. Resetting backoff attempts.`);
+          this.reconnectAttempts = 0;
+        }
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+      } else if (status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+        console.warn(`[VoiceCall] Channel ${name} unhealthy state: ${status}. Scheduling auto-reconnect...`, err || '');
+        this.isSubscribed = false;
+        this.scheduleReconnect(false);
+      }
+    });
+  }
+
+  /**
+   * Periodic connection health check loop (runs every 25s)
+   */
+  private startHealthCheckLoop() {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+    }
+    this.healthCheckInterval = setInterval(() => {
+      this.checkConnectionHealth(false);
+    }, 25000);
+  }
+
+  /**
+   * Check connection health of Supabase Realtime client and active channels
+   */
+  public checkConnectionHealth(forceReconnect: boolean = false): boolean {
+    const hasCredentials = Boolean(this.currentInstitutionId || this.currentUserId || this.currentPhone);
+    if (!hasCredentials) {
+      return true;
+    }
+
+    let isHealthy = true;
+
+    // 1. Verify Supabase Realtime client socket connection
+    try {
+      if (supabase && (supabase as any).realtime) {
+        if (!(supabase as any).realtime.isConnected?.()) {
+          console.warn('[VoiceCall] Realtime client is NOT connected');
+          isHealthy = false;
+        }
+      }
+    } catch {}
+
+    // 2. Verify channel subscriptions
+    const activeChannels = [this.channel, this.userChannel, this.directChannel, this.phoneChannel].filter(Boolean);
+    if (activeChannels.length === 0 && hasCredentials) {
+      isHealthy = false;
+    } else {
+      for (const ch of activeChannels) {
+        if (!ch || ch.state === 'closed' || ch.state === 'leaving') {
+          console.warn(`[VoiceCall] Channel ${ch?.topic || 'unknown'} state is ${ch?.state}`);
+          isHealthy = false;
+          break;
+        }
+      }
+    }
+
+    if (!isHealthy || forceReconnect) {
+      console.log(`[VoiceCall] Connection health check triggered reconnect (healthy: ${isHealthy}, force: ${forceReconnect})`);
+      this.scheduleReconnect(forceReconnect);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Schedule auto-reconnect with exponential backoff
+   */
+  public scheduleReconnect(immediate: boolean = false) {
+    if (immediate) {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      this.reconnectAttempts = 0;
+      this.performReconnect();
+      return;
+    }
+
+    if (this.reconnectTimer) {
+      return;
+    }
+
+    const backoffDelay = Math.min(
+      this.INITIAL_RECONNECT_DELAY * Math.pow(this.BACKOFF_FACTOR, this.reconnectAttempts),
+      this.MAX_RECONNECT_DELAY
+    );
+    const jitter = Math.floor(Math.random() * 500);
+    const totalDelay = Math.round(backoffDelay + jitter);
+
+    this.reconnectAttempts++;
+    console.log(`[VoiceCall] Auto-reconnect attempt #${this.reconnectAttempts} scheduled in ${totalDelay}ms`);
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.performReconnect();
+    }, totalDelay);
+  }
+
+  /**
+   * Execute reconnection of supabase realtime channels
+   */
+  private async performReconnect() {
+    if (this.isReconnecting) return;
+    this.isReconnecting = true;
+
+    try {
+      console.log('[VoiceCall] Performing Supabase realtime channels reconnection...');
+
+      // 1. Reconnect realtime socket if disconnected
+      if (supabase && (supabase as any).realtime) {
+        try {
+          if (!(supabase as any).realtime.isConnected?.()) {
+            (supabase as any).realtime.connect?.();
+          }
+        } catch (e) {
+          console.warn('[VoiceCall] Realtime socket connect notice:', e);
+        }
+      }
+
+      // 2. Re-bind signaling channels
+      if (this.currentInstitutionId || this.currentUserId || this.currentPhone) {
+        await this.bindChannels();
+      }
+    } catch (err) {
+      console.error('[VoiceCall] Error during performReconnect:', err);
+      this.scheduleReconnect(false);
+    } finally {
+      this.isReconnecting = false;
+    }
+  }
+
+  /**
    * Initialize signaling channel for the institution and user
    */
   public initSignaling(institutionId: string, userId: string, phone?: string) {
@@ -285,7 +468,8 @@ export class VoiceCallService {
       this.currentInstitutionId === cleanInstId &&
       this.currentUserId === cleanUserId &&
       this.currentPhone === cleanPhone &&
-      (this.channel || this.directChannel)
+      (this.channel || this.directChannel) &&
+      this.isSubscribed
     ) {
       return;
     }
@@ -293,6 +477,37 @@ export class VoiceCallService {
     this.currentInstitutionId = cleanInstId;
     this.currentUserId = cleanUserId;
     this.currentPhone = cleanPhone;
+
+    this.bindChannels();
+
+    // Auto-register Device FCM Token for Android background call wake-up
+    try {
+      const storedToken = typeof window !== 'undefined' ? localStorage.getItem('deenora_fcm_token') : null;
+      const bridgeToken = typeof window !== 'undefined' ? (window as any).AndroidInterface?.getFcmToken?.() : null;
+      const effectiveToken = storedToken || bridgeToken;
+      if (effectiveToken && (cleanPhone || cleanUserId)) {
+        fetch('/api/call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register_token',
+            token: effectiveToken,
+            phone: cleanPhone || undefined,
+            student_id: cleanUserId || undefined,
+            institution_id: cleanInstId || undefined,
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
+  }
+
+  /**
+   * Bind and subscribe all required signaling channels
+   */
+  private async bindChannels() {
+    const cleanInstId = this.currentInstitutionId;
+    const cleanUserId = this.currentUserId;
+    const cleanPhone = this.currentPhone;
 
     // Teardown existing channels cleanly
     if (this.channel) {
@@ -319,31 +534,27 @@ export class VoiceCallService {
 
     // 1. Institution-wide channel
     if (cleanInstId) {
-      (async () => {
-        try {
-          const { data } = await supabase
-            .from('institutions')
-            .select('name')
-            .eq('id', cleanInstId)
-            .maybeSingle();
-          if (data?.name) {
-            this.cachedInstitutionName = data.name;
-          }
-        } catch {}
-      })();
+      if (!this.cachedInstitutionName) {
+        (async () => {
+          try {
+            const { data } = await supabase
+              .from('institutions')
+              .select('name')
+              .eq('id', cleanInstId)
+              .maybeSingle();
+            if (data?.name) {
+              this.cachedInstitutionName = data.name;
+            }
+          } catch {}
+        })();
+      }
 
       const channelName = `institution-calls-${cleanInstId}`;
       this.channel = supabase.channel(channelName, {
         config: { broadcast: { self: false } },
       });
       this.attachCallListeners(this.channel);
-      this.channel.subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[VoiceCall] Institution Channel Connected:', channelName);
-          this.isSubscribed = true;
-          this.subscribeResolver?.(true);
-        }
-      });
+      this.monitorChannelSubscription(this.channel, channelName);
     }
 
     // 2. Direct User ID channel (for Admin, Teacher, or any logged in user)
@@ -353,13 +564,7 @@ export class VoiceCallService {
         config: { broadcast: { self: false } },
       });
       this.attachCallListeners(this.userChannel);
-      this.userChannel.subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[VoiceCall] Direct User Channel Connected:', userChanName);
-          this.isSubscribed = true;
-          this.subscribeResolver?.(true);
-        }
-      });
+      this.monitorChannelSubscription(this.userChannel, userChanName);
     }
 
     // 3. Direct Student ID channel (for guardian portal)
@@ -369,13 +574,7 @@ export class VoiceCallService {
         config: { broadcast: { self: false } },
       });
       this.attachCallListeners(this.directChannel);
-      this.directChannel.subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[VoiceCall] Direct Student Channel Connected:', directChannelName);
-          this.isSubscribed = true;
-          this.subscribeResolver?.(true);
-        }
-      });
+      this.monitorChannelSubscription(this.directChannel, directChannelName);
     }
 
     // 4. Direct Guardian Phone channel
@@ -385,34 +584,8 @@ export class VoiceCallService {
         config: { broadcast: { self: false } },
       });
       this.attachCallListeners(this.phoneChannel);
-      this.phoneChannel.subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[VoiceCall] Direct Phone Channel Connected:', phoneChannelName);
-          this.isSubscribed = true;
-          this.subscribeResolver?.(true);
-        }
-      });
+      this.monitorChannelSubscription(this.phoneChannel, phoneChannelName);
     }
-
-    // Auto-register Device FCM Token for Android background call wake-up
-    try {
-      const storedToken = typeof window !== 'undefined' ? localStorage.getItem('deenora_fcm_token') : null;
-      const bridgeToken = typeof window !== 'undefined' ? (window as any).AndroidInterface?.getFcmToken?.() : null;
-      const effectiveToken = storedToken || bridgeToken;
-      if (effectiveToken && (cleanPhone || cleanUserId)) {
-        fetch('/api/call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'register_token',
-            token: effectiveToken,
-            phone: cleanPhone || undefined,
-            student_id: cleanUserId || undefined,
-            institution_id: cleanInstId || undefined,
-          }),
-        }).catch(() => {});
-      }
-    } catch {}
   }
 
   /**
@@ -898,6 +1071,7 @@ export class VoiceCallService {
     } catch (error: any) {
       console.error('[VoiceCall] Failed to start call:', error);
       callSoundService.stopAll();
+      this.cleanup();
       this.onStatusChange?.('failed');
       this.onError?.(error.message || 'ভয়েস কল শুরু করা সম্ভব হয়নি।');
       return false;
@@ -938,15 +1112,27 @@ export class VoiceCallService {
       targetPhone,
     });
 
-    // If already in a call, send busy
+    // If already in a call, verify if previous call state is truly active or stale
     if (this.activeCallData && this.activeCallData.callId !== payload.callId) {
-      this.broadcastSignaling('call:reject', {
-        callId: payload.callId,
-        institutionId: payload.institutionId,
-        student: payload.student,
-        reason: 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন।',
-      });
-      return;
+      const isConnectionDead =
+        !this.peerConnection ||
+        this.peerConnection.connectionState === 'closed' ||
+        this.peerConnection.connectionState === 'failed';
+      const isStale = isConnectionDead && (!this.isCaller || !this.outgoingRingTimeout);
+
+      if (isStale) {
+        console.warn('[VoiceCall] Stale call state detected. Cleaning up before accepting incoming offer:', this.activeCallData.callId);
+        this.cleanup();
+      } else {
+        console.log('[VoiceCall] Callee currently in an active call. Rejecting new call offer as busy.');
+        this.broadcastSignaling('call:reject', {
+          callId: payload.callId,
+          institutionId: payload.institutionId,
+          student: payload.student,
+          reason: 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন।',
+        });
+        return;
+      }
     }
 
     this.isCaller = false;
@@ -981,27 +1167,36 @@ export class VoiceCallService {
     const callerName = cleanCallerName || payload.student?.name || 'Institution Admin';
     const callId = payload.callId;
 
+    const hasNativeBridge = typeof window !== 'undefined' && window.AndroidInterface?.onIncomingCall;
+    let handledByNativeBridge = false;
+
     // Trigger Android native incoming call UI via JavaScript bridge if available
-    try {
-      if (typeof window !== 'undefined' && window.AndroidInterface && window.AndroidInterface?.onIncomingCall) {
-        window.AndroidInterface.onIncomingCall(callerName, callId);
+    if (hasNativeBridge) {
+      try {
+        window.AndroidInterface?.onIncomingCall?.(callerName, callId);
+        handledByNativeBridge = true;
+        console.log('[VoiceCall] Native Android incoming call UI triggered via bridge for call:', callId);
+      } catch (bridgeErr) {
+        console.warn('[VoiceCall] AndroidInterface.onIncomingCall bridge error, falling back to web UI & ringtone:', bridgeErr);
+        handledByNativeBridge = false;
       }
-    } catch (bridgeErr) {
-      console.warn('[VoiceCall] AndroidInterface.onIncomingCall bridge invocation error:', bridgeErr);
     }
 
-    // Start incoming ringtone
-    callSoundService.startIncomingRingtone();
-    this.onStatusChange?.('incoming', payload);
-    this.onIncomingCall?.(payload);
+    // If native bridge is not present (desktop/iOS) or bridge invocation failed, use web ringtone & modal
+    if (!handledByNativeBridge) {
+      // Start incoming ringtone
+      callSoundService.startIncomingRingtone();
+      this.onStatusChange?.('incoming', payload);
+      this.onIncomingCall?.(payload);
 
-    // Show WhatsApp-style persistent lock-screen / mobile screen notification
-    showIncomingCallNotification({
-      callId: payload.callId,
-      callerName: cleanCallerName,
-      studentName: payload.student.name,
-      photoUrl: payload.student.photo_url,
-    });
+      // Show WhatsApp-style persistent lock-screen / mobile screen notification
+      showIncomingCallNotification({
+        callId: payload.callId,
+        callerName: cleanCallerName,
+        studentName: payload.student.name,
+        photoUrl: payload.student.photo_url,
+      });
+    }
 
     // Notify caller that phone is ringing
     this.broadcastSignaling('call:ringing', {
@@ -1009,6 +1204,18 @@ export class VoiceCallService {
       institutionId: payload.institutionId,
       calleeId: this.currentUserId,
     });
+
+    // Auto-timeout incoming call after 50 seconds if unanswered by callee
+    if (this.incomingRingTimeout) {
+      clearTimeout(this.incomingRingTimeout);
+      this.incomingRingTimeout = null;
+    }
+    this.incomingRingTimeout = setTimeout(() => {
+      if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCallAnswered) {
+        console.log('[VoiceCall] Callee incoming call unanswered timeout (50s), cleaning up');
+        this.rejectCall('কলের কোনো উত্তর দেওয়া হয়নি (টাইমআউট)।', payload.callId);
+      }
+    }, 50000);
   }
 
   /**
@@ -1020,6 +1227,10 @@ export class VoiceCallService {
     }
 
     try {
+      if (this.incomingRingTimeout) {
+        clearTimeout(this.incomingRingTimeout);
+        this.incomingRingTimeout = null;
+      }
       callSoundService.stopAll();
       dismissIncomingCallNotification();
       const callId = this.activeCallData.callId;
@@ -1288,9 +1499,23 @@ export class VoiceCallService {
    */
   private cleanup() {
     dismissIncomingCallNotification();
+    callSoundService.stopAll();
+
+    // Reset native Android call/ringing UI if native bridge is active
+    if (typeof window !== 'undefined' && window.AndroidInterface) {
+      try {
+        window.AndroidInterface.stopRinging?.();
+        window.AndroidInterface.callEnded?.();
+      } catch {}
+    }
+
     if (this.outgoingRingTimeout) {
       clearTimeout(this.outgoingRingTimeout);
       this.outgoingRingTimeout = null;
+    }
+    if (this.incomingRingTimeout) {
+      clearTimeout(this.incomingRingTimeout);
+      this.incomingRingTimeout = null;
     }
     if (this.disconnectTimer) {
       clearTimeout(this.disconnectTimer);
@@ -1345,7 +1570,9 @@ export class VoiceCallService {
       this.callerExtraChannels = [];
     }
 
+    // Completely reset all call session state so subsequent calls are never blocked
     this.activeCallData = null;
+    this.isCaller = false;
     this.isCallAnswered = false;
     this.pendingCandidates = [];
   }
@@ -1357,6 +1584,29 @@ export class VoiceCallService {
     dismissIncomingCallNotification();
     this.cleanup();
     callSoundService.stopAll();
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+
+    if (typeof window !== 'undefined') {
+      if (this.handleUnload) {
+        window.removeEventListener('beforeunload', this.handleUnload);
+        window.removeEventListener('pagehide', this.handleUnload);
+      }
+      if (this.handleVisibilityChange && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+      }
+      if (this.handleOnline) {
+        window.removeEventListener('online', this.handleOnline);
+      }
+    }
+
     if (this.channel) {
       try { supabase.removeChannel(this.channel); } catch {}
       this.channel = null;
@@ -1373,6 +1623,7 @@ export class VoiceCallService {
       try { supabase.removeChannel(this.userChannel); } catch {}
       this.userChannel = null;
     }
+    this.isSubscribed = false;
   }
 }
 
