@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { voiceCallService, CallPayload, CallStatus, CallStudentInfo, CallParticipantInfo } from '../services/callService';
 import { VoiceCallModal } from '../components/call/VoiceCallModal';
+import { VoiceCallPermissionModal } from '../components/call/VoiceCallPermissionModal';
 
 // Helper: safe caller to Android WebView bridge methods
 const native = (fn: string) => {
@@ -34,6 +35,11 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
+  const [pendingCallRequest, setPendingCallRequest] = useState<{
+    student: CallStudentInfo;
+    caller?: CallParticipantInfo;
+    institutionId?: string;
+  } | null>(null);
   const autoAnswerRef = useRef<string | null>(null);
 
   // Task 3b: Native Android bridge sync on callStatus transitions
@@ -276,7 +282,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  const startCall = useCallback(
+  const executeStartCall = useCallback(
     async (student: CallStudentInfo, caller?: CallParticipantInfo, institutionId?: string) => {
       const activeInstId = institutionId || activeCall?.institutionId || '';
       const activeCaller = caller || {
@@ -290,6 +296,44 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     },
     [activeCall]
   );
+
+  const startCall = useCallback(
+    async (student: CallStudentInfo, caller?: CallParticipantInfo, institutionId?: string): Promise<boolean> => {
+      // Check if permission was already granted previously in this session/browser
+      const alreadyGranted = typeof window !== 'undefined' && localStorage.getItem('deenora_call_permission_granted') === 'true';
+
+      // Check browser permissions query if supported
+      let needsPrompt = !alreadyGranted;
+      if (typeof navigator !== 'undefined' && (navigator as any).permissions && (navigator as any).permissions.query) {
+        try {
+          const micStatus = await (navigator as any).permissions.query({ name: 'microphone' });
+          if (micStatus.state === 'granted') {
+            needsPrompt = false;
+          }
+        } catch {}
+      }
+
+      if (needsPrompt) {
+        // Show polished pre-call permission modal
+        setPendingCallRequest({ student, caller, institutionId });
+        return true;
+      }
+
+      return await executeStartCall(student, caller, institutionId);
+    },
+    [executeStartCall]
+  );
+
+  const handlePermissionGranted = useCallback(async () => {
+    if (!pendingCallRequest) return;
+    const { student, caller, institutionId } = pendingCallRequest;
+    setPendingCallRequest(null);
+    await executeStartCall(student, caller, institutionId);
+  }, [pendingCallRequest, executeStartCall]);
+
+  const handlePermissionCancel = useCallback(() => {
+    setPendingCallRequest(null);
+  }, []);
 
   const acceptCall = useCallback(async () => {
     native('stopRinging');
@@ -352,6 +396,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         onEnd={endCall}
         onToggleMute={toggleMute}
         onToggleSpeaker={toggleSpeaker}
+      />
+      <VoiceCallPermissionModal
+        isOpen={!!pendingCallRequest}
+        calleeName={pendingCallRequest?.student?.guardian_name || pendingCallRequest?.student?.name}
+        onGrant={handlePermissionGranted}
+        onCancel={handlePermissionCancel}
       />
     </CallContext.Provider>
   );

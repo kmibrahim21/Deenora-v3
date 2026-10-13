@@ -7,45 +7,9 @@ export const NotificationPermissionBanner: React.FC = () => {
   const [isGranted, setIsGranted] = useState<boolean>(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const checkPermission = () => {
-      const state = getNotificationPermissionState();
-      if (state === 'default') {
-        const dismissed = localStorage.getItem('deenora_notif_banner_dismissed') === 'true';
-        if (!dismissed) {
-          setShowBanner(true);
-        }
-      } else if (state === 'granted') {
-        setIsGranted(true);
-        setShowBanner(false);
-      }
-    };
-
-    checkPermission();
-
-    // Auto-request permission on first user interaction if in default state
-    const handleFirstUserInteraction = async () => {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        try {
-          const res = await requestPushNotificationPermission();
-          if (res === 'granted') {
-            setIsGranted(true);
-            setShowBanner(false);
-          }
-        } catch {}
-      }
-      window.removeEventListener('click', handleFirstUserInteraction);
-      window.removeEventListener('touchstart', handleFirstUserInteraction);
-    };
-
-    window.addEventListener('click', handleFirstUserInteraction, { once: true });
-    window.addEventListener('touchstart', handleFirstUserInteraction, { once: true });
-
-    return () => {
-      window.removeEventListener('click', handleFirstUserInteraction);
-      window.removeEventListener('touchstart', handleFirstUserInteraction);
-    };
+    // Disabled auto-prompting on initial app open to prevent annoying popups for users.
+    // Permissions are requested contextually when initiating or receiving a voice call.
+    setShowBanner(false);
   }, []);
 
   const handleEnable = async () => {
