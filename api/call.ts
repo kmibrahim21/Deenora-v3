@@ -17,14 +17,24 @@ function parseServiceAccount(): FirebaseServiceAccount | null {
   try {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (raw) {
-      const parsed = typeof raw === 'string' && raw.trim().startsWith('{')
-        ? JSON.parse(raw)
-        : JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+      let trimmed = typeof raw === 'string' ? raw.trim() : '';
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        trimmed = trimmed.slice(1, -1).replace(/\\"/g, '"');
+      }
+      const parsed = trimmed.startsWith('{')
+        ? JSON.parse(trimmed)
+        : JSON.parse(Buffer.from(trimmed, 'base64').toString('utf8'));
       if (parsed.client_email && parsed.private_key && parsed.project_id) {
-        return parsed;
+        return {
+          project_id: parsed.project_id,
+          client_email: parsed.client_email,
+          private_key: parsed.private_key.replace(/\\n/g, '\n'),
+        };
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('[Call API] Error parsing FIREBASE_SERVICE_ACCOUNT:', e);
+  }
 
   const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -120,7 +130,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     calleePhone: string | null | undefined,
     studentId: string | null | undefined
   ): Promise<string | null> {
-    const cleanPhone = calleePhone ? String(calleePhone).replace(/\D/g, '').slice(-10) : '';
+    const rawPhone = calleePhone ? String(calleePhone).trim() : '';
+    const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '').slice(-10) : '';
 
     // 1. Check in-memory token cache
     if (cleanPhone && memoryTokens[`phone_${cleanPhone}`]) {
@@ -131,26 +142,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 2. Query Supabase device_tokens table
-    if (SUPABASE_URL && SUPABASE_KEY && (cleanPhone || studentId)) {
+    if (SUPABASE_URL && SUPABASE_KEY && (cleanPhone || rawPhone || studentId)) {
       try {
-        let qUrl = `${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token`;
+        const queries: string[] = [];
         if (cleanPhone) {
-          qUrl += `&phone=ilike.*${cleanPhone}*`;
-        } else if (studentId) {
-          qUrl += `&student_id=eq.${studentId}`;
+          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&phone=ilike.*${cleanPhone}*&order=updated_at.desc&limit=1`);
         }
-        qUrl += `&order=updated_at.desc&limit=1`;
+        if (rawPhone && rawPhone !== cleanPhone) {
+          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&phone=eq.${encodeURIComponent(rawPhone)}&order=updated_at.desc&limit=1`);
+        }
+        if (studentId) {
+          queries.push(`${SUPABASE_URL}/rest/v1/device_tokens?select=fcm_token&student_id=eq.${encodeURIComponent(studentId)}&order=updated_at.desc&limit=1`);
+        }
 
-        const tokenRes = await fetch(qUrl, {
-          headers: {
-            apikey: SUPABASE_KEY,
-            Authorization: `Bearer ${SUPABASE_KEY}`,
-          },
-        });
-        if (tokenRes.ok) {
-          const tokenList = await tokenRes.json();
-          if (tokenList && tokenList.length > 0 && tokenList[0].fcm_token) {
-            return tokenList[0].fcm_token;
+        for (const qUrl of queries) {
+          const tokenRes = await fetch(qUrl, {
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+            },
+          });
+          if (tokenRes.ok) {
+            const tokenList = await tokenRes.json();
+            if (Array.isArray(tokenList) && tokenList.length > 0 && tokenList[0]?.fcm_token) {
+              return tokenList[0].fcm_token;
+            }
           }
         }
       } catch (dbQErr) {
