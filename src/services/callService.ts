@@ -83,6 +83,7 @@ export class VoiceCallService {
   private pingInterval: NodeJS.Timeout | null = null;
   private watchdogInterval: NodeJS.Timeout | null = null;
   private lastPingReceived: number = Date.now();
+  private statsInterval: NodeJS.Timeout | null = null;
   private isSpeakerOn: boolean = true;
 
   // Realtime connection health & auto-reconnect state
@@ -930,6 +931,51 @@ export class VoiceCallService {
   }
 
   /**
+   * Diagnostic logging: log candidate pairs, RTP audio stats, and ICE/connection state every 3 seconds
+   */
+  private startDiagnosticLogging(pc: RTCPeerConnection) {
+    if (!pc) return;
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+    console.log('[VoiceCall] Starting WebRTC 3s diagnostic logging...');
+    this.statsInterval = setInterval(async () => {
+      try {
+        if (!pc || pc.signalingState === 'closed') {
+          if (this.statsInterval) {
+            clearInterval(this.statsInterval);
+            this.statsInterval = null;
+          }
+          return;
+        }
+        const stats = await pc.getStats();
+        stats.forEach((report: any) => {
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            console.log('[VoiceCall] Nominated pair:', report.localCandidateId, '->', report.remoteCandidateId);
+          }
+          if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
+            console.log('[VoiceCall] Audio received bytes:', report.bytesReceived, 'packets:', report.packetsReceived);
+          }
+          if (report.type === 'outbound-rtp' && report.mediaType === 'audio') {
+            console.log('[VoiceCall] Audio sent bytes:', report.bytesSent);
+          }
+        });
+        console.log('[VoiceCall] ICE:', pc.iceConnectionState, '| Connection:', pc.connectionState);
+      } catch (e) {
+        console.warn('[VoiceCall] Error getting RTCStats:', e);
+      }
+    }, 3000);
+  }
+
+  private stopDiagnosticLogging() {
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+  }
+
+  /**
    * Initialize RTCPeerConnection
    */
   private createPeerConnection(callId: string): RTCPeerConnection {
@@ -1077,6 +1123,7 @@ export class VoiceCallService {
         callSoundService.playConnectChime();
         this.onStatusChange?.('connected', this.activeCallData || undefined);
         this.startHeartbeatAndWatchdog();
+        this.startDiagnosticLogging(pc);
       } else if (pc.connectionState === 'disconnected') {
         if (!this.disconnectTimer) {
           this.disconnectTimer = setTimeout(() => {
@@ -1509,6 +1556,7 @@ export class VoiceCallService {
         try { window.AndroidInterface.callStarted(); } catch {}
       }
       this.startHeartbeatAndWatchdog();
+      this.startDiagnosticLogging(pc);
       return true;
     } catch (error: any) {
       console.error('[VoiceCall] Error accepting call:', error);
@@ -1546,6 +1594,9 @@ export class VoiceCallService {
       callSoundService.playConnectChime();
       this.onStatusChange?.('connected', this.activeCallData || undefined);
       this.startHeartbeatAndWatchdog();
+      if (this.peerConnection) {
+        this.startDiagnosticLogging(this.peerConnection);
+      }
     } catch (e) {
       console.error('[VoiceCall] Failed setting remote answer:', e);
     }
@@ -1782,6 +1833,7 @@ export class VoiceCallService {
       clearInterval(this.watchdogInterval);
       this.watchdogInterval = null;
     }
+    this.stopDiagnosticLogging();
     try {
       localStorage.removeItem('deenora_active_call_payload');
     } catch {}
