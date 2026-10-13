@@ -86,6 +86,12 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
 
   if (status === 'idle' || !callData) return null;
 
+  // Suppress incoming web modal when Android Native Bridge handles incoming call UI
+  const hasNativeBridge = typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
+  if (status === 'incoming' && !isCaller && hasNativeBridge) {
+    return null;
+  }
+
   const formatDuration = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;

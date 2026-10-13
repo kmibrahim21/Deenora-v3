@@ -93,10 +93,21 @@ export class VoiceCallService {
   private handleUnload: (() => void) | null = null;
   private handleVisibilityChange: (() => void) | null = null;
   private handleOnline: (() => void) | null = null;
+  // Android Native Bridge & duplicate offer guard state
+  private isNativeBridgeActive: boolean = false;
+  private currentRingingCallId: string | null = null;
 
   // Staged / Pending auto-answer state (for Android Native Action / URL ?answer=1)
   private pendingAutoAnswerCallId: string | null = null;
   private autoAnswerTimer: NodeJS.Timeout | null = null;
+
+  public hasNativeBridge(): boolean {
+    return typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
+  }
+
+  public getIsNativeBridgeActive(): boolean {
+    return this.isNativeBridgeActive;
+  }
 
   public setPendingAutoAnswer(callId: string | null) {
     this.pendingAutoAnswerCallId = callId ? String(callId).trim() : null;
@@ -1193,19 +1204,27 @@ export class VoiceCallService {
       targetPhone,
     });
 
-    // If already in a call, verify if previous call state is truly active or stale
-    if (this.activeCallData && this.activeCallData.callId !== payload.callId) {
-      const isConnectionDead =
-        !this.peerConnection ||
-        this.peerConnection.connectionState === 'closed' ||
-        this.peerConnection.connectionState === 'failed';
-      const isStale = isConnectionDead && (!this.isCaller || !this.outgoingRingTimeout);
+    // 5.1 Guard: If already handling/ringing this exact callId, do not trigger duplicate bridge or restart ring
+    if (this.activeCallData && this.activeCallData.callId === payload.callId) {
+      if (this.isCallAnswered || this.currentRingingCallId === payload.callId) {
+        console.log('[VoiceCall] Duplicate incoming offer ignored for already active/ringing callId:', payload.callId);
+        if (payload.offer && !this.activeCallData.offer) {
+          this.activeCallData.offer = payload.offer;
+        }
+        return;
+      }
+    }
 
-      if (isStale) {
-        console.warn('[VoiceCall] Stale call state detected. Cleaning up before accepting incoming offer:', this.activeCallData.callId);
-        this.cleanup();
-      } else {
-        console.log('[VoiceCall] Callee currently in an active call. Rejecting new call offer as busy.');
+    // Guard: If already in a call with a DIFFERENT callId:
+    if (this.activeCallData && this.activeCallData.callId !== payload.callId) {
+      // Check if user is ACTUALLY connected and actively talking on another call
+      const isTrulyBusy =
+        this.isCallAnswered &&
+        this.peerConnection &&
+        (this.peerConnection.connectionState === 'connected' || this.peerConnection.connectionState === 'connecting');
+
+      if (isTrulyBusy) {
+        console.log('[VoiceCall] Callee currently in an active connected call. Rejecting new call offer as busy.');
         this.broadcastSignaling('call:reject', {
           callId: payload.callId,
           institutionId: payload.institutionId,
@@ -1213,10 +1232,14 @@ export class VoiceCallService {
           reason: 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন।',
         });
         return;
+      } else {
+        console.log('[VoiceCall] Previous call state was not an active connected call. Cleaning up stale state for new incoming call:', payload.callId);
+        this.cleanup();
       }
     }
 
     this.isCaller = false;
+    this.currentRingingCallId = payload.callId;
 
     // Immediately join the dedicated call room channel so signaling is 100% direct!
     this.subscribeCallRoom(payload.callId);
@@ -1230,15 +1253,6 @@ export class VoiceCallService {
     }
 
     this.activeCallData = payload;
-
-    try {
-      localStorage.setItem('deenora_active_call_payload', JSON.stringify(payload));
-      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-        const bc = new BroadcastChannel('deenora_call_events');
-        bc.postMessage({ type: 'INCOMING_CALL', payload });
-        setTimeout(() => bc.close(), 1000);
-      }
-    } catch {}
 
     // Check if this incoming call was already marked for auto-answer (via ?answer=1 or handleNativeCallAction('answer'))
     const isAutoAnswerPending = Boolean(
@@ -1264,7 +1278,7 @@ export class VoiceCallService {
     const callerName = cleanCallerName || payload.student?.name || 'Institution Admin';
     const callId = payload.callId;
 
-    const hasNativeBridge = typeof window !== 'undefined' && window.AndroidInterface?.onIncomingCall;
+    const hasNativeBridge = typeof window !== 'undefined' && Boolean(window.AndroidInterface?.onIncomingCall);
     let handledByNativeBridge = false;
 
     // Trigger Android native incoming call UI via JavaScript bridge if available
@@ -1272,15 +1286,29 @@ export class VoiceCallService {
       try {
         window.AndroidInterface?.onIncomingCall?.(callerName, callId);
         handledByNativeBridge = true;
+        this.isNativeBridgeActive = true;
         console.log('[VoiceCall] Native Android incoming call UI triggered via bridge for call:', callId);
       } catch (bridgeErr) {
         console.warn('[VoiceCall] AndroidInterface.onIncomingCall bridge error, falling back to web UI & ringtone:', bridgeErr);
         handledByNativeBridge = false;
+        this.isNativeBridgeActive = false;
       }
     }
 
+    // Persist payload for cold start or native retrieval
+    try {
+      localStorage.setItem('deenora_active_call_payload', JSON.stringify(payload));
+      // Only broadcast across tabs if web UI is active (never wake web modal when native bridge handles it)
+      if (!handledByNativeBridge && typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('deenora_call_events');
+        bc.postMessage({ type: 'INCOMING_CALL', payload });
+        setTimeout(() => bc.close(), 1000);
+      }
+    } catch {}
+
     // If native bridge is not present (desktop/iOS) or bridge invocation failed, use web ringtone & modal
     if (!handledByNativeBridge) {
+      this.isNativeBridgeActive = false;
       // Start incoming ringtone
       callSoundService.startIncomingRingtone();
       this.onStatusChange?.('incoming', payload);
@@ -1293,6 +1321,34 @@ export class VoiceCallService {
         studentName: payload.student.name,
         photoUrl: payload.student.photo_url,
       });
+
+      // Auto-timeout incoming call after 50 seconds on web ONLY if native bridge is not handling it
+      if (this.incomingRingTimeout) {
+        clearTimeout(this.incomingRingTimeout);
+        this.incomingRingTimeout = null;
+      }
+      this.incomingRingTimeout = setTimeout(() => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCallAnswered) {
+          console.log('[VoiceCall] Callee incoming call unanswered timeout (50s), cleaning up');
+          this.rejectCall('কলের কোনো উত্তর দেওয়া হয়নি (টাইমআউট)।', payload.callId, true);
+        }
+      }, 50000);
+    } else {
+      // In native bridge mode, web stays passive:
+      // Offer state is preserved in this.activeCallData and localStorage.
+      // Do NOT start incomingRingTimeout or send reject!
+      // Native Android UI manages ringtone, UI dismiss, and user actions.
+      // Long-term fail-safe timer (90s): only cleans up local state silently if native never responds
+      if (this.incomingRingTimeout) {
+        clearTimeout(this.incomingRingTimeout);
+        this.incomingRingTimeout = null;
+      }
+      this.incomingRingTimeout = setTimeout(() => {
+        if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCallAnswered) {
+          console.log('[VoiceCall] Passive native bridge safety timeout (90s) expired. Silently clearing local state without sending reject.');
+          this.cleanup();
+        }
+      }, 90000);
     }
 
     // Notify caller that phone is ringing
@@ -1301,18 +1357,6 @@ export class VoiceCallService {
       institutionId: payload.institutionId,
       calleeId: this.currentUserId,
     });
-
-    // Auto-timeout incoming call after 50 seconds if unanswered by callee
-    if (this.incomingRingTimeout) {
-      clearTimeout(this.incomingRingTimeout);
-      this.incomingRingTimeout = null;
-    }
-    this.incomingRingTimeout = setTimeout(() => {
-      if (this.activeCallData && this.activeCallData.callId === payload.callId && !this.isCallAnswered) {
-        console.log('[VoiceCall] Callee incoming call unanswered timeout (50s), cleaning up');
-        this.rejectCall('কলের কোনো উত্তর দেওয়া হয়নি (টাইমআউট)।', payload.callId);
-      }
-    }, 50000);
   }
 
   /**
@@ -1374,6 +1418,8 @@ export class VoiceCallService {
       });
 
       this.isCallAnswered = true;
+      this.isNativeBridgeActive = false;
+      this.currentRingingCallId = null;
       this.onStatusChange?.('connected', this.activeCallData);
       callSoundService.playConnectChime();
       if (typeof window !== 'undefined' && window.AndroidInterface?.callStarted) {
@@ -1384,7 +1430,7 @@ export class VoiceCallService {
     } catch (error: any) {
       console.error('[VoiceCall] Error accepting call:', error);
       callSoundService.stopAll();
-      this.rejectCall('কল রিসিভ করতে সমস্যা হয়েছে।');
+      this.rejectCall('কল রিসিভ করতে সমস্যা হয়েছে।', undefined, true);
       return false;
     }
   }
@@ -1397,6 +1443,8 @@ export class VoiceCallService {
 
     try {
       this.isCallAnswered = true;
+      this.isNativeBridgeActive = false;
+      this.currentRingingCallId = null;
       callSoundService.stopAll();
       if (this.outgoingRingTimeout) {
         clearTimeout(this.outgoingRingTimeout);
@@ -1440,7 +1488,19 @@ export class VoiceCallService {
   /**
    * Reject incoming call
    */
-  public async rejectCall(reason: string = 'কলটি কেটে দেওয়া হয়েছে।', specificCallId?: string) {
+  public async rejectCall(
+    reason: string = 'কলটি কেটে দেওয়া হয়েছে।',
+    specificCallId?: string,
+    isExplicitUserAction: boolean = false
+  ) {
+    // 5.3 Guard: If native bridge is active, web must NEVER send automatic reject signals to caller.
+    // Only send reject if action was explicitly initiated by user/native action.
+    if (this.isNativeBridgeActive && !isExplicitUserAction) {
+      console.warn('[VoiceCall] Native bridge is active. Suppressing automatic web reject signal so Admin call is not cut off.');
+      this.cleanup();
+      return;
+    }
+
     callSoundService.stopAll();
     dismissIncomingCallNotification();
     callSoundService.playDisconnectChime();
@@ -1686,6 +1746,8 @@ export class VoiceCallService {
     this.isCallAnswered = false;
     this.pendingCandidates = [];
     this.pendingAutoAnswerCallId = null;
+    this.isNativeBridgeActive = false;
+    this.currentRingingCallId = null;
     if (this.autoAnswerTimer) {
       clearTimeout(this.autoAnswerTimer);
       this.autoAnswerTimer = null;

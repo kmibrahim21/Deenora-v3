@@ -41,9 +41,15 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     institutionId?: string;
   } | null>(null);
   const autoAnswerRef = useRef<string | null>(null);
+  const isFirstStatusRender = useRef<boolean>(true);
+  const handledUrlRef = useRef<string>('');
 
   // Task 3b: Native Android bridge sync on callStatus transitions
   useEffect(() => {
+    if (isFirstStatusRender.current) {
+      isFirstStatusRender.current = false;
+      return;
+    }
     if (callStatus === 'connected') {
       native('callStarted');
     } else if (callStatus === 'ended' || callStatus === 'rejected' || callStatus === 'failed' || callStatus === 'idle') {
@@ -75,7 +81,10 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     voiceCallService.onIncomingCall = (call) => {
       setActiveCall(call);
       setIsCaller(false);
-      setCallStatus('incoming');
+      const hasBridge = typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
+      if (!hasBridge) {
+        setCallStatus('incoming');
+      }
     };
 
     voiceCallService.onError = (msg) => {
@@ -89,9 +98,10 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Listen for Service Worker incoming call actions & cross-tab events
   useEffect(() => {
+    const hasBridge = typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
     // Check if there is an active incoming call already in memory or localStorage
     const existingCall = voiceCallService.getActiveCall();
-    if (existingCall && callStatus === 'idle') {
+    if (existingCall && callStatus === 'idle' && !hasBridge) {
       setActiveCall(existingCall);
       setCallStatus('incoming');
     }
@@ -102,7 +112,9 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (event.data?.type === 'INCOMING_CALL' && event.data.payload) {
           setActiveCall(event.data.payload);
           setIsCaller(false);
-          setCallStatus('incoming');
+          if (!hasBridge) {
+            setCallStatus('incoming');
+          }
         }
       };
       return () => {
@@ -206,7 +218,10 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Auto-answer or open call screen if user unlocked phone / opened app directly from lock screen notification, FCM tap, or URL query (?answer=1&call_id=xxx)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
+    const search = window.location.search;
+    if (!search || handledUrlRef.current === search) return;
+
+    const params = new URLSearchParams(search);
     const isFcmTap = params.get('fcm_tap') === '1';
     const answerVal = params.get('answer');
     const targetCallId = params.get('call_id');
@@ -222,9 +237,12 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
+    if (!action && !answerVal && !isFcmTap) return;
+    handledUrlRef.current = search;
+
     if (action === 'reject_call' || answerVal === '0') {
       native('stopRinging');
-      voiceCallService.rejectCall('অভিভাবক কল কেটে দিয়েছেন।', targetCallId || undefined);
+      voiceCallService.rejectCall('অভিভাবক কল কেটে দিয়েছেন।', targetCallId || undefined, true);
       const url = new URL(window.location.href);
       ['fcm_tap', 'answer', 'caller_name', 'call_id', 'action', 't'].forEach((k) => url.searchParams.delete(k));
       window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
@@ -241,7 +259,10 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setCallStatus('connected');
           voiceCallService.acceptCall();
         } else {
-          setCallStatus('incoming');
+          const hasBridge = typeof window !== 'undefined' && Boolean((window as any).AndroidInterface?.onIncomingCall);
+          if (!hasBridge) {
+            setCallStatus('incoming');
+          }
         }
 
         // Clean query parameter from URL without reload
