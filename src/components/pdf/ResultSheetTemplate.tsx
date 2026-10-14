@@ -431,6 +431,18 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
             </div>
           </div>
 
+          {/* Smart Teacher Remarks & Guidance */}
+          {(student.smart_remarks || student.teacher_remarks || student.remarks) && (
+            <div className="mb-2 bg-blue-50/50 rounded-xl px-3 py-2 border border-blue-200/60 text-left">
+              <div className="flex items-center gap-1.5 text-[11px] font-black text-[#1E3A8A] uppercase tracking-wider mb-0.5">
+                <span>✍️ {isBangla ? 'শ্রেণি শিক্ষকের মূল্যায়ন ও দিকনির্দেশনা:' : "Teacher's Evaluation & Guidance Remark:"}</span>
+              </div>
+              <p className="text-[12.5px] leading-relaxed text-slate-800 font-medium font-noto">
+                {student.smart_remarks || student.teacher_remarks || student.remarks}
+              </p>
+            </div>
+          )}
+
           <div className="pt-2 pb-2 flex justify-between items-end gap-x-4">
             {/* Issue Date - Left Side */}
             <div className="w-36 shrink-0 border-l-4 border-[#1E3A8A]/30 pl-3 py-0.5">

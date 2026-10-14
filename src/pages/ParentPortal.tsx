@@ -47,7 +47,11 @@ import {
   TrendingDown,
   MessageSquareText,
   Mic,
+  Sparkles,
+  HeartHandshake,
+  Award,
 } from 'lucide-react';
+import { generateStudentRemark } from '../utils/smartRemarksEngine';
 import { ChatApp } from './ChatApp';
 import { useVoiceCall } from '../context/CallContext';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
@@ -274,6 +278,55 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
     } else if (res === 'denied') {
       setNotifToast('ব্রাউজার সেটিংসে গিয়ে নোটিফিকেশন অনুমতি প্রদান করুন।');
     }
+    setTimeout(() => setNotifToast(null), 4000);
+  };
+
+  // PWA Installation & Standalone mode state
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
+  const [isInstalledPWA, setIsInstalledPWA] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+  });
+  const [showInstallBanner, setShowInstallBanner] = useState(true);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (deferredInstallPrompt) {
+      try {
+        deferredInstallPrompt.prompt();
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          setIsInstalledPWA(true);
+          setShowInstallBanner(false);
+          setNotifToast('Deenora অভিভাবক অ্যাপ হোমস্ক্রিনে যুক্ত হয়েছে! 📲');
+        }
+      } catch (err) {
+        console.error('Install prompt error:', err);
+      }
+      setDeferredInstallPrompt(null);
+    } else {
+      setNotifToast('হোমস্ক্রিনে যুক্ত করতে ব্রাউজারের শেয়ার (Share) বাটনে ট্যাপ করে "Add to Home Screen" বেছে নিন। 📲');
+      setTimeout(() => setNotifToast(null), 5000);
+    }
+  };
+
+  const handleTestPushNotification = () => {
+    playNotificationSound();
+    sendPushNotification(
+      'Deenora অভিভাবক টেস্ট নোটিফিকেশন 🔔',
+      `${student?.student_name || 'শিক্ষার্থী'}-এর উপস্থিতির নোটিশ ও পরীক্ষার ফলাফল সরাসরি আপনার মোবাইলে পাবেন।`,
+      '/Deenora192.png',
+      'test-pwa-push'
+    );
+    setNotifToast('টেস্ট নোটিফিকেশন পাঠানো হয়েছে! মোবাইল নোটিফিকেশন বার চেক করুন। 📲');
     setTimeout(() => setNotifToast(null), 4000);
   };
 
@@ -858,6 +911,16 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
+            {notifPermission === 'granted' && (
+              <button
+                onClick={handleTestPushNotification}
+                className="hidden sm:inline-flex px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl border border-emerald-200 text-xs font-bold items-center gap-1.5 transition-colors cursor-pointer"
+                title="টেস্ট নোটিফিকেশন পাঠান"
+              >
+                <Smartphone size={14} />
+                <span>টেস্ট নোটিফিকেশন</span>
+              </button>
+            )}
             <button 
               onClick={handleEnableNotifications} 
               className={`p-2.5 md:p-3 rounded-xl transition-all border flex items-center gap-1.5 font-bold text-xs font-noto cursor-pointer ${
@@ -885,6 +948,41 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
             </button>
           </div>
         </header>
+
+        {/* PWA Mobile Install Banner */}
+        {!isInstalledPWA && showInstallBanner && (
+          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-5 py-3 shadow-md z-30 flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+                <Smartphone className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <div className="flex items-center gap-2">
+                  <p className="font-black text-xs font-noto">Deenora অভিভাবক অ্যাপ ইনস্টল করুন 📲</p>
+                  <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-bold">PWA</span>
+                </div>
+                <p className="text-[10px] text-emerald-100 font-noto leading-tight mt-0.5">
+                  হোমস্ক্রিন থেকে এক ট্যাপে সরাসরি রেজাল্ট, নিয়মিত হাজিরা ও নোটিশ দেখতে অ্যাপটি ইনস্টল করুন।
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleInstallPWA}
+                className="px-4 py-1.5 bg-white text-emerald-800 font-black text-xs rounded-xl shadow-md active:scale-95 transition-all font-noto hover:bg-emerald-50 cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>ইনস্টল করুন</span>
+              </button>
+              <button
+                onClick={() => setShowInstallBanner(false)}
+                className="px-2 py-1.5 text-xs text-emerald-100 hover:text-white transition-colors cursor-pointer"
+              >
+                পরে
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Notification Alert Toast */}
         <AnimatePresence>
@@ -1600,22 +1698,89 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                      </div>
                   </div>
                   
-                  <div className="bg-white p-5 rounded-[2rem] border border-slate-100 flex flex-col justify-between shadow-premium min-h-[140px]">
-                     <div className="flex items-center justify-between mb-3">
-                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600 border border-blue-100 shadow-sm">
-                           <MessageSquare size={16} />
-                        </div>
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">শিক্ষকের মন্তব্য</span>
-                     </div>
-                     <p className="text-[11px] font-bold text-slate-600 italic leading-relaxed text-left font-noto flex-grow my-2">{currentExam?.remarks || 'এই মুহূর্তে কোনো মন্তব্য নেই।'}</p>
-                     <div className="pt-3 mt-auto border-t border-slate-100 flex items-center justify-between opacity-60">
-                        <div className="flex flex-col text-left">
-                           <span className="text-[8px] font-black text-slate-900 font-noto">--</span>
-                           <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest font-noto">শ্রেণী শিক্ষক</span>
-                        </div>
-                        <div className="w-1.5 h-1.5 bg-blue-100 rounded-full" />
-                     </div>
-                  </div>
+                  {/* Smart Teacher Remarks & Progress Analysis Card */}
+                  {(() => {
+                     const gpaVal = parseFloat(String(currentExam?.gpa || 0)) || 0;
+                     const subList = (currentExam?.marks || []).map((m: any) => ({
+                       subject_name: m.subject || '',
+                       marks_obtained: m.obtained || 0,
+                       full_marks: m.full || 100,
+                       grade: m.grade
+                     }));
+                     const totalAtt = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
+                     const attRate = attendance.length > 0 ? Math.round((totalAtt / attendance.length) * 100) : 85;
+
+                     const smartEval = generateStudentRemark({
+                       student_id: student?.id || '',
+                       student_name: student?.student_name || 'শিক্ষার্থী',
+                       roll: student?.roll_no || student?.roll,
+                       total_marks: currentExam?.total_marks,
+                       gpa: gpaVal,
+                       grade: currentExam?.gpa_grade,
+                       rank: currentExam?.position,
+                       attendance_rate: attRate,
+                       subjects: subList
+                     });
+
+                     const teacherComment = currentExam?.remarks && currentExam.remarks.trim() !== '' 
+                       ? currentExam.remarks 
+                       : smartEval.full_remark_bn;
+
+                     return (
+                       <div className="bg-gradient-to-br from-white via-emerald-50/20 to-slate-50 p-5 rounded-[2rem] border border-emerald-100 flex flex-col justify-between shadow-premium min-h-[170px]">
+                          <div className="flex items-center justify-between mb-2">
+                             <div className="flex items-center gap-2">
+                               <div className="p-2 bg-emerald-600 rounded-lg text-white shadow-sm">
+                                  <Sparkles size={16} />
+                               </div>
+                               <div className="text-left">
+                                  <h4 className="text-xs font-black text-slate-900 font-noto">শিক্ষকের মূল্যায়ন ও দিকনির্দেশনা</h4>
+                                  <span className="text-[8px] font-bold text-emerald-700 tracking-wider">স্মার্ট প্রগ্রেস এনালাইসিস</span>
+                               </div>
+                             </div>
+                             <span className="text-[9px] font-bold text-slate-400 font-mono">GPA {currentExam?.gpa || '--'}</span>
+                          </div>
+
+                          <p className="text-[12px] font-medium text-slate-700 leading-relaxed text-left font-noto my-2 bg-white/70 p-3 rounded-xl border border-slate-100">
+                            "{teacherComment}"
+                          </p>
+
+                          {/* Strengths & Growth Areas */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-left font-noto my-1">
+                             {smartEval.strengths_bn.length > 0 && (
+                               <div className="bg-emerald-50/80 border border-emerald-200/60 rounded-lg p-2">
+                                 <span className="font-black text-emerald-800 block">🎯 বিশেষ পারদর্শিতা:</span>
+                                 <span className="text-emerald-950 font-bold">{smartEval.strengths_bn.join(', ')}</span>
+                               </div>
+                             )}
+                             {smartEval.growth_areas_bn.length > 0 && (
+                               <div className="bg-amber-50/80 border border-amber-200/60 rounded-lg p-2">
+                                 <span className="font-black text-amber-800 block">💡 আরও মনোযোগ প্রয়োজন:</span>
+                                 <span className="text-amber-950 font-bold">{smartEval.growth_areas_bn.join(', ')}</span>
+                               </div>
+                             )}
+                          </div>
+
+                          {smartEval.parent_tip_bn && (
+                            <div className="mt-2 text-[10px] text-slate-600 bg-white/60 p-2 rounded-lg border border-slate-100 flex items-start gap-1.5 text-left font-noto">
+                               <HeartHandshake size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                               <div>
+                                 <span className="font-bold text-slate-800">অভিভাবকের করণীয়: </span>
+                                 <span>{smartEval.parent_tip_bn}</span>
+                               </div>
+                            </div>
+                          )}
+
+                          <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between opacity-70">
+                             <div className="flex flex-col text-left">
+                                <span className="text-[8px] font-black text-slate-900 font-noto">শ্রেণী শিক্ষক ও একাডেমিক মূল্যায়ন টিম</span>
+                                <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest font-noto">Deenora Academic Portal</span>
+                             </div>
+                             <Award size={14} className="text-emerald-600" />
+                          </div>
+                       </div>
+                     );
+                  })()}
                </div>
                
                {/* Action Buttons */}
@@ -1632,6 +1797,34 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           grade: m.grade,
                           grade_point: m.gpa
                         }));
+                        const generatedSmartRemarkText = (() => {
+                          try {
+                            const gpaVal = parseFloat(String(currentExam?.gpa || 0)) || 0;
+                            const subList = (currentExam?.marks || []).map((m: any) => ({
+                              subject_name: m.subject || '',
+                              marks_obtained: m.obtained || 0,
+                              full_marks: m.full || 100,
+                              grade: m.grade
+                            }));
+                            return generateStudentRemark({
+                              student_id: student?.id || '',
+                              student_name: student?.student_name || 'শিক্ষার্থী',
+                              roll: student?.roll_no || student?.roll,
+                              total_marks: currentExam?.total_marks,
+                              gpa: gpaVal,
+                              grade: currentExam?.gpa_grade,
+                              rank: currentExam?.position,
+                              subjects: subList
+                            }).full_remark_bn;
+                          } catch {
+                            return '';
+                          }
+                        })();
+
+                        const finalRemarks = currentExam.remarks && currentExam.remarks.trim() !== '' 
+                          ? currentExam.remarks 
+                          : generatedSmartRemarkText;
+
                         const examInfo = {
                           exam_name: currentExam.name,
                           exam_date: currentExam.date,
@@ -1640,7 +1833,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           gpa_grade: currentExam.gpa_grade,
                           total_marks: currentExam.total_marks,
                           total_full: currentExam.total_full,
-                          remarks: currentExam.remarks
+                          remarks: finalRemarks
                         };
                         const totalAttendanceRate = (() => {
                           const validRecords = attendance.filter(a => a.status === 'present' || a.status === 'absent' || a.status === 'late' || a.status === 'half_day');
@@ -1657,7 +1850,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                         setDownloadProgress(0);
                         try {
                           await generateResultPDF(
-                              { ...student, attendance: totalAttendanceRate }, 
+                              { ...student, attendance: totalAttendanceRate, smart_remarks: finalRemarks, teacher_remarks: finalRemarks }, 
                               examInfo, 
                               marks, 
                               madrasah, 
