@@ -52,7 +52,7 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     if (callStatus === 'connected') {
       native('callStarted');
-    } else if (callStatus === 'ended' || callStatus === 'rejected' || callStatus === 'failed' || callStatus === 'idle') {
+    } else if (callStatus === 'ended' || callStatus === 'rejected' || callStatus === 'busy' || callStatus === 'failed' || callStatus === 'idle') {
       native('stopRinging');
       native('callEnded');
     }
@@ -67,6 +67,14 @@ export const CallProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       if (status === 'connected') {
         setDuration(0);
+      } else if (status === 'busy') {
+        setTimeout(() => {
+          setCallStatus('idle');
+          setActiveCall(null);
+          setDuration(0);
+          setIsMuted(false);
+          setIsSpeakerOn(true);
+        }, 3200);
       } else if (status === 'idle' || status === 'ended' || status === 'rejected' || status === 'failed') {
         setTimeout(() => {
           setCallStatus('idle');

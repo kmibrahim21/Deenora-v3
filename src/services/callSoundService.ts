@@ -185,6 +185,44 @@ class CallSoundService {
   }
 
   /**
+   * Play busy tone (Standard telephony rapid beeps: 480Hz + 620Hz, 3 bursts)
+   */
+  playBusyTone() {
+    this.stopAll();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      for (let i = 0; i < 3; i++) {
+        const start = now + i * 0.55;
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+        osc1.frequency.setValueAtTime(480, start);
+        osc2.frequency.setValueAtTime(620, start);
+
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.exponentialRampToValueAtTime(0.14, start + 0.02);
+        gain.gain.setValueAtTime(0.14, start + 0.28);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.3);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(start);
+        osc2.start(start);
+        osc1.stop(start + 0.32);
+        osc2.stop(start + 0.32);
+      }
+    } catch {}
+  }
+
+  /**
    * Stop all active tones
    */
   stopAll() {

@@ -35,11 +35,26 @@ export interface CallPayload {
   timestamp: number;
 }
 
-export type CallStatus = 'idle' | 'calling' | 'incoming' | 'connected' | 'ended' | 'rejected' | 'failed';
+export type CallStatus =
+  | 'idle'
+  | 'calling'
+  | 'ringing'
+  | 'incoming'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'ended'
+  | 'rejected'
+  | 'busy'
+  | 'failed';
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
     {
       urls: [
         'turn:openrelay.metered.ca:80',
@@ -51,7 +66,27 @@ const RTC_CONFIG: RTCConfiguration = {
     },
   ],
   iceCandidatePoolSize: 10,
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require',
 };
+
+/**
+ * Munges SDP to enable Opus FEC (forward error correction), mono voice encoding and optimal bitrate
+ * to eliminate audio stuttering and packet-drop cutoffs on mobile devices.
+ */
+function optimizeOpusSdp(sdp?: string): string {
+  if (!sdp) return sdp || '';
+  let modified = sdp;
+  modified = modified.replace(/a=fmtp:(\d+) (.*)/g, (match, pt, params) => {
+    if (params.includes('minptime') || params.includes('useinbandfec') || params.includes('opus')) {
+      if (!params.includes('useinbandfec=1')) params += ';useinbandfec=1';
+      if (!params.includes('stereo=')) params += ';stereo=0;sprop-stereo=0';
+      if (!params.includes('maxaveragebitrate=')) params += ';maxaveragebitrate=32000';
+    }
+    return `a=fmtp:${pt} ${params}`;
+  });
+  return modified;
+}
 
 
 
@@ -192,6 +227,12 @@ export class VoiceCallService {
 
   public setSpeaker(enabled: boolean): void {
     this.isSpeakerOn = enabled;
+    // Android Native AudioManager bridge for hardware earpiece vs loudspeaker switching
+    if (typeof window !== 'undefined' && (window as any).AndroidInterface?.setAudioMode) {
+      try {
+        (window as any).AndroidInterface.setAudioMode(enabled ? 'speaker' : 'earpiece');
+      } catch {}
+    }
     if (this.remoteAudioElement) {
       this.remoteAudioElement.volume = enabled ? 1.0 : 0.3;
       if ('setSinkId' in this.remoteAudioElement) {
@@ -288,16 +329,87 @@ export class VoiceCallService {
         document.addEventListener('visibilitychange', this.handleVisibilityChange);
       }
 
-      // Online event: network restored, verify connection immediately
+      // Online event: network restored, verify connection immediately & trigger ICE restart if call active
       this.handleOnline = () => {
         console.log('[VoiceCall] Network back online, checking realtime connection health...');
         this.checkConnectionHealth(true);
+        if (this.peerConnection && (this.peerConnection.connectionState === 'connected' || this.peerConnection.connectionState === 'disconnected')) {
+          console.log('[VoiceCall] Network restored while in call, performing seamless ICE restart...');
+          this.triggerIceRestart('network_online');
+        }
       };
       window.addEventListener('online', this.handleOnline);
+
+      // Network interface change (WiFi <-> Cellular) handover listener
+      if (typeof navigator !== 'undefined' && (navigator as any).connection) {
+        try {
+          (navigator as any).connection.addEventListener('change', () => {
+            console.log('[VoiceCall] Network connection type changed, checking WebRTC health...');
+            if (this.peerConnection && this.peerConnection.connectionState === 'connected') {
+              this.triggerIceRestart('network_type_change');
+            }
+          });
+        } catch {}
+      }
+
+      // Android Native Proximity Sensor Listener (hardware earpiece / speaker toggle)
+      if (typeof window !== 'undefined') {
+        (window as any).handleProximityChange = (isNearEar: boolean) => {
+          console.log('[VoiceCall] Proximity sensor triggered from native bridge. isNearEar:', isNearEar);
+          if (this.peerConnection && this.peerConnection.connectionState === 'connected') {
+            this.setSpeaker(!isNearEar);
+          }
+        };
+      }
 
       // Periodic connection health check (every 25 seconds)
       this.startHealthCheckLoop();
     }
+  }
+
+  /**
+   * Seamless ICE restart on network handover (WiFi to Mobile Data)
+   */
+  public async triggerIceRestart(reason: string) {
+    if (!this.peerConnection || this.peerConnection.signalingState === 'closed') return;
+    console.log(`[VoiceCall] triggerIceRestart initiated (${reason})`);
+    try {
+      this.onStatusChange?.('reconnecting', this.activeCallData || undefined);
+      if (typeof (this.peerConnection as any).restartIce === 'function') {
+        (this.peerConnection as any).restartIce();
+      }
+      if (this.isCaller && this.activeCallData) {
+        const newOffer = await this.peerConnection.createOffer({ iceRestart: true });
+        if (newOffer.sdp) {
+          newOffer.sdp = optimizeOpusSdp(newOffer.sdp);
+        }
+        await this.peerConnection.setLocalDescription(newOffer);
+        await this.broadcastSignaling('call:offer', {
+          callId: this.activeCallData.callId,
+          offer: newOffer,
+          senderId: this.currentUserId,
+          timestamp: Date.now(),
+        });
+        console.log('[VoiceCall] Seamless ICE restart offer broadcasted successfully');
+      }
+    } catch (e) {
+      console.warn('[VoiceCall] Error during triggerIceRestart:', e);
+    }
+  }
+
+  /**
+   * Callee is busy on another call handler
+   */
+  private handleCalleeBusy(reason?: string) {
+    callSoundService.stopAll();
+    dismissIncomingCallNotification();
+    callSoundService.playBusyTone();
+    this.onStatusChange?.('busy', this.activeCallData || undefined);
+    this.onError?.(reason || 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন');
+    setTimeout(() => {
+      this.cleanup();
+      this.onStatusChange?.('idle');
+    }, 3200);
   }
 
   private normPhone(p?: string): string {
@@ -316,7 +428,14 @@ export class VoiceCallService {
       })
       .on('broadcast', { event: 'call:ringing' }, ({ payload }: { payload: CallPayload }) => {
         if (this.activeCallData && this.activeCallData.callId === payload.callId && this.isCaller) {
-          this.onStatusChange?.('calling', this.activeCallData);
+          console.log('[VoiceCall] Callee phone is ringing! Updating status to ringing.');
+          this.onStatusChange?.('ringing', this.activeCallData);
+        }
+      })
+      .on('broadcast', { event: 'call:busy' }, ({ payload }: { payload: any }) => {
+        if (this.activeCallData && (!payload.callId || this.activeCallData.callId === payload.callId)) {
+          console.log('[VoiceCall] Callee is busy on another call:', payload);
+          this.handleCalleeBusy(payload.reason);
         }
       })
       .on('broadcast', { event: 'call:accept' }, async ({ payload }: { payload: CallPayload }) => {
@@ -862,7 +981,15 @@ export class VoiceCallService {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        },
+          channelCount: 1,
+          sampleRate: 48000,
+          latency: 0.01,
+          googEchoCancellation: true,
+          googAutoGainControl: true,
+          googNoiseSuppression: true,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true,
+        } as any,
         video: false,
       });
       const audioTracks = stream.getAudioTracks();
@@ -1066,6 +1193,7 @@ export class VoiceCallService {
 
       if (state === 'failed' || state === 'disconnected') {
         console.warn(`[VoiceCall] ICE connection state is "${state}", triggering ICE restart...`);
+        this.onStatusChange?.('reconnecting', this.activeCallData || undefined);
         try {
           if (typeof (pc as any).restartIce === 'function') {
             (pc as any).restartIce();
@@ -1074,6 +1202,9 @@ export class VoiceCallService {
           if (this.isCaller && this.activeCallData) {
             pc.createOffer({ iceRestart: true })
               .then(async (newOffer) => {
+                if (newOffer.sdp) {
+                  newOffer.sdp = optimizeOpusSdp(newOffer.sdp);
+                }
                 await pc.setLocalDescription(newOffer);
                 await this.broadcastSignaling('call:offer', {
                   callId: this.activeCallData!.callId,
@@ -1106,6 +1237,7 @@ export class VoiceCallService {
           clearTimeout(this.disconnectTimer);
           this.disconnectTimer = null;
         }
+        this.onStatusChange?.('connected', this.activeCallData || undefined);
       }
     };
 
@@ -1198,6 +1330,9 @@ export class VoiceCallService {
         offerToReceiveAudio: true,
         offerToReceiveVideo: false,
       });
+      if (offer.sdp) {
+        offer.sdp = optimizeOpusSdp(offer.sdp);
+      }
       await pc.setLocalDescription(offer);
 
       const payload: CallPayload = {
@@ -1355,11 +1490,14 @@ export class VoiceCallService {
 
       if (isTrulyBusy) {
         console.log('[VoiceCall] Callee currently in an active connected call. Rejecting new call offer as busy.');
-        this.broadcastSignaling('call:reject', {
+        this.broadcastSignaling('call:busy', {
           callId: payload.callId,
           institutionId: payload.institutionId,
           student: payload.student,
+          caller: payload.caller,
           reason: 'ব্যবহারকারী অন্য কলে ব্যস্ত আছেন।',
+          senderId: this.currentUserId,
+          timestamp: Date.now(),
         });
         return;
       } else {
@@ -1383,6 +1521,13 @@ export class VoiceCallService {
     }
 
     this.activeCallData = payload;
+
+    // Callee immediately sends ringing acknowledgement back to Caller so Caller transitions to 'ringing'
+    this.broadcastSignaling('call:ringing', {
+      callId: payload.callId,
+      senderId: this.currentUserId,
+      timestamp: Date.now(),
+    });
 
     // Check if this incoming call was already marked for auto-answer (via ?answer=1 or handleNativeCallAction('answer'))
     const isAutoAnswerPending = Boolean(
@@ -1531,7 +1676,11 @@ export class VoiceCallService {
         }
       }
 
+      this.onStatusChange?.('connecting', this.activeCallData);
       const answer = await pc.createAnswer();
+      if (answer.sdp) {
+        answer.sdp = optimizeOpusSdp(answer.sdp);
+      }
       await pc.setLocalDescription(answer);
 
       // Broadcast accept across channels
@@ -1554,6 +1703,9 @@ export class VoiceCallService {
       callSoundService.playConnectChime();
       if (typeof window !== 'undefined' && window.AndroidInterface?.callStarted) {
         try { window.AndroidInterface.callStarted(); } catch {}
+      }
+      if (typeof window !== 'undefined' && (window as any).AndroidInterface?.setProximitySensorEnabled) {
+        try { (window as any).AndroidInterface.setProximitySensorEnabled(true); } catch {}
       }
       this.startHeartbeatAndWatchdog();
       this.startDiagnosticLogging(pc);
@@ -1810,6 +1962,8 @@ export class VoiceCallService {
       try {
         window.AndroidInterface.stopRinging?.();
         window.AndroidInterface.callEnded?.();
+        (window.AndroidInterface as any).setProximitySensorEnabled?.(false);
+        (window.AndroidInterface as any).setAudioMode?.('speaker');
       } catch {}
     }
 

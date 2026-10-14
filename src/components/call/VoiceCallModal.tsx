@@ -113,6 +113,79 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   const displayInstName = isGenericOrEmail(rawInstName) ? 'শিক্ষা প্রতিষ্ঠান' : rawInstName.trim();
   const callerPersonName = !isGenericOrEmail(caller?.name) ? caller?.name?.trim() : '';
 
+  const getStatusDisplay = () => {
+    switch (status) {
+      case 'connected':
+        return {
+          text: 'কথা বলা হচ্ছে (HD Voice Active)',
+          dotClass: 'bg-emerald-400 animate-ping',
+          badgeBorder: 'border-emerald-500/40 text-emerald-200',
+        };
+      case 'reconnecting':
+        return {
+          text: 'পুনরায় সংযোগ করা হচ্ছে... (Reconnecting)',
+          dotClass: 'bg-amber-400 animate-ping',
+          badgeBorder: 'border-amber-500/50 text-amber-200',
+        };
+      case 'calling':
+        return {
+          text: 'কল যাচ্ছে... (Calling)',
+          dotClass: 'bg-blue-400 animate-pulse',
+          badgeBorder: 'border-blue-500/40 text-blue-200',
+        };
+      case 'ringing':
+        return {
+          text: 'কল বাজছে... (Ringing)',
+          dotClass: 'bg-emerald-400 animate-pulse',
+          badgeBorder: 'border-emerald-500/40 text-emerald-200',
+        };
+      case 'connecting':
+        return {
+          text: 'সংযোগ স্থাপন হচ্ছে... (Connecting)',
+          dotClass: 'bg-teal-400 animate-pulse',
+          badgeBorder: 'border-teal-500/40 text-teal-200',
+        };
+      case 'incoming':
+        return {
+          text: 'ইনকামিং ভয়েস কল (Incoming Call)',
+          dotClass: 'bg-blue-400 animate-pulse',
+          badgeBorder: 'border-blue-500/40 text-blue-200',
+        };
+      case 'busy':
+        return {
+          text: 'অন্য কলে ব্যস্ত আছেন (Busy)',
+          dotClass: 'bg-amber-500',
+          badgeBorder: 'border-amber-500/60 text-amber-300',
+        };
+      case 'rejected':
+        return {
+          text: 'কলটি কেটে দেওয়া হয়েছে (Declined)',
+          dotClass: 'bg-rose-500',
+          badgeBorder: 'border-rose-500/50 text-rose-300',
+        };
+      case 'ended':
+        return {
+          text: 'কল সমাপ্ত হয়েছে (Call Ended)',
+          dotClass: 'bg-rose-500',
+          badgeBorder: 'border-rose-500/50 text-rose-300',
+        };
+      case 'failed':
+        return {
+          text: 'সংযোগ স্থাপন ব্যর্থ হয়েছে (Failed)',
+          dotClass: 'bg-red-600',
+          badgeBorder: 'border-red-500/60 text-red-300',
+        };
+      default:
+        return {
+          text: 'কল সক্রিয়',
+          dotClass: 'bg-slate-400',
+          badgeBorder: 'border-slate-600 text-slate-300',
+        };
+    }
+  };
+
+  const statusInfo = getStatusDisplay();
+
   // MINIMIZED PIP / DOCK VIEW
   if (isMinimized) {
     return (
@@ -136,7 +209,15 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
           <div className="flex flex-col min-w-[120px]">
             <span className="text-xs font-bold font-noto truncate max-w-[150px]">{student.name}</span>
             <span className="text-[11px] font-mono text-emerald-400 font-semibold">
-              {status === 'connected' ? formatDuration(duration) : 'কল চলছে...'}
+              {status === 'connected'
+                ? formatDuration(duration)
+                : status === 'ringing'
+                ? 'কল বাজছে...'
+                : status === 'reconnecting'
+                ? 'পুনরায় সংযোগ...'
+                : status === 'busy'
+                ? 'ব্যস্ত আছেন'
+                : 'কল হচ্ছে...'}
             </span>
           </div>
 
@@ -307,33 +388,17 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-6 md:py-8 text-center max-w-2xl mx-auto w-full">
         
         {/* Dynamic Status Pill */}
-        <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-slate-900/80 border border-slate-700/80 text-slate-200 text-xs md:text-sm font-semibold tracking-wide mb-6 md:mb-8 shadow-xl backdrop-blur-xl">
-          <span className={`w-3 h-3 rounded-full shadow-lg ${
-            status === 'connected'
-              ? 'bg-emerald-400 animate-ping'
-              : isIncoming
-              ? 'bg-blue-400 animate-pulse'
-              : status === 'rejected' || status === 'ended'
-              ? 'bg-rose-500'
-              : 'bg-amber-400 animate-ping'
-          }`} />
+        <div className={`inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-slate-900/80 border text-xs md:text-sm font-semibold tracking-wide mb-6 md:mb-8 shadow-xl backdrop-blur-xl ${statusInfo.badgeBorder}`}>
+          <span className={`w-3 h-3 rounded-full shadow-lg ${statusInfo.dotClass}`} />
           <span className="font-noto">
-            {status === 'connected'
-              ? 'কথা বলা হচ্ছে (HD Voice Active)'
-              : status === 'calling'
-              ? 'কল বাজছে... (Ringing)'
-              : isIncoming
-              ? 'ইনকামিং ভয়েস কল (Incoming Call)'
-              : status === 'rejected'
-              ? 'কলটি কেটে দেওয়া হয়েছে'
-              : 'কল শেষ হয়েছে'}
+            {statusInfo.text}
           </span>
         </div>
 
         {/* Large Central Avatar with Dynamic Acoustic Waves */}
         <div className="relative mb-6 md:mb-8">
-          {/* Animated concentric acoustic ripples when calling or incoming */}
-          {(status === 'calling' || status === 'incoming') && (
+          {/* Animated concentric acoustic ripples when calling, ringing, or incoming */}
+          {(status === 'calling' || status === 'ringing' || status === 'incoming' || status === 'reconnecting') && (
             <>
               <div className="absolute -inset-4 sm:-inset-6 md:-inset-8 rounded-full bg-blue-500/20 animate-ping duration-1000" />
               <div className="absolute -inset-8 sm:-inset-12 md:-inset-16 rounded-full border border-blue-400/30 animate-pulse duration-700" />
@@ -449,11 +514,33 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-slate-400 text-xs md:text-sm animate-pulse mb-2">
-            <Radio size={16} className="text-blue-400 animate-spin" />
-            <span className="font-noto">
-              {isIncoming ? 'কল রিসিভ করতে নিচের সবুজ বাটনে চাপ দিন' : 'নেটওয়ার্ক সংযোগ স্থাপন করা হচ্ছে...'}
-            </span>
+          <div className="flex items-center gap-2 text-xs md:text-sm animate-pulse mb-2">
+            {status === 'reconnecting' ? (
+              <span className="text-amber-400 font-noto flex items-center gap-2">
+                <Wifi size={16} className="animate-spin" />
+                নেটওয়ার্ক স্যুইচিং - পুনরায় সংযোগ করা হচ্ছে...
+              </span>
+            ) : status === 'busy' ? (
+              <span className="text-amber-400 font-noto flex items-center gap-2">
+                <PhoneOff size={16} />
+                অভিভাবক এই মুহূর্তে অন্য কলে ব্যস্ত আছেন
+              </span>
+            ) : status === 'ringing' ? (
+              <span className="text-emerald-300 font-noto flex items-center gap-2">
+                <Radio size={16} className="text-emerald-400 animate-spin" />
+                অভিভাবকের ফোনে রিং বাজছে...
+              </span>
+            ) : isIncoming ? (
+              <span className="text-blue-300 font-noto flex items-center gap-2">
+                <Radio size={16} className="text-blue-400 animate-spin" />
+                কল রিসিভ করতে নিচের সবুজ বাটনে চাপ দিন
+              </span>
+            ) : (
+              <span className="text-slate-400 font-noto flex items-center gap-2">
+                <Radio size={16} className="text-blue-400 animate-spin" />
+                নেটওয়ার্ক সংযোগ স্থাপন করা হচ্ছে...
+              </span>
+            )}
           </div>
         )}
       </main>
