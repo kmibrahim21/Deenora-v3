@@ -1,6 +1,6 @@
 {
-  "summary": "Revised implementation plan focusing exclusively on the Guardian Mobile PWA with web push notifications and the Automated Smart Report Card Remarks Engine, with WhatsApp automation excluded as requested.",
-  "updatedAt": "2026-10-14T14:59:34.207728717Z",
+  "summary": "WhatsApp ও imo-এর মতো নিরবচ্ছিন্ন ভয়েস কলিং আর্কিটেকচার বাস্তবায়নের পূর্ণাঙ্গ কর্মপরিকল্পনা:\n1. অপ্টিমাইজড মাল্টি-টার্ন (Multi-TURN) ও STUN রিলে ফলব্যাক সেটআপ\n2. ক্রিস্টাল ক্লিয়ার অডিও টিউনিং (AEC, ANS, AGC, 48kHz, Opus FEC)\n3. ওয়াইফাই/মোবাইল ডাটা স্যুইচিংয়ে ইনস্ট্যান্ট অটো-রিকানেকশন ও আইস রিস্টার্ট\n4. প্রক্সিমেট্রি সেন্সর ও অ্যান্ড্রয়েড নেটিভ ইয়ারপিস/স্পিকার অটো-স্যুইচিং ব্রিজ\n5. হোয়াটসঅ্যাপ-স্টাইল সুনির্দিষ্ট কল স্ট্যাটাস (Calling, Ringing, Busy, Reconnecting)\n6. অ্যান্ড্রয়েড নেটিভ CallStyle ও লক স্ক্রিন ওয়েকআপ নোটিফিকেশন গাইডলাইন",
+  "updatedAt": "2026-10-14T03:12:56.890347907Z",
   "requestFeedback": true,
   "userFacing": true
 }
