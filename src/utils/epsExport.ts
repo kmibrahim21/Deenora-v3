@@ -188,19 +188,15 @@ export async function elementToEps(
   return dataUrlToEps(dataUrl, options);
 }
 
+import { downloadBlob } from './fileDownloader';
+
 /**
- * Triggers a browser download of a single .eps file.
+ * Triggers a download of a single .eps file compatible with Android and Web.
  */
-export function triggerEpsDownload(epsContent: string, filename: string) {
+export async function triggerEpsDownload(epsContent: string, filename: string) {
   const blob = new Blob([epsContent], { type: 'application/postscript;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename.endsWith('.eps') ? filename : `${filename}.eps`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const finalName = filename.endsWith('.eps') ? filename : `${filename}.eps`;
+  await downloadBlob(blob, finalName, 'application/postscript');
 }
 
 /**
@@ -236,12 +232,6 @@ export async function downloadCardEpsZip(
   zip.file(`${safeBase}_Back_Vector.svg`, backSvg);
 
   const content = await zip.generateAsync({ type: 'blob' });
-  const url = URL.createObjectURL(content);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${safeBase}_Press_Ready_Vector_EPS.zip`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const zipFileName = `${safeBase}_Press_Ready_Vector_EPS.zip`;
+  await downloadBlob(content, zipFileName, 'application/zip');
 }

@@ -142,17 +142,26 @@ const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile }) =>
     if (!madrasah) return;
     setLoadingStudents(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('students')
         .select('*, classes(class_name)')
-        .eq('institution_id', madrasah.id)
-        .eq('class_id', classId)
-        .order('roll', { ascending: true });
+        .eq('institution_id', madrasah.id);
+
+      if (classId !== 'all_classes') {
+        query = query.eq('class_id', classId);
+      }
+
+      const { data, error } = await query.order('roll', { ascending: true });
 
       if (error) throw error;
       setStudents(data || []);
       if (data && data.length > 0) {
-        setSelectedStudentId(data[0].id);
+        // If all_classes is selected, default to 'all' for instant bulk download
+        if (classId === 'all_classes') {
+          setSelectedStudentId('all');
+        } else {
+          setSelectedStudentId(data[0].id);
+        }
       } else {
         setSelectedStudentId('');
       }
@@ -444,6 +453,7 @@ const IdCards: React.FC<IdCardsProps> = ({ lang, madrasah, onBack, profile }) =>
                         }`}
                       >
                         <option value="">{t('select_class', lang)}</option>
+                        <option value="all_classes">{isBn ? '🌟 সমগ্র প্রতিষ্ঠান (সকল শিক্ষার্থী)' : '🌟 Entire Institution (All Students)'}</option>
                         {classes.map(c => (
                           <option key={c.id} value={c.id}>{c.class_name}</option>
                         ))}

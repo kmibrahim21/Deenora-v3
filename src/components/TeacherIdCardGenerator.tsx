@@ -10,6 +10,7 @@ import { IdCardDesignSettings, DEFAULT_ID_CARD_DESIGN } from "../types/idCardDes
 import IdCardDesignModal from "./idcard/IdCardDesignModal";
 import { supabase } from "../supabase";
 import { elementToEps, elementToPureSvgXml, downloadCardEpsZip } from "../utils/epsExport";
+import { downloadBlob, downloadFromUrl, saveJsPdf } from "../utils/fileDownloader";
 
 interface TeacherIdCardGeneratorProps {
   teacher: Teacher;
@@ -107,13 +108,14 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
     localStorage.setItem('deenora_teacher_idcard_design_settings', JSON.stringify(newSettings));
   };
 
-  const generateSingleCardData = async () => {
+  const generateSingleCardData = async (targetSide: 'front' | 'back' | 'both' = 'both') => {
     if (!cardRef.current || !backCardRef.current) return null;
     try {
       const options = {
-        pixelRatio: 2,
+        pixelRatio: 1.5,
         backgroundColor: '#ffffff',
         cacheBust: false,
+        imagePlaceholder: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%23cbd5e1" stroke-width="1.5"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
         fontEmbedCSS: `
           @font-face {
             font-family: 'SolaimanLipi';
@@ -129,20 +131,44 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
           transform: "scale(1)",
         },
       };
-      const frontDataUrl = await Promise.race([
-        toJpeg(cardRef.current, options),
-        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-      ]);
-      const backDataUrl = await Promise.race([
-        toJpeg(backCardRef.current, options),
-        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-      ]);
+
+      let frontDataUrl = '';
+      let backDataUrl = '';
+
+      if (targetSide === 'front' || targetSide === 'both') {
+        try {
+          frontDataUrl = await Promise.race([
+            toJpeg(cardRef.current, options),
+            new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 7000))
+          ]);
+        } catch (fErr) {
+          console.warn('[TeacherIdCard] Front card image render warning, retrying with PNG:', fErr);
+          try {
+            frontDataUrl = await toPng(cardRef.current, options);
+          } catch {}
+        }
+      }
+
+      if (targetSide === 'back' || targetSide === 'both') {
+        try {
+          backDataUrl = await Promise.race([
+            toJpeg(backCardRef.current, options),
+            new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 7000))
+          ]);
+        } catch (bErr) {
+          console.warn('[TeacherIdCard] Back card image render warning, retrying with PNG:', bErr);
+          try {
+            backDataUrl = await toPng(backCardRef.current, options);
+          } catch {}
+        }
+      }
+
       return {
         front: frontDataUrl,
         back: backDataUrl,
       };
     } catch (e) {
-      console.error("Error generating image", e);
+      console.error("[TeacherIdCard] Error generating card image:", e);
       return null;
     }
   };
@@ -280,32 +306,18 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
         if (contentType.includes('application/json')) {
           const data = await response.json();
           if (data.url) {
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = data.url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            await downloadFromUrl(data.url, filename, 'application/pdf');
             return;
           }
         } else {
           const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.style.display = 'none';
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
+          await downloadBlob(blob, filename, 'application/pdf');
           return;
         }
       }
       throw new Error('Server returned non-OK response');
     } catch (serverError) {
-      console.warn("Server ID card generation failed, falling back to client-side:", serverError);
+      console.warn("[TeacherIdCard] Server ID card generation skipped/failed, proceeding to client jsPDF:", serverError);
       
       try {
         const pdf = new jsPDF("portrait", "mm", "a4");
@@ -313,19 +325,23 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
         const cardHeight = 86;
 
         setCurrentRenderTeacher(teacher);
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        const cardData = await generateSingleCardData();
-        if (cardData) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const cardData = await generateSingleCardData('both');
+        if (cardData && (cardData.front || cardData.back)) {
           const gapX = 10;
           const xMargin = (210 - (cardWidth * 2) - gapX) / 2;
           const yMargin = 30;
 
-          pdf.addImage(cardData.front, "JPEG", xMargin, yMargin, cardWidth, cardHeight, undefined, "FAST");
-          pdf.addImage(cardData.back, "JPEG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight, undefined, "FAST");
-          pdf.save(filename);
+          if (cardData.front) {
+            pdf.addImage(cardData.front, "JPEG", xMargin, yMargin, cardWidth, cardHeight, undefined, "FAST");
+          }
+          if (cardData.back) {
+            pdf.addImage(cardData.back, "JPEG", xMargin + cardWidth + gapX, yMargin, cardWidth, cardHeight, undefined, "FAST");
+          }
+          await saveJsPdf(pdf, filename);
         }
       } catch (err) {
-        console.error("Single PDF fallback generation error:", err);
+        console.error("[TeacherIdCard] Single PDF fallback generation error:", err);
       }
     } finally {
       setIsGenerating(false);
@@ -339,216 +355,57 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
     setBulkProgress(5);
 
     try {
-      const cardsHtmlList: string[] = [];
+      const pdf = new jsPDF("portrait", "mm", "a4");
+      const cardWidth = 54;
+      const cardHeight = 86;
+      const gapX = 10;
+      const gapY = 6;
+      const columns = 3;
+      const rows = 3;
+      const cardsPerPage = columns * rows;
+      const xOffset = 14;
+      const yOffset = 15;
+
       for (let i = 0; i < teachersToRender.length; i++) {
-        setCurrentRenderTeacher(teachersToRender[i]);
-        await new Promise(r => setTimeout(r, 15));
-        const targetEl = activeSide === 'front' ? cardRef.current : backCardRef.current;
-        if (targetEl) {
-          cardsHtmlList.push(targetEl.outerHTML.replace(/\bhidden\b/g, 'flex'));
-        }
-        setBulkProgress(Math.min(50, Math.round(((i + 1) / teachersToRender.length) * 50)));
-      }
+        const currentTch = teachersToRender[i];
+        setCurrentRenderTeacher(currentTch);
 
-      const CARDS_PER_PAGE = 8;
-      const pages: string[][] = [];
-      for (let i = 0; i < cardsHtmlList.length; i += CARDS_PER_PAGE) {
-        pages.push(cardsHtmlList.slice(i, i + CARDS_PER_PAGE));
-      }
-
-      const pagesHtml = pages.map((pageCards, pageIdx) => `
-        <div class="page-container" style="page-break-after: ${pageIdx < pages.length - 1 ? 'always' : 'auto'};">
-          ${pageCards.map(c => `
-            <div class="card-slot">
-              ${c}
-            </div>
-          `).join('')}
-        </div>
-      `).join('');
-
-      const fullHtml = `
-        <!DOCTYPE html>
-        <html lang="bn">
-        <head>
-          <meta charset="UTF-8">
-          <title>${filename}</title>
-          <script src="https://cdn.tailwindcss.com"></script>
-          <style>
-            @font-face {
-              font-family: 'SolaimanLipi';
-              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
-                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-normal-v1.0.ttf') format('truetype');
-              font-weight: normal;
-              font-style: normal;
-              font-display: swap;
-            }
-            @font-face {
-              font-family: 'SolaimanLipi';
-              src: url('data:font/ttf;base64,${solaimanLipiBase64}') format('truetype'),
-                   url('https://cdn.jsdelivr.net/gh/maateen/bangla-web-fonts@main/fonts/solaiman-lipi/solaimanlipi-bold-v1.0.ttf') format('truetype');
-              font-weight: bold;
-              font-style: normal;
-              font-display: swap;
-            }
-            * {
-              box-sizing: border-box;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            .font-solaiman, .font-solaiman * {
-              font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
-            }
-            body, html, div, span, p, h1, h2, h3, h4, h5, h6, li {
-              font-family: 'SolaimanLipi', 'Hind Siliguri', 'Noto Sans Bengali', sans-serif !important;
-            }
-            @page {
-              size: a4 portrait;
-              margin: 0;
-            }
-            html, body {
-              margin: 0;
-              padding: 0;
-              background-color: white;
-            }
-            .page-container {
-              width: 210mm;
-              height: 297mm;
-              padding-top: 15mm;
-              padding-bottom: 15mm;
-              padding-left: 10mm;
-              padding-right: 10mm;
-              display: grid;
-              grid-template-columns: repeat(3, 54mm);
-              grid-template-rows: repeat(3, 86mm);
-              gap: 6mm 10mm;
-              box-sizing: border-box;
-              justify-content: center;
-              align-content: center;
-            }
-            .card-slot {
-              width: 54mm;
-              height: 86mm;
-              overflow: hidden;
-              position: relative;
-              border-radius: 3.5mm;
-              box-sizing: border-box;
-              border: 0.5px solid #cbd5e1;
-            }
-            .card-slot > div {
-              transform: scale(0.72) !important;
-              transform-origin: top left !important;
-              display: flex !important;
-              margin: 0 !important;
-              box-shadow: none !important;
-            }
-            .photo-frame {
-              border-radius: 12px !important;
-              overflow: hidden !important;
-              -webkit-mask-image: -webkit-radial-gradient(white, black) !important;
-              clip-path: inset(0 round 12px) !important;
-              isolation: isolate !important;
-            }
-            .photo-frame img {
-              border-radius: 10px !important;
-              object-fit: cover !important;
-              display: block !important;
-            }
-          </style>
-        </head>
-        <body>
-          ${pagesHtml}
-        </body>
-        </html>
-      `;
-
-      setBulkProgress(70);
-
-      const batchKey = teachersToRender.map(t => t.id).slice(0, 5).join('-');
-      const response = await fetch('/api/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: fullHtml,
-          format: 'a4',
-          orientation: 'portrait',
-          entity_type: 'teacher_id_card_grid',
-          entity_id: `batch_${batchKey}_${activeSide}_${teachersToRender.length}`,
-          filename: filename,
-          force_refresh: true
-        })
-      });
-
-      if (response.ok) {
-        setBulkProgress(95);
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const data = await response.json();
-          if (data.url) {
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = data.url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            return;
+        // Ensure DOM has committed the new teacher data before capturing
+        const expectedId = currentTch.id;
+        for (let wait = 0; wait < 12; wait++) {
+          await new Promise(r => setTimeout(r, 25));
+          if (cardRef.current?.getAttribute('data-teacher-id') === expectedId) {
+            break;
           }
-        } else {
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.style.display = 'none';
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          return;
         }
-      }
-      throw new Error('Server returned non-OK response');
-    } catch (serverError) {
-      console.warn("Server ID card generation failed, falling back to client-side:", serverError);
-      
-      try {
-        const pdf = new jsPDF("portrait", "mm", "a4");
-        const cardWidth = 54;
-        const cardHeight = 86;
-        const gapX = 10;
-        const gapY = 6;
-        const columns = 3;
-        const rows = 3;
-        const cardsPerPage = columns * rows;
-        const xOffset = 14;
-        const yOffset = 15;
 
-        for (let i = 0; i < teachersToRender.length; i++) {
-          setBulkProgress(Math.round(((i + 1) / teachersToRender.length) * 100));
-          setCurrentRenderTeacher(teachersToRender[i]);
-          await new Promise((resolve) => setTimeout(resolve, 150));
+        const pageIndex = Math.floor((i % cardsPerPage) / columns);
+        const colIndex = (i % cardsPerPage) % columns;
 
-          const pageIndex = Math.floor((i % cardsPerPage) / columns);
-          const colIndex = (i % cardsPerPage) % columns;
+        if (i > 0 && i % cardsPerPage === 0) {
+          pdf.addPage();
+        }
 
-          if (i > 0 && i % cardsPerPage === 0) {
-            pdf.addPage();
-          }
+        const x = xOffset + colIndex * (cardWidth + gapX);
+        const y = yOffset + pageIndex * (cardHeight + gapY);
 
-          const x = xOffset + colIndex * (cardWidth + gapX);
-          const y = yOffset + pageIndex * (cardHeight + gapY);
-
-          const cardData = await generateSingleCardData();
-          if (cardData) {
-            const imageToDraw = activeSide === 'front' ? cardData.front : cardData.back;
+        // Only capture the side currently selected for download to optimize speed and RAM
+        const cardData = await generateSingleCardData(activeSide);
+        if (cardData) {
+          const imageToDraw = activeSide === 'front' ? cardData.front : cardData.back;
+          if (imageToDraw) {
             pdf.addImage(imageToDraw, "JPEG", x, y, cardWidth, cardHeight, undefined, "FAST");
           }
         }
 
-        pdf.save(filename);
-      } catch (err) {
-        console.error("Batch PDF fallback generation error:", err);
+        setBulkProgress(Math.min(98, Math.round(((i + 1) / teachersToRender.length) * 100)));
       }
+
+      setBulkProgress(100);
+      // Save using Universal File Downloader (Supports Android Studio WebView Native Bridge & DownloadManager)
+      await saveJsPdf(pdf, filename);
+    } catch (err) {
+      console.error("[TeacherIdCard] Batch PDF generation error:", err);
     } finally {
       setIsGenerating(false);
       setBulkProgress(0);
@@ -576,7 +433,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
 
       await downloadCardEpsZip(frontEl, backEl, baseFilename, teacher?.name || 'Teacher');
     } catch (err) {
-      console.error('Failed to generate EPS:', err);
+      console.error('[TeacherIdCard] Failed to generate EPS:', err);
     } finally {
       setIsGenerating(false);
     }
@@ -597,7 +454,13 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
       for (let i = 0; i < teachersToProcess.length; i++) {
         const t = teachersToProcess[i];
         setCurrentRenderTeacher(t);
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        const expectedId = t.id;
+        for (let wait = 0; wait < 12; wait++) {
+          await new Promise(r => setTimeout(r, 25));
+          if (cardRef.current?.getAttribute('data-teacher-id') === expectedId) {
+            break;
+          }
+        }
 
         const frontEl = cardRef.current;
         const backEl = backCardRef.current;
@@ -625,16 +488,9 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(zipBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${folderName}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await downloadBlob(zipBlob, `${folderName}.zip`, 'application/zip');
     } catch (err) {
-      console.error('Failed to export bulk EPS:', err);
+      console.error('[TeacherIdCard] Failed to export bulk EPS:', err);
     } finally {
       setCurrentRenderTeacher(teacher);
       setIsGenerating(false);
@@ -988,6 +844,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
               borderRadius: "12px",
               overflow: "hidden"
             }}
+            data-teacher-id={currentRenderTeacher?.id || ''}
             ref={cardRef}
           >
              {/* Header Vector */}
@@ -1261,6 +1118,7 @@ const TeacherIdCardGenerator: React.FC<TeacherIdCardGeneratorProps> = ({
               borderRadius: "12px",
               overflow: "hidden"
             }}
+            data-teacher-id={currentRenderTeacher?.id || ''}
             ref={backCardRef}
           >
             {madrasah?.logo_url && (
