@@ -55,7 +55,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-import { generateStudentRemark } from '../utils/smartRemarksEngine';
+// Smart remarks import removed
 import { ChatApp } from './ChatApp';
 import { useVoiceCall } from '../context/CallContext';
 import { useGlobalNotifications } from '../hooks/useGlobalNotifications';
@@ -1708,178 +1708,13 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                      </div>
                   </div>
                   
-                  {/* Smart Teacher Remarks & Progress Analysis Card */}
-                  {(() => {
-                     const gpaVal = parseFloat(String(currentExam?.gpa || 0)) || 0;
-                     const subList = (currentExam?.marks || []).map((m: any) => ({
-                       subject_name: m.subject || '',
-                       marks_obtained: m.obtained || 0,
-                       full_marks: m.full || 100,
-                       grade: m.grade
-                     }));
-                     const totalAtt = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
-                     const attRate = attendance.length > 0 ? Math.round((totalAtt / attendance.length) * 100) : 85;
-
-                     const smartEval = generateStudentRemark({
-                       student_id: student?.id || '',
-                       student_name: student?.student_name || 'শিক্ষার্থী',
-                       roll: student?.roll_no || student?.roll,
-                       total_marks: currentExam?.total_marks,
-                       gpa: gpaVal,
-                       grade: currentExam?.gpa_grade,
-                       rank: currentExam?.position,
-                       attendance_rate: attRate,
-                       subjects: subList
-                     });
-
-                     const teacherComment = currentExam?.remarks && currentExam.remarks.trim() !== "" 
-                       ? currentExam.remarks 
-                       : smartEval.full_remark_bn;
-
-                     const band = smartEval.achievement_band || "jayyid";
-                     const bandMeta = {
-                       mumtaz: { label: "🌟 মুমতাজ (ممتاز) · অসাধারণ মেধা", text: "text-amber-300", bg: "bg-amber-500/20 border-amber-500/40" },
-                       jayyid_jiddan: { label: "✨ জায়্যিদ জিদ্দান · চমৎকার সাফল্য", text: "text-emerald-300", bg: "bg-emerald-500/20 border-emerald-500/40" },
-                       jayyid: { label: "📘 জায়্যিদ · সন্তোষজনক অগ্রগতি", text: "text-cyan-300", bg: "bg-cyan-500/20 border-cyan-500/40" },
-                       maqbool: { label: "⚡ মাকবুল · নিয়মিত প্রচেষ্টা কাম্য", text: "text-orange-300", bg: "bg-orange-500/20 border-orange-500/40" },
-                       rasib: { label: "⚠️ বিশেষ যত্ন ও নিবিড় পরিচর্যা প্রয়োজন", text: "text-rose-300", bg: "bg-rose-500/20 border-rose-500/40" }
-                     }[band];
-
-                     return (
-                        <div className="relative overflow-hidden bg-gradient-to-br from-[#061521] via-[#092233] to-[#040E17] text-white p-4 sm:p-6 rounded-[2.2rem] border border-emerald-500/35 shadow-2xl shadow-emerald-950/40 my-3 text-left font-noto">
-                           {/* Decorative Islamic Background Glow */}
-                           <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-                           <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                           {/* Card Top Header */}
-                           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-emerald-800/40 pb-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 text-white flex items-center justify-center shadow-lg shadow-amber-500/25 shrink-0 border border-amber-300/40">
-                                   <Sparkles className="w-5 h-5 text-amber-100" />
-                                </div>
-                                <div>
-                                   <div className="flex items-center gap-2">
-                                     <h4 className="text-xs sm:text-sm font-black text-white font-noto">
-                                       শিক্ষকের বিশেষ পর্যবেক্ষণ ও মূল্যায়ন
-                                     </h4>
-                                     <span className="hidden xs:inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                       AI Verified
-                                     </span>
-                                   </div>
-                                   <p className="text-[10px] text-emerald-300/80 font-noto">
-                                     শিক্ষার্থীর মেধা, একাগ্রতা ও চারিত্রিক বৈশিষ্ট্যের সমন্বিত বিবরণ
-                                   </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 self-start sm:self-auto">
-                                <span className={`text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-xl border font-noto ${bandMeta.bg} ${bandMeta.text}`}>
-                                  {bandMeta.label}
-                                </span>
-                              </div>
-                           </div>
-
-                           {/* Main Remark Quote Balloon */}
-                           <div className="relative z-10 my-3.5 bg-white/5 backdrop-blur-md p-3.5 sm:p-4 rounded-2xl border border-white/10 shadow-inner">
-                              <div className="flex items-start gap-2">
-                                <span className="text-emerald-400/50 text-2xl font-serif leading-none select-none">“</span>
-                                <p className="text-xs sm:text-[13px] font-medium text-emerald-50 leading-relaxed text-left font-noto flex-1">
-                                  {teacherComment}
-                                </p>
-                                <span className="text-emerald-400/50 text-2xl font-serif leading-none select-none self-end">”</span>
-                              </div>
-                           </div>
-
-                           {/* Diagnostic Insights Grid */}
-                           <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] sm:text-[11px] font-noto my-2">
-                              {smartEval.strengths_bn.length > 0 && (
-                                <div className="bg-emerald-950/60 border border-emerald-500/30 rounded-xl p-2.5">
-                                  <span className="font-black text-emerald-300 flex items-center gap-1.5 mb-0.5">
-                                    <CheckCircle2 size={13} className="text-emerald-400" />
-                                    বিশেষ পারদর্শিতা ও অর্জিত দক্ষতা:
-                                  </span>
-                                  <span className="text-emerald-100 font-bold block pl-4">
-                                    {smartEval.strengths_bn.join(", ")}
-                                  </span>
-                                </div>
-                              )}
-                              {smartEval.growth_areas_bn.length > 0 && (
-                                <div className="bg-amber-950/50 border border-amber-500/30 rounded-xl p-2.5">
-                                  <span className="font-black text-amber-300 flex items-center gap-1.5 mb-0.5">
-                                    <Sparkles size={13} className="text-amber-400" />
-                                    অনুশীলন ও উন্নয়নের ক্ষেত্র:
-                                  </span>
-                                  <span className="text-amber-100 font-bold block pl-4">
-                                    {smartEval.growth_areas_bn.join(", ")}
-                                  </span>
-                                </div>
-                              )}
-                           </div>
-
-                           {/* Parent Action Guidance */}
-                           {smartEval.parent_tip_bn && (
-                             <div className="relative z-10 mt-2 text-[10px] sm:text-[11px] text-slate-200 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/25 flex items-start gap-2 text-left font-noto">
-                                <HeartHandshake size={15} className="text-amber-400 shrink-0 mt-0.5" />
-                                <div>
-                                  <strong className="text-amber-300 font-black">পিতা-মাতার করণীয় ও দিকনির্দেশনা: </strong>
-                                  <span className="text-amber-100">{smartEval.parent_tip_bn}</span>
-                                </div>
-                             </div>
-                           )}
-
-                           {/* Interactive Toolbar: Audio Listen, Copy, Share */}
-                           <div className="relative z-10 pt-3 mt-3 border-t border-emerald-900/50 flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSpeakRemark(teacherComment)}
-                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black border inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer font-noto ${
-                                    speakingRemark
-                                      ? "bg-amber-500 text-slate-950 border-amber-400 shadow-md animate-pulse"
-                                      : "bg-white/10 text-emerald-200 border-white/15 hover:bg-white/15"
-                                  }`}
-                                  title="উচ্চারণ শুনে নিন"
-                                >
-                                  {speakingRemark ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                                  <span>{speakingRemark ? "থামুন" : "শুনে নিন"}</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyRemarkText(teacherComment)}
-                                  className="px-3 py-1.5 rounded-xl text-[10px] font-bold bg-white/10 text-emerald-200 border border-white/15 hover:bg-white/15 inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer font-noto"
-                                  title="মন্তব্য কপি করুন"
-                                >
-                                  {copiedRemark ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                                  <span>{copiedRemark ? "কপি হয়েছে" : "কপি"}</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleShareRemark(student?.student_name || "শিক্ষার্থী", currentExam?.name || "পরীক্ষা", teacherComment)}
-                                  className="px-3 py-1.5 rounded-xl text-[10px] font-bold bg-emerald-600/40 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-600/60 inline-flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer font-noto"
-                                  title="পরিবারে শেয়ার করুন"
-                                >
-                                  <Share2 size={13} />
-                                  <span className="hidden xs:inline">শেয়ার</span>
-                                </button>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 opacity-80 text-left">
-                                <Award size={14} className="text-amber-400 shrink-0" />
-                                <div className="flex flex-col">
-                                  <span className="text-[8px] font-black text-emerald-200 uppercase tracking-wider font-noto">
-                                    অনুমোদিত একাডেমিক মূল্যায়ন
-                                  </span>
-                                  <span className="text-[7px] text-slate-400 font-mono">
-                                    Deenora Academic Portal
-                                  </span>
-                                </div>
-                              </div>
-                           </div>
-                        </div>
-                     );
-                  })()}
+                  {/* Teacher Remarks (If manually entered in exam) */}
+                  {currentExam?.remarks && currentExam.remarks.trim() !== '' && (
+                    <div className="my-3 p-4 rounded-2xl bg-blue-50 dark:bg-slate-800 border border-blue-100 dark:border-slate-700 text-left font-noto">
+                      <p className="text-xs font-black text-[#1E3A8A] dark:text-blue-400 mb-1">শিক্ষকের মন্তব্য:</p>
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{currentExam.remarks}</p>
+                    </div>
+                  )}
                </div>
                
                {/* Action Buttons */}
@@ -1896,33 +1731,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
                           grade: m.grade,
                           grade_point: m.gpa
                         }));
-                        const generatedSmartRemarkText = (() => {
-                          try {
-                            const gpaVal = parseFloat(String(currentExam?.gpa || 0)) || 0;
-                            const subList = (currentExam?.marks || []).map((m: any) => ({
-                              subject_name: m.subject || '',
-                              marks_obtained: m.obtained || 0,
-                              full_marks: m.full || 100,
-                              grade: m.grade
-                            }));
-                            return generateStudentRemark({
-                              student_id: student?.id || '',
-                              student_name: student?.student_name || 'শিক্ষার্থী',
-                              roll: student?.roll_no || student?.roll,
-                              total_marks: currentExam?.total_marks,
-                              gpa: gpaVal,
-                              grade: currentExam?.gpa_grade,
-                              rank: currentExam?.position,
-                              subjects: subList
-                            }).full_remark_bn;
-                          } catch {
-                            return '';
-                          }
-                        })();
-
                         const finalRemarks = currentExam.remarks && currentExam.remarks.trim() !== '' 
                           ? currentExam.remarks 
-                          : generatedSmartRemarkText;
+                          : '';
 
                         const examInfo = {
                           exam_name: currentExam.name,
