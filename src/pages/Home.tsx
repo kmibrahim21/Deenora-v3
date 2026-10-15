@@ -22,6 +22,7 @@ interface HomeProps {
   institutionId?: string;
   madrasah: Institution | null;
   profile?: any;
+  activeYear?: any;
   onNavigateToWallet?: () => void;
   onNavigateToAccounting?: () => void;
   onNavigateToAttendance?: () => void;
@@ -34,7 +35,7 @@ interface HomeProps {
   onNavigateToDonations?: () => void;
 }
 
-const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast, onNavigateToMessages, onNavigateToCertificates, onNavigateToDonations }) => {
+const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerRefresh, institutionId, madrasah, profile, activeYear, onNavigateToWallet, onNavigateToAccounting, onNavigateToAttendance, onNavigateToExams, onNavigateToClasses, onNavigateToTeachers, onNavigateToVoiceBroadcast, onNavigateToMessages, onNavigateToCertificates, onNavigateToDonations }) => {
   const role = profile?.role || 'teacher';
   const isAdmin = role === 'madrasah_admin' || role === 'super_admin' || role === 'manager';
   const canSendSMS = isAdmin || !!profile?.permissions?.can_send_sms;
@@ -96,6 +97,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
   }, [madrasah]) as any;
 
   const activeYearId = React.useMemo(() => {
+    if (activeYear?.id) return activeYear.id;
     let config = madrasah?.config_json as any;
     if (typeof config === 'string') {
       try { config = JSON.parse(config); } catch (e) { config = {}; }
@@ -104,7 +106,7 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
     // Basic UUID validation (8-4-4-4-12 hex chars)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(yearId) ? yearId : null;
-  }, [madrasah]);
+  }, [activeYear, madrasah]);
 
   const [isRevalidating, setIsRevalidating] = useState(false);
 

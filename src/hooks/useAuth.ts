@@ -12,8 +12,36 @@ export const useAuth = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [madrasah, setMadrasah] = useState<Institution | null>(null);
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
+  const [selectedYearState, setSelectedYearState] = useState<AcademicYear | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('selected_viewing_year');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const setSelectedYear = (year: AcademicYear | null) => {
+    setSelectedYearState(year);
+    try {
+      if (year) {
+        sessionStorage.setItem('selected_viewing_year', JSON.stringify(year));
+      } else {
+        sessionStorage.removeItem('selected_viewing_year');
+      }
+    } catch (e) {}
+  };
+
+  const resetToActiveYear = () => {
+    setSelectedYear(activeYear);
+  };
+
+  const viewingYear = selectedYearState || activeYear;
+  const isHistoricalMode = Boolean(
+    viewingYear && activeYear && viewingYear.id !== activeYear.id
+  );
 
   const fetchActiveYear = async (institutionId: string) => {
     if (!isValidUUID(institutionId)) return;
@@ -27,7 +55,12 @@ export const useAuth = () => {
       if (year) {
         // Handle maybeSingle logic
         const singleYear = Array.isArray(year) ? year[0] : year;
-        if (singleYear) setActiveYear(singleYear);
+        if (singleYear) {
+          setActiveYear(singleYear);
+          if (!selectedYearState) {
+            setSelectedYearState(singleYear);
+          }
+        }
       }
     } catch (err) {
       console.error("Error fetching active year:", err);
@@ -484,5 +517,18 @@ export const useAuth = () => {
     };
   }, [profile?.institution_id]);
 
-  return { session, profile, madrasah, activeYear, loading, authError, handleLogout, refreshMadrasah };
+  return { 
+    session, 
+    profile, 
+    madrasah, 
+    activeYear, 
+    selectedYear: viewingYear || activeYear, 
+    setSelectedYear, 
+    isHistoricalMode, 
+    resetToActiveYear, 
+    loading, 
+    authError, 
+    handleLogout, 
+    refreshMadrasah 
+  };
 };

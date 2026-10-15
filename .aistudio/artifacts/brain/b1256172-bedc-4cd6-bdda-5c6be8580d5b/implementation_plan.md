@@ -1,99 +1,114 @@
-# WhatsApp / imo-স্টাইল প্রফেশনাল ভয়েস কল আর্কিটেকচার ইমপ্লিমেন্টেশন প্ল্যান
+# Historical Academic Year Switcher & Multi-Year Data Browsing Plan
 
-WhatsApp ও imo-এর মতো স্মুথ, হাই-কোয়ালিটি এবং ব্যাকগ্রাউন্ড ও লক স্ক্রিন থেকে রিং হওয়ার মতো নির্ভরযোগ্য কলিং ব্যবস্থা নিশ্চিত করতে ক্লায়েন্ট-সাইড (Web) এবং অ্যান্ড্রয়েড নেটিভ ব্রিজের একটি পূর্ণাঙ্গ ব্লুপ্রিন্ট তৈরি করা হলো।
-
----
-
-## ১. মাল্টি-TURN এবং STUN রিলে ক্লাস্টার (Optimized Free Relays with Auto-Fallback)
-
-### সমস্যা:
-একটি মাত্র ফ্রি ওপেন-রিলে (openrelay) ব্যবহার করলে পিক আওয়ারে প্যাকেট ড্রপ হয় বা আইস ক্যান্ডিডেট টাইমআউট হয়ে ১৫ সেকেন্ডের মাথায় কল কেটে যায়।
-
-### সমাধান:
-- Google STUN ক্লাস্টার (`stun.l.google.com:19302`, `stun1.l.google.com:19302`, `stun2.l.google.com:19302`)
-- একাধিক ফ্রি টার্ন ও মেটার্ড সিকিউর ফলব্যাক রিলে
-- `iceCandidatePoolSize: 10` এবং `bundlePolicy: 'max-bundle'` সক্রিয় করা যাতে কল পিক করার আগেই ক্যান্ডিডেট প্রস্তুত থাকে (Zero setup latency)।
+This plan details the architecture and implementation for switching between past and current academic years across all modules (Students, Classes, Attendance, Accounting/Fees, Exams, Results, and Reports) in read-only historical viewing mode.
 
 ---
 
-## ২. স্টুডিও গ্রেড অডিও টিউনিং (Echo Cancellation & Noise Suppression)
+## User Review & Critical Decisions
 
-### WebRTC অডিও কনস্ট্রেইন্ট টিউনিং:
-- **Acoustic Echo Cancellation (AEC)**: স্পিকারের শব্দ মাইকে ফিরে আসা সম্পূর্ণ বন্ধ করা (`echoCancellation: true`, `googEchoCancellation: true`)।
-- **Active Noise Suppression (ANS)**: পেছনের ফ্যান, বাতাসের শব্দ ফিল্টার করা (`noiseSuppression: true`, `googNoiseSuppression: true`)।
-- **Automatic Gain Control (AGC)**: ব্যবহারকারী মুখ দূরে নিলেও ভলিউম স্বাভাবিক রাখা (`autoGainControl: true`, `googAutoGainControl: true`)।
-- **Opus কোডেক অপ্টিমাইজেশন**:
-  - `stereo=0` (মোবাইল কলের জন্য মনো অডিও ব্যান্ডউইথ বাঁচায়)
-  - `maxaveragebitrate=32000` (ক্লিন ও কম্প্যাক্ট অডিও)
-  - `useinbandfec=1` (প্যাকেট লস হলেও অডিও ড্রপ বা রোবোটিক সাউন্ড হয় না)
+> [!IMPORTANT]
+> The following decisions were confirmed directly by the user:
+
+- **Confirmed Decision 1 (Read-Only Mode for Past Years)**: Past academic years will operate strictly in **Read-Only Mode** ("শুধু দেখার অনুমতি থাকবে"). When a past academic year is selected, users can view all student records, attendance reports, exam results, and financial transactions for that year, but cannot add, edit, or delete data to prevent past year corruption.
+- **Confirmed Decision 2 (Switching Location)**: Academic Year switching will take place inside the **Academic Year Module** ("শিক্ষাবর্ষ মডিউল যেখানে আছে সেখানেই থাকবে"). A persistent banner/badge will appear at the top of the interface showing the currently viewed academic year with a single click button to return to the active year.
+- **Confirmed Decision 3 (Historical Class & Roll Accuracy)**: Students and class rosters for past academic years will be queried based on their class and roll for that specific year ("ওই শিক্ষাবর্ষে শিক্ষার্থীর তখনকার ক্লাস ও রোল অনুযায়ী").
 
 ---
 
-## ৩. ওয়াইফাই এবং মোবাইল ডাটা অটো-স্যুইচিং (Seamless Network Handover & ICE Restart)
+## 1. Overview & Core Concept
 
-### সমস্যা:
-বাসা থেকে বের হওয়ার সময় ওয়াইফাই বন্ধ হয়ে মোবাইল ডাটাতে গেলে বা ৪জি/৫জি নেটওয়ার্ক ড্রপ করলে কল কেটে যায়।
+Currently, switching or creating a new academic year overwrites active student records, leading to data mixing and loss of visibility into past academic years.
 
-### সমাধান:
-- `window.addEventListener('online')` এবং `navigator.connection` পরিবর্তনের সাথে সাথে নীরব **ICE Restart** (`pc.restartIce()` বা `createOffer({ iceRestart: true })`)।
-- UI তে সুন্দর "Reconnecting..." স্ট্যাটাস দেখানো এবং ৮-১০ সেকেন্ডের গ্রেস পিরিয়ড দেওয়া (কল না কেটে আগের অডিও বাফার ক্ল্যাস মুক্ত রাখা)।
-- প্যাকেট রিসিভ বন্ধ হলে ইনস্ট্যান্ট পিং-পং প্রোব পাঠানো।
-
----
-
-## ৪. প্রক্সিমেট্রি সেন্সর ও ইয়ারপিস/স্পিকার অটো-স্যুইচিং
-
-### WhatsApp-এর মতো কানে নিলে স্ক্রিন অফ ও স্পিকারে কথা:
-1. **Android Bridge Integration**:
-   - `window.AndroidInterface.setAudioMode('earpiece')` এবং `window.AndroidInterface.setAudioMode('speaker')`।
-   - নেটিভ প্রক্সিমেট্রি সেন্সর ইভেন্ট লিসেনার: কানে ফোন ঠেকলে স্ক্রিন অফ (`WAKE_LOCK_PROXIMITY_SCREEN_OFF`) এবং অডিও ইয়ারপিসে যাবে; কান থেকে সরালে স্পিকারে যাবে।
-2. **Web Audio Route & UI Controls**:
-   - কলে থাকা অবস্থায় ম্যানুয়াল স্পিকার/ইয়ারপিস টগল বাটন।
-   - অডিও এলিমেন্টে `sinkId` হ্যান্ডলিং (সমর্থিত ব্রাউজারে)।
+This solution introduces a **Global Academic Year Viewing Context** (`selectedYear`):
+1. **Active Year** (`activeYear`): The institution's official active session where current daily operations (new admissions, daily attendance, fee collections, current exams) occur and save.
+2. **Viewing Year** (`selectedYear`): The academic year selected by the user to view.
+   - When `selectedYear.id === activeYear.id`: Standard read-write mode for current operations.
+   - When `selectedYear.id !== activeYear.id`: **Read-Only Historical Mode**. All views automatically query data filtered by `selectedYear.id`. Edit and creation controls are suppressed, and a prominent banner reminds the user they are viewing historical records.
 
 ---
 
-## ৫. হোয়াটসঅ্যাপের মতো নিখুঁত কল স্টেটাস ও ফিডব্যাক
+## 2. User Experience & Visual Design
 
-### স্টেটস:
-1. **Outgoing Flow**:
-   - `Calling...` (সার্ভারে রিকোয়েস্ট গেছে)
-   - `Ringing...` (রিসিভারের ফোনে রিংটোন বাজছে — রিসিভার থেকে `ringing_ack` পাওয়ার পর)
-   - `Connecting...` (রিসিভার কল রিসিভ করেছে, WebRTC হ্যান্ডশেক চলছে)
-   - `00:01, 00:02...` (কল কানেক্টেড এবং ২-ওয়ে অডিও সক্রিয়)
-2. **Busy & Unavailable Flow**:
-   - রিসিভার অন্য কলে থাকলে: `User is on another call` (Busy tone প্লে হবে এবং কল শেষ হবে)
-   - রিসিভার ৩০ সেকেন্ডের মধ্যে না ধরলে: `No answer`
-   - রিসিভার কল কাটলে: `Call Declined`
-3. **Incoming Flow**:
-   - ফুলস্ক্রিন ডায়ালগ, স্পিকার/মিউট বাটন এবং সোয়াইপ/ক্লিক টু অ্যানসার।
+### Key User Flows
 
----
+1. **Viewing Past Academic Year**:
+   - User goes to **Account -> Academic Year** (`AcademicYearManager`).
+   - Clicks **"বিগত ডাটা দেখুন" (View Data)** on any archived academic year.
+   - The app switches into Historical Viewing Mode for that year.
+   - A soft banner appears at the top: `👁️ বিগত শিক্ষাবর্ষ: [২০২৪-২০২৫] (শুধু দেখা যাবে)` with a `[বর্তমান শিক্ষাবর্ষে ফিরুন]` button.
+   - Navigating to Students, Classes, Attendance, Accounting, or Exam Result tabs shows complete historical records for that year.
+   - Add/Edit buttons are disabled with tooltip `"বিগত শিক্ষাবর্ষের তথ্য কেবল দেখা যাবে"`.
 
-## ৬. অ্যান্ড্রয়েড নেটিভ CallStyle ও লক স্ক্রিন ওয়েকআপ (Native Architecture Integration)
-
-### অ্যান্ড্রয়েড নেটিভ অংশে যা নিশ্চিত করতে হবে:
-1. **FCM High-Priority Data Push**:
-   - নোটিফিকেশন পেলোড নয়, ডেটা পেলোড পাঠাতে হবে (`priority: 'high'`)।
-2. **Android Telecom Framework / CallStyle Notification**:
-   - `NotificationCompat.CallStyle.forIncomingCall(...)` ব্যবহার করে ফুল-স্ক্রিন ইনকামিং কল অ্যাক্টিভিটি।
-   - স্ক্রিন লক থাকলেও স্ক্রিন অন করে রিংটোন বাজানো (`FLAG_KEEP_SCREEN_ON`, `FLAG_SHOW_WHEN_LOCKED`, `FLAG_TURN_SCREEN_ON`)।
-3. **Web Bridge Sync**:
-   - নেটিভ থেকে "Answer" চাপলে `window.handleNativeCallAction('answer', callId)` নির্বিঘ্নে পেজ রিলোড ছাড়াই WebRTC হ্যান্ডশেক শেষ করে।
+2. **Returning to Current Active Year**:
+   - Clicks `[বর্তমান শিক্ষাবর্ষে ফিরুন]` in the header banner or in the Academic Year Manager.
+   - App returns to normal active state with full edit/create capabilities.
 
 ---
 
-## বাস্তবায়নের ধাপসমূহ (Immediate Action Plan for Web):
+## 3. Technical Architecture & Component Strategy
 
-1. **Phase 1: WebRTC Service আপগ্রেড (`callService.ts`)**:
-   - মাল্টি-রিলে আইস সার্ভার ও ক্যান্ডিডেট পুল কনফিগারেশন।
-   - অ্যাডভান্সড অডিও কনস্ট্রেইন্টস (AEC, ANS, AGC, Opus FEC)।
-   - নেটওয়ার্ক স্যুইচিং অটো-আইস রিস্টার্ট লিসেনার।
-2. **Phase 2: সুনির্দিষ্ট কল স্ট্যাটাস ও সাউন্ড ইফেক্ট**:
-   - `ringing` একনলেজমেন্ট সিগন্যালিং যুক্ত করা (যাতে কলার বুঝতে পারে রিসিভারের ফোনে আসলেই রিং বাজছে)।
-   - `busy` হ্যান্ডলিং (রিসিভার অলরেডি কোনো কলে থাকলে কলারকে Busy সিগন্যাল পাঠানো)।
-3. **Phase 3: স্পিকার/ইয়ারপিস ব্রিজ ও প্রক্সিমেট্রি হ্যান্ডলার**:
-   - AndroidInterface অডিও রাউটিং ব্রিজ তৈরি।
-   - স্ক্রিন প্রক্সিমেট্রি ও স্পিকার স্টেট সিঙ্ক।
-4. **Phase 4: ভেরিফিকেশন ও কমপাইল টেস্ট**:
-   - কোড লিন্ট ও বিল্ড টেস্ট।
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                          useAuth / AuthContext                         │
+│   ┌────────────────────────┐         ┌─────────────────────────────┐   │
+│   │ activeYear (Official)  │         │ selectedYear (Viewing Mode) │   │
+│   └───────────┬────────────┘         └──────────────┬──────────────┘   │
+└───────────────┼─────────────────────────────────────┼──────────────────┘
+                │                                     │
+                ▼                                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                             Header Banner                              │
+│   [ 👁️ বিগত শিক্ষাবর্ষ: 2024 (Read Only) ]  -->  [ বর্তমান শিক্ষাবর্ষে ফিরুন ]│
+└────────────────────────────────────────────────────────────────────────┘
+                │
+                ├──────────────────────┬──────────────────────┐
+                ▼                      ▼                      ▼
+┌──────────────────────┐┌──────────────────────┐┌──────────────────────┐
+│  Students / Classes  ││ Attendance & Finance ││  Exams & Results     │
+│ .eq('academic_year_  ││ .eq('academic_year_  ││ .eq('academic_year_  │
+│      id', yearId)    ││      id', yearId)    ││      id', yearId)    │
+│  readOnly = true     ││  readOnly = true     ││  readOnly = true     │
+└──────────────────────┘└──────────────────────┘└──────────────────────┘
+```
+
+### Key Data Strategy
+
+1. **`useAuth.ts` State**:
+   - `activeYear`: AcademicYear object with `status = 'active'`.
+   - `selectedYear`: AcademicYear object currently selected for viewing (persisted in `sessionStorage`).
+   - `setSelectedYear`: Function to change viewing year.
+   - `isHistoricalMode`: Computed `Boolean(selectedYear && activeYear && selectedYear.id !== activeYear.id)`.
+
+2. **Query Filters in Modules**:
+   - **`Students.tsx` / `Home.tsx`**: Filter students by `.eq('academic_year_id', selectedYear.id)` (or null for legacy data).
+   - **`Attendance.tsx`**: Query attendance by `.eq('academic_year_id', selectedYear.id)`.
+   - **`Accounting.tsx`**: Query ledger entries and fees by `.eq('academic_year_id', selectedYear.id)`.
+   - **`Exams.tsx` & `FinalResults.tsx`**: Query exams and results by `.eq('academic_year_id', selectedYear.id)`.
+
+3. **Academic Year Switcher in `AcademicYearManager.tsx`**:
+   - Add an action button next to every academic year:
+     - For Active Year: Badge `[সক্রিয় শিক্ষাবর্ষ]`
+     - For Past Years: Button `[বিগত ডাটা দেখুন]` and `[সক্রিয় করুন]` (Activate).
+
+---
+
+## 4. Implementation Steps
+
+1. **`useAuth.ts` Context Expansion**:
+   - Expose `selectedYear`, `setSelectedYear`, and `isHistoricalMode`.
+   - Initialize `selectedYear` from `sessionStorage` or fallback to `activeYear`.
+
+2. **`AcademicYearManager.tsx` Updates**:
+   - Add "View Past Year" / "বিগত ডাটা দেখুন" action.
+   - Allow switching viewing context without altering the DB active status unless "Activate Year" is explicitly clicked.
+
+3. **Global Layout Header Indicator (`Layout.tsx`)**:
+   - Render persistent banner when `isHistoricalMode` is active.
+   - Include one-click return to current year.
+
+4. **Module Integration**:
+   - Pass `selectedYear` and `readOnly={isHistoricalMode}` to `Students`, `Classes`, `Attendance`, `Accounting`, `Exams`, and `FinalResults`.
+   - Update fetch queries to scope by `selectedYear.id`.
+
+5. **Verification & Testing**:
+   - Run `compile_applet` to ensure zero build or TypeScript errors.

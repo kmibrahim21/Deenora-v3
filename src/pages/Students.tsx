@@ -28,11 +28,14 @@ interface StudentsProps {
   profile?: any;
   onNavigateToWallet?: () => void;
   onNavigateToVoiceBroadcast?: (ids: string[]) => void;
+  selectedYear?: any;
+  activeYear?: any;
+  readOnly?: boolean;
 }
 
 const PAGE_SIZE = 50;
 
-const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToVoiceBroadcast }) => {
+const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAddClick, onBack, lang, dataVersion, triggerRefresh, canAdd, canSendSMS, canUseVoice, institutionId, madrasah, profile, onNavigateToWallet, onNavigateToVoiceBroadcast, selectedYear, activeYear, readOnly = false }) => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -373,6 +376,8 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
 
   // Paginated Fetching
   const activeYearId = useMemo(() => {
+    if (selectedYear?.id) return selectedYear.id;
+    if (activeYear?.id) return activeYear.id;
     if (!madrasah?.config_json) return null;
     let config = madrasah.config_json as any;
     if (typeof config === 'string') {
@@ -381,7 +386,7 @@ const Students: React.FC<StudentsProps> = ({ selectedClass, onStudentClick, onAd
     const yearId = config?.active_academic_year_id;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(yearId) ? yearId : null;
-  }, [madrasah]);
+  }, [selectedYear, activeYear, madrasah]);
 
   const fetchStudents = useCallback(async (reset = false) => {
     if (!institutionId) return;

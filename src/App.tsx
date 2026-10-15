@@ -83,6 +83,10 @@ const App: React.FC = () => {
     profile,
     madrasah,
     activeYear,
+    selectedYear,
+    setSelectedYear,
+    isHistoricalMode,
+    resetToActiveYear,
     loading,
     authError,
     handleLogout,
@@ -465,6 +469,7 @@ const App: React.FC = () => {
             institutionId={madrasah?.id}
             madrasah={madrasah}
             profile={profile}
+            activeYear={selectedYear || activeYear}
             onNavigateToWallet={() => {
               const modules = {
                 voice_broadcast: true,
@@ -500,9 +505,11 @@ const App: React.FC = () => {
             dataVersion={dataVersion}
             triggerRefresh={triggerRefresh}
             readOnly={
-              role !== "madrasah_admin" &&
-              role !== "super_admin" &&
-              !profile?.permissions?.can_manage_classes
+              isHistoricalMode || (
+                role !== "madrasah_admin" &&
+                role !== "super_admin" &&
+                !profile?.permissions?.can_manage_classes
+              )
             }
             profile={profile}
           />
@@ -530,10 +537,15 @@ const App: React.FC = () => {
             lang={lang}
             dataVersion={dataVersion}
             triggerRefresh={triggerRefresh}
+            selectedYear={selectedYear}
+            activeYear={activeYear}
+            readOnly={isHistoricalMode}
             canAdd={
-              role === "madrasah_admin" ||
-              role === "super_admin" ||
-              !!profile?.permissions?.can_manage_students
+              !isHistoricalMode && (
+                role === "madrasah_admin" ||
+                role === "super_admin" ||
+                !!profile?.permissions?.can_manage_students
+              )
             }
             canSendSMS={
               role === "madrasah_admin" ||
@@ -645,6 +657,9 @@ const App: React.FC = () => {
             onClose={() => setView('account')}
             onUpdate={refreshMadrasah}
             lang={lang}
+            selectedViewingYear={selectedYear}
+            onSelectViewingYear={setSelectedYear}
+            onResetViewingYear={resetToActiveYear}
           />
         );
       case "super-account":
@@ -840,7 +855,7 @@ const App: React.FC = () => {
             onBack={() => handleBack("home")}
             role={role}
             profile={profile}
-            activeYear={activeYear}
+            activeYear={selectedYear || activeYear}
             triggerRefresh={triggerRefresh}
           />
         );
@@ -856,7 +871,7 @@ const App: React.FC = () => {
             onBack={() => handleBack("home")}
             role={role}
             profile={profile}
-            activeYear={activeYear}
+            activeYear={selectedYear || activeYear}
             triggerRefresh={triggerRefresh}
           />
         );
@@ -868,7 +883,7 @@ const App: React.FC = () => {
             onBack={() => handleBack("home")}
             userId={session?.user?.id}
             profile={profile}
-            activeYear={activeYear}
+            activeYear={selectedYear || activeYear}
             triggerRefresh={triggerRefresh}
           />
         );
@@ -881,7 +896,7 @@ const App: React.FC = () => {
             role={role}
             onNavigateToFinalResults={() => setView("final-results")}
             profile={profile}
-            activeYear={activeYear}
+            activeYear={selectedYear || activeYear}
           />
         );
       case "final-results":
@@ -1019,6 +1034,7 @@ const App: React.FC = () => {
             institutionId={madrasah?.id}
             madrasah={madrasah}
             profile={profile}
+            activeYear={selectedYear || activeYear}
             onNavigateToWallet={() => {
               const modules = {
                 voice_broadcast: true,
@@ -1054,6 +1070,9 @@ const App: React.FC = () => {
       madrasah={madrasah}
       profile={profile}
       isMobileChatActive={isMobileChatActive}
+      selectedYear={selectedYear}
+      isHistoricalMode={isHistoricalMode}
+      onReturnToCurrentYear={resetToActiveYear}
     >
       <OfflineIndicator />
       <NotificationPermissionBanner />

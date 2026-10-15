@@ -22,6 +22,7 @@ import {
   Check,
   GraduationCap,
   TrendingUp,
+  RefreshCw,
 } from "lucide-react";
 
 import { sortMadrasahClasses } from "pages/Classes";
@@ -31,6 +32,9 @@ interface AcademicYearManagerProps {
   onClose: () => void;
   onUpdate?: () => void;
   lang?: "en" | "bn";
+  selectedViewingYear?: AcademicYear | null;
+  onSelectViewingYear?: (year: AcademicYear | null) => void;
+  onResetViewingYear?: () => void;
 }
 
 export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
@@ -38,6 +42,9 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   onClose,
   onUpdate,
   lang = "en",
+  selectedViewingYear,
+  onSelectViewingYear,
+  onResetViewingYear,
 }) => {
   const isDark = institution?.theme === "dark";
   const isPromotionActive = React.useMemo(() => {
@@ -880,96 +887,153 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {academicYears.map((year) => (
-                <div
-                  key={year.id}
-                  className={`p-6 rounded-[2rem] border relative group transition-all ${isDark ? "bg-slate-800/50 border-slate-800 hover:border-blue-500/30" : "bg-white border-slate-100 hover:border-blue-200"}`}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center ${year.status === "active" ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"}`}
-                    >
-                      <Calendar size={24} />
-                    </div>
-                    <div
-                      className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${year.status === "active" ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"}`}
-                    >
-                      {year.status === "active"
-                        ? lang === "bn"
-                          ? "সক্রিয়"
-                          : "Active"
-                        : lang === "bn"
-                          ? "আর্কাইভ"
-                          : "Archived"}
-                    </div>
-                  </div>
-                  <h4
-                    className={`text-xl font-black ${isDark ? "text-white" : "text-[#1E3A8A]"}`}
-                  >
-                    {year.year_name}
-                  </h4>
-                  <div className="flex flex-col gap-1 mt-2">
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                      <span>{year.start_date}</span>
-                      <ArrowRight size={10} />
-                      <span>{year.end_date}</span>
-                    </div>
-                    {(year.hijri_start_date || year.hijri_end_date) && (
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500/70">
-                        <span>{year.hijri_start_date || "—"}</span>
-                        <ArrowRight size={10} />
-                        <span>{year.hijri_end_date || "—"}</span>
-                      </div>
-                    )}
-                  </div>
+              {academicYears.map((year) => {
+                const isCurrentlyViewing = selectedViewingYear ? selectedViewingYear.id === year.id : year.status === "active";
+                const isPastViewing = isCurrentlyViewing && year.status !== "active";
 
-                  <div className="mt-6 flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    {year.status !== "active" && (
-                      <button
-                        onClick={() => {
-                          if (!isPromotionActive) return;
-                          handleSetActive(year.id);
-                        }}
-                        disabled={!isPromotionActive}
-                        className={`flex-1 py-2.5 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}
+                return (
+                  <div
+                    key={year.id}
+                    className={`p-6 rounded-[2rem] border relative group transition-all ${
+                      isPastViewing
+                        ? (isDark ? "bg-amber-950/20 border-amber-500/50" : "bg-amber-50/50 border-amber-200")
+                        : (isDark ? "bg-slate-800/50 border-slate-800 hover:border-blue-500/30" : "bg-white border-slate-100 hover:border-blue-200")
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                          year.status === "active" 
+                            ? "bg-emerald-50 text-emerald-600" 
+                            : isPastViewing
+                              ? "bg-amber-100 text-amber-600"
+                              : "bg-slate-50 text-slate-400"
+                        }`}
                       >
-                        <Check size={14} />{" "}
-                        {lang === "bn" ? "সক্রিয় করুন" : "Set Active"}
-                      </button>
-                    )}
-                    {year.status === "active" && (
-                      <button
-                        onClick={() => {
-                          if (!isPromotionActive) return;
-                          handleArchive(year.id);
-                        }}
-                        disabled={!isPromotionActive}
-                        className={`flex-1 py-2.5 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600"}`}
-                      >
-                        <Archive size={14} />{" "}
-                        {lang === "bn" ? "আর্কাইভ করুন" : "Archive"}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (!isPromotionActive) return;
-                        handleDeleteYear(year.id);
-                      }}
-                      disabled={!isPromotionActive}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors border ${
-                        !isPromotionActive
-                          ? "opacity-40 bg-slate-400 text-slate-200 border-slate-300 cursor-not-allowed"
-                          : isDark
-                            ? "bg-red-900/20 text-red-400 border-red-900/30 hover:bg-red-900/40"
-                            : "bg-red-50 text-red-500 border-red-100 hover:bg-red-100"
-                      }`}
-                      title={lang === "bn" ? "ডিলিট করুন" : "Delete"}
+                        <Calendar size={24} />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {isPastViewing && (
+                          <div className="px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest bg-amber-500 text-white animate-pulse">
+                            {lang === "bn" ? "দেখা হচ্ছে (Read Only)" : "Viewing (Read Only)"}
+                          </div>
+                        )}
+                        <div
+                          className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                            year.status === "active" ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"
+                          }`}
+                        >
+                          {year.status === "active"
+                            ? lang === "bn"
+                              ? "সক্রিয়"
+                              : "Active"
+                            : lang === "bn"
+                              ? "আর্কাইভ"
+                              : "Archived"}
+                        </div>
+                      </div>
+                    </div>
+                    <h4
+                      className={`text-xl font-black ${isDark ? "text-white" : "text-[#1E3A8A]"}`}
                     >
-                      <Trash2 size={16} />
-                    </button>
+                      {year.year_name}
+                    </h4>
+                    <div className="flex flex-col gap-1 mt-2">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                        <span>{year.start_date}</span>
+                        <ArrowRight size={10} />
+                        <span>{year.end_date}</span>
+                      </div>
+                      {(year.hijri_start_date || year.hijri_end_date) && (
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-500/70">
+                          <span>{year.hijri_start_date || "—"}</span>
+                          <ArrowRight size={10} />
+                          <span>{year.hijri_end_date || "—"}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap items-center gap-2">
+                      {/* View Past Data / Historical Mode Switcher */}
+                      {onSelectViewingYear && (
+                        isPastViewing ? (
+                          <button
+                            onClick={() => {
+                              if (onResetViewingYear) onResetViewingYear();
+                            }}
+                            className="flex-1 py-2.5 bg-slate-800 text-white hover:bg-slate-700 font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm"
+                          >
+                            <RefreshCw size={14} />
+                            {lang === "bn" ? "বর্তমান শিক্ষাবর্ষে ফিরুন" : "Return to Current Year"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              onSelectViewingYear(year);
+                            }}
+                            className={`flex-1 py-2.5 font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm ${
+                              year.status === "active"
+                                ? "bg-blue-50 text-blue-600 border border-blue-200"
+                                : "bg-purple-600 hover:bg-purple-700 text-white"
+                            }`}
+                          >
+                            <BarChart3 size={14} />
+                            {year.status === "active"
+                              ? (lang === "bn" ? "বর্তমান ডাটা দেখা হচ্ছে" : "Viewing Active Data")
+                              : (lang === "bn" ? "বিগত ডাটা দেখুন" : "View Past Data")}
+                          </button>
+                        )
+                      )}
+
+                      {year.status !== "active" && (
+                        <button
+                          onClick={() => {
+                            if (!isPromotionActive) return;
+                            handleSetActive(year.id);
+                          }}
+                          disabled={!isPromotionActive}
+                          className={`py-2.5 px-3 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}
+                          title={lang === "bn" ? "সক্রিয় করুন" : "Set Active"}
+                        >
+                          <Check size={14} />
+                          <span className="hidden sm:inline">{lang === "bn" ? "সক্রিয় করুন" : "Set Active"}</span>
+                        </button>
+                      )}
+                      {year.status === "active" && (
+                        <button
+                          onClick={() => {
+                            if (!isPromotionActive) return;
+                            handleArchive(year.id);
+                          }}
+                          disabled={!isPromotionActive}
+                          className={`py-2.5 px-3 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600"}`}
+                          title={lang === "bn" ? "আর্কাইভ করুন" : "Archive"}
+                        >
+                          <Archive size={14} />
+                          <span className="hidden sm:inline">{lang === "bn" ? "আর্কাইভ করুন" : "Archive"}</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (!isPromotionActive) return;
+                          handleDeleteYear(year.id);
+                        }}
+                        disabled={!isPromotionActive}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors border ${
+                          !isPromotionActive
+                            ? "opacity-40 bg-slate-400 text-slate-200 border-slate-300 cursor-not-allowed"
+                            : isDark
+                              ? "bg-red-900/20 text-red-400 border-red-900/30 hover:bg-red-900/40"
+                              : "bg-red-50 text-red-500 border-red-100 hover:bg-red-100"
+                        }`}
+                        title={lang === "bn" ? "ডিলিট করুন" : "Delete"}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

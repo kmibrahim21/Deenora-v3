@@ -17,6 +17,9 @@ interface LayoutProps {
   madrasah: Institution | null;
   profile?: Profile | null;
   isMobileChatActive?: boolean;
+  selectedYear?: any;
+  isHistoricalMode?: boolean;
+  onReturnToCurrentYear?: () => void;
 }
 
 interface AppNotification {
@@ -27,7 +30,7 @@ interface AppNotification {
   time: string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, madrasah, profile, isMobileChatActive = false }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, madrasah, profile, isMobileChatActive = false, selectedYear, isHistoricalMode = false, onReturnToCurrentYear }) => {
   const isOnline = useOfflineStatus();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -354,6 +357,28 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, lang, m
         )}
 
         {(currentView === 'home' || currentView === 'admin-dashboard') && role !== 'parent' && <MultiCalendarHeader madrasah={madrasah} />}
+
+        {isHistoricalMode && selectedYear && (
+          <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 md:px-8 py-2.5 flex items-center justify-between gap-3 text-amber-600 dark:text-amber-400 text-xs font-bold animate-in slide-in-from-top duration-300">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
+              <p className="truncate font-noto">
+                {lang === 'bn' 
+                  ? `বিগত শিক্ষাবর্ষ দেখছেন: ${selectedYear.year_name} (শুধু দেখা যাবে - Read Only)` 
+                  : `Viewing Historical Academic Year: ${selectedYear.year_name} (Read-Only Mode)`}
+              </p>
+            </div>
+            {onReturnToCurrentYear && (
+              <button
+                onClick={onReturnToCurrentYear}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[11px] font-black shrink-0 transition-all active:scale-95 shadow-sm flex items-center gap-1.5"
+              >
+                <RefreshCw size={12} className="animate-spin" />
+                <span>{lang === 'bn' ? 'বর্তমান শিক্ষাবর্ষে ফিরুন' : 'Return to Current Year'}</span>
+              </button>
+            )}
+          </div>
+        )}
 
         <main className={`flex-1 overflow-y-auto w-full custom-scrollbar ${(role === 'parent' || currentView === 'chat') ? 'p-0' : 'px-5 md:px-8 pt-4 pb-44 md:pb-8'}`} style={(role !== 'parent' && currentView !== 'chat') ? { paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
           {children}
