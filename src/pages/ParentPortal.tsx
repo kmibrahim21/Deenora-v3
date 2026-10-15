@@ -994,41 +994,6 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ lang, studentId, madrasah }
           </div>
         </header>
 
-        {/* PWA Mobile Install Banner */}
-        {!isInstalledPWA && showInstallBanner && (
-          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-5 py-3 shadow-md z-30 flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
-                <Smartphone className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left">
-                <div className="flex items-center gap-2">
-                  <p className="font-black text-xs font-noto">Deenora অভিভাবক অ্যাপ ইনস্টল করুন 📲</p>
-                  <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-bold">PWA</span>
-                </div>
-                <p className="text-[10px] text-emerald-100 font-noto leading-tight mt-0.5">
-                  হোমস্ক্রিন থেকে এক ট্যাপে সরাসরি রেজাল্ট, নিয়মিত হাজিরা ও নোটিশ দেখতে অ্যাপটি ইনস্টল করুন।
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleInstallPWA}
-                className="px-4 py-1.5 bg-white text-emerald-800 font-black text-xs rounded-xl shadow-md active:scale-95 transition-all font-noto hover:bg-emerald-50 cursor-pointer inline-flex items-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>ইনস্টল করুন</span>
-              </button>
-              <button
-                onClick={() => setShowInstallBanner(false)}
-                className="px-2 py-1.5 text-xs text-emerald-100 hover:text-white transition-colors cursor-pointer"
-              >
-                পরে
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Notification Alert Toast */}
         <AnimatePresence>
           {notifToast && (

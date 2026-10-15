@@ -3,7 +3,8 @@
  * 
  * Automatically analyzes student score distributions, subject proficiencies, 
  * attendance consistency, and moral character (Adab / Deeniyat) to produce 
- * context-sensitive, human-sounding remarks in Bengali and English.
+ * context-sensitive, human-sounding remarks in Bengali and English for 
+ * both School and Madrasah institutions.
  */
 
 export type RemarkTone = 'nurturing' | 'academic' | 'deeniyat';
@@ -22,6 +23,7 @@ export interface StudentAcademicProfile {
   attendance_rate?: number; // e.g. 92 (meaning 92%)
   total_present_days?: number;
   total_working_days?: number;
+  institution_type?: 'school' | 'madrasah' | 'kindergarten' | 'college' | 'choching' | 'qawmi' | string;
   subjects?: Array<{
     subject_name: string;
     marks_obtained: number;
@@ -116,8 +118,12 @@ export function classifyAchievementBand(
  */
 export function generateStudentRemark(
   profile: StudentAcademicProfile,
-  tone: RemarkTone = 'nurturing'
+  tone: RemarkTone = 'nurturing',
+  overrideInstType?: string
 ): GeneratedSmartRemark {
+  const instType = (overrideInstType || profile.institution_type || 'madrasah').toLowerCase();
+  const isSchool = instType === 'school' || instType === 'kindergarten' || instType === 'choching' || instType === 'college';
+
   const gpaNum = typeof profile.gpa === 'number' ? profile.gpa : parseFloat(String(profile.gpa || 0)) || 0;
   const percentage = profile.percentage ?? (profile.total_marks && profile.max_marks ? Math.round((profile.total_marks / profile.max_marks) * 100) : (gpaNum / 5) * 100);
   const band = classifyAchievementBand(gpaNum, percentage, profile.grade);
@@ -163,89 +169,104 @@ export function generateStudentRemark(
   let parent_tip_bn = '';
   let parent_tip_en = '';
 
-  // Tone-specific remarks generator
-  if (tone === 'deeniyat') {
+  if (isSchool) {
+    // School / Academic Account Phrases
     switch (band) {
       case 'mumtaz':
-        overall_bn = 'মাশাআল্লাহ, কুরআন ও প্রাতিষ্ঠানিক সকল বিষয়ে অত্যন্ত প্রশংসনীয় নৈপুণ্য অর্জন করেছে।';
-        overall_en = 'MashaAllah, exhibited exceptional diligence and outstanding academic and moral merit.';
+        overall_bn = 'অভিনন্দন! অনবদ্য মেধা ও অর্জিত ফলাফলের স্বাক্ষর রেখেছে। পাঠ্যবিষয়গুলোর মূল ধারণায় সুদৃঢ় অবস্থান রয়েছে।';
+        overall_en = 'Congratulations! Demonstrates outstanding academic excellence and strong conceptual mastery.';
         break;
       case 'jayyid_jiddan':
-        overall_bn = 'আলহামদুলিল্লাহ, মেধা ও দ্বীনি শৃঙ্খলায় শিক্ষার্থী অত্যন্ত সম্ভাবনাময় অগ্রগতির স্বাক্ষর রেখেছে।';
-        overall_en = 'Alhamdulillah, demonstrates remarkable dedication with consistent academic and character progress.';
+        overall_bn = 'খুবই চমৎকার ফলাফল। শ্রেণিকক্ষে অত্যন্ত নিয়মিত ও পড়ার বিষয়ে মনোযোগী। সামান্য চর্চায় আরও ভালো করা সম্ভব।';
+        overall_en = 'Very commendable performance. Attentive in class with great potential for top rankings.';
         break;
       case 'jayyid':
-        overall_bn = 'সন্তোষজনক অগ্রগতি। নিয়মিত মুতালায়া (পড়াশোনা) ও অধ্যবসায়ে আরও উন্নতির সুযোগ রয়েছে।';
-        overall_en = 'Satisfactory progress. Continuous revision and focused self-study will elevate the rank.';
+        overall_bn = 'সন্তোষজনক অগ্রগতি। বিষয়ভিত্তিক দুর্বলতা কাটিয়ে উঠতে নিয়মিত রুটিন মেনে অধ্যবসায় প্রয়োজন।';
+        overall_en = 'Satisfactory progress. Regular practice in lagging subjects will yield even better marks.';
         break;
       case 'maqbool':
-        overall_bn = 'দৈনন্দিন পড়ালেখায় আরও নিষ্ঠাবান হওয়া প্রয়োজন। নিয়মিত উপস্থিত থাকলে কাঙ্ক্ষিত ফল সম্ভব।';
-        overall_en = 'Shows potential but requires steady dedication, punctual attendance, and consistent practice.';
+        overall_bn = 'শিক্ষার্থীর মেধা রয়েছে, তবে পরীক্ষায় কাঙ্ক্ষিত ফলাফলের জন্য দৈনন্দিন পাঠ প্রস্তুতিতে বাড়তি সময় দিতে হবে।';
+        overall_en = 'Capable student who requires structured study time and daily homework review.';
         break;
       case 'rasib':
-        overall_bn = 'বিশেষ যত্ন ও পুনর্বিবেচনা প্রয়োজন। পাঠে একাগ্রতা বাড়ানো এবং নিয়মিত ক্লাসে অংশগ্রহণ জরুরি।';
-        overall_en = 'Requires intensive academic intervention, regular attendance, and close parental supervision.';
-        break;
-    }
-  } else if (tone === 'academic') {
-    switch (band) {
-      case 'mumtaz':
-        overall_bn = 'অনবদ্য মেধার প্রকাশ। পাঠ্যবিষয়গুলোর মূল ধারণায় পূর্ণ দখল রয়েছে এবং ধারাবাহিকতা চমৎকার।';
-        overall_en = 'Exemplary academic command with deep conceptual understanding across all subjects.';
-        break;
-      case 'jayyid_jiddan':
-        overall_bn = 'খুব ভালো ফল করেছে। সামান্য বাড়তি মনোযোগ দিলে শীর্ষস্থান নিশ্চিত করা সম্ভব।';
-        overall_en = 'Very strong academic performance with clear aptitude for top-tier rankings.';
-        break;
-      case 'jayyid':
-        overall_bn = 'মানসম্মত অগ্রগতি। দুর্বল বিষয়গুলোতে নিয়মিত অনুশীলন করলে ফলাফল আরও উজ্জ্বল হবে।';
-        overall_en = 'Steady scholastic progress. Targeted practice in lagging subjects will bring notable gains.';
-        break;
-      case 'maqbool':
-        overall_bn = 'শিক্ষার্থীর মেধা রয়েছে, তবে পরীক্ষার প্রস্তুতি ও অনুশীলনে আরও সময় দেওয়া বাঞ্ছনীয়।';
-        overall_en = 'Capable student who needs structured study schedules and regular written homework review.';
-        break;
-      case 'rasib':
-        overall_bn = 'শিক্ষার্থীর বর্তমান ফলাফল আশানুরূপ নয়। মৌলিক বিষয়গুলো পুনরায় আয়ত্ত করতে নিবিড় সহায়তা প্রয়োজন।';
-        overall_en = 'Performance requires immediate academic support and structured remedial guidance.';
+        overall_bn = 'বিশেষ যত্ন ও নিবিড় পরিচর্যা প্রয়োজন। নিয়মিত ক্লাসে উপস্থিতি এবং বিষয়াভিত্তিক শিক্ষকের সহায়তা আবশ্যক।';
+        overall_en = 'Requires focused academic attention, regular class attendance, and active parental guidance.';
         break;
     }
   } else {
-    // Nurturing (Default)
-    switch (band) {
-      case 'mumtaz':
-        overall_bn = 'মাশাআল্লাহ, অসাধারণ মেধা ও নিষ্ঠার পরিচয় দিয়েছে। আমরা তার ধারাবাহিক সাফল্যে গর্বিত।';
-        overall_en = 'Outstanding dedication and exemplary performance. Truly a model student.';
-        break;
-      case 'jayyid_jiddan':
-        overall_bn = 'খুবই চমৎকার অগ্রগতি। ক্লাসে সক্রিয় অংশগ্রহণ ও আগ্রহ প্রশংসার দাবিদার।';
-        overall_en = 'Very good progress with enthusiastic classroom engagement and steady growth.';
-        break;
-      case 'jayyid':
-        overall_bn = 'সন্তোষজনক ফলাফল। আরেকটু অধ্যবসায় ও আত্মবিশ্বাস থাকলে আরও অনেক দূর এগিয়ে যাবে।';
-        overall_en = 'Good, steady performance. With focused practice and confidence, greater heights are within reach.';
-        break;
-      case 'maqbool':
-        overall_bn = 'চেষ্টা অব্যাহত রাখতে হবে। নিয়মিত ক্লাসের পড়া শেষ করা এবং শিক্ষকের নির্দেশনা মানা জরুরি।';
-        overall_en = 'Shows promise. Consistent daily study habits and prompt homework submission are recommended.';
-        break;
-      case 'rasib':
-        overall_bn = 'হতাশ না হয়ে নতুন উদ্যমে শুরু করতে হবে। আমরা প্রতিষ্ঠান থেকে সর্বোচ্চ সহযোগিতা দিতে প্রস্তুত।';
-        overall_en = 'Encouraged to stay determined. With personalized teacher support and home care, improvement is assured.';
-        break;
+    // Madrasah / Islamic Account Phrases
+    if (tone === 'deeniyat') {
+      switch (band) {
+        case 'mumtaz':
+          overall_bn = 'মাশাআল্লাহ, কুরআন ও প্রাতিষ্ঠানিক সকল বিষয়ে অত্যন্ত প্রশংসনীয় নৈপুণ্য অর্জন করেছে।';
+          overall_en = 'MashaAllah, exhibited exceptional diligence and outstanding academic and moral merit.';
+          break;
+        case 'jayyid_jiddan':
+          overall_bn = 'আলহামদুলিল্লাহ, মেধা ও দ্বীনি শৃঙ্খলায় শিক্ষার্থী অত্যন্ত সম্ভাবনাময় অগ্রগতির স্বাক্ষর রেখেছে।';
+          overall_en = 'Alhamdulillah, demonstrates remarkable dedication with consistent academic and character progress.';
+          break;
+        case 'jayyid':
+          overall_bn = 'সন্তোষজনক অগ্রগতি। নিয়মিত মুতালায়া (পড়াশোনা) ও অধ্যবসায়ে আরও উন্নতির সুযোগ রয়েছে।';
+          overall_en = 'Satisfactory progress. Continuous revision and focused self-study will elevate the rank.';
+          break;
+        case 'maqbool':
+          overall_bn = 'দৈনন্দিন পড়ালেখায় আরও নিষ্ঠাবান হওয়া প্রয়োজন। নিয়মিত উপস্থিত থাকলে কাঙ্ক্ষিত ফল সম্ভব।';
+          overall_en = 'Shows potential but requires steady dedication, punctual attendance, and consistent practice.';
+          break;
+        case 'rasib':
+          overall_bn = 'বিশেষ যত্ন ও পুনর্বিবেচনা প্রয়োজন। পাঠে একাগ্রতা বাড়ানো এবং নিয়মিত ক্লাসে অংশগ্রহণ জরুরি।';
+          overall_en = 'Requires intensive academic intervention, regular attendance, and close parental supervision.';
+          break;
+      }
+    } else {
+      switch (band) {
+        case 'mumtaz':
+          overall_bn = 'মাশাআল্লাহ, অসাধারণ মেধা ও নিষ্ঠার পরিচয় দিয়েছে। আমরা তার ধারাবাহিক সাফল্যে গর্বিত।';
+          overall_en = 'Outstanding dedication and exemplary performance. Truly a model student.';
+          break;
+        case 'jayyid_jiddan':
+          overall_bn = 'খুবই চমৎকার অগ্রগতি। ক্লাসে সক্রিয় অংশগ্রহণ ও আগ্রহ প্রশংসার দাবিদার।';
+          overall_en = 'Very good progress with enthusiastic classroom engagement and steady growth.';
+          break;
+        case 'jayyid':
+          overall_bn = 'সন্তোষজনক ফলাফল। আরেকটু অধ্যবসায় ও আত্মবিশ্বাস থাকলে আরও অনেক দূর এগিয়ে যাবে।';
+          overall_en = 'Good, steady performance. With focused practice and confidence, greater heights are within reach.';
+          break;
+        case 'maqbool':
+          overall_bn = 'চেষ্টা অব্যাহত রাখতে হবে। নিয়মিত ক্লাসের পড়া শেষ করা এবং শিক্ষকের নির্দেশনা মানা জরুরি।';
+          overall_en = 'Shows promise. Consistent daily study habits and prompt homework submission are recommended.';
+          break;
+        case 'rasib':
+          overall_bn = 'হতাশ না হয়ে নতুন উদ্যমে শুরু করতে হবে। আমরা প্রতিষ্ঠান থেকে সর্বোচ্চ সহযোগিতা দিতে প্রস্তুত।';
+          overall_en = 'Encouraged to stay determined. With personalized teacher support and home care, improvement is assured.';
+          break;
+      }
     }
   }
 
   // Conduct assessment
-  if (conduct === 'excellent') {
-    conduct_bn = 'বিনয়ী, ভদ্র ও নিয়মানুবর্তী আচার-আচরণ প্রদর্শন করেছে।';
-    conduct_en = 'Exhibits polite manners, discipline, and respectful conduct.';
-  } else if (conduct === 'good') {
-    conduct_bn = 'শ্রেণিকক্ষে দায়িত্বশীল ও শিক্ষকদের প্রতি শ্রদ্ধাশীল।';
-    conduct_en = 'Demonstrates positive behavior and cooperation with peers and teachers.';
+  if (isSchool) {
+    if (conduct === 'excellent') {
+      conduct_bn = 'বিনয়ী, ভদ্র ও শ্রেণিশিক্ষকদের প্রতি অত্যন্ত শ্রদ্ধাশীল আচরণ প্রদর্শন করেছে।';
+      conduct_en = 'Exhibits excellent discipline, politeness, and respect towards teachers.';
+    } else if (conduct === 'good') {
+      conduct_bn = 'শ্রেণিকক্ষে দায়িত্বশীল ও সহপাঠীদের সাথে সৌহার্দ্যপূর্ণ আচরণ করেছে।';
+      conduct_en = 'Demonstrates positive classroom conduct and friendly peer cooperation.';
+    } else {
+      conduct_bn = 'শ্রেণিকক্ষের শৃঙ্খলা ও মনোযোগে কিছুটা সচেতনতা বৃদ্ধি কাম্য।';
+      conduct_en = 'Greater focus on classroom attentiveness and discipline is recommended.';
+    }
   } else {
-    conduct_bn = 'শ্রেণিকক্ষের শৃঙ্খলা ও মনসংযোগে কিছুটা উন্নতির সুযোগ রয়েছে।';
-    conduct_en = 'Further attention to classroom discipline and focus is encouraged.';
+    if (conduct === 'excellent') {
+      conduct_bn = 'বিনয়ী, ভদ্র ও নিয়মানুবর্তী আচার-আচরণ প্রদর্শন করেছে।';
+      conduct_en = 'Exhibits polite manners, discipline, and respectful conduct.';
+    } else if (conduct === 'good') {
+      conduct_bn = 'শ্রেণিকক্ষে দায়িত্বশীল ও শিক্ষকদের প্রতি শ্রদ্ধাশীল।';
+      conduct_en = 'Demonstrates positive behavior and cooperation with peers and teachers.';
+    } else {
+      conduct_bn = 'শ্রেণিকক্ষের শৃঙ্খলা ও মনসংযোগে কিছুটা উন্নতির সুযোগ রয়েছে।';
+      conduct_en = 'Further attention to classroom discipline and focus is encouraged.';
+    }
   }
 
   // Parent guidance tip
@@ -310,11 +331,12 @@ export function generateStudentRemark(
  */
 export function generateClassRemarks(
   students: StudentAcademicProfile[],
-  tone: RemarkTone = 'nurturing'
+  tone: RemarkTone = 'nurturing',
+  overrideInstType?: string
 ): Record<string, GeneratedSmartRemark> {
   const result: Record<string, GeneratedSmartRemark> = {};
   students.forEach(st => {
-    result[st.student_id] = generateStudentRemark(st, tone);
+    result[st.student_id] = generateStudentRemark(st, tone, overrideInstType);
   });
   return result;
 }

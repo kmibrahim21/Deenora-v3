@@ -6,7 +6,6 @@ import { t } from 'translations';
 import { generateFinalResultPDF, generateFinalIndividualResultPDF, generateFinalMassMarksheetsPDF } from '../../../../utils/pdfGenerator';
 import { sortMadrasahClasses } from 'pages/Classes';
 import { FileText } from 'lucide-react';
-import { SmartRemarksModal } from '../../SmartRemarksModal';
 
 interface FinalResultsProps {
   lang: Language;
@@ -797,19 +796,6 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
             </button>
 
             <button 
-              onClick={() => setShowSmartRemarksModal(true)}
-              className={`h-11 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-2 font-black text-xs transition-all border ${
-                madrasah?.theme === 'dark' 
-                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30' 
-                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 shadow-sm'
-              }`}
-              title={lang === 'bn' ? 'স্মার্ট মূল্যায়ন ও শিক্ষকের মন্তব্য' : 'Smart Remarks & Evaluation'}
-            >
-              <Sparkles size={16} className="text-amber-600" />
-              <span className="truncate">{lang === 'bn' ? 'স্মার্ট মন্তব্য' : 'Smart Remarks'}</span>
-            </button>
-
-            <button 
               onClick={() => {
                 setDownloadModalType('marksheet');
                 setShowDownloadLangModal(true);
@@ -1051,51 +1037,6 @@ const FinalResults: React.FC<FinalResultsProps> = ({ lang, madrasah, onBack, rol
             </div>
           </div>
         </div>
-      )}
-
-      {showSmartRemarksModal && viewResult && (
-        <SmartRemarksModal
-          isOpen={showSmartRemarksModal}
-          onClose={() => setShowSmartRemarksModal(false)}
-          examTitle={viewResult.title}
-          className={classes.find(c => c.id === viewResult.class_id)?.class_name || ''}
-          students={calculatedData}
-          subjects={subjects}
-          initialRemarks={Object.fromEntries(
-            Object.entries(remarksMap).map(([k, v]) => [k, v.full_remark_bn])
-          )}
-          onSaveRemarks={(newRemarks) => {
-            setRemarksMap(newRemarks);
-            setCalculatedData(prev => prev.map(st => {
-              const r = newRemarks[st.student_id] || newRemarks[st.id];
-              return {
-                ...st,
-                smart_remarks: r?.full_remark_bn || r?.full_remark_en,
-                teacher_remarks: r?.full_remark_bn || r?.full_remark_en
-              };
-            }));
-
-            // Persist to institution config_json
-            try {
-              const currentConf = (madrasah?.config_json as any) || {};
-              const updatedConf = {
-                ...currentConf,
-                smart_remarks: {
-                  ...(currentConf.smart_remarks || {}),
-                  [viewResult.id]: newRemarks
-                }
-              };
-              supabase
-                .from('institutions')
-                .update({ config_json: updatedConf })
-                .eq('id', madrasah?.id)
-                .then();
-            } catch (e) {
-              console.error('Failed to persist smart remarks to institution config:', e);
-            }
-          }}
-          lang={lang}
-        />
       )}
 
       {showCreate && (

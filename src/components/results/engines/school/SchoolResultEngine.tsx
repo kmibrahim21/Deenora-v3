@@ -8,7 +8,6 @@ import { t } from 'translations';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import FinalResults from './FinalResults';
-import { SmartRemarksModal } from '../../SmartRemarksModal';
 import { generateSeatPlanPDF, generateResultPDF, generateClassResultPDF, generateExamRoutinePDF, generateMassMarksheetPDF } from '../../../../utils/pdfGenerator';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
 
@@ -2537,12 +2536,6 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
                 }} className="px-2.5 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center border border-purple-100 hover:bg-purple-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5">
                     <Printer size={14} />
                     {lang === 'bn' ? 'মার্কশীট' : 'Marksheet'}
-                </button>
-                <button onClick={() => {
-                    setShowSmartRemarksModal(true);
-                }} className="px-2.5 h-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center border border-amber-200 hover:bg-amber-100 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5" title={lang === 'bn' ? 'স্মার্ট মূল্যায়ন ও শিক্ষকের মন্তব্য' : 'Smart Remarks'}>
-                    <Sparkles size={14} className="text-amber-600" />
-                    {lang === 'bn' ? 'স্মার্ট মন্তব্য' : 'Smart Remarks'}
                 </button>
               </div>
           )}
@@ -5309,56 +5302,6 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
           </div>
         </div>
-      )}
-
-      {showSmartRemarksModal && selectedExam && (
-        <SmartRemarksModal
-          isOpen={showSmartRemarksModal}
-          onClose={() => setShowSmartRemarksModal(false)}
-          examTitle={selectedExam.exam_name}
-          className={classes.find(c => c.id === selectedExam.class_id)?.class_name || ''}
-          students={students.map(std => {
-            const res = calculateStudentResult(std.id, subjects);
-            const marksObj: Record<string, any> = {};
-            subjects.forEach(sub => {
-              marksObj[sub.subject_name] = marksData[std.id]?.[sub.id] || 0;
-            });
-            return {
-              student_id: std.id,
-              student_name: std.student_name,
-              roll: std.roll || (std as any).roll_no,
-              gpa: res.gpa,
-              grade: res.grade,
-              rank: (std as any).rank || '-',
-              marks: marksObj
-            };
-          })}
-          subjects={subjects.map(s => s.subject_name)}
-          initialRemarks={Object.fromEntries(
-            Object.entries(examRemarksMap).map(([k, v]) => [k, v.full_remark_bn])
-          )}
-          onSaveRemarks={(newRemarks) => {
-            setExamRemarksMap(newRemarks);
-            try {
-              const currentConf = (madrasah?.config_json as any) || {};
-              const updatedConf = {
-                ...currentConf,
-                smart_remarks: {
-                  ...(currentConf.smart_remarks || {}),
-                  [selectedExam.id]: newRemarks
-                }
-              };
-              supabase
-                .from('institutions')
-                .update({ config_json: updatedConf })
-                .eq('id', madrasah?.id)
-                .then();
-            } catch (e) {
-              console.error('Failed to save smart remarks in SchoolResultEngine:', e);
-            }
-          }}
-          lang={lang}
-        />
       )}
 
       </AnimatePresence>
