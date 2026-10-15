@@ -106,6 +106,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
   }>({ show: false, title: "", message: "" });
 
   const [selectedReportYear, setSelectedReportYear] = useState<AcademicYear | null>(null);
+  const [viewConfirmYear, setViewConfirmYear] = useState<AcademicYear | null>(null);
   const [reportData, setReportData] = useState<any>(null);
   const [fetchingReport, setFetchingReport] = useState(false);
 
@@ -134,10 +135,18 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
       const totalPaid = feesData?.reduce((sum, f) => sum + Number(f.amount_paid), 0) || 0;
       const totalDue = feesData?.reduce((sum, f) => sum + Number(f.amount_due), 0) || 0;
 
-      // Fetch student count
-      const { count: studentCount } = await supabase
+      // Fetch student count & list
+      const { data: yearStudents, count: studentCount } = await supabase
         .from("students")
-        .select("*", { count: 'exact', head: true })
+        .select("id, student_name, name_en, roll, class_id, guardian_phone, classes(class_name)", { count: 'exact' })
+        .eq("academic_year_id", year.id)
+        .order("roll", { ascending: true })
+        .limit(100);
+
+      // Fetch exams summary
+      const { data: yearExams } = await supabase
+        .from("exams")
+        .select("id, name, exam_date, is_published")
         .eq("academic_year_id", year.id);
 
       setReportData({
@@ -145,7 +154,9 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
         expense,
         totalPaid,
         totalDue,
-        studentCount: studentCount || 0
+        studentCount: studentCount || 0,
+        students: yearStudents || [],
+        exams: yearExams || []
       });
     } catch (err) {
       console.error("Error fetching report data:", err);
@@ -953,38 +964,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                       )}
                     </div>
 
-                    <div className="mt-6 flex flex-wrap items-center gap-2">
-                      {/* View Past Data / Historical Mode Switcher */}
-                      {onSelectViewingYear && (
-                        isPastViewing ? (
-                          <button
-                            onClick={() => {
-                              if (onResetViewingYear) onResetViewingYear();
-                            }}
-                            className="flex-1 py-2.5 bg-slate-800 text-white hover:bg-slate-700 font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm"
-                          >
-                            <RefreshCw size={14} />
-                            {lang === "bn" ? "বর্তমান শিক্ষাবর্ষে ফিরুন" : "Return to Current Year"}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              onSelectViewingYear(year);
-                            }}
-                            className={`flex-1 py-2.5 font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm ${
-                              year.status === "active"
-                                ? "bg-blue-50 text-blue-600 border border-blue-200"
-                                : "bg-purple-600 hover:bg-purple-700 text-white"
-                            }`}
-                          >
-                            <BarChart3 size={14} />
-                            {year.status === "active"
-                              ? (lang === "bn" ? "বর্তমান ডাটা দেখা হচ্ছে" : "Viewing Active Data")
-                              : (lang === "bn" ? "বিগত ডাটা দেখুন" : "View Past Data")}
-                          </button>
-                        )
-                      )}
-
+                    <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
                       {year.status !== "active" && (
                         <button
                           onClick={() => {
@@ -992,11 +972,11 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                             handleSetActive(year.id);
                           }}
                           disabled={!isPromotionActive}
-                          className={`py-2.5 px-3 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}
+                          className={`flex-1 py-2.5 px-3 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all active:scale-95 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20"}`}
                           title={lang === "bn" ? "সক্রিয় করুন" : "Set Active"}
                         >
                           <Check size={14} />
-                          <span className="hidden sm:inline">{lang === "bn" ? "সক্রিয় করুন" : "Set Active"}</span>
+                          <span>{lang === "bn" ? "সক্রিয় করুন" : "Set Active"}</span>
                         </button>
                       )}
                       {year.status === "active" && (
@@ -1006,11 +986,11 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                             handleArchive(year.id);
                           }}
                           disabled={!isPromotionActive}
-                          className={`py-2.5 px-3 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600"}`}
+                          className={`flex-1 py-2.5 px-3 text-white font-black rounded-xl text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all active:scale-95 ${!isPromotionActive ? "opacity-40 bg-slate-500 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-500/20"}`}
                           title={lang === "bn" ? "আর্কাইভ করুন" : "Archive"}
                         >
                           <Archive size={14} />
-                          <span className="hidden sm:inline">{lang === "bn" ? "আর্কাইভ করুন" : "Archive"}</span>
+                          <span>{lang === "bn" ? "আর্কাইভ করুন" : "Archive"}</span>
                         </button>
                       )}
                       <button
@@ -1019,7 +999,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                           handleDeleteYear(year.id);
                         }}
                         disabled={!isPromotionActive}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors border ${
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border shrink-0 ${
                           !isPromotionActive
                             ? "opacity-40 bg-slate-400 text-slate-200 border-slate-300 cursor-not-allowed"
                             : isDark
@@ -1147,8 +1127,7 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                   <button
                     key={year.id}
                     onClick={() => {
-                      setSelectedReportYear(year);
-                      fetchReportData(year);
+                      setViewConfirmYear(year);
                     }}
                     className={`p-6 rounded-3xl border text-left group transition-all active:scale-95 ${isDark ? "bg-slate-900 border-slate-800 hover:border-purple-500/30" : "bg-white border-slate-200 hover:border-purple-200"}`}
                   >
@@ -1175,103 +1154,181 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
 
         {activeTab === "reports" && selectedReportYear && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
+            {/* Header / Nav */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button 
                 onClick={() => setSelectedReportYear(null)}
                 className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-800"}`}
               >
                 <ArrowRight size={16} className="rotate-180" />
-                {lang === "bn" ? "ফিরে যান" : "Back to List"}
+                {lang === "bn" ? "অন্যান্য শিক্ষাবর্ষে ফিরুন" : "Back to Years List"}
               </button>
               <h3 className={`text-lg font-black ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
-                {selectedReportYear.year_name} {lang === "bn" ? "রিপোর্ট" : "Report"}
+                {selectedReportYear.year_name} {lang === "bn" ? "শিক্ষাবর্ষের ফুল রিপোর্ট (Read-Only)" : "Academic Year Report"}
               </h3>
+            </div>
+
+            {/* Read-Only Status Banner */}
+            <div className="p-5 rounded-2xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                  <BarChart3 size={20} />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm font-noto text-purple-900 dark:text-purple-200">
+                    {selectedReportYear.year_name} {lang === 'bn' ? 'শিক্ষাবর্ষ দেখছেন (Read-Only Mode)' : 'Viewing Historical Academic Year'}
+                  </h4>
+                  <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5 font-noto">
+                    {lang === 'bn' ? 'এই শিক্ষাবর্ষের সকল ডাটা সংরক্ষিত ও রিড-অনলি মোডে আছে। নতুন কিছু যোগ/এডিট করা যাবে না।' : 'All historical records are strictly read-only.'}
+                  </p>
+                </div>
+              </div>
+              {onResetViewingYear && (
+                <button
+                  onClick={() => {
+                    onResetViewingYear();
+                    setSelectedReportYear(null);
+                  }}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-black rounded-xl transition-all active:scale-95 shrink-0 flex items-center gap-1.5 font-noto shadow-sm"
+                >
+                  <RefreshCw size={14} />
+                  <span>{lang === 'bn' ? 'বর্তমান শিক্ষাবর্ষে ফিরুন' : 'Return to Current Year'}</span>
+                </button>
+              )}
             </div>
 
             {fetchingReport ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <Loader2 size={40} className="text-purple-500 animate-spin" />
-                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Fetching Data...</p>
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">
+                  {lang === "bn" ? "ডাটা লোড হচ্ছে..." : "Fetching Data..."}
+                </p>
               </div>
             ) : reportData ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Student Count */}
-                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                      <GraduationCap size={24} />
+              <div className="space-y-6">
+                {/* Metric Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Student Count */}
+                  <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <GraduationCap size={24} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {lang === "bn" ? "মোট শিক্ষার্থী" : "Total Students"}
+                        </p>
+                        <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>{reportData.studentCount}</h4>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Students</p>
-                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>{reportData.studentCount}</h4>
+                  </div>
+
+                  {/* Income */}
+                  <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <TrendingUp size={24} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {lang === "bn" ? "মোট আয়" : "Total Income"}
+                        </p>
+                        <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.income.toLocaleString()}</h4>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expense */}
+                  <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+                        <TrendingUp size={24} className="rotate-180" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {lang === "bn" ? "মোট ব্যয়" : "Total Expense"}
+                        </p>
+                        <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.expense.toLocaleString()}</h4>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fees Paid */}
+                  <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                        <CheckCircle2 size={24} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {lang === "bn" ? "সংগৃহীত ফি" : "Fees Collected"}
+                        </p>
+                        <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.totalPaid.toLocaleString()}</h4>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fees Due */}
+                  <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <AlertTriangle size={24} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {lang === "bn" ? "মোট বকেয়া" : "Total Due"}
+                        </p>
+                        <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.totalDue.toLocaleString()}</h4>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Net Balance */}
+                  <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <List size={24} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {lang === "bn" ? "নীট ব্যালেন্স" : "Net Balance"}
+                        </p>
+                        <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{(reportData.income - reportData.expense).toLocaleString()}</h4>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Income */}
-                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                      <TrendingUp size={24} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Income</p>
-                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.income}</h4>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expense */}
-                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
-                      <TrendingUp size={24} className="rotate-180" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Expense</p>
-                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.expense}</h4>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Fees Paid */}
-                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                      <CheckCircle2 size={24} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fees Collected</p>
-                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.totalPaid}</h4>
+                {/* Enrolled Students Table */}
+                {reportData.students && reportData.students.length > 0 && (
+                  <div className={`p-6 rounded-[2rem] border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
+                    <h4 className={`text-base font-black font-noto mb-4 ${isDark ? "text-white" : "text-[#1E3A8A]"}`}>
+                      {lang === "bn" ? `${selectedReportYear.year_name} শিক্ষাবর্ষের এনরোল্ড শিক্ষার্থী (তখনকার ক্লাস ও রোল)` : `Enrolled Students in ${selectedReportYear.year_name}`}
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs font-bold">
+                        <thead>
+                          <tr className={`border-b ${isDark ? "border-slate-800 text-slate-400" : "border-slate-100 text-slate-500"}`}>
+                            <th className="py-3 px-4">{lang === "bn" ? "রোল" : "Roll"}</th>
+                            <th className="py-3 px-4">{lang === "bn" ? "শিক্ষার্থীর নাম" : "Student Name"}</th>
+                            <th className="py-3 px-4">{lang === "bn" ? "তখনকার ক্লাস" : "Class"}</th>
+                            <th className="py-3 px-4">{lang === "bn" ? "অভিভাবকের মোবাইল" : "Guardian Phone"}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                          {reportData.students.map((st: any) => (
+                            <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                              <td className="py-3 px-4 font-black text-purple-600 dark:text-purple-400">{st.roll || "—"}</td>
+                              <td className="py-3 px-4 font-black">{st.student_name}</td>
+                              <td className="py-3 px-4">{st.classes?.class_name || "—"}</td>
+                              <td className="py-3 px-4 text-slate-500">{st.guardian_phone || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                </div>
-
-                {/* Fees Due */}
-                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                      <AlertTriangle size={24} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Due</p>
-                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.totalDue}</h4>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Net Balance */}
-                <div className={`p-6 rounded-3xl border ${isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"} shadow-sm`}>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                      <List size={24} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Net Balance</p>
-                      <h4 className={`text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>৳{reportData.income - reportData.expense}</h4>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-20 text-slate-400 font-bold">No data found for this year.</div>
@@ -1936,6 +1993,69 @@ export const AcademicYearManager: React.FC<AcademicYearManagerProps> = ({
                 >
                   {lang === "bn" ? "ঠিক আছে" : "Done"}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {viewConfirmYear && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewConfirmYear(null)}
+              className="absolute inset-0 bg-slate-950/50 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`relative w-full max-w-md rounded-[2.5rem] shadow-2xl border overflow-hidden ${isDark ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-100 text-slate-800"}`}
+            >
+              <div className="p-8 text-center space-y-4">
+                <div className="w-20 h-20 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-3xl flex items-center justify-center mx-auto shadow-lg shadow-purple-200/50">
+                  <BarChart3 size={36} />
+                </div>
+
+                <h3 className="text-xl font-black font-noto">
+                  {lang === "bn" ? "বিগত শিক্ষাবর্ষের ডাটা দেখার নিশ্চিতকরণ" : "Confirm Historical Year View"}
+                </h3>
+
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-semibold text-left space-y-2">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+                    <span>{viewConfirmYear.year_name} {lang === "bn" ? "শিক্ষাবর্ষ (রিড-অনলি মোড)" : "Academic Year (Read-Only)"}</span>
+                  </p>
+                  <p className="leading-relaxed font-noto">
+                    {lang === "bn" 
+                      ? `কনফার্ম করলে ${viewConfirmYear.year_name} শিক্ষাবর্ষের ফুল রিপোর্ট (শিক্ষার্থী সংখ্যা, ফি সংগ্রহ, বাৎসরিক বিবরণী ইত্যাদি) ওপেন হবে এবং সমগ্র অ্যাপস রিড-অনলি (Read-Only) মোডে সেট হবে। কোনো নতুন শিক্ষার্থী ভর্তি, পরীক্ষা তৈরি বা ডাটা পরিবর্তন করা যাবে না।`
+                      : `Confirming will load all reports for ${viewConfirmYear.year_name} in Read-Only Mode. All historical records will be viewable, but no additions, edits, or deletions will be allowed.`}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    onClick={() => setViewConfirmYear(null)}
+                    className={`py-3.5 rounded-2xl font-black text-xs transition-all active:scale-95 ${isDark ? "bg-slate-800 text-slate-400 hover:text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                  >
+                    {lang === "bn" ? "বাতিল" : "Cancel"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const targetYear = viewConfirmYear;
+                      setViewConfirmYear(null);
+                      setSelectedReportYear(targetYear);
+                      fetchReportData(targetYear);
+                      if (onSelectViewingYear) {
+                        onSelectViewingYear(targetYear);
+                      }
+                    }}
+                    className="py-3.5 rounded-2xl font-black text-xs text-white bg-purple-600 hover:bg-purple-700 transition-all active:scale-95 shadow-lg shadow-purple-500/30 font-noto"
+                  >
+                    {lang === "bn" ? "হ্যাঁ, ডাটা দেখুন (Read-Only)" : "Confirm & View Data"}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
