@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Institution, Language, UserRole, Profile } from 'types';
 import { ResultEngineProvider, useResultEngine } from 'components/results/ResultEngineProvider';
 import SchoolResultEngine from 'components/results/engines/school/SchoolResultEngine';
@@ -19,7 +19,10 @@ interface ExamsProps {
 }
 
 const ExamsContent: React.FC<ExamsProps> = (props) => {
-  const { engine } = useResultEngine();
+  const { engine: defaultEngine } = useResultEngine();
+  const [activeEngineOverride, setActiveEngineOverride] = useState<'school' | 'befaq' | null>(null);
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
+
   const isTeacher = props.role === 'teacher';
   const canManageExams = !isTeacher || props.profile?.permissions?.can_manage_results || props.profile?.permissions?.can_manage_exams;
 
@@ -42,14 +45,40 @@ const ExamsContent: React.FC<ExamsProps> = (props) => {
     );
   }
 
-  switch (engine) {
+  const handleSwitchEngineAndClass = (targetEngine: 'school' | 'befaq', classId: string) => {
+    setActiveEngineOverride(targetEngine);
+    setActiveClassId(classId);
+  };
+
+  const handleClassBack = () => {
+    setActiveClassId(null);
+    setActiveEngineOverride(null);
+  };
+
+  const currentEngine = activeEngineOverride || defaultEngine;
+
+  switch (currentEngine) {
     case 'befaq':
-      return <BefaqResultEngine {...props} />;
+      return (
+        <BefaqResultEngine 
+          {...props} 
+          initialClassId={activeClassId}
+          onSwitchEngineAndClass={handleSwitchEngineAndClass}
+          onClassBack={handleClassBack}
+        />
+      );
     case 'qawmi_custom':
       return <QawmiResultEngine {...props} />;
     case 'school':
     default:
-      return <SchoolResultEngine {...props} />;
+      return (
+        <SchoolResultEngine 
+          {...props} 
+          initialClassId={activeClassId}
+          onSwitchEngineAndClass={handleSwitchEngineAndClass}
+          onClassBack={handleClassBack}
+        />
+      );
   }
 };
 

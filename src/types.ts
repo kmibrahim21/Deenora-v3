@@ -56,6 +56,9 @@ export interface Institution {
       donations?: boolean;
     };
     result_engine: 'school' | 'befaq' | 'qawmi_custom';
+    class_result_engines?: Record<string, 'gpa' | 'befaq' | 'high_school' | 'school'>;
+    merit_ranking_mode?: 'gpa_first' | 'total_marks_first' | 'off';
+    optional_subject_total_mode?: 'exclude' | 'bonus_above_40' | 'include';
     result_system: 'grading' | 'marks' | 'hifz' | 'grading_optional' | 'high_school';
     attendance_type: 'daily' | 'period';
     fee_structure: 'monthly' | 'session';

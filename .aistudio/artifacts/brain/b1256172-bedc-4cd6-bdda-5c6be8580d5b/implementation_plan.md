@@ -1,29 +1,31 @@
-# Historical Academic Year Switcher & Multi-Year Data Browsing Plan
+# Class-Wise Result System Configuration & Dynamic Routing
 
-This plan details the architecture and implementation for switching between past and current academic years across all modules (Students, Classes, Attendance, Accounting/Fees, Exams, Results, and Reports) in read-only historical viewing mode.
-
----
-
-## User Review & Critical Decisions
+A flexible, class-level result engine architecture enabling educational institutions (Madrasahs and Schools) to assign specific grading systems—such as GPA/Grading, Befaq, or High School—on a per-class basis within the Exam & Result Settings panel, automatically launching the corresponding result engine interface upon entering each class.
 
 > [!IMPORTANT]
-> The following decisions were confirmed directly by the user:
-
-- **Confirmed Decision 1 (Read-Only Mode for Past Years)**: Past academic years will operate strictly in **Read-Only Mode** ("শুধু দেখার অনুমতি থাকবে"). When a past academic year is selected, users can view all student records, attendance reports, exam results, and financial transactions for that year, but cannot add, edit, or delete data to prevent past year corruption.
-- **Confirmed Decision 2 (Switching Location)**: Academic Year switching will take place inside the **Academic Year Module** ("শিক্ষাবর্ষ মডিউল যেখানে আছে সেখানেই থাকবে"). A persistent banner/badge will appear at the top of the interface showing the currently viewed academic year with a single click button to return to the active year.
-- **Confirmed Decision 3 (Historical Class & Roll Accuracy)**: Students and class rosters for past academic years will be queried based on their class and roll for that specific year ("ওই শিক্ষাবর্ষে শিক্ষার্থীর তখনকার ক্লাস ও রোল অনুযায়ী").
+> **Confirmed User Decisions (from Clarification Phase):**
+> - **Settings Location**: The class-wise result system selection is housed directly within the **Exam & Result Settings Panel** (পরীক্ষা ও রেজাল্ট সেটিংস প্যানেল), accessible from the Exam management workspace.
+> - **Allowed Systems by Institution Type**:
+>   - **Madrasah**: জিপিএ (GPA/School Grading) and বেফাক (Befaq Examination System).
+>   - **School**: জিপিএ (GPA System) and হাই স্কুল (High School Grading System).
+> - **Navigation & Routing**: When entering a class from the exam class list, the system automatically routes to and launches the designated engine interface for that class (e.g., Befaq engine for Befaq classes, GPA engine for GPA classes).
+> - **Average Mark Feature**: The Befaq mark entry table average mark column (গড় নম্বর) requested earlier is fully verified and integrated into the workflow.
 
 ---
 
 ## 1. Overview & Core Concept
 
-Currently, switching or creating a new academic year overwrites active student records, leading to data mixing and loss of visibility into past academic years.
+### What It Does
+This feature enables mixed-curriculum institutions to manage different educational standards within a single institution account. For example, a Madrasah may conduct primary/nursery classes using the standard GPA system while higher theological classes follow the Befaqul Madaris (বেফাক) examination structure. In schools, lower classes can use standard GPA while secondary grades follow the High School grading matrix.
 
-This solution introduces a **Global Academic Year Viewing Context** (`selectedYear`):
-1. **Active Year** (`activeYear`): The institution's official active session where current daily operations (new admissions, daily attendance, fee collections, current exams) occur and save.
-2. **Viewing Year** (`selectedYear`): The academic year selected by the user to view.
-   - When `selectedYear.id === activeYear.id`: Standard read-write mode for current operations.
-   - When `selectedYear.id !== activeYear.id`: **Read-Only Historical Mode**. All views automatically query data filtered by `selectedYear.id`. Edit and creation controls are suppressed, and a prominent banner reminds the user they are viewing historical records.
+Administrators can designate the result engine for each class in the Exam & Result Settings modal. When viewing exams, the class browser shows each class with its configured result system badge. Clicking a class automatically activates that class's specialized result engine interface with full marksheet, seat plan, admit card, and merit ranking support.
+
+### Target Audience & Persona
+- **Institution Administrators & Head Principals**: Need granular control over which classes follow board/befaq rules versus standard GPA without creating separate institution accounts.
+- **Teachers & Evaluators**: Enter marks and view merit ranks inside the exact regulatory format required for that specific class.
+
+### Key Value
+Eliminates curriculum friction by allowing multi-stream madrasahs and schools to co-exist in one unified management platform with zero manual switching needed by teachers.
 
 ---
 
@@ -31,84 +33,117 @@ This solution introduces a **Global Academic Year Viewing Context** (`selectedYe
 
 ### Key User Flows
 
-1. **Viewing Past Academic Year**:
-   - User goes to **Account -> Academic Year** (`AcademicYearManager`).
-   - Clicks **"বিগত ডাটা দেখুন" (View Data)** on any archived academic year.
-   - The app switches into Historical Viewing Mode for that year.
-   - A soft banner appears at the top: `👁️ বিগত শিক্ষাবর্ষ: [২০২৪-২০২৫] (শুধু দেখা যাবে)` with a `[বর্তমান শিক্ষাবর্ষে ফিরুন]` button.
-   - Navigating to Students, Classes, Attendance, Accounting, or Exam Result tabs shows complete historical records for that year.
-   - Add/Edit buttons are disabled with tooltip `"বিগত শিক্ষাবর্ষের তথ্য কেবল দেখা যাবে"`.
+1. **Configuring Class Result Systems**:
+   - User navigates to **Exams** (পরীক্ষা).
+   - In the header or settings bar, clicks the **Exam & Result Settings** (পরীক্ষা ও রেজাল্ট সেটিংস) gear button.
+   - The settings modal opens with a dedicated section: **"ক্লাস অনুযায়ী রেজাল্ট সিস্টেম নির্ধারণ" (Class-wise Result System Settings)**.
+   - A list of all active classes is displayed with sleek segmented toggle controls matching the institution type:
+     - For Madrasah: `[ জিপিএ (GPA) | বেফাক (Befaq) ]`
+     - For School: `[ জিপিএ (GPA) | হাই স্কুল (High School) ]`
+   - Changing a toggle automatically updates the state and persists to the institution's `config_json.class_result_engines`.
+   - Visual confirmation toast confirms instant save.
 
-2. **Returning to Current Active Year**:
-   - Clicks `[বর্তমান শিক্ষাবর্ষে ফিরুন]` in the header banner or in the Academic Year Manager.
-   - App returns to normal active state with full edit/create capabilities.
+2. **Browsing Classes & Automatic Dynamic Interface**:
+   - In the main Exams view (`activeTab === 'exams'`, `view === 'list'`), the class cards grid displays all classes.
+   - Each card displays a clean typography tag indicating its active system (e.g. `বেফাক সিস্টেম` in emerald or `জিপিএ সিস্টেম` in blue).
+   - When the user clicks on a class card:
+     - If the class is set to `befaq`, it dynamically initializes and renders `BefaqResultEngine` scoped to that class.
+     - If the class is set to `school` / `gpa` / `high_school`, it initializes `SchoolResultEngine` scoped to that class.
+   - Clicking **"Back to Classes"** (শ্রেণিতে ফিরে যান) seamlessly unmounts the active class view and returns to the unified class list.
+
+### Visual Identity & Theme
+- **Color Palette & Discipline**:
+  - Light canvas: Clean off-white (`#F8FAFC`) with pure white card surfaces (`#FFFFFF`) and hairline borders (`border-slate-200`).
+  - Dark canvas: Deep navy/slate (`#0F172A`) with subdued elevated panels (`#1E293B`) and dark hairline borders (`border-slate-800`).
+  - Engine Accents:
+    - **Befaq System**: Distinctive emerald branding (`#059669` / `text-emerald-500`) with subtle mint indicator.
+    - **GPA / School System**: Institutional royal blue (`#2563EB` / `text-blue-500`).
+    - **High School System**: Indigo / Violet accent (`#4F46E5`).
+- **Typography**:
+  - Bengali prose: Clean `Hind Siliguri` / `Noto Sans Bengali` with refined weights (font-bold / font-black).
+  - Tabular and score numbers: Strict `font-mono tabular-nums` for roll, marks, total, and average marks.
+- **Anti-Slop Restraint**:
+  - Zero static pill capsules around status text; metadata rendered as clean inline typographic text separated by `·`.
+  - Filter controls and toggles built with functional segmented button controls.
 
 ---
 
-## 3. Technical Architecture & Component Strategy
+## 3. Key Product Decisions & Trade-Offs
+
+### Decision 1: Storage Architecture for Class-Wise Engine Mapping
+- **Chosen Approach**: Store class engine mappings inside `institutions.config_json.class_result_engines` as a key-value dictionary (`{ [classId]: 'befaq' | 'gpa' | 'high_school' }`).
+- **Why**: 
+  - Works immediately with existing Supabase schema without requiring a database migration on the `classes` table.
+  - Automatically syncs across devices when the institution profile updates.
+  - Fallback logic is straightforward: if a class has no override in `class_result_engines`, it falls back to the institution default `institution.config_json.result_engine`.
+- **Alternatives Considered**: Adding an `engine` column to `classes` table—rejected because it would require altering table schemas and backend RPCs across all environments.
+
+### Decision 2: Routing Architecture in `Exams.tsx`
+- **Chosen Approach**: Elevate the class selection stage to a unified coordinator component in `Exams.tsx`. When a class is selected, `ExamsContent` reads `class_result_engines[selectedClassId]` and mounts the matching engine (`BefaqResultEngine` or `SchoolResultEngine`) pre-initialized with `selectedClassId`.
+- **Why**: 
+  - Prevents state collision and duplicate network fetches between engines.
+  - Ensures a seamless transition: clicking a Befaq class shows Befaq's specific Marhala/Sanad views, while clicking a School class shows standard GPA subject grading.
+  - Teachers only see the interface relevant to their students.
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+### System Architecture Diagram
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                          useAuth / AuthContext                         │
-│   ┌────────────────────────┐         ┌─────────────────────────────┐   │
-│   │ activeYear (Official)  │         │ selectedYear (Viewing Mode) │   │
-│   └───────────┬────────────┘         └──────────────┬──────────────┘   │
-└───────────────┼─────────────────────────────────────┼──────────────────┘
-                │                                     │
-                ▼                                     ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                             Header Banner                              │
-│   [ 👁️ বিগত শিক্ষাবর্ষ: 2024 (Read Only) ]  -->  [ বর্তমান শিক্ষাবর্ষে ফিরুন ]│
+│                              Exams.tsx                                 │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ Unified Top Bar: Search · Exam Settings Modal Trigger (Settings) │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                   │                                    │
+│                 ┌─────────────────┴─────────────────┐                  │
+│                 ▼                                   ▼                  │
+│       [No Class Selected]                 [Class Selected: ID]         │
+│  ┌──────────────────────────────┐                   │                  │
+│  │     Class Cards Grid         │                   │                  │
+│  │ • Class 1 [জিপিএ সিস্টেম]    │                   │                  │
+│  │ • Class 2 [বেফাক সিস্টেম]    │                   │                  │
+│  │ • Class 3 [হাই স্কুল]        │                   │                  │
+│  └──────────────────────────────┘                   │                  │
+│                 │                                   │                  │
+│                 ▼                                   ▼                  │
+│      [Exam Settings Modal]                Check class engine:          │
+│   ┌─────────────────────────┐             ┌─────────────────┐          │
+│   │ Class Engine Selectors: │             │ engine ===      │          │
+│   │ [Class A] -> [GPA|Befaq]│             │ 'befaq' ?       │          │
+│   │ [Class B] -> [GPA|Befaq]│             └────────┬────────┘          │
+│   │ Instant DB Save         │                      │                   │
+│   └─────────────────────────┘             ┌────────┴────────┐          │
+│                                           ▼                 ▼          │
+│                                  BefaqResultEngine   SchoolResultEngine │
+│                                  (Befaq UI & Logic)  (GPA/School Logic) │
 └────────────────────────────────────────────────────────────────────────┘
-                │
-                ├──────────────────────┬──────────────────────┐
-                ▼                      ▼                      ▼
-┌──────────────────────┐┌──────────────────────┐┌──────────────────────┐
-│  Students / Classes  ││ Attendance & Finance ││  Exams & Results     │
-│ .eq('academic_year_  ││ .eq('academic_year_  ││ .eq('academic_year_  │
-│      id', yearId)    ││      id', yearId)    ││      id', yearId)    │
-│  readOnly = true     ││  readOnly = true     ││  readOnly = true     │
-└──────────────────────┘└──────────────────────┘└──────────────────────┘
 ```
 
-### Key Data Strategy
+### Data Model & State Schema
 
-1. **`useAuth.ts` State**:
-   - `activeYear`: AcademicYear object with `status = 'active'`.
-   - `selectedYear`: AcademicYear object currently selected for viewing (persisted in `sessionStorage`).
-   - `setSelectedYear`: Function to change viewing year.
-   - `isHistoricalMode`: Computed `Boolean(selectedYear && activeYear && selectedYear.id !== activeYear.id)`.
+```typescript
+// Extension to Institution config_json:
+interface InstitutionConfig {
+  result_engine?: 'school' | 'befaq' | 'qawmi_custom';
+  class_result_engines?: Record<string, 'gpa' | 'befaq' | 'high_school' | 'school'>;
+  merit_ranking_mode?: string;
+  // ... existing fields preserved
+}
+```
 
-2. **Query Filters in Modules**:
-   - **`Students.tsx` / `Home.tsx`**: Filter students by `.eq('academic_year_id', selectedYear.id)` (or null for legacy data).
-   - **`Attendance.tsx`**: Query attendance by `.eq('academic_year_id', selectedYear.id)`.
-   - **`Accounting.tsx`**: Query ledger entries and fees by `.eq('academic_year_id', selectedYear.id)`.
-   - **`Exams.tsx` & `FinalResults.tsx`**: Query exams and results by `.eq('academic_year_id', selectedYear.id)`.
+### Interactive State Transitions
 
-3. **Academic Year Switcher in `AcademicYearManager.tsx`**:
-   - Add an action button next to every academic year:
-     - For Active Year: Badge `[সক্রিয় শিক্ষাবর্ষ]`
-     - For Past Years: Button `[বিগত ডাটা দেখুন]` and `[সক্রিয় করুন]` (Activate).
+1. **Settings Modal Toggle**:
+   - `handleToggleClassEngine(classId: string, engine: 'gpa' | 'befaq' | 'high_school')`
+   - Immutably clones `madrasah.config_json.class_result_engines`.
+   - Calls Supabase `institutions.update({ config_json })`.
+   - Updates local React state so UI reflects the new choice immediately.
 
----
-
-## 4. Implementation Steps
-
-1. **`useAuth.ts` Context Expansion**:
-   - Expose `selectedYear`, `setSelectedYear`, and `isHistoricalMode`.
-   - Initialize `selectedYear` from `sessionStorage` or fallback to `activeYear`.
-
-2. **`AcademicYearManager.tsx` Updates**:
-   - Add "View Past Year" / "বিগত ডাটা দেখুন" action.
-   - Allow switching viewing context without altering the DB active status unless "Activate Year" is explicitly clicked.
-
-3. **Global Layout Header Indicator (`Layout.tsx`)**:
-   - Render persistent banner when `isHistoricalMode` is active.
-   - Include one-click return to current year.
-
-4. **Module Integration**:
-   - Pass `selectedYear` and `readOnly={isHistoricalMode}` to `Students`, `Classes`, `Attendance`, `Accounting`, `Exams`, and `FinalResults`.
-   - Update fetch queries to scope by `selectedYear.id`.
-
-5. **Verification & Testing**:
-   - Run `compile_applet` to ensure zero build or TypeScript errors.
+2. **Dynamic Class Selection**:
+   - When user clicks a class in `Exams.tsx`:
+     `const targetEngine = madrasah?.config_json?.class_result_engines?.[cls.id] || madrasah?.config_json?.result_engine || 'school';`
+   - Sets `selectedClassId = cls.id` and `activeEngine = targetEngine`.
+   - Renders the chosen engine with `initialClassId={cls.id}` and `onBack={() => setSelectedClassId(null)}`.

@@ -11,6 +11,8 @@ import FinalResults from './FinalResults';
 import { generateSeatPlanPDF, generateResultPDF, generateClassResultPDF, generateExamRoutinePDF, generateMassMarksheetPDF } from '../../../../utils/pdfGenerator';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
 
+import ExamSettingsModal from '../../ExamSettingsModal';
+
 interface SchoolResultEngineProps {
   lang: Language;
   madrasah: Institution | null;
@@ -19,12 +21,32 @@ interface SchoolResultEngineProps {
   activeYear?: any;
   onNavigateToFinalResults?: () => void;
   profile?: Profile | null;
+  initialClassId?: string | null;
+  onSwitchEngineAndClass?: (engine: 'school' | 'befaq', classId: string) => void;
+  onClassBack?: () => void;
 }
 
-const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah, onBack, role, activeYear, onNavigateToFinalResults, profile }) => {
+const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ 
+  lang, 
+  madrasah, 
+  onBack, 
+  role, 
+  activeYear, 
+  onNavigateToFinalResults, 
+  profile,
+  initialClassId,
+  onSwitchEngineAndClass,
+  onClassBack
+}) => {
   const [activeTab, setActiveTab] = useState<'exams' | 'final-results' | 'seat-plan' | 'analytics' | 'exam-routine'>('exams');
   const [view, setView] = useState<'list' | 'subjects' | 'marks' | 'report'>('list');
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(initialClassId || null);
+
+  useEffect(() => {
+    if (initialClassId !== undefined) {
+      setSelectedClassId(initialClassId);
+    }
+  }, [initialClassId]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
@@ -3873,26 +3895,62 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
 
       {activeTab === 'exams' && view === 'list' && !selectedClassId && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classes.map(cls => (
-            <button
-              key={cls.id}
-              onClick={() => setSelectedClassId(cls.id)}
-              className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble flex items-center justify-between hover:border-blue-200 transition-all active:scale-95`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-50 text-[#2563EB] rounded-2xl flex items-center justify-center"><BookOpen size={24}/></div>
-                <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{cls.class_name}</h3>
-              </div>
-              <ChevronRight className="text-slate-300" />
-            </button>
-          ))}
+          {classes.map(cls => {
+            const configuredEngine = (madrasah?.config_json as any)?.class_result_engines?.[cls.id] || (madrasah?.config_json as any)?.result_engine || 'school';
+            const isBefaq = configuredEngine === 'befaq';
+            const isHighSchool = configuredEngine === 'high_school';
+            return (
+              <button
+                key={cls.id}
+                onClick={() => {
+                  if (isBefaq && onSwitchEngineAndClass) {
+                    onSwitchEngineAndClass('befaq', cls.id);
+                  } else {
+                    setSelectedClassId(cls.id);
+                  }
+                }}
+                className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble flex items-center justify-between hover:border-blue-200 transition-all active:scale-95 text-left`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                    isBefaq 
+                      ? (madrasah?.theme === 'dark' ? 'bg-emerald-950/50 text-emerald-400' : 'bg-emerald-50 text-emerald-600')
+                      : isHighSchool 
+                        ? (madrasah?.theme === 'dark' ? 'bg-indigo-950/50 text-indigo-400' : 'bg-indigo-50 text-indigo-600')
+                        : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950/50 dark:text-blue-400'
+                  }`}>
+                    <BookOpen size={24}/>
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
+                      {cls.class_name}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md font-noto ${
+                        isBefaq 
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                          : isHighSchool 
+                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
+                            : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                      }`}>
+                        {isBefaq ? (lang === 'bn' ? 'বেফাক সিস্টেম' : 'Befaq System') :
+                         isHighSchool ? (lang === 'bn' ? 'হাই স্কুল সিস্টেম' : 'High School System') :
+                         (lang === 'bn' ? 'জিপিএ সিস্টেম' : 'GPA System')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="text-slate-300 shrink-0" />
+              </button>
+            );
+          })}
         </div>
       )}
 
       {activeTab === 'exams' && view === 'list' && selectedClassId && (
         <div className="space-y-4">
           <div className="flex items-center justify-between px-2">
-            <button onClick={() => setSelectedClassId(null)} className="text-sm font-black text-[#2563EB] flex items-center gap-2">
+            <button onClick={() => { setSelectedClassId(null); onClassBack?.(); }} className="text-sm font-black text-[#2563EB] flex items-center gap-2">
               <ArrowLeft size={16} /> {lang === 'bn' ? 'শ্রেণিতে ফিরে যান' : 'Back to Classes'}
             </button>
             <div className="flex items-center gap-2">
@@ -4924,197 +4982,18 @@ const SchoolResultEngine: React.FC<SchoolResultEngineProps> = ({ lang, madrasah,
           </div>
         )}
       {/* Exam Settings Modal */}
-      {showExamSettingsModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4">
-          <div className={`w-full max-w-md rounded-[2.2rem] p-6 shadow-2xl border ${
-            madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'
-          } animate-in zoom-in-95 duration-200`}>
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-900/30 text-[#2563EB] dark:text-blue-400 flex items-center justify-center border border-blue-100 dark:border-blue-800/50">
-                  <Settings size={20} />
-                </div>
-                <div>
-                  <h3 className="text-base font-black font-noto">
-                    {lang === 'bn' ? 'পরীক্ষা ও মেধা সেটিংস' : 'Exam & Merit Settings'}
-                  </h3>
-                  <p className="text-[10px] font-bold text-slate-400">
-                    {lang === 'bn' ? 'মেধাস্থান ও র্যাঙ্কিং নিয়মাবলি' : 'Merit position & ranking rules'}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowExamSettingsModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              {/* Mode 1: GPA Priority */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                ((madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first')
-                  ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-blue-50/70 border-blue-200')
-                  : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/80' : 'bg-slate-50 border-slate-100')
-              }`}>
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="pr-1">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Trophy size={15} className="text-amber-500" />
-                      <h4 className="text-xs font-black font-noto">
-                        {lang === 'bn' ? '১. জিপিএ অগ্রাধিকার (GPA Priority Mode)' : '1. GPA Priority Mode'}
-                      </h4>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-noto leading-relaxed">
-                      {lang === 'bn' 
-                        ? 'GPA বেশি → আগে। GPA সমান হলে Total Mark বেশি → আগে। Total Mark সমান হলে Attendance বেশি → আগে।' 
-                        : 'Higher GPA → First. If GPA is equal, higher Total Marks → First. If Total Marks also equal, higher Attendance → First.'}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => handleSetMeritRankingMode(
-                      (madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first' ? 'off' : 'gpa_first'
-                    )}
-                    className={`shrink-0 px-3 py-1.5 rounded-xl font-black text-[11px] flex items-center gap-1.5 transition-all ${
-                      (madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first'
-                        ? 'bg-[#2563EB] text-white shadow-md'
-                        : madrasah?.theme === 'dark'
-                          ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
-                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {(madrasah?.config_json as any)?.merit_ranking_mode === 'gpa_first' ? (
-                      <>
-                        <CheckCircle2 size={14} />
-                        {lang === 'bn' ? 'একটিভ' : 'Active'}
-                      </>
-                    ) : (
-                      <>
-                        <XCircle size={14} />
-                        {lang === 'bn' ? 'অফ' : 'Off'}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Mode 2: Total Mark Priority */}
-              <div className={`p-4 rounded-2xl border transition-all ${
-                ((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode)
-                  ? (madrasah?.theme === 'dark' ? 'bg-blue-900/30 border-blue-500/50' : 'bg-blue-50/70 border-blue-200')
-                  : (madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/80' : 'bg-slate-50 border-slate-100')
-              }`}>
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="pr-1">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Trophy size={15} className="text-[#2563EB]" />
-                      <h4 className="text-xs font-black font-noto">
-                        {lang === 'bn' ? '২. টোটাল মার্ক অগ্রাধিকার (Total Mark Priority Mode)' : '2. Total Mark Priority Mode'}
-                      </h4>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-noto leading-relaxed">
-                      {lang === 'bn' 
-                        ? 'Total Mark বেশি → আগে। Total Mark সমান হলে GPA বেশি → আগে। এরপর Attendance বেশি → আগে।' 
-                        : 'Higher Total Marks → First. If Total Marks equal, higher GPA → First. Then higher Attendance → First.'}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => handleSetMeritRankingMode(
-                      ((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode) ? 'off' : 'total_marks_first'
-                    )}
-                    className={`shrink-0 px-3 py-1.5 rounded-xl font-black text-[11px] flex items-center gap-1.5 transition-all ${
-                      ((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode)
-                        ? 'bg-[#2563EB] text-white shadow-md'
-                        : madrasah?.theme === 'dark'
-                          ? 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
-                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {((madrasah?.config_json as any)?.merit_ranking_mode === 'total_marks_first' || !(madrasah?.config_json as any)?.merit_ranking_mode) ? (
-                      <>
-                        <CheckCircle2 size={14} />
-                        {lang === 'bn' ? 'একটিভ' : 'Active'}
-                      </>
-                    ) : (
-                      <>
-                        <XCircle size={14} />
-                        {lang === 'bn' ? 'অফ' : 'Off'}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-              {/* Mode 3: 4th / Optional Subject Total Calculation */}
-              <div className={`p-4 rounded-2xl border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800/50 border-slate-700/80' : 'bg-slate-50 border-slate-100'}`}>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Sparkles size={15} className="text-indigo-600 dark:text-indigo-400" />
-                  <h4 className="text-xs font-black font-noto">
-                    {lang === 'bn' ? '৩. ৪র্থ / ঐচ্ছিক বিষয়ের নম্বর মোট নম্বরে যোগ করার নিয়ম' : '3. 4th / Optional Subject in Total Marks'}
-                  </h4>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-noto leading-relaxed mb-3">
-                  {lang === 'bn' 
-                    ? 'বাংলাদেশ শিক্ষা বোর্ড ও মার্কশিট অনুযায়ী ৪র্থ বিষয় বাদে শুধুমাত্র মূল বিষয়সমূহের মোট নম্বর গণনা করা হয়।' 
-                    : 'According to Board standards, 4th subject marks are usually excluded from the mandatory total marks.'}
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSetOptionalSubjectTotalMode('exclude')}
-                    className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex flex-col justify-between ${
-                      (madrasah?.config_json as any)?.optional_subject_total_mode === 'exclude'
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700')
-                    }`}
-                  >
-                    <span>{lang === 'bn' ? '৪র্থ বিষয় বাদ' : 'Exclude 4th Sub'}</span>
-                    <span className="text-[9px] font-normal opacity-80 mt-0.5">{lang === 'bn' ? '(বোর্ডের মূল নিয়ম)' : '(Board Rule)'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSetOptionalSubjectTotalMode('bonus_above_40')}
-                    className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex flex-col justify-between ${
-                      (madrasah?.config_json as any)?.optional_subject_total_mode === 'bonus_above_40'
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700')
-                    }`}
-                  >
-                    <span>{lang === 'bn' ? '৪০-এর বেশিটুকু যোগ' : 'Bonus > 40 Only'}</span>
-                    <span className="text-[9px] font-normal opacity-80 mt-0.5">{lang === 'bn' ? '(অতিরিক্ত নম্বর)' : '(Above pass mark)'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSetOptionalSubjectTotalMode('include')}
-                    className={`p-2.5 rounded-xl border text-left transition-all text-xs font-black flex flex-col justify-between ${
-                      (!((madrasah?.config_json as any)?.optional_subject_total_mode) || (madrasah?.config_json as any)?.optional_subject_total_mode === 'include')
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : (madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700')
-                    }`}
-                  >
-                    <span>{lang === 'bn' ? 'সম্পূর্ণ নম্বর যোগ' : 'Include Full Marks'}</span>
-                    <span className="text-[9px] font-normal opacity-80 mt-0.5">{lang === 'bn' ? '(সব বিষয়সহ)' : '(All subjects)'}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowExamSettingsModal(false)}
-                className="w-full py-3 bg-[#2563EB] hover:bg-blue-700 text-white font-black rounded-xl text-xs shadow-premium active:scale-95 transition-all"
-              >
-                {lang === 'bn' ? 'সম্পন্ন' : 'Done'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ExamSettingsModal
+        isOpen={showExamSettingsModal}
+        onClose={() => setShowExamSettingsModal(false)}
+        madrasah={madrasah}
+        lang={lang}
+        classes={classes}
+        onConfigUpdated={() => {
+          if (selectedExam) {
+            fetchRanking(selectedExam.id, selectedExam.class_id);
+          }
+        }}
+      />
 
       {/* High School 4th / Optional Subject Assignment Modal */}
       {showHighSchool4thSubModal && selectedExamFor4thSub && (

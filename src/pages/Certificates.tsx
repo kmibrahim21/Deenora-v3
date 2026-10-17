@@ -6,6 +6,7 @@ import { t } from '../translations';
 import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import jsPDF from 'jspdf';
+import { saveJsPdf } from '../utils/fileDownloader';
 import { toJpeg, toPng } from 'html-to-image';
 import { CertificateTemplate } from '../components/pdf/CertificateTemplate';
 import { solaimanLipiBase64 } from '../utils/fonts';
@@ -412,7 +413,7 @@ const Certificates: React.FC<CertificatesProps> = ({ lang, madrasah, onBack, pro
         });
 
         pdf.addImage(dataUrl, 'PNG', 0, 0, 297, 210, undefined, 'FAST');
-        pdf.save(filename);
+        await saveJsPdf(pdf, filename);
 
         root.unmount();
         document.body.removeChild(container);

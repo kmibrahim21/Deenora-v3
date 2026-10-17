@@ -4,6 +4,7 @@ import { supabase } from 'supabase';
 import { Institution, Language, Profile } from 'types';
 import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
+import { saveJsPdf } from '../utils/fileDownloader';
 import { downloadServerPdf, wrapHtmlForPdf, SOLAIMAN_LIPI_FONT_STYLE } from '../utils/serverPdfHelper';
 
 
@@ -412,7 +413,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         // Bottom copy
         pdf.addImage(dataUrl, 'JPEG', xOffset, (pageHeight / 2) + margin, drawWidth, drawHeight);
         
-        pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+        await saveJsPdf(pdf, `${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
       } else {
         const pdf = new jsPDF({ 
           orientation: 'landscape', 
@@ -434,7 +435,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
         const yOffset = (pageHeight - drawHeight) / 2;
         
         pdf.addImage(dataUrl, 'JPEG', xOffset, yOffset, drawWidth, drawHeight);
-        pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+        await saveJsPdf(pdf, `${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
       }
       
       showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড হয়েছে!' : 'PDF downloaded!', 'success');
@@ -469,7 +470,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
           pdf.setDrawColor(200, 200, 200);
           pdf.line(margin, pageHeight / 2, pageWidth - margin, pageHeight / 2);
           pdf.addImage(imgData, 'JPEG', xOffset, (pageHeight / 2) + margin, drawWidth, drawHeight);
-          pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+          await saveJsPdf(pdf, `${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
         } else {
           const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
           const pageWidth = pdf.internal.pageSize.getWidth();
@@ -483,7 +484,7 @@ const ClassRoutine: React.FC<ClassRoutineProps> = ({ lang, madrasah, onBack, pro
           const xOffset = (pageWidth - drawWidth) / 2;
           const yOffset = (pageHeight - drawHeight) / 2;
           pdf.addImage(imgData, 'JPEG', xOffset, yOffset, drawWidth, drawHeight);
-          pdf.save(`${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
+          await saveJsPdf(pdf, `${routineTitle.replace(/\s+/g, '_') || 'Class_Routine'}.pdf`);
         }
         showToast(lang === 'bn' ? 'পিডিএফ ডাউনলোড হয়েছে (অল্টারনেট পদ্ধতি)!' : 'PDF downloaded (fallback)!', 'success');
       } catch (fbError) {

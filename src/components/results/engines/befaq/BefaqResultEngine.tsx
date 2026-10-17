@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, BefaqExam, BefaqSubject, Language, UserRole, Profile } from 'types';
-import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Layout, Download, CreditCard, Trash2, RefreshCw, Edit2, Edit3, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash, Palette, Clock, ZoomIn, ZoomOut, Maximize, Upload, Globe, Eye, EyeOff, Type, Printer } from 'lucide-react';
+import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Layout, Download, CreditCard, Trash2, RefreshCw, Edit2, Edit3, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash, Palette, Clock, ZoomIn, ZoomOut, Maximize, Upload, Globe, Eye, EyeOff, Type, Printer, Settings } from 'lucide-react';
 import { t } from 'translations';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
@@ -10,6 +10,7 @@ import { generateSeatPlanPDF, generateExamRoutinePDF, generateFinalResultPDF, ge
 import { SeatAssignment, ExamRoom } from 'types';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import FinalResults from './FinalResults';
+import ExamSettingsModal from '../../ExamSettingsModal';
 
 interface BefaqResultEngineProps {
   lang: Language;
@@ -18,14 +19,34 @@ interface BefaqResultEngineProps {
   role: UserRole;
   activeYear?: any;
   profile?: Profile | null;
+  initialClassId?: string | null;
+  onSwitchEngineAndClass?: (engine: 'school' | 'befaq', classId: string) => void;
+  onClassBack?: () => void;
 }
 
-const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, onBack, role, activeYear, profile }) => {
+const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ 
+  lang, 
+  madrasah, 
+  onBack, 
+  role, 
+  activeYear, 
+  profile,
+  initialClassId,
+  onSwitchEngineAndClass,
+  onClassBack
+}) => {
   const [activeTab, setActiveTab] = useState<'exams' | 'analytics' | 'final-results' | 'seat-plan' | 'exam-routine'>('exams');
   
   // Original Befaq states moved to top to avoid TS2448 block-scope issues
   const [view, setView] = useState<'list' | 'subjects' | 'marks' | 'report' | 'rank'>('list');
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(initialClassId || null);
+  const [showExamSettingsModal, setShowExamSettingsModal] = useState(false);
+
+  useEffect(() => {
+    if (initialClassId !== undefined) {
+      setSelectedClassId(initialClassId);
+    }
+  }, [initialClassId]);
   const [exams, setExams] = useState<BefaqExam[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedExam, setSelectedExam] = useState<BefaqExam | null>(null);
@@ -1880,6 +1901,17 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
             <div className="flex gap-2">
+                <button
+                  onClick={() => setShowExamSettingsModal(true)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all ${
+                    madrasah?.theme === 'dark' 
+                      ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' 
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                  title={lang === 'bn' ? 'পরীক্ষা ও মেধা সেটিংস' : 'Exam & Merit Settings'}
+                >
+                  <Settings size={20} />
+                </button>
                 <button onClick={() => setActiveTab('final-results')} className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm active:scale-95 transition-all ${madrasah?.theme === 'dark' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-purple-50 text-purple-600 border-purple-100'}`} title="চূড়ান্ত ফলাফল">
                   <Trophy size={20} />
                 </button>
@@ -3241,26 +3273,62 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {activeTab === 'exams' && view === 'list' && !selectedClassId && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classes.map(cls => (
-            <button
-              key={cls.id}
-              onClick={() => setSelectedClassId(cls.id)}
-              className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble flex items-center justify-between hover:border-emerald-200 transition-all active:scale-95`}
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'} rounded-2xl flex items-center justify-center`}><BookOpen size={24}/></div>
-                <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>{cls.class_name}</h3>
-              </div>
-              <ChevronRight className="text-slate-300" />
-            </button>
-          ))}
+          {classes.map(cls => {
+            const configuredEngine = (madrasah?.config_json as any)?.class_result_engines?.[cls.id] || (madrasah?.config_json as any)?.result_engine || 'befaq';
+            const isBefaq = configuredEngine === 'befaq';
+            const isHighSchool = configuredEngine === 'high_school';
+            return (
+              <button
+                key={cls.id}
+                onClick={() => {
+                  if (!isBefaq && onSwitchEngineAndClass) {
+                    onSwitchEngineAndClass('school', cls.id);
+                  } else {
+                    setSelectedClassId(cls.id);
+                  }
+                }}
+                className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-6 rounded-[2rem] border shadow-bubble flex items-center justify-between hover:border-emerald-200 transition-all active:scale-95 text-left`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                    isBefaq 
+                      ? (madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600')
+                      : isHighSchool
+                        ? (madrasah?.theme === 'dark' ? 'bg-indigo-950/50 text-indigo-400' : 'bg-indigo-50 text-indigo-600')
+                        : 'bg-blue-50 text-[#2563EB] dark:bg-blue-950/50 dark:text-blue-400'
+                  }`}>
+                    <BookOpen size={24}/>
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} font-noto`}>
+                      {cls.class_name}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md font-noto ${
+                        isBefaq 
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                          : isHighSchool 
+                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
+                            : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                      }`}>
+                        {isBefaq ? (lang === 'bn' ? 'বেফাক সিস্টেম' : 'Befaq System') :
+                         isHighSchool ? (lang === 'bn' ? 'হাই স্কুল সিস্টেম' : 'High School System') :
+                         (lang === 'bn' ? 'জিপিএ সিস্টেম' : 'GPA System')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="text-slate-300 shrink-0" />
+              </button>
+            );
+          })}
         </div>
       )}
 
       {activeTab === 'exams' && view === 'list' && selectedClassId && (
         <div className="space-y-4">
           <div className="flex items-center justify-between px-2">
-            <button onClick={() => setSelectedClassId(null)} className="text-sm font-black text-emerald-600 flex items-center gap-2">
+            <button onClick={() => { setSelectedClassId(null); onClassBack?.(); }} className="text-sm font-black text-emerald-600 flex items-center gap-2">
               <ArrowLeft size={16} /> {lang === 'bn' ? 'শ্রেণিতে ফিরে যান' : 'Back to Classes'}
             </button>
             {role === 'madrasah_admin' && (
@@ -3980,6 +4048,15 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           </div>
         )}
       </AnimatePresence>
+
+      {/* Exam Settings Modal */}
+      <ExamSettingsModal
+        isOpen={showExamSettingsModal}
+        onClose={() => setShowExamSettingsModal(false)}
+        madrasah={madrasah}
+        lang={lang}
+        classes={classes}
+      />
     </div>
   );
 };

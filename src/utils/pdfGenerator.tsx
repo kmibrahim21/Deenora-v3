@@ -361,7 +361,7 @@ export const generateSeatPlanPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`seat-plan-${templateId}.pdf`);
+    await saveJsPdf(doc, `seat-plan-${templateId}.pdf`);
     onProgress?.(100);
 };
 
@@ -473,11 +473,7 @@ export const generateResultPDF = async (
         
         onProgress?.(98);
         const outFileName = `Result_${student.student_name || student.name || 'Student'}.pdf`;
-        if (typeof window !== 'undefined' && (window.AndroidInterface?.downloadFile || window.Android?.downloadFile)) {
-            await saveJsPdf(doc, outFileName);
-        } else {
-            doc.save(outFileName);
-        }
+        await saveJsPdf(doc, outFileName);
     }
     
     root.unmount();
@@ -577,7 +573,7 @@ export const generateMassMarksheetPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
+    await saveJsPdf(doc, `Mass_Marksheets_${exam.exam_name || 'All'}.pdf`);
     onProgress?.(100);
 };
 
@@ -980,7 +976,7 @@ export const generateClassResultPDF = async (
         root.unmount();
         document.body.removeChild(container);
 
-        doc.save(premiumFileName);
+        await saveJsPdf(doc, premiumFileName);
         onProgress?.(100);
         return;
     }
@@ -1048,7 +1044,7 @@ export const generateClassResultPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(classicFileName);
+    await saveJsPdf(doc, classicFileName);
     onProgress?.(100);
 };
 
@@ -1131,7 +1127,7 @@ export const generateClassFeeReportPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`Fee-Report-${className}-${month}.pdf`);
+    await saveJsPdf(doc, `Fee-Report-${className}-${month}.pdf`);
     onProgress?.(100);
 };
 
@@ -1316,7 +1312,7 @@ export const generateFeeReceiptPDF_Universal = async (
             }, 1000);
         }
     } else {
-        doc.save(`Receipt-${student.student_name}-${month}.pdf`);
+        await saveJsPdf(doc, `Receipt-${student.student_name}-${month}.pdf`);
     }
     
     onProgress?.(95);
@@ -1406,7 +1402,7 @@ export const generateFinalResultPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(finalResultFileName);
+    await saveJsPdf(doc, finalResultFileName);
     onProgress?.(100);
 };
 
@@ -1535,11 +1531,7 @@ export const generateFinalIndividualResultPDF = async (
         doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         
         onProgress?.(98);
-        if (typeof window !== 'undefined' && (window.AndroidInterface?.downloadFile || window.Android?.downloadFile)) {
-            await saveJsPdf(doc, finalMarksheetFileName);
-        } else {
-            doc.save(finalMarksheetFileName);
-        }
+        await saveJsPdf(doc, finalMarksheetFileName);
     }
 
     root.unmount();
@@ -1674,7 +1666,7 @@ export const generateFinalMassMarksheetsPDF = async (
     root.unmount();
     document.body.removeChild(container);
 
-    doc.save(massFileName);
+    await saveJsPdf(doc, massFileName);
     onProgress?.(100);
 };
 
@@ -1733,7 +1725,7 @@ export const generateAccountingReportPDF = async (
     root.unmount();
     document.body.removeChild(container);
     
-    doc.save(`Accounting_Report_${period}.pdf`);
+    await saveJsPdf(doc, `Accounting_Report_${period}.pdf`);
 };
 
 // --- CLASS ROUTINE GENERATOR ---
@@ -1817,7 +1809,7 @@ export const generateClassRoutinePDF = async (
     }
     
     onProgress?.(98);
-    doc.save(classRoutineFileName);
+    await saveJsPdf(doc, classRoutineFileName);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -1896,7 +1888,7 @@ export const generateMasterClassRoutinePDF = async (
     }
     
     onProgress?.(98);
-    doc.save(masterRoutineFileName);
+    await saveJsPdf(doc, masterRoutineFileName);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -1995,7 +1987,7 @@ export const generateExamRoutinePDF = async (
     }
     
     onProgress?.(98);
-    doc.save(examRoutineFileName);
+    await saveJsPdf(doc, examRoutineFileName);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -2053,7 +2045,7 @@ export const generateStudentListPDF = async (
     }
     
     onProgress?.(98);
-    doc.save(`Student_List_${className || 'All'}.pdf`);
+    await saveJsPdf(doc, `Student_List_${className || 'All'}.pdf`);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -2115,7 +2107,7 @@ export const generateSystemPaymentReportPDF = async (
     }
     
     onProgress?.(98);
-    doc.save(`System_Payment_Report_${period.replace(/\s+/g, '_')}.pdf`);
+    await saveJsPdf(doc, `System_Payment_Report_${period.replace(/\s+/g, '_')}.pdf`);
     root.unmount();
     document.body.removeChild(container);
     onProgress?.(100);
@@ -2293,7 +2285,7 @@ export const generateMessagePDF = async (
         onProgress?.(98);
         const fileName = (messageData.class_name || '').toLowerCase().includes('suggestion') ? 'Suggestion' : (messageData.class_name || '').toLowerCase().includes('syllabus') ? 'Syllabus' : 
                          (messageData.class_name || '').toLowerCase().includes('diary') ? 'Diary' : 'Notice';
-        doc.save(`${fileName}_${new Date().getTime()}.pdf`);
+        await saveJsPdf(doc, `${fileName}_${new Date().getTime()}.pdf`);
     } catch (error: any) {
         console.error("Error in generateMessagePDF:", error);
         throw error;
