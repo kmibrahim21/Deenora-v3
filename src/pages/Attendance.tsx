@@ -2049,7 +2049,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                           setShowErrorModal(true);
                                           return;
                                       }
-                                      const mappedAbsents = onlyAbsents.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
+                                      const mappedAbsents = onlyAbsents.map(a => ({
+                                          ...(a.students || {}),
+                                          id: a.student_id || a.id || a.students?.id,
+                                          student_name: a.student_name || a.students?.student_name || 'শিক্ষার্থী',
+                                          guardian_phone: a.guardian_phone || a.students?.guardian_phone || '',
+                                          roll: a.roll || a.students?.roll || ''
+                                      })).filter(s => s.guardian_phone && s.guardian_phone.trim() !== '');
                                       sendAbsentAlerts(mappedAbsents, selectedClass?.id === 'all' ? 'All Classes' : undefined);
                                   }} 
                                   disabled={sendingAlerts || !isOnline} 
@@ -2090,7 +2096,13 @@ const Attendance: React.FC<AttendanceProps> = ({ lang, madrasah, onBack, userId,
                                           setShowErrorModal(true);
                                           return;
                                       }
-                                      const mappedAbsents = onlyAbsents.filter(a => a.students).map(a => ({...a.students, id: a.student_id}));
+                                      const mappedAbsents = onlyAbsents.map(a => ({
+                                          ...(a.students || {}),
+                                          id: a.student_id || a.id || a.students?.id,
+                                          student_name: a.student_name || a.students?.student_name || 'শিক্ষার্থী',
+                                          guardian_phone: a.guardian_phone || a.students?.guardian_phone || '',
+                                          roll: a.roll || a.students?.roll || ''
+                                      })).filter(s => s.guardian_phone && s.guardian_phone.trim() !== '');
                                       sendAbsentVoiceAlerts(mappedAbsents, selectedClass?.id === 'all' ? 'All Classes' : undefined);
                                   }} 
                                   disabled={sendingVoiceAlerts || !isOnline || voiceTemplates.length === 0} 

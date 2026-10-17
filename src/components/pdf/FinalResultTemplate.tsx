@@ -16,12 +16,12 @@ export const FinalResultTemplate: React.FC<FinalResultProps> = ({ title, classNa
   const config = madrasah?.config_json || {};
   const t = {
     class: isBangla ? 'শ্রেণি' : 'Class',
-    rank: 'Merit Position',
+    rank: isBangla ? 'মেধা' : 'Merit',
     roll: isBangla ? 'রোল' : 'Roll',
     name: isBangla ? 'শিক্ষার্থীর নাম' : 'Student Name',
     total: isBangla ? 'মোট' : 'Total',
-    grade: isBangla ? 'গ্রেড' : 'GRADE',
-    gpa: 'GPA',
+    grade: isBangla ? 'বিভাগ / গ্রেড' : 'Grade / Division',
+    gpa: isBangla ? 'শতাংশ / GPA' : 'GPA / %',
     date: isBangla ? 'তারিখ' : 'Date',
     examController: isBangla ? 'পরীক্ষা নিয়ন্ত্রক' : 'Exam Controller',
     principal: isBangla ? 'প্রতিষ্ঠান প্রধান' : 'Principal',

@@ -14,24 +14,42 @@ export interface SmsProviderResult {
 // Simple in-memory cache to prevent double sending due to network retries
 const requestCache = new Map<string, number>();
 
-function httpsGet(url: string, agent: https.Agent): Promise<{ ok: boolean; text: string }> {
+function httpsGet(url: string, agent: https.Agent, timeoutMs = 6000): Promise<{ ok: boolean; text: string }> {
   return new Promise((resolve) => {
-    https.get(url, { agent }, (res) => {
+    let resolved = false;
+    const req = https.get(url, { agent }, (res) => {
       let data = '';
       res.on('data', (chunk) => {
         data += chunk;
       });
       res.on('end', () => {
+        if (!resolved) {
+          resolved = true;
+          resolve({
+            ok: res.statusCode ? res.statusCode >= 200 && res.statusCode < 300 : false,
+            text: data
+          });
+        }
+      });
+    });
+    req.on('error', (err) => {
+      if (!resolved) {
+        resolved = true;
         resolve({
-          ok: res.statusCode ? res.statusCode >= 200 && res.statusCode < 300 : false,
-          text: data
+          ok: false,
+          text: err.message || 'Network error'
         });
-      });
-    }).on('error', (err) => {
-      resolve({
-        ok: false,
-        text: err.message || 'Network error'
-      });
+      }
+    });
+    req.setTimeout(timeoutMs, () => {
+      if (!resolved) {
+        resolved = true;
+        req.destroy();
+        resolve({
+          ok: false,
+          text: 'Request timeout'
+        });
+      }
     });
   });
 }
@@ -53,17 +71,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'send_routed_sms' || (Array.isArray(messages) && messages.length > 0)) {
       // Fetch global system settings & institution overrides from Supabase
       const defaults = { 
-        reve_api_key: '1762419e515c6f28', 
-        reve_secret_key: '326edcba', 
-        reve_caller_id: 'DEENORA',
-        reve_client_id: '',
+        reve_api_key: 'aa407e1c6629da8e', 
+        reve_secret_key: '91051e7e', 
+        reve_caller_id: '1234',
+        reve_client_id: 'DEENORA',
         reve_non_masking_id: '',
-        automas_api_key: '',
+        automas_api_key: '10f3d0e31061dd30138ef383b2bd49f1',
         automas_masking_sender_id: '',
-        automas_non_masking_sender_id: '',
+        automas_non_masking_sender_id: '09617640326',
         sms_provider_config: {
           reve: { masking_enabled: true, non_masking_enabled: true },
-          automas: { masking_enabled: false, non_masking_enabled: false },
+          automas: { masking_enabled: false, non_masking_enabled: true },
           primary: { masking: 'reve', non_masking: 'reve' },
           masking_rate: 0.55,
           non_masking_rate: 0.35
@@ -75,31 +93,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       try {
         const supabase = getSupabaseAdmin();
-        const { data: sysData } = await supabase
-          .from('system_settings')
-          .select('*')
-          .eq('id', '00000000-0000-0000-0000-000000000001')
-          .maybeSingle();
-        if (sysData) {
-          sysSettings = {
-            ...sysSettings,
-            ...sysData,
-            reve_non_masking_id: sysData.reve_non_masking_id || sysData.reve_caller_id || '',
-            sms_provider_config: sysData.sms_provider_config || sysSettings.sms_provider_config
-          };
-        }
-
-        if (institutionId) {
-          const { data: instData } = await supabase
-            .from('institutions')
-            .select('reve_api_key, reve_secret_key, reve_client_id, reve_caller_id, reve_non_masking_id, automas_api_key, automas_masking_sender_id, automas_non_masking_sender_id')
-            .eq('id', institutionId)
-            .single();
-          if (instData) {
-            instSettings = {
-              ...instData,
-              reve_non_masking_id: instData.reve_non_masking_id || instData.reve_caller_id || ''
+        if (supabase) {
+          const { data: sysData } = await supabase
+            .from('system_settings')
+            .select('*')
+            .eq('id', '00000000-0000-0000-0000-000000000001')
+            .maybeSingle();
+          if (sysData) {
+            sysSettings = {
+              ...sysSettings,
+              ...sysData,
+              reve_api_key: sysData.reve_api_key || sysSettings.reve_api_key,
+              reve_secret_key: sysData.reve_secret_key || sysSettings.reve_secret_key,
+              reve_non_masking_id: sysData.reve_non_masking_id || sysData.reve_caller_id || '',
+              sms_provider_config: sysData.sms_provider_config || sysSettings.sms_provider_config
             };
+          }
+
+          if (institutionId) {
+            const { data: instData } = await supabase
+              .from('institutions')
+              .select('reve_api_key, reve_secret_key, reve_client_id, reve_caller_id, reve_non_masking_id, automas_api_key, automas_masking_sender_id, automas_non_masking_sender_id')
+              .eq('id', institutionId)
+              .single();
+            if (instData) {
+              instSettings = {
+                ...instData,
+                reve_non_masking_id: instData.reve_non_masking_id || instData.reve_caller_id || ''
+              };
+            }
           }
         }
       } catch (dbErr) {
@@ -112,245 +134,142 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Ensure API keys actually exist before considering them active
       const hasReveKey = Boolean((instSettings.reve_api_key || sysSettings.reve_api_key) && (instSettings.reve_secret_key || sysSettings.reve_secret_key));
       const hasAutomasKey = Boolean(instSettings.automas_api_key || sysSettings.automas_api_key);
-      
-      const reveMaskingActive = Boolean(config.reve?.masking_enabled) && hasReveKey;
-      const reveNonMaskingActive = Boolean(config.reve?.non_masking_enabled) && hasReveKey;
-      const automasMaskingActive = Boolean(config.automas?.masking_enabled) && hasAutomasKey;
-      const automasNonMaskingActive = Boolean(config.automas?.non_masking_enabled) && hasAutomasKey;
 
       const hasPersonalReveKey = Boolean(instSettings.reve_api_key?.trim() && instSettings.reve_secret_key?.trim());
 
-      let finalType: 'masking' | 'non_masking';
-      let selectedProvider: 'reve' | 'automas';
+      let finalType: 'masking' | 'non_masking' = smsType === 'non_masking' ? 'non_masking' : 'masking';
+      let primaryProvider: 'reve' | 'automas' = 'reve';
 
       if (hasPersonalReveKey) {
-        // If they have personal REVE key set, they ALWAYS route to REVE Masking!
         finalType = 'masking';
-        selectedProvider = 'reve';
+        primaryProvider = 'reve';
       } else {
-        // Determine finalType based on requested smsType or default_type config
-        let type: 'masking' | 'non_masking' | 'unknown' = smsType === 'non_masking' ? 'non_masking' : (smsType === 'masking' ? 'masking' : 'unknown');
-        
-        if (type === 'unknown') {
-          type = config.default_type || 'non_masking';
-        }
-
-        finalType = type as 'masking' | 'non_masking';
-
-        // Check active providers for this type
-        const reveActive = finalType === 'masking' ? reveMaskingActive : reveNonMaskingActive;
-        const automasActive = finalType === 'masking' ? automasMaskingActive : automasNonMaskingActive;
-
-        if (reveActive && automasActive) {
-          const primary = config.primary?.[finalType];
-          selectedProvider = primary === 'automas' ? 'automas' : 'reve';
-        } else if (reveActive) {
-          selectedProvider = 'reve';
-        } else if (automasActive) {
-          selectedProvider = 'automas';
-        } else {
-          // Fallback to alternate type if nothing is active for selected type
-          const altType = finalType === 'masking' ? 'non_masking' : 'masking';
-          const altReveActive = altType === 'masking' ? reveMaskingActive : reveNonMaskingActive;
-          const altAutomasActive = altType === 'masking' ? automasMaskingActive : automasNonMaskingActive;
-
-          if (altReveActive && altAutomasActive) {
-            finalType = altType;
-            const primary = config.primary?.[finalType];
-            selectedProvider = primary === 'automas' ? 'automas' : 'reve';
-          } else if (altReveActive) {
-            finalType = altType;
-            selectedProvider = 'reve';
-          } else if (altAutomasActive) {
-            finalType = altType;
-            selectedProvider = 'automas';
-          } else {
-            // Absolute fallback to Automas or REVE
-            selectedProvider = hasReveKey ? 'reve' : 'automas';
-          }
+        const configuredPrimary = config.primary?.[finalType] || config.primary?.masking || 'reve';
+        if (configuredPrimary === 'automas' && hasAutomasKey) {
+          primaryProvider = 'automas';
+        } else if (hasReveKey) {
+          primaryProvider = 'reve';
+        } else if (hasAutomasKey) {
+          primaryProvider = 'automas';
         }
       }
 
-      const results: SmsProviderResult[] = [];
+      // Setup REVE send function
+      const reveApiKey = (instSettings.reve_api_key || sysSettings.reve_api_key || 'aa407e1c6629da8e').trim();
+      const reveSecretKey = (instSettings.reve_secret_key || sysSettings.reve_secret_key || '91051e7e').trim();
+      const reveSenderId = (
+        finalType === 'masking'
+          ? (instSettings.reve_client_id || sysSettings.reve_client_id || sysSettings.reve_caller_id || 'DEENORA')
+          : (instSettings.reve_non_masking_id || sysSettings.reve_non_masking_id || sysSettings.reve_caller_id || instSettings.reve_client_id || sysSettings.reve_client_id || 'DEENORA')
+      ).trim() || 'DEENORA';
 
-      if (selectedProvider === 'reve') {
-        const apiKey = (instSettings.reve_api_key || sysSettings.reve_api_key || '1762419e515c6f28').trim();
-        const secretKey = (instSettings.reve_secret_key || sysSettings.reve_secret_key || '').trim();
-        const senderId = (
-          finalType === 'masking'
-            ? (instSettings.reve_client_id || sysSettings.reve_client_id || sysSettings.reve_caller_id || '')
-            : (instSettings.reve_non_masking_id || sysSettings.reve_non_masking_id || sysSettings.reve_caller_id || instSettings.reve_client_id || sysSettings.reve_client_id || '')
-        ).trim();
+      const sendSingleReve = async (item: { phone?: string; recipient?: string; mobile?: string; text: string }): Promise<SmsProviderResult> => {
+        const rawPhone = item.phone || item.recipient || item.mobile || '';
+        let normPhone = String(rawPhone).replace(/\D/g, '');
+        if (normPhone.startsWith('01') && normPhone.length === 11) {
+          normPhone = `88${normPhone}`;
+        } else if (normPhone.startsWith('1') && normPhone.length === 10) {
+          normPhone = `880${normPhone}`;
+        }
 
-        for (const item of messages) {
-          let normPhone = item.recipient.replace(/\D/g, '');
-          if (normPhone.startsWith('01') && normPhone.length === 11) {
-            normPhone = `88${normPhone}`;
-          } else if (normPhone.startsWith('1') && normPhone.length === 10) {
-            normPhone = `880${normPhone}`;
-          }
-          const url = `https://smpp.revesms.com:7790/sendtext?apikey=${encodeURIComponent(apiKey)}&secretkey=${encodeURIComponent(secretKey)}&callerID=${encodeURIComponent(senderId)}&toUser=${encodeURIComponent(normPhone)}&messageContent=${encodeURIComponent(item.text)}&type=3`;
+        if (!normPhone) {
+          return {
+            success: false,
+            provider: 'reve',
+            recipient: rawPhone,
+            errorMessage: 'Invalid or missing phone number'
+          };
+        }
+
+        const url = `https://smpp.revesms.com:7790/sendtext?apikey=${encodeURIComponent(reveApiKey)}&secretkey=${encodeURIComponent(reveSecretKey)}&callerID=${encodeURIComponent(reveSenderId)}&toUser=${encodeURIComponent(normPhone)}&messageContent=${encodeURIComponent(item.text)}&type=3`;
+
+        try {
+          const getResult = await httpsGet(url, agent, 6000);
+          const resText = getResult.text.trim();
+
+          let isSuccess = false;
+          let msgId: string | undefined = undefined;
 
           try {
-            const getResult = await httpsGet(url, agent);
-            const resText = getResult.text.trim();
-
+            const j = JSON.parse(resText);
+            if (j.Status === "0" || j.Status === 0 || j.status === "0" || j.status === 0) {
+              isSuccess = true;
+              msgId = String(j.Message_ID || j.message_id || j.MessageId || Date.now());
+            } else if (j.Message_ID && String(j.Message_ID).trim() !== '' && j.Status !== "109" && j.Status !== "101" && !j.Text?.includes('Invalid')) {
+              isSuccess = true;
+              msgId = String(j.Message_ID);
+            }
+          } catch (pE) {
             const isNumericId = /^\d+$/.test(resText);
-            const isSuccess = getResult.ok && (
+            isSuccess = getResult.ok && (
               isNumericId || 
               resText.toLowerCase().includes('success') || 
               resText.startsWith('1001') ||
               resText.toUpperCase().includes('ACCEPTD') ||
               resText.toUpperCase().includes('ACCEPTED') ||
-              resText.includes('"Status":"0"') ||
-              resText.includes('"Status": "0"') ||
-              resText.includes('"Status":0') ||
-              resText.includes('Message_ID') ||
               resText.toLowerCase().includes('submitted')
             );
-
-            // Extract message ID if JSON
-            let msgId = resText;
-            try {
-              const j = JSON.parse(resText);
-              if (j.Message_ID || j.message_id || j.MessageId) {
-                msgId = String(j.Message_ID || j.message_id || j.MessageId);
-              }
-            } catch (pE) {
-              // Plain text
-            }
-
-            results.push({
-              success: isSuccess,
-              provider: 'reve',
-              recipient: item.recipient,
-              providerMessageId: isSuccess ? msgId : undefined,
-              errorCode: !isSuccess ? resText : undefined,
-              errorMessage: !isSuccess ? `REVE Error: ${resText}` : undefined
-            });
-          } catch (err: any) {
-            results.push({
-              success: false,
-              provider: 'reve',
-              recipient: item.recipient,
-              errorMessage: err.message || 'Network request failed'
-            });
+            if (isSuccess) msgId = resText;
           }
-        }
-      } else if (selectedProvider === 'automas') {
-        const apiKey = (instSettings.automas_api_key || sysSettings.automas_api_key || '').trim();
-        const rawSenderId = (
-          finalType === 'non_masking'
-            ? (instSettings.automas_non_masking_sender_id || sysSettings.automas_non_masking_sender_id || instSettings.automas_masking_sender_id || sysSettings.automas_masking_sender_id || '')
-            : (instSettings.automas_masking_sender_id || sysSettings.automas_masking_sender_id || instSettings.automas_non_masking_sender_id || sysSettings.automas_non_masking_sender_id || '')
-        ).trim();
 
-        if (!apiKey || !rawSenderId) {
-          const missingFields = [];
-          if (!apiKey) missingFields.push('API Key');
-          if (!rawSenderId) missingFields.push(`Sender ID for ${finalType === 'non_masking' ? 'Non-Masking' : 'Masking'}`);
-          
-          return res.status(400).json({
+          return {
+            success: isSuccess,
+            provider: 'reve',
+            recipient: rawPhone,
+            providerMessageId: isSuccess ? msgId : undefined,
+            errorCode: !isSuccess ? resText : undefined,
+            errorMessage: !isSuccess ? `REVE error: ${resText}` : undefined
+          };
+        } catch (err: any) {
+          return {
             success: false,
-            error: `Automas SMS configuration incomplete: Missing ${missingFields.join(' & ')}. Please configure in Super Admin → SMS Settings.`
-          });
+            provider: 'reve',
+            recipient: rawPhone,
+            errorMessage: err.message || 'Network request failed'
+          };
         }
+      };
 
-        // Clean senderId (remove dashes, spaces e.g. "09617-640326" -> "09617640326")
-        const cleanSenderId = rawSenderId.replace(/[\s-]/g, '');
-        const senderCandidates: string[] = [];
-        if (cleanSenderId) {
-          senderCandidates.push(cleanSenderId);
-          if (cleanSenderId.startsWith('0') && cleanSenderId.length === 11) {
-            senderCandidates.push(`88${cleanSenderId}`);
-          } else if (cleanSenderId.startsWith('880') && cleanSenderId.length === 13) {
-            senderCandidates.push(cleanSenderId.slice(2));
-          }
-        }
-        if (!senderCandidates.includes(rawSenderId)) {
-          senderCandidates.push(rawSenderId);
-        }
+      // Setup Automas send function
+      const automasApiKey = (instSettings.automas_api_key || sysSettings.automas_api_key || '').trim();
+      const rawAutomasSenderId = (
+        finalType === 'non_masking'
+          ? (instSettings.automas_non_masking_sender_id || sysSettings.automas_non_masking_sender_id || instSettings.automas_masking_sender_id || sysSettings.automas_masking_sender_id || '')
+          : (instSettings.automas_masking_sender_id || sysSettings.automas_masking_sender_id || instSettings.automas_non_masking_sender_id || sysSettings.automas_non_masking_sender_id || '')
+      ).trim();
 
-        const AUTOMAS_ERROR_MAP: Record<number | string, string> = {
-          0: 'Success',
-          101: 'বার্তা অনেক লম্বা (Invalid Message Length)',
-          102: 'Sender ID অনুমোদিত নয় (Invalid / Unapproved Sender ID)',
-          103: 'Automas Authentication পয়েন্টে ত্রুটি',
-          104: 'ব্যবহারকারী অকার্যকর (Invalid User)',
-          105: 'মোবাইল নম্বরটি সঠিক নয় (Invalid MSISDN)',
-          106: 'Automas API Key সঠিক নয় (Incorrect API Key)',
-          107: 'Automas অ্যাকাউন্ট সাময়িকভাবে স্থগিত',
-          108: 'IP Address Not Allowed',
-          109: 'API Access Not Allowed',
-          110: 'গ্রাহকের সিমে DND সার্ভিস অন করা আছে (Do Not Disturb)',
-          111: 'বার্তায় নিষিদ্ধ শব্দ (Spam Word) পাওয়া গেছে',
-          600: 'অপারেটর বা গেটওয়ে রুট ট্রাফিকে সমস্যা (Automos Carrier Error 600)',
-          1000: 'Automas গেটওয়েতে পর্যাপ্ত এসএমএস ব্যালেন্স নেই (Insufficient Balance)',
-          2300: 'Destination Route Issue',
-          2400: 'Destination Route Not Permitted',
-          3300: 'Automas সিস্টেম ত্রুটি',
-          2000: 'মোবাইল অপারেটর সার্ভিস আপাতত বন্ধ',
-          3000: 'মোবাইল অপারেটর সার্ভিস আপাতত বন্ধ',
-          4000: 'মোবাইল অপারেটর সার্ভিস আপাতত বন্ধ'
-        };
+      const AUTOMAS_ERROR_MAP: Record<number | string, string> = {
+        0: 'Success',
+        101: 'বার্তা অনেক লম্বা (Invalid Message Length)',
+        102: 'Sender ID অনুমোদিত নয় (Invalid / Unapproved Sender ID)',
+        103: 'Automas Authentication পয়েন্টে ত্রুটি',
+        104: 'ব্যবহারকারী অকার্যকর (Invalid User)',
+        105: 'মোবাইল নম্বরটি সঠিক নয় (Invalid MSISDN)',
+        106: 'Automas API Key সঠিক নয় (Incorrect API Key)',
+        107: 'Automas অ্যাকাউন্ট সাময়িকভাবে স্থগিত',
+        110: 'গ্রাহকের সিমে DND সার্ভিস অন করা আছে (Do Not Disturb)',
+        111: 'বার্তায় নিষিদ্ধ শব্দ (Spam Word) পাওয়া গেছে',
+        1000: 'Automas গেটওয়েতে পর্যাপ্ত এসএমএস ব্যালেন্স নেই (Insufficient Balance)'
+      };
 
-        const parseAutomasResponse = (parsedJson: any, resText: string) => {
-          let isSuccess = false;
-          let msgId: string | undefined = undefined;
-          let errorMsg: string | undefined = undefined;
+      const parseAutomasResponse = (parsedJson: any, resText: string) => {
+        let isSuccess = false;
+        let msgId: string | undefined = undefined;
+        let errorMsg: string | undefined = undefined;
 
-          if (parsedJson) {
-            if (Array.isArray(parsedJson.response) && parsedJson.response.length > 0) {
-              const first = parsedJson.response[0];
-              const st = first.status !== undefined ? Number(first.status) : undefined;
-              if (st === 0) {
-                isSuccess = true;
-                msgId = String(first.id || first.sid || first.cid || Date.now());
-              } else if (st !== undefined) {
-                errorMsg = AUTOMAS_ERROR_MAP[st] || `Automas Error Code ${st}`;
-              }
-            } else if (parsedJson.response !== undefined && (typeof parsedJson.response === 'number' || typeof parsedJson.response === 'string')) {
-              const respVal = parsedJson.response;
-              const numCode = Number(respVal);
-              if (!isNaN(numCode)) {
-                if (numCode === 0) {
-                  isSuccess = true;
-                  msgId = String(Date.now());
-                } else {
-                  errorMsg = AUTOMAS_ERROR_MAP[numCode] || `Automas Error Code ${numCode}`;
-                }
-              } else if (String(respVal).toLowerCase().includes('success') || String(respVal).toLowerCase().includes('submitted')) {
-                isSuccess = true;
-                msgId = String(Date.now());
-              } else {
-                errorMsg = String(respVal);
-              }
-            } else if (parsedJson.status !== undefined) {
-              const st = Number(parsedJson.status);
-              if (st === 0 || parsedJson.status === 'SUCCESS' || parsedJson.status === 'success') {
-                isSuccess = true;
-                msgId = String(parsedJson.id || parsedJson.sid || Date.now());
-              } else if (!isNaN(st)) {
-                errorMsg = AUTOMAS_ERROR_MAP[st] || `Automas Error Code ${st}`;
-              }
-            } else if (parsedJson.response_code !== undefined) {
-              const rc = Number(parsedJson.response_code);
-              if (rc === 202 || rc === 200 || rc === 0) {
-                isSuccess = true;
-                msgId = String(parsedJson.message_id || parsedJson.messageId || Date.now());
-              } else {
-                errorMsg = AUTOMAS_ERROR_MAP[rc] || parsedJson.error_message || `Automas Error Code ${rc}`;
-              }
-            } else if (parsedJson.error_message) {
-              errorMsg = parsedJson.error_message;
-            } else if (parsedJson.success_message) {
+        if (parsedJson) {
+          if (Array.isArray(parsedJson.response) && parsedJson.response.length > 0) {
+            const first = parsedJson.response[0];
+            const st = first.status !== undefined ? Number(first.status) : undefined;
+            if (st === 0) {
               isSuccess = true;
-              msgId = String(Date.now());
+              msgId = String(first.id || first.sid || first.cid || Date.now());
+            } else if (st !== undefined) {
+              errorMsg = AUTOMAS_ERROR_MAP[st] || `Automas Error Code ${st}`;
             }
-          }
-
-          if (!isSuccess && !errorMsg && resText) {
-            const numCode = Number(resText.trim());
+          } else if (parsedJson.response !== undefined && (typeof parsedJson.response === 'number' || typeof parsedJson.response === 'string')) {
+            const respVal = parsedJson.response;
+            const numCode = Number(respVal);
             if (!isNaN(numCode)) {
               if (numCode === 0) {
                 isSuccess = true;
@@ -358,160 +277,138 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               } else {
                 errorMsg = AUTOMAS_ERROR_MAP[numCode] || `Automas Error Code ${numCode}`;
               }
-            } else if (resText.toLowerCase().includes('success') || resText.toLowerCase().includes('submitted')) {
+            } else if (String(respVal).toLowerCase().includes('success') || String(respVal).toLowerCase().includes('submitted')) {
               isSuccess = true;
               msgId = String(Date.now());
             } else {
-              errorMsg = resText;
+              errorMsg = String(respVal);
+            }
+          } else if (parsedJson.status !== undefined) {
+            const st = Number(parsedJson.status);
+            if (st === 0 || parsedJson.status === 'SUCCESS' || parsedJson.status === 'success') {
+              isSuccess = true;
+              msgId = String(parsedJson.id || parsedJson.sid || Date.now());
+            } else if (!isNaN(st)) {
+              errorMsg = AUTOMAS_ERROR_MAP[st] || `Automas Error Code ${st}`;
+            }
+          } else if (parsedJson.response_code !== undefined) {
+            const rc = Number(parsedJson.response_code);
+            if (rc === 202 || rc === 200 || rc === 0) {
+              isSuccess = true;
+              msgId = String(parsedJson.message_id || parsedJson.messageId || Date.now());
+            } else {
+              errorMsg = AUTOMAS_ERROR_MAP[rc] || parsedJson.error_message || `Automas Error Code ${rc}`;
             }
           }
-
-          return { isSuccess, msgId, errorMsg };
-        };
-
-        for (const item of messages) {
-          let normPhone = String(item.recipient || '').replace(/\D/g, '');
-          if (normPhone.length === 10 && normPhone.startsWith('1')) {
-            normPhone = `0${normPhone}`;
-          }
-
-          const phone11 = normPhone.startsWith('880') && normPhone.length === 13 ? normPhone.slice(2) : normPhone;
-          const phone13 = normPhone.startsWith('01') && normPhone.length === 11 ? `88${normPhone}` : normPhone;
-
-          const isUnicode = /[^\x00-\x7F]/.test(item.text);
-
-          let isSuccess = false;
-          let msgId: string | undefined = undefined;
-          let errorMsg: string | undefined = undefined;
-
-          // Try each sender ID candidate until success
-          for (const currentSenderId of senderCandidates) {
-            if (isSuccess) break;
-
-            const phoneCandidates = [phone11, phone13];
-
-            for (const currentPhone of phoneCandidates) {
-              if (isSuccess) break;
-
-              // Attempt 1: Standard Single SMS JSON POST
-              try {
-                const payload: any = {
-                  api_key: apiKey,
-                  senderid: currentSenderId,
-                  type: isUnicode ? 'unicode' : 'text',
-                  scheduledDateTime: '',
-                  msg: item.text,
-                  contacts: currentPhone
-                };
-
-                if (isUnicode) {
-                  payload.smsformat = 8;
-                }
-
-                const response = await fetch('https://api.automas.com.bd/smsapiv3', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload)
-                });
-
-                const resText = await response.text();
-                let parsedJson: any = null;
-                try { parsedJson = JSON.parse(resText); } catch (pE) {}
-
-                const parsed = parseAutomasResponse(parsedJson, resText);
-                if (parsed.isSuccess) {
-                  isSuccess = true;
-                  msgId = parsed.msgId;
-                  errorMsg = undefined;
-                  break;
-                } else if (parsed.errorMsg) {
-                  errorMsg = parsed.errorMsg;
-                }
-              } catch (postErr: any) {
-                errorMsg = postErr.message;
-              }
-
-              // Attempt 2: Dynamic SMS JSON POST
-              if (!isSuccess) {
-                try {
-                  const dynamicPayload = {
-                    apikey: apiKey,
-                    sender: currentSenderId,
-                    messages: [
-                      {
-                        id: 1,
-                        msisdn: currentPhone,
-                        smstext: item.text
-                      }
-                    ]
-                  };
-
-                  const response = await fetch('https://api.automas.com.bd/smsapiv3', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dynamicPayload)
-                  });
-
-                  const resText = await response.text();
-                  let parsedJson: any = null;
-                  try { parsedJson = JSON.parse(resText); } catch (pE) {}
-
-                  const parsed = parseAutomasResponse(parsedJson, resText);
-                  if (parsed.isSuccess) {
-                    isSuccess = true;
-                    msgId = parsed.msgId;
-                    errorMsg = undefined;
-                    break;
-                  } else if (parsed.errorMsg) {
-                    errorMsg = parsed.errorMsg;
-                  }
-                } catch (dynErr: any) {
-                  // Dynamic attempt error
-                }
-              }
-
-              // Attempt 3: HTTP GET Fallback
-              if (!isSuccess) {
-                try {
-                  const getUrl = `https://api.automas.com.bd/smsapiv3?apikey=${encodeURIComponent(apiKey)}&sender=${encodeURIComponent(currentSenderId)}&msisdn=${encodeURIComponent(currentPhone)}&smstext=${encodeURIComponent(item.text)}${isUnicode ? '&type=unicode&smsformat=8' : '&type=text'}`;
-                  const getRes = await fetch(getUrl, { method: 'GET' });
-                  const getResText = await getRes.text();
-                  let getJson: any = null;
-                  try { getJson = JSON.parse(getResText); } catch (e) {}
-
-                  const parsed = parseAutomasResponse(getJson, getResText);
-                  if (parsed.isSuccess) {
-                    isSuccess = true;
-                    msgId = parsed.msgId;
-                    errorMsg = undefined;
-                    break;
-                  } else if (parsed.errorMsg) {
-                    errorMsg = parsed.errorMsg;
-                  }
-                } catch (getErr) {
-                  // Fallback fetch failed
-                }
-              }
-            }
-          }
-
-          if (!isSuccess && !errorMsg) {
-            errorMsg = 'Automas SMS sending failed';
-          }
-
-          results.push({
-            success: isSuccess,
-            provider: 'automas',
-            recipient: item.recipient,
-            providerMessageId: msgId,
-            errorMessage: !isSuccess ? errorMsg : undefined
-          });
         }
+
+        if (!isSuccess && !errorMsg && resText) {
+          const numCode = Number(resText.trim());
+          if (!isNaN(numCode)) {
+            if (numCode === 0) {
+              isSuccess = true;
+              msgId = String(Date.now());
+            } else {
+              errorMsg = AUTOMAS_ERROR_MAP[numCode] || `Automas Error Code ${numCode}`;
+            }
+          } else if (resText.toLowerCase().includes('success') || resText.toLowerCase().includes('submitted')) {
+            isSuccess = true;
+            msgId = String(Date.now());
+          } else {
+            errorMsg = resText;
+          }
+        }
+
+        return { isSuccess, msgId, errorMsg };
+      };
+
+      const sendSingleAutomas = async (item: { phone?: string; recipient?: string; mobile?: string; text: string }): Promise<SmsProviderResult> => {
+        const rawPhone = item.phone || item.recipient || item.mobile || '';
+        if (!automasApiKey || !rawAutomasSenderId) {
+          return {
+            success: false,
+            provider: 'automas',
+            recipient: rawPhone,
+            errorMessage: 'Automas credentials not configured'
+          };
+        }
+
+        let normPhone = String(rawPhone).replace(/\D/g, '');
+        if (normPhone.length === 10 && normPhone.startsWith('1')) normPhone = `0${normPhone}`;
+        const currentPhone = normPhone.startsWith('880') && normPhone.length === 13 ? normPhone.slice(2) : normPhone;
+        const isUnicode = /[^\x00-\x7F]/.test(item.text);
+
+        try {
+          const payload: any = {
+            api_key: automasApiKey,
+            senderid: rawAutomasSenderId,
+            type: isUnicode ? 'unicode' : 'text',
+            scheduledDateTime: '',
+            msg: item.text,
+            contacts: currentPhone
+          };
+          if (isUnicode) payload.smsformat = 8;
+
+          const response = await fetch('https://api.automas.com.bd/smsapiv3', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(3000)
+          });
+
+          const resText = await response.text();
+          let parsedJson: any = null;
+          try { parsedJson = JSON.parse(resText); } catch (pE) {}
+
+          const parsed = parseAutomasResponse(parsedJson, resText);
+          return {
+            success: parsed.isSuccess,
+            provider: 'automas',
+            recipient: rawPhone,
+            providerMessageId: parsed.msgId,
+            errorMessage: !parsed.isSuccess ? (parsed.errorMsg || 'Automas delivery failed') : undefined
+          };
+        } catch (err: any) {
+          return {
+            success: false,
+            provider: 'automas',
+            recipient: rawPhone,
+            errorMessage: err.message || 'Automas request failed'
+          };
+        }
+      };
+
+      // Dispatcher with Auto-Fallback
+      const sendSingleWithFallback = async (item: { phone?: string; recipient?: string; mobile?: string; text: string }): Promise<SmsProviderResult> => {
+        if (primaryProvider === 'automas' && automasApiKey && rawAutomasSenderId) {
+          const autoRes = await sendSingleAutomas(item);
+          if (autoRes.success) return autoRes;
+          // Fallback to REVE if Automas failed or timed out
+          const reveRes = await sendSingleReve(item);
+          return reveRes;
+        } else {
+          const reveRes = await sendSingleReve(item);
+          if (reveRes.success) return reveRes;
+          // Fallback to Automas if REVE failed
+          if (automasApiKey && rawAutomasSenderId) {
+            const autoRes = await sendSingleAutomas(item);
+            if (autoRes.success) return autoRes;
+          }
+          return reveRes;
+        }
+      };
+
+      const results: SmsProviderResult[] = [];
+      const chunkSize = 10;
+      for (let i = 0; i < messages.length; i += chunkSize) {
+        const chunk = messages.slice(i, i + chunkSize);
+        const chunkResults = await Promise.all(chunk.map(sendSingleWithFallback));
+        results.push(...chunkResults);
       }
 
       return res.status(200).json({
         success: true,
-        provider: selectedProvider,
+        provider: primaryProvider,
         smsType: finalType,
         results
       });
@@ -520,7 +417,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 2. Legacy requests support (apiUrls / apiUrl)
     if (apiUrls && Array.isArray(apiUrls)) {
       const results = await Promise.allSettled(apiUrls.map(async (url) => {
-        const response = await fetch(url, { method: 'GET' });
+        const response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(8000) });
         const text = await response.text();
         return { success: response.ok, response: text, url };
       }));
@@ -548,7 +445,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const response = await fetch(apiUrl, { method: 'GET' });
+    const response = await fetch(apiUrl, { method: 'GET', signal: AbortSignal.timeout(8000) });
     const text = await response.text();
 
     return res.status(200).json({ success: true, response: text });

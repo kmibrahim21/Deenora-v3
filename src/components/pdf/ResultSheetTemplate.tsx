@@ -88,12 +88,13 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
   ) : '';
 
   const finalGrade = hasAnyMark ? (
-    student.grade && student.grade !== 'F' 
+    student.grade && student.grade !== 'F' && student.grade !== 'রাসিব' && student.grade !== 'Failed'
       ? student.grade 
+      : (student.grade === 'রাসিব' || student.grade === 'Failed') ? student.grade
       : averageGpa === '5.0' ? 'A+' : Number(averageGpa) >= 4.0 ? 'A' : Number(averageGpa) >= 3.5 ? 'A-' : Number(averageGpa) >= 3.0 ? 'B' : Number(averageGpa) >= 2.0 ? 'C' : Number(averageGpa) >= 1.0 ? 'D' : 'F'
   ) : '';
 
-  const isPassed = hasAnyMark && finalGrade !== 'F';
+  const isPassed = hasAnyMark && finalGrade !== 'F' && finalGrade !== 'রাসিব' && finalGrade !== 'Failed';
 
   const formattedAttendance = React.useMemo(() => {
     const att = student.attendance;
@@ -106,13 +107,17 @@ export const ResultSheetTemplate: React.FC<ResultSheetProps> = ({
   const assessmentText = React.useMemo(() => {
     if (!hasAnyMark) return '-';
     if (isBangla) {
-      if (finalGrade === 'A+') return 'চমৎকার';
-      if (finalGrade === 'A') return 'উত্তম';
+      if (finalGrade === 'A+' || finalGrade === 'মুমতাজ') return 'চমৎকার';
+      if (finalGrade === 'A' || finalGrade === 'জায়্যিদ জিদ্দান') return 'উত্তম';
+      if (finalGrade === 'জায়্যিদ') return 'সন্তোষজনক';
+      if (finalGrade === 'মকবুল') return 'সাধারণ';
       if (isPassed) return 'সন্তোষজনক';
       return 'প্রচেষ্টা প্রয়োজন';
     }
-    if (finalGrade === 'A+') return 'Outstanding';
-    if (finalGrade === 'A') return 'Very Good';
+    if (finalGrade === 'A+' || finalGrade === 'মুমতাজ') return 'Outstanding';
+    if (finalGrade === 'A' || finalGrade === 'জায়্যিদ জিদ্দান') return 'Very Good';
+    if (finalGrade === 'জায়্যিদ') return 'Good';
+    if (finalGrade === 'মকবুল') return 'Satisfactory';
     if (isPassed) return 'Satisfactory';
     return 'Needs Improvement';
   }, [isBangla, finalGrade, isPassed, hasAnyMark]);

@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from 'supabase';
 import { Institution, Class, Student, BefaqExam, BefaqSubject, Language, UserRole, Profile } from 'types';
-import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Download, CreditCard, Trash2, RefreshCw, Edit2, Edit3, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash, Palette, Clock, ZoomIn, ZoomOut, Maximize, Upload, Globe, Eye, EyeOff, Type } from 'lucide-react';
+import { GraduationCap, Plus, BookOpen, Trophy, Save, X, Loader2, ArrowLeft, Calendar, LayoutGrid, Layout, Download, CreditCard, Trash2, RefreshCw, Edit2, Edit3, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, Hash, Palette, Clock, ZoomIn, ZoomOut, Maximize, Upload, Globe, Eye, EyeOff, Type, Printer } from 'lucide-react';
 import { t } from 'translations';
 import SmartResultAnalytics from '../../../../components/SmartResultAnalytics';
 import { generateAdmitCardPDF } from '../../../../utils/admitCardGenerator';
-import { generateSeatPlanPDF, generateExamRoutinePDF } from '../../../../utils/pdfGenerator';
+import { generateSeatPlanPDF, generateExamRoutinePDF, generateFinalResultPDF, generateClassResultPDF, generateResultPDF, generateMassMarksheetPDF } from '../../../../utils/pdfGenerator';
 import { SeatAssignment, ExamRoom } from 'types';
 import { sortMadrasahClasses } from '../../../../pages/Classes';
 import FinalResults from './FinalResults';
@@ -44,7 +44,10 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
   const [examToDelete, setExamToDelete] = useState<string | null>(null);
   const [subjectToDelete, setSubjectToDelete] = useState<string | null>(null);
   const [showDownloadLangModal, setShowDownloadLangModal] = useState(false);
-  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn') => void) | null>(null);
+  const [downloadAction, setDownloadAction] = useState<((lang: 'en' | 'bn', templateId?: 'classic' | 'premium') => Promise<void> | void) | null>(null);
+  const [downloadActionType, setDownloadActionType] = useState<'marksheet' | 'result-sheet' | 'single-marksheet' | 'admit-card' | null>(null);
+  const [selectedResultTemplate, setSelectedResultTemplate] = useState<'classic' | 'premium'>('premium');
+  const [selectedStudentForMarksheet, setSelectedStudentForMarksheet] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   
   // Exam Routine Feature States
@@ -835,6 +838,41 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     setLoading(false);
   };
 
+  const fetchRankData = async (examId: string, classId: string) => {
+    setLoading(true);
+    try {
+      const activeYearId = madrasah?.config_json?.active_academic_year_id;
+      let studentQuery = supabase.from('students').select('*').eq('class_id', classId).order('roll', { ascending: true });
+      if ((window as any)._hasIsActive !== false) {
+        studentQuery = studentQuery.eq('is_active', true);
+      }
+      if (activeYearId) {
+        studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+      }
+
+      const [subsRes, stdsRes, marksRes] = await Promise.all([
+        supabase.from('befaq_subjects').select('*').eq('exam_id', examId).order('sort_order', { ascending: true }),
+        studentQuery,
+        supabase.from('befaq_results').select('*').eq('exam_id', examId)
+      ]);
+
+      if (subsRes.data) setSubjects(subsRes.data);
+      if (stdsRes.data) setStudents(stdsRes.data);
+      if (marksRes.data) {
+        const initialMarks: any = {};
+        marksRes.data.forEach(m => {
+          if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
+          initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
+        });
+        setMarksData(initialMarks);
+      }
+    } catch (err) {
+      console.error('Error fetching Befaq rank data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownloadAdmitCard = (exam: BefaqExam) => {
       setExamForAdmitCard(exam);
       setShowAdmitCardModal(true);
@@ -1361,6 +1399,401 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
     return 'রাসিব';
   };
 
+  const handleDownloadClassResult = async (downloadLang: 'en' | 'bn' = lang, templateId: 'classic' | 'premium' = selectedResultTemplate, targetExam?: BefaqExam | null) => {
+    const examToUse = targetExam || selectedExam;
+    if (!examToUse || !madrasah) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(5);
+
+    try {
+      let activeSubjects = subjects;
+      if (activeSubjects.length === 0 || activeSubjects[0]?.exam_id !== examToUse.id) {
+        const { data: subs } = await supabase
+          .from('befaq_subjects')
+          .select('*')
+          .eq('exam_id', examToUse.id)
+          .order('sort_order', { ascending: true });
+        if (subs) {
+          activeSubjects = subs;
+          setSubjects(subs);
+        }
+      }
+
+      let activeStudents = students;
+      let activeMarksData = marksData;
+      if (activeStudents.length === 0 || Object.keys(activeMarksData).length === 0 || !activeStudents[0]?.class_id || activeStudents[0]?.class_id !== examToUse.marhala_id) {
+        const activeYearId = madrasah?.config_json?.active_academic_year_id;
+        let studentQuery = supabase.from('students').select('*').eq('class_id', examToUse.marhala_id).order('roll', { ascending: true });
+        if ((window as any)._hasIsActive !== false) {
+          studentQuery = studentQuery.eq('is_active', true);
+        }
+        if (activeYearId) {
+          studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        }
+        const { data: stds } = await studentQuery;
+        const { data: marks } = await supabase.from('befaq_results').select('*').eq('exam_id', examToUse.id);
+        if (stds) {
+          activeStudents = stds;
+          setStudents(stds);
+        }
+        if (marks) {
+          const initialMarks: any = {};
+          marks.forEach(m => {
+            if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
+            initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
+          });
+          activeMarksData = initialMarks;
+          setMarksData(initialMarks);
+        }
+      }
+
+      setDownloadProgress(25);
+
+      const totalPossible = activeSubjects.reduce((sum, s) => sum + (s.total_marks || 100), 0);
+      const sortedStds = activeStudents.map(std => {
+        const stdMarks = activeMarksData[std.id] || {};
+        const totalObtained = activeSubjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
+        const failed = activeSubjects.some(sub => {
+          const marks = parseFloat(stdMarks[sub.id] || '0');
+          return marks < (sub.passing_marks || 33);
+        });
+        const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
+        const division = failed ? 'রাসিব' : getDivision(totalObtained, totalPossible);
+        return {
+          ...std,
+          totalObtained,
+          percentage,
+          division,
+          failed
+        };
+      }).sort((a, b) => {
+        if (a.failed && !b.failed) return 1;
+        if (!a.failed && b.failed) return -1;
+        return b.totalObtained - a.totalObtained;
+      });
+
+      let currentRank = 1;
+      const rankedStds = sortedStds.map((std, index) => {
+        if (index > 0) {
+          const prev = sortedStds[index - 1];
+          const isTie = prev.totalObtained === std.totalObtained && prev.failed === std.failed;
+          if (!isTie) {
+            currentRank++;
+          }
+        }
+        return {
+          ...std,
+          rank: currentRank
+        };
+      });
+
+      const pdfStudents = rankedStds.map(std => {
+        const stdMarks = activeMarksData[std.id] || {};
+        const subjectMarksMap: { [key: string]: any } = {};
+        activeSubjects.forEach(s => {
+          subjectMarksMap[s.subject_name] = stdMarks[s.id] !== undefined ? stdMarks[s.id] : '-';
+        });
+
+        return {
+          id: std.id,
+          roll: std.roll,
+          student_name: std.student_name,
+          marks: subjectMarksMap,
+          total: std.totalObtained,
+          division: std.division,
+          grade: std.division,
+          percentage: std.percentage.toFixed(1),
+          gpa: `${std.percentage.toFixed(1)}%`,
+          rank: std.rank
+        };
+      });
+
+      const className = classes.find(c => c.id === examToUse.marhala_id)?.class_name || examToUse.classes?.class_name || '';
+      const subjectNames = activeSubjects.map(s => s.subject_name);
+
+      if (templateId === 'premium') {
+        await generateClassResultPDF(
+          { ...examToUse, classes: { class_name: className } },
+          activeSubjects,
+          activeStudents,
+          activeMarksData,
+          madrasah,
+          downloadLang,
+          (p) => setDownloadProgress(p),
+          'premium'
+        );
+      } else {
+        await generateFinalResultPDF(
+          examToUse.exam_name,
+          className,
+          subjectNames,
+          pdfStudents,
+          madrasah,
+          downloadLang,
+          (p) => setDownloadProgress(p)
+        );
+      }
+    } catch (err) {
+      console.error('Error generating Befaq result sheet:', err);
+      alert(lang === 'bn' ? 'রেজাল্ট শীট তৈরিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Failed to generate result sheet. Please try again.');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
+  const handleDownloadMassMarksheets = async (downloadLang: 'en' | 'bn' = lang, targetExam?: BefaqExam | null) => {
+    const examToUse = targetExam || selectedExam;
+    if (!examToUse || !madrasah) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(5);
+
+    try {
+      let activeSubjects = subjects;
+      if (activeSubjects.length === 0 || activeSubjects[0]?.exam_id !== examToUse.id) {
+        const { data: subs } = await supabase
+          .from('befaq_subjects')
+          .select('*')
+          .eq('exam_id', examToUse.id)
+          .order('sort_order', { ascending: true });
+        if (subs) {
+          activeSubjects = subs;
+          setSubjects(subs);
+        }
+      }
+
+      let activeStudents = students;
+      let activeMarksData = marksData;
+      if (activeStudents.length === 0 || Object.keys(activeMarksData).length === 0 || !activeStudents[0]?.class_id || activeStudents[0]?.class_id !== examToUse.marhala_id) {
+        const activeYearId = madrasah?.config_json?.active_academic_year_id;
+        let studentQuery = supabase.from('students').select('*').eq('class_id', examToUse.marhala_id).order('roll', { ascending: true });
+        if ((window as any)._hasIsActive !== false) {
+          studentQuery = studentQuery.eq('is_active', true);
+        }
+        if (activeYearId) {
+          studentQuery = studentQuery.or(`academic_year_id.eq.${activeYearId},academic_year_id.is.null`);
+        }
+        const { data: stds } = await studentQuery;
+        const { data: marks } = await supabase.from('befaq_results').select('*').eq('exam_id', examToUse.id);
+        if (stds) {
+          activeStudents = stds;
+          setStudents(stds);
+        }
+        if (marks) {
+          const initialMarks: any = {};
+          marks.forEach(m => {
+            if (!initialMarks[m.student_id]) initialMarks[m.student_id] = {};
+            initialMarks[m.student_id][m.subject_id] = m.marks_obtained;
+          });
+          activeMarksData = initialMarks;
+          setMarksData(initialMarks);
+        }
+      }
+
+      setDownloadProgress(20);
+
+      const totalPossible = activeSubjects.reduce((sum, s) => sum + (s.total_marks || 100), 0);
+      
+      const highestMarksMap: { [subId: string]: number } = {};
+      activeSubjects.forEach(s => {
+        let maxMark = 0;
+        Object.keys(activeMarksData).forEach(stId => {
+          const val = parseFloat(activeMarksData[stId]?.[s.id] || '0') || 0;
+          if (val > maxMark) maxMark = val;
+        });
+        highestMarksMap[s.id] = maxMark;
+      });
+
+      const sortedStds = activeStudents.map(std => {
+        const stdMarks = activeMarksData[std.id] || {};
+        const totalObtained = activeSubjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
+        const failed = activeSubjects.some(sub => {
+          const marks = parseFloat(stdMarks[sub.id] || '0');
+          return marks < (sub.passing_marks || 33);
+        });
+        const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
+        const division = failed ? 'রাসিব' : getDivision(totalObtained, totalPossible);
+        return {
+          ...std,
+          totalObtained,
+          percentage,
+          division,
+          failed
+        };
+      }).sort((a, b) => {
+        if (a.failed && !b.failed) return 1;
+        if (!a.failed && b.failed) return -1;
+        return b.totalObtained - a.totalObtained;
+      });
+
+      let currentRank = 1;
+      const rankedStds = sortedStds.map((std, index) => {
+        if (index > 0) {
+          const prev = sortedStds[index - 1];
+          const isTie = prev.totalObtained === std.totalObtained && prev.failed === std.failed;
+          if (!isTie) {
+            currentRank++;
+          }
+        }
+        return {
+          ...std,
+          rank: currentRank
+        };
+      });
+
+      const className = classes.find(c => c.id === examToUse.marhala_id)?.class_name || examToUse.classes?.class_name || '';
+
+      const preppedStudents = rankedStds.map(std => {
+        const stdMarks = activeMarksData[std.id] || {};
+        const preparedMarks = activeSubjects.map(s => {
+          const obtained = parseFloat(stdMarks[s.id] || '0') || 0;
+          const fullMarks = s.total_marks || 100;
+          const passMarks = s.passing_marks || 33;
+          const subPct = fullMarks > 0 ? (obtained / fullMarks) * 100 : 0;
+          const isSubFail = obtained < passMarks;
+          let subGrade = 'রাসিব';
+          if (!isSubFail) {
+            if (subPct >= 80) subGrade = 'মুমতাজ';
+            else if (subPct >= 65) subGrade = 'জায়্যিদ জিদ্দান';
+            else if (subPct >= 50) subGrade = 'জায়্যিদ';
+            else if (subPct >= 40) subGrade = 'মকবুল';
+          }
+          return {
+            id: s.id,
+            subject_name: s.subject_name,
+            marks_obtained: stdMarks[s.id] !== undefined ? obtained : '',
+            full_marks: fullMarks,
+            pass_marks: passMarks,
+            grade: subGrade,
+            grade_point: `${subPct.toFixed(0)}%`,
+            class_highest: highestMarksMap[s.id] || obtained
+          };
+        });
+
+        return {
+          info: {
+            ...std,
+            student_name: std.student_name,
+            roll: std.roll,
+            classes: { class_name: className },
+            merit_position: std.rank,
+            gpa: `${std.percentage.toFixed(1)}%`,
+            grade: std.division,
+            photo_url: std.photo_url,
+            attendance: (std as any).attendance || '-'
+          },
+          marks: preparedMarks
+        };
+      });
+
+      const examPayload = {
+        id: examToUse.id,
+        exam_name: examToUse.exam_name,
+        class_id: examToUse.marhala_id,
+        classes: { class_name: className },
+        is_published: examToUse.is_published
+      };
+
+      await generateMassMarksheetPDF(
+        preppedStudents,
+        examPayload,
+        madrasah,
+        downloadLang,
+        (p) => setDownloadProgress(p)
+      );
+    } catch (err) {
+      console.error('Error generating Befaq mass marksheets:', err);
+      alert(lang === 'bn' ? 'মার্ক শীট তৈরিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Failed to generate marksheets. Please try again.');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
+  const handleDownloadSingleMarksheet = async (std: any, rank: number, downloadLang: 'en' | 'bn' = lang) => {
+    if (!selectedExam || !madrasah) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(10);
+
+    try {
+      const className = classes.find(c => c.id === selectedExam.marhala_id)?.class_name || selectedExam.classes?.class_name || '';
+      const stdMarks = marksData[std.id] || {};
+
+      const highestMarksMap: { [subId: string]: number } = {};
+      subjects.forEach(s => {
+        let maxMark = 0;
+        Object.keys(marksData).forEach(stId => {
+          const val = parseFloat(marksData[stId]?.[s.id] || '0') || 0;
+          if (val > maxMark) maxMark = val;
+        });
+        highestMarksMap[s.id] = maxMark;
+      });
+
+      const preparedMarks = subjects.map(s => {
+        const obtained = parseFloat(stdMarks[s.id] || '0') || 0;
+        const fullMarks = s.total_marks || 100;
+        const passMarks = s.passing_marks || 33;
+        const subPct = fullMarks > 0 ? (obtained / fullMarks) * 100 : 0;
+        const isSubFail = obtained < passMarks;
+        let subGrade = 'রাসিব';
+        if (!isSubFail) {
+          if (subPct >= 80) subGrade = 'মুমতাজ';
+          else if (subPct >= 65) subGrade = 'জায়্যিদ জিদ্দান';
+          else if (subPct >= 50) subGrade = 'জায়্যিদ';
+          else if (subPct >= 40) subGrade = 'মকবুল';
+        }
+        return {
+          id: s.id,
+          subject_name: s.subject_name,
+          marks_obtained: stdMarks[s.id] !== undefined ? obtained : '',
+          full_marks: fullMarks,
+          pass_marks: passMarks,
+          grade: subGrade,
+          grade_point: `${subPct.toFixed(0)}%`,
+          class_highest: highestMarksMap[s.id] || obtained
+        };
+      });
+
+      const studentInfo = {
+        ...std,
+        student_name: std.student_name,
+        roll: std.roll,
+        classes: { class_name: className },
+        merit_position: rank,
+        gpa: `${(std.percentage || 0).toFixed(1)}%`,
+        grade: std.division,
+        photo_url: std.photo_url,
+        attendance: std.attendance || '-'
+      };
+
+      const examPayload = {
+        id: selectedExam.id,
+        exam_name: selectedExam.exam_name,
+        class_id: selectedExam.marhala_id,
+        classes: { class_name: className },
+        is_published: selectedExam.is_published
+      };
+
+      await generateResultPDF(
+        studentInfo,
+        examPayload,
+        preparedMarks,
+        madrasah,
+        downloadLang,
+        (p) => setDownloadProgress(p)
+      );
+    } catch (err) {
+      console.error('Error generating single marksheet:', err);
+      alert(lang === 'bn' ? 'মার্ক শীট তৈরিতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Failed to generate marksheet. Please try again.');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       {isDownloading && (
@@ -1409,13 +1842,41 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
           <button onClick={view === 'list' ? (selectedClassId ? () => setSelectedClassId(null) : onBack) : () => setView('list')} className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all ${madrasah?.theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
             <ArrowLeft size={20}/>
           </button>
-          <h1 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto`}>
+          <h1 className={`text-lg sm:text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} font-noto truncate max-w-[50vw]`}>
             {activeTab === 'exams' && view === 'list' ? (selectedClassId ? classes.find(c => c.id === selectedClassId)?.class_name : 'বেফাক পরীক্ষা') : 
              activeTab === 'exams' && selectedExam ? selectedExam.exam_name :
              activeTab === 'seat-plan' ? (lang === 'bn' ? 'আসন বিন্যাস' : 'Seat Plan') :
              activeTab === 'analytics' ? (lang === 'bn' ? 'ফলাফল অ্যানালিটিক্স' : 'Result Analytics') : 
              activeTab === 'exam-routine' ? (lang === 'bn' ? 'পরীক্ষার রুটিন' : 'Exam Routine') : 'বেফাক পরীক্ষা'}
           </h1>
+          {activeTab === 'exams' && (view === 'rank' || view === 'report') && (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    setDownloadAction(() => (l: 'en' | 'bn', tId?: 'classic' | 'premium') => handleDownloadClassResult(l, tId));
+                    setDownloadActionType('result-sheet');
+                    setShowDownloadLangModal(true);
+                  }} 
+                  className="px-2.5 h-8 bg-blue-50 text-[#2563EB] dark:bg-blue-500/10 dark:text-blue-400 rounded-lg flex items-center justify-center border border-blue-100 dark:border-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5"
+                  title={lang === 'bn' ? 'ফলাফল ডাউনলোড' : 'Download Result Sheet'}
+                >
+                  <Download size={14} />
+                  <span>{lang === 'bn' ? 'ফলাফল' : 'Result'}</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadMassMarksheets(l));
+                    setDownloadActionType('marksheet');
+                    setShowDownloadLangModal(true);
+                  }} 
+                  className="px-2.5 h-8 bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 rounded-lg flex items-center justify-center border border-purple-100 dark:border-purple-500/20 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors text-[10px] font-black uppercase tracking-widest gap-1.5"
+                  title={lang === 'bn' ? 'সকল মার্কশীট ডাউনলোড' : 'Download All Marksheets'}
+                >
+                  <Printer size={14} />
+                  <span>{lang === 'bn' ? 'মার্কশীট' : 'Marksheet'}</span>
+                </button>
+              </div>
+          )}
         </div>
         {activeTab === 'exams' && view === 'list' && role === 'madrasah_admin' && (
             <div className="flex gap-2">
@@ -2842,11 +3303,11 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                     <button onClick={() => { setSelectedExam(exam); setView('subjects'); fetchSubjects(exam.id); }} className="py-2.5 bg-slate-50 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest border border-slate-100 active:scale-95 transition-all">{t('subject', lang)}</button>
-                    <button onClick={() => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.marhala_id); }} className="py-2.5 bg-emerald-50 text-emerald-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-emerald-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
-                    <button onClick={() => { setSelectedExam(exam); setView('rank'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.marhala_id); }} className="py-2.5 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
+                    <button onClick={() => { setSelectedExam(exam); setView('marks'); fetchSubjects(exam.id); fetchMarkEntryData(exam.id, exam.marhala_id || (exam as any).class_id); }} className="py-2.5 bg-emerald-50 text-emerald-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-emerald-100 active:scale-95 transition-all">{t('enter_marks', lang)}</button>
+                    <button onClick={() => { setSelectedExam(exam); setView('rank'); fetchSubjects(exam.id); fetchRankData(exam.id, exam.marhala_id || (exam as any).class_id); }} className="py-2.5 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-premium active:scale-95 transition-all">{t('rank', lang)}</button>
                 </div>
                 {modules.admit_card && (
-                  <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2">
+                  <button onClick={() => handleDownloadAdmitCard(exam)} className="w-full py-2.5 bg-purple-50 text-purple-600 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-100 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2">
                       <CreditCard size={14}/> Admit Card
                   </button>
                 )}
@@ -2918,6 +3379,7 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                 <th key={s.id} className={`py-4 text-[10px] font-black text-slate-400 uppercase text-center min-w-[80px] pl-4 sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{s.subject_name}</th>
                             ))}
                             <th className={`py-4 text-[10px] font-black text-emerald-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>মোট</th>
+                            <th className={`py-4 text-[10px] font-black text-blue-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>{lang === 'bn' ? 'গড়' : 'Average'}</th>
                             <th className={`py-4 text-[10px] font-black text-purple-400 uppercase text-center min-w-[60px] sticky top-0 z-10 ${madrasah?.theme === 'dark' ? 'bg-slate-900 border-b border-b-slate-800' : 'bg-white border-b border-b-slate-100'}`}>বিভাগ</th>
                         </tr>
                     </thead>
@@ -3002,6 +3464,13 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
                                 <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs`}>
                                     {subjects.reduce((sum, sub) => sum + (parseFloat(marksData[std.id]?.[sub.id] || '0') || 0), 0)}
                                 </td>
+                                <td className={`py-4 px-2 text-center font-black ${madrasah?.theme === 'dark' ? 'text-blue-400' : 'text-[#2563EB]'} text-xs font-mono`}>
+                                    {(() => {
+                                        const total = subjects.reduce((sum, sub) => sum + (parseFloat(marksData[std.id]?.[sub.id] || '0') || 0), 0);
+                                        const avg = subjects.length > 0 ? (total / subjects.length) : 0;
+                                        return avg.toFixed(2);
+                                    })()}
+                                </td>
                                 <td className="py-4 px-2 text-center font-black text-emerald-500 text-xs">
                                     {(() => {
                                         const total = subjects.reduce((sum, sub) => sum + (parseFloat(marksData[std.id]?.[sub.id] || '0') || 0), 0);
@@ -3022,73 +3491,141 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
         </div>
       )}
 
-      {activeTab === 'exams' && view === 'rank' && (
-        <div className="space-y-4">
-            <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-5 rounded-[2.5rem] shadow-bubble border overflow-x-auto no-scrollbar`}>
-                <table className="w-full text-left min-w-[600px]">
-                    <thead>
-                        <tr className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
-                            <th className="py-4 text-[10px] font-black text-slate-400 uppercase text-center w-16">মেধা</th>
-                            <th className="py-4 text-[10px] font-black text-slate-400 uppercase pl-4">নাম</th>
-                            <th className="py-4 text-[10px] font-black text-slate-400 uppercase text-center">রোল</th>
-                            <th className="py-4 text-[10px] font-black text-emerald-400 uppercase text-center">মোট নম্বর</th>
-                            <th className="py-4 text-[10px] font-black text-purple-400 uppercase text-center">বিভাগ</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {(() => {
-                            const sortedStds = students.map(std => {
-                                const stdMarks = marksData[std.id] || {};
-                                const totalObtained = subjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
-                                const totalPossible = subjects.reduce((sum, s) => sum + s.total_marks, 0);
-                                
-                                // Check if failed in any subject
-                                const failed = subjects.some(sub => {
-                                    const marks = parseFloat(stdMarks[sub.id] || '0');
-                                    return marks < sub.passing_marks;
-                                });
-
-                                return {
-                                    ...std,
-                                    totalObtained,
-                                    division: failed ? 'রাসিব' : getDivision(totalObtained, totalPossible),
-                                    failed
-                                };
-                            }).sort((a, b) => {
-                                if (a.failed && !b.failed) return 1;
-                                if (!a.failed && b.failed) return -1;
-                                return b.totalObtained - a.totalObtained;
-                            });
-
-                            let currentRank = 1;
-                            return sortedStds.map((std, index) => {
-                                if (index > 0) {
-                                    const prev = sortedStds[index - 1];
-                                    const isTie = prev.totalObtained === std.totalObtained && prev.failed === std.failed;
-                                    if (!isTie) {
-                                        currentRank++;
-                                    }
-                                }
-                                const rank = currentRank;
-
-                                return (
-                                    <tr key={std.id} className={`border-b ${madrasah?.theme === 'dark' ? 'border-slate-800/50' : 'border-slate-50'} last:border-0`}>
-                                        <td className="py-4 px-2">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black mx-auto ${rank <= 3 ? 'bg-yellow-100 text-yellow-700' : (madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500')}`}>
-                                                {rank}
-                                            </div>
-                                        </td>
-                                        <td className={`py-4 pl-4 font-black ${madrasah?.theme === 'dark' ? 'text-slate-200' : 'text-[#1E3A8A]'} text-xs font-noto`}>{std.student_name}</td>
-                                        <td className="py-4 text-center font-black text-slate-400 text-xs">{std.roll}</td>
-                                        <td className="py-4 text-center font-black text-emerald-600 text-xs">{std.totalObtained}</td>
-                                        <td className={`py-4 text-center font-black text-xs ${std.failed ? 'text-red-500' : 'text-purple-600'}`}>{std.division}</td>
-                                    </tr>
-                                );
-                            });
-                        })()}
-                    </tbody>
-                </table>
+      {activeTab === 'exams' && (view === 'rank' || view === 'report') && (
+        <div className="space-y-4 animate-in fade-in duration-300">
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="animate-spin text-emerald-600" size={40} />
             </div>
+          ) : (() => {
+            const totalPossible = subjects.reduce((sum, s) => sum + (s.total_marks || 100), 0);
+            const sortedStds = students.map(std => {
+                const stdMarks = marksData[std.id] || {};
+                const totalObtained = subjects.reduce((sum, s) => sum + (parseFloat(stdMarks[s.id] || '0') || 0), 0);
+                
+                // Check if failed in any subject
+                const failed = subjects.some(sub => {
+                    const marks = parseFloat(stdMarks[sub.id] || '0');
+                    return marks < (sub.passing_marks || 33);
+                });
+
+                const percentage = totalPossible > 0 ? (totalObtained / totalPossible) * 100 : 0;
+
+                return {
+                    ...std,
+                    totalObtained,
+                    percentage,
+                    division: failed ? 'রাসিব' : getDivision(totalObtained, totalPossible),
+                    failed
+                };
+            }).sort((a, b) => {
+                if (a.failed && !b.failed) return 1;
+                if (!a.failed && b.failed) return -1;
+                return b.totalObtained - a.totalObtained;
+            });
+
+            let currentRank = 1;
+            const rankedStds = sortedStds.map((std, index) => {
+                if (index > 0) {
+                    const prev = sortedStds[index - 1];
+                    const isTie = prev.totalObtained === std.totalObtained && prev.failed === std.failed;
+                    if (!isTie) {
+                        currentRank++;
+                    }
+                }
+                return {
+                    ...std,
+                    rank: currentRank
+                };
+            });
+
+            const topStudent = rankedStds[0];
+
+            if (rankedStds.length === 0) {
+              return (
+                <div className="text-center py-20 text-slate-400 font-bold">
+                  <p>{lang === 'bn' ? 'কোনো শিক্ষার্থী বা ফলাফল পাওয়া যায়নি।' : 'No students or results found.'}</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-4">
+                {/* Best Result Banner (সেরা ফলাফল) */}
+                <div className="bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] text-white flex items-center justify-between shadow-premium">
+                    <div className="min-w-0">
+                        <p className="text-[9px] font-black uppercase opacity-60">সেরা ফলাফল</p>
+                        <h3 className="text-lg sm:text-2xl font-black font-noto truncate pt-1">{topStudent?.student_name || 'N/A'}</h3>
+                        {topStudent && (
+                          <p className="text-[10px] font-bold text-blue-100 mt-1 opacity-90">
+                            রোল: {topStudent.roll} | প্রাপ্ত নম্বর: {topStudent.totalObtained} | শতকরা: {topStudent.percentage.toFixed(1)}% | {topStudent.division}
+                          </p>
+                        )}
+                    </div>
+                    <Trophy size={40} className="text-amber-300 shrink-0" />
+                </div>
+
+                {/* Student Cards Grid (School Layout) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {rankedStds.map((item) => (
+                        <div key={item.id} className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} p-2.5 sm:p-3 rounded-[1.2rem] sm:rounded-[1.5rem] border shadow-sm flex items-center justify-between gap-2`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-5 h-5 sm:w-6 sm:h-6 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-blue-400' : 'bg-blue-50 text-[#2563EB]'} rounded-md flex items-center justify-center text-[8px] sm:text-[9px] font-black shrink-0`}>
+                                    {item.rank}
+                                </div>
+                                <div className="min-w-0">
+                                    <h5 className={`font-black ${madrasah?.theme === 'dark' ? 'text-slate-100' : 'text-[#1E3A8A]'} font-noto truncate leading-relaxed mb-0.5 text-[12px] sm:text-[13px] pt-0.5`}>
+                                        {item.student_name}
+                                    </h5>
+                                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-tighter truncate opacity-80">
+                                        ROLL: {item.roll} | {item.totalObtained} | {(() => {
+                                            const avgValue = subjects.length > 0 ? (item.totalObtained / subjects.length) : 0;
+                                            return avgValue.toFixed(2);
+                                        })()}{(item as any).attendance ? ` | ATT: ${(item as any).attendance}` : ''}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                <div className="flex gap-1.5 mb-0.5">
+                                    <button 
+                                        onClick={() => {
+                                            setSelectedStudentForMarksheet(item);
+                                            setDownloadAction(() => (l: 'en' | 'bn') => handleDownloadSingleMarksheet(item, item.rank, l));
+                                            setDownloadActionType('single-marksheet');
+                                            setShowDownloadLangModal(true);
+                                        }}
+                                        className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase flex items-center gap-1 transition-all active:scale-95 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                                    >
+                                        <Printer size={10}/> {lang === 'bn' ? 'মার্কশিট' : 'Marksheet'}
+                                    </button>
+                                    <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase border ${!item.failed ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                                        {!item.failed ? (lang === 'bn' ? 'পাস' : 'Passed') : (lang === 'bn' ? 'ফেল' : 'Failed')}
+                                    </div>
+                                </div>
+                                {!item.failed ? (
+                                    <div className="flex gap-1">
+                                        <span className="px-1.5 py-0.5 bg-blue-50 text-[#2563EB] rounded-md text-[7px] font-black border border-blue-50">
+                                            নম্বর: {item.percentage.toFixed(1)}%
+                                        </span>
+                                        <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded-md text-[7px] font-black border border-purple-50">
+                                            {item.division}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-1">
+                                        <span className="px-1.5 py-0.5 bg-red-50 text-red-500 rounded-md text-[7px] font-black border border-red-50">
+                                            রাসিব
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -3204,34 +3741,122 @@ const BefaqResultEngine: React.FC<BefaqResultEngineProps> = ({ lang, madrasah, o
 
       {/* Modals */}
       {showDownloadLangModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white'} rounded-[2rem] p-6 w-full max-w-sm shadow-2xl`}>
-                  <h3 className={`text-lg font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E293B]'} mb-4 text-center`}>Select Language / ভাষা নির্বাচন করুন</h3>
-                  <div className="space-y-3">
-                      <button 
-                          onClick={() => {
-                              if (downloadAction) downloadAction('en');
-                              setShowDownloadLangModal(false);
-                          }}
-                          className={`w-full py-3 ${madrasah?.theme === 'dark' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-[#2563EB] border-blue-100'} font-bold rounded-xl border hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors`}
-                      >
-                          English
-                      </button>
-                      <button 
-                          onClick={() => {
-                              if (downloadAction) downloadAction('bn');
-                              setShowDownloadLangModal(false);
-                          }}
-                          className={`w-full py-3 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-100'} font-bold rounded-xl border hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors`}
-                      >
-                          বাংলা (Bengali)
-                      </button>
-                      <button 
-                          onClick={() => setShowDownloadLangModal(false)}
-                          className={`w-full py-3 ${madrasah?.theme === 'dark' ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200'} font-bold rounded-xl border hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mt-4`}
-                      >
-                          Cancel
-                      </button>
+          <div className="fixed inset-0 bg-[#080A12]/60 backdrop-blur-xl z-[1100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+              <div className={`${madrasah?.theme === 'dark' ? 'bg-slate-900 border border-slate-800 shadow-none' : 'bg-white border-white/20 shadow-2xl'} w-full max-w-md rounded-[3rem] p-8 animate-in zoom-in-95 duration-300 relative overflow-hidden`}>
+                  {/* Decorative Background */}
+                  <div className={`absolute top-0 right-0 w-32 h-32 ${madrasah?.theme === 'dark' ? 'bg-emerald-500/5' : 'bg-emerald-50'} rounded-full -mr-16 -mt-16 opacity-50`}></div>
+                  <div className={`absolute bottom-0 left-0 w-24 h-24 ${madrasah?.theme === 'dark' ? 'bg-blue-500/5' : 'bg-blue-50'} rounded-full -ml-12 -mb-12 opacity-50`}></div>
+
+                  <div className="relative z-10">
+                      <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-[1.8rem] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-200 dark:shadow-none rotate-3">
+                          <Download className="text-white" size={28} strokeWidth={2.5} />
+                      </div>
+                      
+                      <div className="text-center mb-6">
+                          <h3 className={`text-xl font-black ${madrasah?.theme === 'dark' ? 'text-white' : 'text-[#1E3A8A]'} leading-tight`}>
+                            {downloadActionType === 'result-sheet'
+                              ? (lang === 'bn' ? 'রেজাল্ট শীট PDF ডাউনলোড' : 'Result Sheet Export')
+                              : downloadActionType === 'marksheet'
+                              ? (lang === 'bn' ? 'সকল মার্কশীট একসাথে ডাউনলোড' : 'All Marksheets Export')
+                              : (lang === 'bn' ? 'মার্কশিট ডাউনলোড' : 'Student Marksheet Export')
+                            }
+                          </h3>
+                          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest mt-0.5">
+                            {downloadActionType === 'result-sheet'
+                              ? (lang === 'bn' ? 'ডিজাইন টেমপ্লেট ও ভাষা নির্বাচন করুন' : 'Select Template Design & Language')
+                              : downloadActionType === 'single-marksheet' && selectedStudentForMarksheet
+                              ? `${selectedStudentForMarksheet.student_name} (রোল: ${selectedStudentForMarksheet.roll})`
+                              : (lang === 'bn' ? 'ভাষা নির্বাচন করে ডাউনলোড করুন' : 'Select Language & Download')
+                            }
+                          </p>
+                      </div>
+
+                      {downloadActionType === 'result-sheet' && (
+                          <div className="mb-6 space-y-2 text-left">
+                              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
+                                  {lang === 'bn' ? '১. টেমপ্লেট ডিজাইন (Template Design)' : '1. Select Template Design'}
+                              </label>
+                              <div className="grid grid-cols-2 gap-2.5">
+                                  <button
+                                      type="button"
+                                      onClick={() => setSelectedResultTemplate('premium')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          selectedResultTemplate === 'premium'
+                                              ? 'border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-200 ring-2 ring-emerald-500/20'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[8px] font-black rounded-md uppercase tracking-wider shadow-sm">NEW</span>
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <Layout size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                          {lang === 'bn' ? 'প্রিমিয়াম ডিজাইন' : 'Premium Design'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                                          {lang === 'bn' ? 'অফিসিয়াল বেফাক' : 'Befaq Official'}
+                                      </div>
+                                  </button>
+
+                                  <button
+                                      type="button"
+                                      onClick={() => setSelectedResultTemplate('classic')}
+                                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                                          selectedResultTemplate === 'classic'
+                                              ? 'border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-200 ring-2 ring-emerald-500/20'
+                                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                  >
+                                      <div className="font-bold text-xs flex items-center gap-1.5">
+                                          <Layout size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                          {lang === 'bn' ? 'স্ট্যান্ডার্ড ডিজাইন' : 'Standard Design'}
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                                          {lang === 'bn' ? 'সাধারণ তালিকা' : 'Standard Tabulation'}
+                                      </div>
+                                  </button>
+                              </div>
+                          </div>
+                      )}
+
+                      <div className="space-y-2.5">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1 text-left font-noto">
+                              {downloadActionType === 'result-sheet'
+                                  ? (lang === 'bn' ? '২. ভাষা নির্বাচন করুন (Select Language)' : '2. Select Language')
+                                  : (lang === 'bn' ? 'ভাষা নির্বাচন করুন (Select Language)' : 'Select Language')
+                              }
+                          </label>
+                          <button 
+                              onClick={async () => {
+                                  if (downloadAction) {
+                                      setShowDownloadLangModal(false);
+                                      await downloadAction('bn', selectedResultTemplate);
+                                  }
+                              }}
+                              className="w-full group relative overflow-hidden py-4 bg-emerald-600 text-white font-black rounded-2xl shadow-lg shadow-emerald-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
+                          >
+                              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                              <span className="relative z-10 text-base">বাংলা (Bengali)</span>
+                          </button>
+
+                          <button 
+                              onClick={async () => {
+                                  if (downloadAction) {
+                                      setShowDownloadLangModal(false);
+                                      await downloadAction('en', selectedResultTemplate);
+                                  }
+                              }}
+                              className="w-full group relative overflow-hidden py-4 bg-[#2563EB] text-white font-black rounded-2xl shadow-lg shadow-blue-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
+                          >
+                              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                              <span className="relative z-10 text-base">English</span>
+                          </button>
+
+                          <button 
+                              onClick={() => setShowDownloadLangModal(false)}
+                              className="w-full py-3 text-slate-400 dark:text-slate-500 font-black text-xs uppercase tracking-[0.2em] hover:text-slate-600 dark:hover:text-slate-300 transition-colors active:scale-95"
+                          >
+                              Cancel / বাতিল
+                          </button>
+                      </div>
                   </div>
               </div>
           </div>

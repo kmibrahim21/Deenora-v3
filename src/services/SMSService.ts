@@ -228,16 +228,18 @@ export const SMSService = {
                 smsType,
                 institutionId,
                 messages: messageItems
-              })
+              }),
+              signal: AbortSignal.timeout(20000)
             }); 
 
             const parsed = await res.json();
 
             if (!res.ok || parsed.success === false) {
               logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-              batchErrorStr = parsed.error || 'SMS send failed';
+              batchErrorStr = parsed.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
             } else if (parsed.results) {
               const activeProvider = parsed.provider || 'reve';
+              let failCount = 0;
               parsed.results.forEach((r: any, idx: number) => {
                 const log = logs.find(l => l.recipient === validMsgs[idx].phone && l.status === 'sent');
                 if (log) {
@@ -248,17 +250,22 @@ export const SMSService = {
 
                   if (!r.success) {
                     log.status = 'failed';
+                    failCount++;
                   }
                 }
-                if (!r.success && r.errorMessage) {
+                if (!r.success && r.errorMessage && !batchErrorStr) {
                   batchErrorStr = r.errorMessage;
                 }
               });
+              // If at least one succeeded, don't fail the entire batch
+              if (failCount < parsed.results.length) {
+                batchErrorStr = '';
+              }
             }
           } catch (err: any) { 
             console.warn("Personalized SMS batch failed:", err); 
             logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-            batchErrorStr = err.message || 'SMS Batch Request Error';
+            batchErrorStr = err.name === 'TimeoutError' ? 'এসএমএস সার্ভার সাড়া দিচ্ছে না (Request Timeout)' : (err.message || 'নেটওয়ার্ক সংযোগে সমস্যা (Failed to fetch)');
           }
         }
         
@@ -328,16 +335,18 @@ export const SMSService = {
                 smsType,
                 institutionId,
                 messages: messageItems
-              })
+              }),
+              signal: AbortSignal.timeout(20000)
             }); 
 
             const parsed = await res.json();
 
             if (!res.ok || parsed.success === false) {
               logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-              batchErrorStr = parsed.error || 'SMS send failed';
+              batchErrorStr = parsed.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
             } else if (parsed.results) {
               const activeProvider = parsed.provider || 'reve';
+              let failCount = 0;
               parsed.results.forEach((r: any, idx: number) => {
                 const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone && l.status === 'sent');
                 if (log) {
@@ -348,17 +357,22 @@ export const SMSService = {
 
                   if (!r.success) {
                     log.status = 'failed';
+                    failCount++;
                   }
                 }
-                if (!r.success && r.errorMessage) {
+                if (!r.success && r.errorMessage && !batchErrorStr) {
                   batchErrorStr = r.errorMessage;
                 }
               });
+              // If at least one succeeded, don't fail the entire batch
+              if (failCount < parsed.results.length) {
+                batchErrorStr = '';
+              }
             }
           } catch (err: any) { 
             console.warn("SMS batch failed:", err); 
             logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-            batchErrorStr = err.message || 'SMS Batch Request Error';
+            batchErrorStr = err.name === 'TimeoutError' ? 'এসএমএস সার্ভার সাড়া দিচ্ছে না (Request Timeout)' : (err.message || 'নেটওয়ার্ক সংযোগে সমস্যা (Failed to fetch)');
           }
         }
         
@@ -441,13 +455,14 @@ export const SMSService = {
             smsType,
             institutionId,
             messages: [{ recipient: phone, text: message }]
-          })
+          }),
+          signal: AbortSignal.timeout(15000)
         });
 
         parsed = await res.json();
         if (!res.ok || parsed.success === false) {
           finalStatus = 'failed';
-          throwErrorMsg = parsed.error || 'SMS send failed';
+          throwErrorMsg = parsed.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
         } else if (parsed.results && parsed.results.length > 0) {
           const r = parsed.results[0];
           usedProvider = r.provider || parsed.provider || 'reve';
@@ -456,13 +471,13 @@ export const SMSService = {
 
           if (!r.success) {
             finalStatus = 'failed';
-            throwErrorMsg = providerErr || 'SMS send failed';
+            throwErrorMsg = providerErr || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
           }
         }
       } catch (e: any) { 
         console.warn("Direct SMS failed:", e);
         finalStatus = 'failed';
-        throwErrorMsg = e.message || 'Direct SMS send failed';
+        throwErrorMsg = e.name === 'TimeoutError' ? 'এসএমএস সার্ভার সাড়া দিচ্ছে না (Request Timeout)' : (e.message || 'নেটওয়ার্ক সংযোগে সমস্যা (Failed to fetch)');
       }
     }
     

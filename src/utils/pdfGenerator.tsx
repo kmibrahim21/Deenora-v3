@@ -1355,7 +1355,7 @@ export const generateFinalResultPDF = async (
     });
     onProgress?.(25);
 
-    const finalResultFileName = `Final_Result_${className.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
+    const finalResultFileName = `${(title || 'Result').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}_${className.replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_')}.pdf`;
     const wrapper = container.querySelector('#pdf-wrapper');
 
     // Try server-side generation first with SolaimanLipi font
@@ -1367,7 +1367,7 @@ export const generateFinalResultPDF = async (
                 format: 'a4',
                 orientation: 'landscape',
                 entity_type: 'final_result',
-                entity_id: `${className}_final_result`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                entity_id: `${(title || 'result')}_${className}_final_result`.replace(/[^a-zA-Z0-9_-]/g, '_'),
                 filename: finalResultFileName
             });
             if (serverSuccess) {
