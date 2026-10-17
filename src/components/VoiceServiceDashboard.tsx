@@ -466,6 +466,9 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
       setVoices(apiVoices);
       setSenders(sendersRes.senders || sendersRes.data || []);
 
+      const fifteenDaysAgo = new Date();
+      fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
       // Fetch broadcasts from Supabase
       const { data: broadcastsData, error: broadcastsError } = await supabase
         .from('voice_broadcasts')
@@ -474,6 +477,7 @@ export const VoiceServiceDashboard: React.FC<VoiceServiceDashboardProps> = ({ on
           institutions (name),
           voice_templates (title)
         `)
+        .gte('created_at', fifteenDaysAgo.toISOString())
         .order('created_at', { ascending: false });
 
       if (!broadcastsError && broadcastsData) {

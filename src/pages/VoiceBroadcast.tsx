@@ -795,7 +795,13 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
     if (!madrasah && !isSuperAdmin) return;
     if (!isBackground) setLoading(true);
     
-    let query = supabase.from('voice_broadcasts').select('*, voice_templates(title)');
+    const fifteenDaysAgo = new Date();
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+
+    let query = supabase
+      .from('voice_broadcasts')
+      .select('*, voice_templates(title)')
+      .gte('created_at', fifteenDaysAgo.toISOString());
     
     // For super admins, show all history if they are in the super admin panel (madrasah.id is 'super_admin')
     // Otherwise filter by institution
@@ -2241,13 +2247,6 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
                         </div>
                         <div className="flex flex-col items-end gap-2">
                           <div className="flex items-center gap-2">
-                            <button 
-                              onClick={(e) => handleDeleteHistory(h.id, e)}
-                              className="w-7 h-7 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 transition-all active:scale-90"
-                              title={lang === 'bn' ? 'ডিলিট করুন' : 'Delete'}
-                            >
-                              <Trash2 size={14} />
-                            </button>
                             <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${h.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                               {h.status}
                             </span>
