@@ -377,6 +377,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   // Recharge state
   const [rechargeAmount, setRechargeAmount] = useState('');
+  const IS_VOICE_BROADCAST_DISABLED = true;
   const [rechargeStep, setRechargeStep] = useState<1 | 2>(1);
   const [isRecharging, setIsRecharging] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
@@ -981,6 +982,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const [isRetrying, setIsRetrying] = useState(false);
 
   const executeRetry = async () => {
+    if (IS_VOICE_BROADCAST_DISABLED) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্রডকাস্ট বন্ধ আছে' : 'Broadcast Disabled',
+        message: lang === 'bn' ? 'ভয়েস কল ব্রডকাস্ট বাটন টি অফ করে রাখা হয়েছে।' : 'Voice call broadcast button is turned off.'
+      });
+      return;
+    }
+
     const { broadcast, voiceId, senderId, phoneNumbers } = retryModal;
     
     if (!voiceId || !senderId) {
@@ -1296,6 +1307,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
   const isTargetingAllStudents = !isSuperAdmin && targetType === 'all';
 
   const handleBroadcast = async () => {
+    if (IS_VOICE_BROADCAST_DISABLED) {
+      setStatusModal({
+        show: true,
+        type: 'error',
+        title: lang === 'bn' ? 'ব্রডকাস্ট বন্ধ আছে' : 'Broadcast Disabled',
+        message: lang === 'bn' ? 'ভয়েস কল ব্রডকাস্ট বাটন টি অফ করে রাখা হয়েছে। পরবর্তীতে নির্দেশ দিলে আবার চালু করা হবে।' : 'Voice call broadcast button is turned off.'
+      });
+      return;
+    }
+
     if (!madrasah || !selectedVoiceId || (!selectedClassId && targetType === 'class' && !isPreSelected && !isTargetingInstitutions && !isTargetingAllStudents) || (targetType === 'teachers' && teachers.length === 0) || !selectedSenderId) {
       setStatusModal({
         show: true,
@@ -1891,6 +1912,16 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
       <div className="space-y-6">
         {activeTab === 'broadcast' && (
           <div className="space-y-5 animate-in slide-in-from-bottom-5">
+            {IS_VOICE_BROADCAST_DISABLED && (
+              <div className="bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-200 dark:border-amber-700/50 rounded-2xl p-4 flex items-center gap-3 text-amber-800 dark:text-amber-200 shadow-xs">
+                <AlertCircle className="shrink-0 text-amber-600 dark:text-amber-400" size={22} />
+                <div className="text-xs sm:text-sm font-bold font-noto">
+                  {lang === 'bn' 
+                    ? 'ভয়েস কল ব্রডকাস্ট বাটন টি অফ করে রাখা হয়েছে। পরবর্তীতে নির্দেশ দিলে আবার চালু করা হবে।' 
+                    : 'Voice call broadcast button is currently turned off.'}
+                </div>
+              </div>
+            )}
             <div className="bg-white p-6 rounded-[2.5rem] shadow-bubble border border-slate-100">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
                 <div className="space-y-7">
@@ -2107,15 +2138,21 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
                   <button 
                     onClick={handleBroadcast}
-                    disabled={!selectedVoiceId || (targetType === 'class' && !selectedClassId && !isPreSelected && !isTargetingInstitutions) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || !selectedSenderId || isBroadcasting}
-                    className="w-full h-[64px] bg-[#2563EB] text-white font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg disabled:opacity-40 active:scale-95 transition-all mt-auto"
+                    disabled={IS_VOICE_BROADCAST_DISABLED || !selectedVoiceId || (targetType === 'class' && !selectedClassId && !isPreSelected && !isTargetingInstitutions) || (targetType === 'teachers' && teachers.length === 0) || (targetType === 'specific_institution' && selectedInstitutionIds.length === 0) || !selectedSenderId || isBroadcasting}
+                    className={`w-full h-[64px] font-black rounded-full shadow-premium flex items-center justify-center gap-3 text-lg transition-all mt-auto ${
+                      IS_VOICE_BROADCAST_DISABLED
+                        ? 'bg-slate-400 text-white cursor-not-allowed opacity-70'
+                        : 'bg-[#2563EB] text-white active:scale-95 disabled:opacity-40'
+                    }`}
                   >
                     {isBroadcasting ? <Loader2 className="animate-spin" size={24} /> : (
                       <>
                         <Send size={20} /> 
-                        {targetType === 'all_institutions' ? 'Broadcasting to All Institutions' : 
-                         targetType === 'specific_institution' ? `Calling ${selectedInstitutionIds.length} Institutions` :
-                         t('start_broadcast', lang)}
+                        {IS_VOICE_BROADCAST_DISABLED
+                          ? (lang === 'bn' ? 'ব্রডকাস্ট অফ আছে (OFF)' : 'Voice Broadcast Disabled')
+                          : (targetType === 'all_institutions' ? 'Broadcasting to All Institutions' : 
+                             targetType === 'specific_institution' ? `Calling ${selectedInstitutionIds.length} Institutions` :
+                             t('start_broadcast', lang))}
                       </>
                     )}
                   </button>
@@ -2760,13 +2797,17 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
             <div className="flex flex-col gap-3">
               <button 
                 onClick={executeRetry}
-                disabled={isRetrying}
-                className="w-full py-5 bg-[#2563EB] text-white font-black rounded-full shadow-xl shadow-blue-100 active:scale-95 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-50"
+                disabled={IS_VOICE_BROADCAST_DISABLED || isRetrying}
+                className={`w-full py-5 font-black rounded-full shadow-xl transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-3 ${
+                  IS_VOICE_BROADCAST_DISABLED
+                    ? 'bg-slate-400 text-white cursor-not-allowed opacity-70'
+                    : 'bg-[#2563EB] text-white shadow-blue-100 active:scale-95 disabled:opacity-50'
+                }`}
               >
                 {isRetrying ? (
                   <Loader2 className="animate-spin" size={20} />
                 ) : (
-                  <><Send size={18} /> {lang === 'bn' ? 'Retry কল শুরু করুন' : 'Start Retry'}</>
+                  <><Send size={18} /> {IS_VOICE_BROADCAST_DISABLED ? (lang === 'bn' ? 'ব্রডকাস্ট অফ আছে' : 'Broadcast Disabled') : (lang === 'bn' ? 'Retry কল শুরু করুন' : 'Start Retry')}</>
                 )}
               </button>
               <button 

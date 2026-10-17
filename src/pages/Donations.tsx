@@ -783,7 +783,8 @@ const Donations: React.FC<DonationsProps> = ({
 
   // Send Group Voice Call Broadcast
   const handleSendGroupVoiceBroadcast = async () => {
-    if (!madrasah?.id) return;
+    alert(lang === 'bn' ? 'ভয়েস কল ব্রডকাস্ট বাটন টি অফ করে রাখা হয়েছে। পরবর্তীতে নির্দেশ দিলে আবার চালু করা হবে।' : 'Voice call broadcast is disabled.');
+    return;
 
     // Filter Donors according to target group selection
     let targetDonorsList: Donor[] = [];
@@ -2426,18 +2427,12 @@ const Donations: React.FC<DonationsProps> = ({
 
               <button
                 onClick={handleSendGroupVoiceBroadcast}
-                disabled={sendingVoiceBroadcast || voiceTemplates.length === 0}
-                className="px-5 py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-black shadow-sm active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                disabled={true}
+                className="px-5 py-2.5 rounded-2xl bg-slate-400 text-white text-xs font-black shadow-sm cursor-not-allowed opacity-70 flex items-center gap-2"
               >
                 <Mic size={15} />
                 <span>
-                  {sendingVoiceBroadcast
-                    ? lang === 'bn'
-                      ? 'পাঠানো হচ্ছে...'
-                      : 'Sending...'
-                    : lang === 'bn'
-                    ? 'ভয়েস কল পাঠান'
-                    : 'Send Voice Call'}
+                  {lang === 'bn' ? 'ভয়েস ব্রডকাস্ট অফ আছে' : 'Voice Broadcast Off'}
                 </span>
               </button>
             </div>
