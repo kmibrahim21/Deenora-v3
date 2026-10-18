@@ -14,44 +14,23 @@ export interface SmsProviderResult {
 // Simple in-memory cache to prevent double sending due to network retries
 const requestCache = new Map<string, number>();
 
-function httpsGet(url: string, agent: https.Agent, timeoutMs = 6000): Promise<{ ok: boolean; text: string }> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    const req = https.get(url, { agent }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        if (!resolved) {
-          resolved = true;
-          resolve({
-            ok: res.statusCode ? res.statusCode >= 200 && res.statusCode < 300 : false,
-            text: data
-          });
-        }
-      });
-    });
-    req.on('error', (err) => {
-      if (!resolved) {
-        resolved = true;
-        resolve({
-          ok: false,
-          text: err.message || 'Network error'
-        });
-      }
-    });
-    req.setTimeout(timeoutMs, () => {
-      if (!resolved) {
-        resolved = true;
-        req.destroy();
-        resolve({
-          ok: false,
-          text: 'Request timeout'
-        });
-      }
-    });
-  });
+async function httpsGet(url: string, agent: https.Agent, timeoutMs = 15000): Promise<{ ok: boolean; text: string }> {
+  try {
+    const res = await fetch(url, { 
+      agent, 
+      signal: AbortSignal.timeout(timeoutMs) 
+    } as any);
+    const text = await res.text();
+    return {
+      ok: res.ok,
+      text: text
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      text: err.name === 'TimeoutError' ? 'Request timeout' : (err.message || 'Network error')
+    };
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -184,7 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const url = `https://smpp.revesms.com:7790/sendtext?apikey=${encodeURIComponent(reveApiKey)}&secretkey=${encodeURIComponent(reveSecretKey)}&callerID=${encodeURIComponent(reveSenderId)}&toUser=${encodeURIComponent(normPhone)}&messageContent=${encodeURIComponent(item.text)}&type=3`;
 
         try {
-          const getResult = await httpsGet(url, agent, 6000);
+          const getResult = await httpsGet(url, agent, 12000);
           const resText = getResult.text.trim();
 
           let isSuccess = false;
@@ -353,7 +332,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(3000)
+            signal: AbortSignal.timeout(10000)
           });
 
           const resText = await response.text();
@@ -399,7 +378,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       const results: SmsProviderResult[] = [];
-      const chunkSize = 10;
+      const chunkSize = 25; // Increased chunk size for better parallelism
       for (let i = 0; i < messages.length; i += chunkSize) {
         const chunk = messages.slice(i, i + chunkSize);
         const chunkResults = await Promise.all(chunk.map(sendSingleWithFallback));

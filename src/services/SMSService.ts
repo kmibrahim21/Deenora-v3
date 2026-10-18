@@ -171,226 +171,230 @@ export const SMSService = {
     if (rpcData && rpcData.success === false) throw new Error(rpcData.error || "ট্রানজ্যাকশন সফল হয়নি।");
 
     const allLogs: any[] = [];
-    let sendPromises: Promise<void>[] = [];
+    const chunkSize = 50;
 
-    if (hasShortcodes) {
-      // Send personalized messages in batches of 50
-      const chunkSize = 50;
-      const batches = [];
-      for (let i = 0; i < personalizedMessages.length; i += chunkSize) {
-        batches.push(personalizedMessages.slice(i, i + chunkSize));
-      }
-
-      sendPromises = batches.map(async (chunk) => {
-        const validMsgs: typeof chunk = [];
-        const logs: any[] = [];
-        let batchErrorStr = '';
-        
-        chunk.forEach(m => {
-          const normPhone = normalizePhone(m.phone);
-          if (!normPhone) {
-            logs.push({
-              institution_id: institutionId,
-              recipient: m.phone || 'Unknown',
-              message: m.text,
-              parts: m.parts,
-              status: 'failed',
-              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
-              provider: 'none',
-              provider_error: 'Invalid phone number'
-            });
-          } else {
-            validMsgs.push(m);
-            logs.push({
-              institution_id: institutionId,
-              recipient: m.phone,
-              message: m.text,
-              parts: m.parts,
-              status: 'sent',
-              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
-              provider: 'pending'
-            });
-          }
-        });
-
-        if (validMsgs.length > 0) {
-          const messageItems = validMsgs.map(m => ({
+    const processPersonalizedBatch = async (chunk: typeof personalizedMessages) => {
+      const validMsgs: typeof chunk = [];
+      const logs: any[] = [];
+      let batchErrorStr = '';
+      
+      chunk.forEach(m => {
+        const normPhone = normalizePhone(m.phone);
+        if (!normPhone) {
+          logs.push({
+            institution_id: institutionId,
+            recipient: m.phone || 'Unknown',
+            message: m.text,
+            parts: m.parts,
+            status: 'failed',
+            sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+            provider: 'none',
+            provider_error: 'Invalid phone number'
+          });
+        } else {
+          validMsgs.push(m);
+          logs.push({
+            institution_id: institutionId,
             recipient: m.phone,
-            text: m.text
-          }));
-
-          try { 
-            const res = await fetch('/api/sms', { 
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'send_routed_sms',
-                smsType,
-                institutionId,
-                messages: messageItems
-              }),
-              signal: AbortSignal.timeout(20000)
-            }); 
-
-            const parsed = await res.json();
-
-            if (!res.ok || parsed.success === false) {
-              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-              batchErrorStr = parsed.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
-            } else if (parsed.results) {
-              const activeProvider = parsed.provider || 'reve';
-              let failCount = 0;
-              parsed.results.forEach((r: any, idx: number) => {
-                const log = logs.find(l => l.recipient === validMsgs[idx].phone && l.status === 'sent');
-                if (log) {
-                  log.provider = r.provider || activeProvider;
-                  log.sms_type = parsed.smsType || (smsType === 'unknown' ? 'non_masking' : smsType);
-                  log.provider_message_id = r.providerMessageId || null;
-                  log.provider_error = r.errorMessage || r.errorCode || null;
-
-                  if (!r.success) {
-                    log.status = 'failed';
-                    failCount++;
-                  }
-                }
-                if (!r.success && r.errorMessage && !batchErrorStr) {
-                  batchErrorStr = r.errorMessage;
-                }
-              });
-              // If at least one succeeded, don't fail the entire batch
-              if (failCount < parsed.results.length) {
-                batchErrorStr = '';
-              }
-            }
-          } catch (err: any) { 
-            console.warn("Personalized SMS batch failed:", err); 
-            logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-            batchErrorStr = err.name === 'TimeoutError' ? 'এসএমএস সার্ভার সাড়া দিচ্ছে না (Request Timeout)' : (err.message || 'নেটওয়ার্ক সংযোগে সমস্যা (Failed to fetch)');
-          }
-        }
-        
-        // Insert logs
-        if (logs.length > 0) {
-          await supabase.from('sms_logs').insert(logs);
-          allLogs.push(...logs);
-        }
-
-        if (batchErrorStr) {
-          throw new Error(batchErrorStr);
+            message: m.text,
+            parts: m.parts,
+            status: 'sent',
+            sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+            provider: 'pending'
+          });
         }
       });
-    } else {
-      // Standard bulk logic (same message for all)
-      const chunkSize = 50; 
-      const batches: Student[][] = [];
-      for (let i = 0; i < students.length; i += chunkSize) {
-        batches.push(students.slice(i, i + chunkSize));
+
+      if (validMsgs.length > 0) {
+        const messageItems = validMsgs.map(m => ({
+          recipient: m.phone,
+          text: m.text
+        }));
+
+        try { 
+          const res = await fetch('/api/sms', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'send_routed_sms',
+              smsType,
+              institutionId,
+              messages: messageItems
+            }),
+            signal: AbortSignal.timeout(60000)
+          }); 
+
+          const parsed = await res.json();
+
+          if (!res.ok || parsed.success === false) {
+            logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+            batchErrorStr = parsed.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
+          } else if (parsed.results) {
+            const activeProvider = parsed.provider || 'reve';
+            let failCount = 0;
+            parsed.results.forEach((r: any, idx: number) => {
+              const log = logs.find(l => l.recipient === validMsgs[idx].phone && l.status === 'sent');
+              if (log) {
+                log.provider = r.provider || activeProvider;
+                log.sms_type = parsed.smsType || (smsType === 'unknown' ? 'non_masking' : smsType);
+                log.provider_message_id = r.providerMessageId || null;
+                log.provider_error = r.errorMessage || r.errorCode || null;
+
+                if (!r.success) {
+                  log.status = 'failed';
+                  failCount++;
+                }
+              }
+              if (!r.success && r.errorMessage && !batchErrorStr) {
+                batchErrorStr = r.errorMessage;
+              }
+            });
+            if (failCount < parsed.results.length) {
+              batchErrorStr = '';
+            }
+          }
+        } catch (err: any) { 
+          console.warn("Personalized SMS batch failed:", err); 
+          logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+          batchErrorStr = err.name === 'TimeoutError' ? 'এসএমএস সার্ভার সাড়া দিচ্ছে না (Request Timeout)' : (err.message || 'নেটওয়ার্ক সংযোগে সমস্যা (Failed to fetch)');
+        }
+      }
+      
+      if (logs.length > 0) {
+        await supabase.from('sms_logs').insert(logs);
+        allLogs.push(...logs);
       }
 
-      sendPromises = batches.map(async (chunkStudents) => {
-        const { parts } = getSmsLengthInfo(message);
-        const validMsgs: Student[] = [];
-        const logs: any[] = [];
-        let batchErrorStr = '';
-        
-        chunkStudents.forEach(s => {
-          const normPhone = normalizePhone(s.guardian_phone);
-          if (!normPhone) {
-            logs.push({
-              institution_id: institutionId,
-              recipient: s.guardian_phone || 'Unknown',
-              message: message,
-              parts: parts,
-              status: 'failed',
-              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
-              provider: 'none',
-              provider_error: 'Invalid phone number'
-            });
-          } else {
-            validMsgs.push(s);
-            logs.push({
-              institution_id: institutionId,
-              recipient: s.guardian_phone,
-              message: message,
-              parts: parts,
-              status: 'sent',
-              sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
-              provider: 'pending'
-            });
-          }
-        });
+      if (batchErrorStr) {
+        throw new Error(batchErrorStr);
+      }
+    };
 
-        if (validMsgs.length > 0) {
-          const messageItems = validMsgs.map(s => ({
+    const processStandardBatch = async (chunkStudents: Student[]) => {
+      const { parts } = getSmsLengthInfo(message);
+      const validMsgs: Student[] = [];
+      const logs: any[] = [];
+      let batchErrorStr = '';
+      
+      chunkStudents.forEach(s => {
+        const normPhone = normalizePhone(s.guardian_phone);
+        if (!normPhone) {
+          logs.push({
+            institution_id: institutionId,
+            recipient: s.guardian_phone || 'Unknown',
+            message: message,
+            parts: parts,
+            status: 'failed',
+            sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+            provider: 'none',
+            provider_error: 'Invalid phone number'
+          });
+        } else {
+          validMsgs.push(s);
+          logs.push({
+            institution_id: institutionId,
             recipient: s.guardian_phone,
-            text: message
-          }));
-
-          try { 
-            const res = await fetch('/api/sms', { 
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'send_routed_sms',
-                smsType,
-                institutionId,
-                messages: messageItems
-              }),
-              signal: AbortSignal.timeout(20000)
-            }); 
-
-            const parsed = await res.json();
-
-            if (!res.ok || parsed.success === false) {
-              logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-              batchErrorStr = parsed.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
-            } else if (parsed.results) {
-              const activeProvider = parsed.provider || 'reve';
-              let failCount = 0;
-              parsed.results.forEach((r: any, idx: number) => {
-                const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone && l.status === 'sent');
-                if (log) {
-                  log.provider = r.provider || activeProvider;
-                  log.sms_type = parsed.smsType || (smsType === 'unknown' ? 'non_masking' : smsType);
-                  log.provider_message_id = r.providerMessageId || null;
-                  log.provider_error = r.errorMessage || r.errorCode || null;
-
-                  if (!r.success) {
-                    log.status = 'failed';
-                    failCount++;
-                  }
-                }
-                if (!r.success && r.errorMessage && !batchErrorStr) {
-                  batchErrorStr = r.errorMessage;
-                }
-              });
-              // If at least one succeeded, don't fail the entire batch
-              if (failCount < parsed.results.length) {
-                batchErrorStr = '';
-              }
-            }
-          } catch (err: any) { 
-            console.warn("SMS batch failed:", err); 
-            logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
-            batchErrorStr = err.name === 'TimeoutError' ? 'এসএমএস সার্ভার সাড়া দিচ্ছে না (Request Timeout)' : (err.message || 'নেটওয়ার্ক সংযোগে সমস্যা (Failed to fetch)');
-          }
-        }
-        
-        // Insert logs
-        if (logs.length > 0) {
-          await supabase.from('sms_logs').insert(logs);
-          allLogs.push(...logs);
-        }
-
-        if (batchErrorStr) {
-          throw new Error(batchErrorStr);
+            message: message,
+            parts: parts,
+            status: 'sent',
+            sms_type: smsType === 'unknown' ? 'non_masking' : smsType,
+            provider: 'pending'
+          });
         }
       });
-    }
+
+      if (validMsgs.length > 0) {
+        const messageItems = validMsgs.map(s => ({
+          recipient: s.guardian_phone,
+          text: message
+        }));
+
+        try { 
+          const res = await fetch('/api/sms', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'send_routed_sms',
+              smsType,
+              institutionId,
+              messages: messageItems
+            }),
+            signal: AbortSignal.timeout(60000)
+          }); 
+
+          const parsed = await res.json();
+
+          if (!res.ok || parsed.success === false) {
+            logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+            batchErrorStr = parsed.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে।';
+          } else if (parsed.results) {
+            const activeProvider = parsed.provider || 'reve';
+            let failCount = 0;
+            parsed.results.forEach((r: any, idx: number) => {
+              const log = logs.find(l => l.recipient === validMsgs[idx].guardian_phone && l.status === 'sent');
+              if (log) {
+                log.provider = r.provider || activeProvider;
+                log.sms_type = parsed.smsType || (smsType === 'unknown' ? 'non_masking' : smsType);
+                log.provider_message_id = r.providerMessageId || null;
+                log.provider_error = r.errorMessage || r.errorCode || null;
+
+                if (!r.success) {
+                  log.status = 'failed';
+                  failCount++;
+                }
+              }
+              if (!r.success && r.errorMessage && !batchErrorStr) {
+                batchErrorStr = r.errorMessage;
+              }
+            });
+            if (failCount < parsed.results.length) {
+              batchErrorStr = '';
+            }
+          }
+        } catch (err: any) { 
+          console.warn("SMS batch failed:", err); 
+          logs.forEach(l => { if (l.status === 'sent') l.status = 'failed'; });
+          batchErrorStr = err.name === 'TimeoutError' ? 'এসএমএস সার্ভার সাড়া দিচ্ছে না (Request Timeout)' : (err.message || 'নেটওয়ার্ক সংযোগে সমস্যা (Failed to fetch)');
+        }
+      }
+      
+      if (logs.length > 0) {
+        await supabase.from('sms_logs').insert(logs);
+        allLogs.push(...logs);
+      }
+
+      if (batchErrorStr) {
+        throw new Error(batchErrorStr);
+      }
+    };
 
     let throwError: Error | null = null;
+    const concurrencyLimit = 3;
+
     try {
-      await Promise.all(sendPromises);
+      if (hasShortcodes) {
+        for (let i = 0; i < personalizedMessages.length; i += chunkSize * concurrencyLimit) {
+          const currentBatchChunks = [];
+          for (let j = 0; j < concurrencyLimit; j++) {
+            const start = i + (j * chunkSize);
+            if (start < personalizedMessages.length) {
+              currentBatchChunks.push(personalizedMessages.slice(start, start + chunkSize));
+            }
+          }
+          await Promise.all(currentBatchChunks.map(processPersonalizedBatch));
+        }
+      } else {
+        for (let i = 0; i < students.length; i += chunkSize * concurrencyLimit) {
+          const currentBatchChunks = [];
+          for (let j = 0; j < concurrencyLimit; j++) {
+            const start = i + (j * chunkSize);
+            if (start < students.length) {
+              currentBatchChunks.push(students.slice(start, start + chunkSize));
+            }
+          }
+          await Promise.all(currentBatchChunks.map(processStandardBatch));
+        }
+      }
     } catch (err: any) {
       throwError = err;
     } finally {
