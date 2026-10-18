@@ -889,10 +889,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rawData = await response.json();
       let sendersList = Array.isArray(rawData) ? rawData : (rawData.senders || rawData.data || []);
       
-      // Filter out old senders and keep only +880 9610-993084
+      // Keep only valid senders, hiding 84 and keeping 98
       sendersList = sendersList.filter((s: any) => {
         const num = String(s.callingNumber || s.caller_id || s.id || '');
-        return num.includes('9610993084') || num.includes('9610-993084');
+        if (num.endsWith('84')) return false;
+        return num.endsWith('98') || num.length > 5;
       });
       
       // Ensure the correct structure is returned

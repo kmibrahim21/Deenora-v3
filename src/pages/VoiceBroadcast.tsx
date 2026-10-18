@@ -377,7 +377,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
 
   // Recharge state
   const [rechargeAmount, setRechargeAmount] = useState('');
-  const IS_VOICE_BROADCAST_DISABLED = true;
+  const IS_VOICE_BROADCAST_DISABLED = false;
   const [rechargeStep, setRechargeStep] = useState<1 | 2>(1);
   const [isRecharging, setIsRecharging] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState(false);
@@ -654,10 +654,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         const data = await response.json();
         let fetchedList = Array.isArray(data) ? data : (data.senders || data.data || []);
         
-        // Filter out old senders and keep only +880 9610-993084 (or its variations)
+        // Keep only valid senders, specifically excluding the one ending in 84 and keeping 98
         sendersList = fetchedList.filter(s => {
           const num = String(s.callingNumber || s.caller_id || s.id || '');
-          return num.includes('9610993084') || num.includes('9610-993084');
+          // Hide 84, keep 98
+          if (num.endsWith('84')) return false;
+          return num.endsWith('98') || num.length > 5;
         });
 
         console.log('Awaj Senders List (Filtered):', sendersList);
@@ -1442,7 +1444,7 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
           students = data || [];
         }
         
-        phoneNumbers = students.map(s => s.guardian_phone || s.guardian_phone_2).filter(p => !!p);
+        phoneNumbers = students.map(s => s.guardian_phone).filter(p => !!p);
       }
       
       // Normalize phone numbers: 11 digits (01...) for Awaj API
