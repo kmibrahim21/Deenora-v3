@@ -654,12 +654,12 @@ const VoiceBroadcast: React.FC<VoiceBroadcastProps> = ({ lang, madrasah, trigger
         const data = await response.json();
         let fetchedList = Array.isArray(data) ? data : (data.senders || data.data || []);
         
-        // Keep only valid senders, specifically excluding the one ending in 84 and keeping 98
+        // Keep only valid senders, specifically excluding the one ending in 98 and keeping 84
         sendersList = fetchedList.filter(s => {
           const num = String(s.callingNumber || s.caller_id || s.id || '');
-          // Hide 84, keep 98
-          if (num.endsWith('84')) return false;
-          return num.endsWith('98') || num.length > 5;
+          // Hide 98, show 84
+          if (num.endsWith('98')) return false;
+          return num.endsWith('84') || num.length > 5;
         });
 
         console.log('Awaj Senders List (Filtered):', sendersList);

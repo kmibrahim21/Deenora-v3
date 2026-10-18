@@ -889,11 +889,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rawData = await response.json();
       let sendersList = Array.isArray(rawData) ? rawData : (rawData.senders || rawData.data || []);
       
-      // Keep only valid senders, hiding 84 and keeping 98
+      // Keep only valid senders, hiding 98 and keeping 84
       sendersList = sendersList.filter((s: any) => {
         const num = String(s.callingNumber || s.caller_id || s.id || '');
-        if (num.endsWith('84')) return false;
-        return num.endsWith('98') || num.length > 5;
+        if (num.endsWith('98')) return false;
+        return num.endsWith('84') || num.length > 5;
       });
       
       // Ensure the correct structure is returned
