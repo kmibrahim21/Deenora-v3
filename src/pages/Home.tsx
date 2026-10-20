@@ -356,75 +356,51 @@ const Home: React.FC<HomeProps> = ({ onStudentClick, lang, dataVersion, triggerR
           <button 
             type="button"
             onClick={onNavigateToAttendance} 
-            className={`col-span-2 sm:col-span-2 lg:col-span-2 xl:col-span-2 ${
+            className={`col-span-1 sm:col-span-2 lg:col-span-2 xl:col-span-2 ${
               madrasah?.theme === 'dark' 
                 ? 'bg-slate-800/90 border-slate-700 hover:bg-slate-800 hover:border-blue-500/40' 
                 : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'
-            } p-4 lg:p-5 rounded-[2rem] shadow-bubble flex flex-col justify-between text-left animate-in zoom-in duration-300 delay-200 active:scale-[0.99] transition-all border w-full group cursor-pointer`}
+            } p-4 lg:p-6 rounded-[2rem] shadow-bubble flex flex-col justify-center animate-in zoom-in duration-300 delay-200 active:scale-[0.99] transition-all border w-full group cursor-pointer`}
           >
-             {/* Header Row: Title & Action Hint */}
-             <div className="flex items-center justify-between w-full pb-2.5 mb-1.5 border-b border-slate-100 dark:border-slate-700/60">
-               <div className="flex items-center gap-2.5">
-                 <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                   <Users size={16} />
-                 </div>
-                 <div>
-                   <h5 className={`text-xs lg:text-sm font-black font-noto leading-tight ${madrasah?.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                     {lang === 'bn' ? 'আজকের সার্বিক হাজিরা' : "Today's Attendance"}
-                   </h5>
-                   <p className="text-[9px] lg:text-[10px] font-bold text-slate-400">
-                     {lang === 'bn' ? 'ক্লিক করে ক্লাসভিত্তিক হাজিরা দিন' : 'Click to manage attendance'}
-                   </p>
-                 </div>
-               </div>
-               <span className={`text-[10px] lg:text-[11px] font-black px-2.5 py-1 rounded-xl transition-colors ${
-                 madrasah?.theme === 'dark' 
-                   ? 'bg-slate-700 text-blue-400 group-hover:bg-blue-600 group-hover:text-white' 
-                   : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
-               }`}>
-                 {lang === 'bn' ? 'হাজিরা শিট →' : 'Sheet →'}
-               </span>
-             </div>
-
              {/* 4 Responsive Attendance Metrics */}
-             <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 lg:gap-2.5">
+             <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-1.5 lg:gap-2.5">
                 {/* 1. Present */}
-                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/50 group-hover:border-emerald-300 transition-colors">
-                   <span className="text-[10px] lg:text-[11px] font-black text-emerald-800 dark:text-emerald-300 font-noto mb-0.5">
+                <div className="flex flex-col items-center justify-center py-1.5 lg:py-2.5 px-1 lg:px-2 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/50 group-hover:border-emerald-300 transition-colors">
+                   <span className="text-[8px] lg:text-[11px] font-black text-emerald-800 dark:text-emerald-300 font-noto mb-0.5">
                      {lang === 'bn' ? 'উপস্থিত' : 'Present'}
                    </span>
-                   <span className="text-base lg:text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                   <span className="text-sm lg:text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
                      {loadingStats ? '...' : stats.attendanceToday}
                    </span>
                 </div>
 
                 {/* 2. Absent */}
-                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200/70 dark:border-rose-800/50 group-hover:border-rose-300 transition-colors">
-                   <span className="text-[10px] lg:text-[11px] font-black text-rose-800 dark:text-rose-300 font-noto mb-0.5">
+                <div className="flex flex-col items-center justify-center py-1.5 lg:py-2.5 px-1 lg:px-2 rounded-2xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200/70 dark:border-rose-800/50 group-hover:border-rose-300 transition-colors">
+                   <span className="text-[8px] lg:text-[11px] font-black text-rose-800 dark:text-rose-300 font-noto mb-0.5">
                      {lang === 'bn' ? 'অনুপস্থিত' : 'Absent'}
                    </span>
-                   <span className="text-base lg:text-xl font-black text-rose-700 dark:text-rose-300 font-mono">
+                   <span className="text-sm lg:text-xl font-black text-rose-700 dark:text-rose-300 font-mono">
                      {loadingStats ? '...' : stats.attendanceTodayAbsents}
                    </span>
                 </div>
 
                 {/* 3. Leave */}
-                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800/50 group-hover:border-indigo-300 transition-colors">
-                   <span className="text-[10px] lg:text-[11px] font-black text-indigo-800 dark:text-indigo-300 font-noto mb-0.5">
+                <div className="flex flex-col items-center justify-center py-1.5 lg:py-2.5 px-1 lg:px-2 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800/50 group-hover:border-indigo-300 transition-colors">
+                   <span className="text-[8px] lg:text-[11px] font-black text-indigo-800 dark:text-indigo-300 font-noto mb-0.5">
                      {lang === 'bn' ? 'ছুটি' : 'Leave'}
                    </span>
-                   <span className="text-base lg:text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
+                   <span className="text-sm lg:text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
                      {loadingStats ? '...' : stats.attendanceTodayLeaves}
                    </span>
                 </div>
 
                 {/* 4. Pending */}
-                <div className="flex flex-col items-center justify-center py-2.5 px-2 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/50 group-hover:border-amber-300 transition-colors">
-                   <span className="text-[10px] lg:text-[11px] font-black text-amber-800 dark:text-amber-300 font-noto mb-0.5">
-                     {lang === 'bn' ? 'হাজিরা বাকি' : 'Pending'}
+                <div className="flex flex-col items-center justify-center py-1.5 lg:py-2.5 px-1 lg:px-2 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/50 group-hover:border-amber-300 transition-colors">
+                   <span className="text-[8px] lg:text-[11px] font-black text-amber-800 dark:text-amber-300 font-noto mb-0.5">
+                     {lang === 'bn' ? 'বাকি' : 'Pending'}
                    </span>
-                   <span className="text-base lg:text-xl font-black text-amber-700 dark:text-amber-300 font-mono">
-                     {loadingStats ? '...' : `${stats.pendingAttendanceClasses} টি`}
+                   <span className="text-sm lg:text-xl font-black text-amber-700 dark:text-amber-300 font-mono">
+                     {loadingStats ? '...' : `${stats.pendingAttendanceClasses}`}
                    </span>
                 </div>
              </div>
